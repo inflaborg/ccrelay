@@ -1,0 +1,33 @@
+.vscode/**
+.vscode-test/**
+src/**
+.gitignore
+.yarnrc
+vsc-extension-quickstart.md
+**/tsconfig.json
+**/.eslintrc.json
+**/*.map
+**/*.ts
+
+# Web source directory (产物已在 out/web/)
+web/**
+!out/web/**
+
+# Web node_modules
+web/node_modules/**
+
+# Scripts
+scripts/**
+
+# Exclude tests
+tests/**
+out/tests/**
+
+# Dev config files
+.tool-versions
+eslint.config.js
+eslint.config.mjs
+.prettierrc
+
+# Documentation
+docs/**

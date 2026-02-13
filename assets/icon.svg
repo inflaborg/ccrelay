@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="purpleGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#9B59B6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8E44AD;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="grayGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#95A5A6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7F8C8D;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="64" cy="64" r="56" fill="#2C3E50" opacity="0.1"/>
+
+  <!-- Main relay symbol - two arrows forming a cycle -->
+  <!-- Left arrow (curved upward) -->
+  <path d="M 32 75 Q 32 45 50 45 L 64 45"
+        stroke="url(#purpleGradient)"
+        stroke-width="10"
+        stroke-linecap="round"
+        fill="none"/>
+
+  <!-- Arrow head left -->
+  <path d="M 52 35 L 66 45 L 52 55"
+        fill="url(#purpleGradient)"
+        stroke="url(#purpleGradient)"
+        stroke-width="3"
+        stroke-linejoin="round"/>
+
+  <!-- Right arrow (curved downward) -->
+  <path d="M 96 53 Q 96 83 78 83 L 64 83"
+        stroke="url(#grayGradient)"
+        stroke-width="10"
+        stroke-linecap="round"
+        fill="none"/>
+
+  <!-- Arrow head right -->
+  <path d="M 76 93 L 62 83 L 76 73"
+        fill="url(#grayGradient)"
+        stroke="url(#grayGradient)"
+        stroke-width="3"
+        stroke-linejoin="round"/>
+
+  <!-- Center dot representing the relay/switch point -->
+  <circle cx="64" cy="64" r="8" fill="url(#purpleGradient)"/>
+  <circle cx="64" cy="64" r="4" fill="#FFFFFF"/>
+
+  <!-- Small connection lines to endpoints -->
+  <line x1="22" y1="64" x2="32" y2="64" stroke="#7F8C8D" stroke-width="4" stroke-linecap="round"/>
+  <line x1="96" y1="64" x2="106" y2="64" stroke="#7F8C8D" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Small endpoint dots -->
+  <circle cx="18" cy="64" r="4" fill="#95A5A6"/>
+  <circle cx="110" cy="64" r="4" fill="#95A5A6"/>
+</svg>
