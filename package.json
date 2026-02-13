@@ -1,0 +1,310 @@
+{
+  "name": "ccrelay-vscode",
+  "displayName": "CCRelay",
+  "icon": "assets/icon-128.png",
+  "description": "VSCode extension with built-in API proxy server - switch between AI providers seamlessly",
+  "version": "0.1.1",
+  "publisher": "inflab",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/src/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ccrelay.showMenu",
+        "title": "CCRelay: Show Menu"
+      },
+      {
+        "command": "ccrelay.switchProvider",
+        "title": "CCRelay: Switch Provider"
+      },
+      {
+        "command": "ccrelay.startServer",
+        "title": "CCRelay: Start Server"
+      },
+      {
+        "command": "ccrelay.stopServer",
+        "title": "CCRelay: Stop Server"
+      },
+      {
+        "command": "ccrelay.openSettings",
+        "title": "CCRelay: Open Settings"
+      },
+      {
+        "command": "ccrelay.showLogs",
+        "title": "CCRelay: Show Logs",
+        "icon": "$(output)"
+      },
+      {
+        "command": "ccrelay.clearLogs",
+        "title": "CCRelay: Clear Logs"
+      },
+      {
+        "command": "ccrelay.openWebUI",
+        "title": "CCRelay: Open Web UI",
+        "icon": "$(browser)"
+      }
+    ],
+    "configuration": {
+      "title": "CCRelay",
+      "properties": {
+        "ccrelay.server.port": {
+          "type": "number",
+          "default": 7575,
+          "description": "Port for the proxy server"
+        },
+        "ccrelay.server.host": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "Host for the proxy server"
+        },
+        "ccrelay.server.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start the server when VSCode starts"
+        },
+        "ccrelay.config.useFile": {
+          "type": "boolean",
+          "default": false,
+          "description": "Read configuration from ~/.ccrelay/config.yaml"
+        },
+        "ccrelay.provider.default": {
+          "type": "string",
+          "default": "official",
+          "description": "Default provider to use"
+        },
+        "ccrelay.provider.list": {
+          "type": "object",
+          "default": {
+            "official": {
+              "name": "Claude Official",
+              "baseUrl": "https://api.anthropic.com",
+              "mode": "passthrough"
+            },
+            "glm": {
+              "name": "GLM-4.7",
+              "baseUrl": "https://api.z.ai/api/anthropic",
+              "mode": "inject",
+              "authHeader": "authorization",
+              "apiKey": "",
+              "modelMap": {
+                "claude-*": "glm-4.7"
+              }
+            }
+          },
+          "description": "Provider configurations. Each provider can have: name, baseUrl, mode, apiKey, authHeader, modelMap (model name mapping with wildcard support), headers. Example modelMap: { \"claude-*\": \"glm-4.7\" }",
+          "scope": "window"
+        },
+        "ccrelay.route.patterns": {
+          "type": "array",
+          "default": [
+            "/v1/messages",
+            "/messages"
+          ],
+          "description": "Paths that route to current provider"
+        },
+        "ccrelay.route.passthroughPatterns": {
+          "type": "array",
+          "default": [
+            "/v1/users/*",
+            "/v1/organizations/*"
+          ],
+          "description": "Paths that always go to official API"
+        },
+        "ccrelay.route.blockPatterns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "response": {
+                "type": "string"
+              },
+              "responseCode": {
+                "type": "number",
+                "default": 200
+              }
+            },
+            "required": [
+              "path",
+              "response"
+            ]
+          },
+          "default": [
+            {
+              "path": "/api/event_logging/*",
+              "response": "{\"ok\": true}"
+            }
+          ],
+          "description": "Paths that return custom response in inject mode"
+        },
+        "ccrelay.route.openaiBlockPatterns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "response": {
+                "type": "string"
+              },
+              "responseCode": {
+                "type": "number",
+                "default": 200
+              }
+            },
+            "required": [
+              "path",
+              "response"
+            ]
+          },
+          "default": [],
+          "description": "OpenAI API paths that return custom response"
+        },
+        "ccrelay.concurrency.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable concurrency control for requests"
+        },
+        "ccrelay.concurrency.maxConcurrency": {
+          "type": "number",
+          "default": 5,
+          "description": "Maximum number of concurrent requests to provider",
+          "minimum": 1
+        },
+        "ccrelay.concurrency.maxQueueSize": {
+          "type": "number",
+          "description": "Maximum number of queued requests (0 or undefined = unlimited, capped at 10000)",
+          "minimum": 0
+        },
+        "ccrelay.concurrency.timeout": {
+          "type": "number",
+          "description": "Request timeout in milliseconds",
+          "minimum": 0
+        },
+        "ccrelay.log.enableStorage": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable request/response logging to database"
+        },
+        "ccrelay.database.type": {
+          "type": "string",
+          "enum": [
+            "sqlite",
+            "postgres"
+          ],
+          "default": "sqlite",
+          "description": "Database backend type"
+        },
+        "ccrelay.database.sqlitePath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to SQLite database file (default: ~/.ccrelay/logs.db)"
+        },
+        "ccrelay.database.postgresHost": {
+          "type": "string",
+          "default": "localhost",
+          "description": "PostgreSQL server host"
+        },
+        "ccrelay.database.postgresPort": {
+          "type": "number",
+          "default": 5432,
+          "description": "PostgreSQL server port"
+        },
+        "ccrelay.database.postgresDatabase": {
+          "type": "string",
+          "default": "ccrelay",
+          "description": "PostgreSQL database name"
+        },
+        "ccrelay.database.postgresUser": {
+          "type": "string",
+          "default": "",
+          "description": "PostgreSQL username"
+        },
+        "ccrelay.database.postgresPassword": {
+          "type": "string",
+          "default": "",
+          "description": "PostgreSQL password (supports ${ENV_VAR} for environment variable substitution)"
+        },
+        "ccrelay.database.postgresSsl": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable SSL for PostgreSQL connection"
+        },
+        "ccrelay.ui.statusBarPosition": {
+          "type": "string",
+          "enum": [
+            "left",
+            "right"
+          ],
+          "default": "right",
+          "description": "Position of the status bar item"
+        },
+        "ccrelay.ui.statusBarPriority": {
+          "type": "number",
+          "default": 100,
+          "description": "Priority of the status bar item"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "clean": "npx shx rm -rf out web/dist",
+    "vscode:prepublish": "npm run build:prod",
+    "dev": "npm run watch",
+    "dev:web": "cd web && npm run dev",
+    "prebuild": "node scripts/generate-version.mjs",
+    "build": "npm run clean && npm run build:web && npm run compile",
+    "build:dev": "node scripts/build-config.mjs dev && npm run build",
+    "build:prod": "node scripts/build-config.mjs prod && npm run build",
+    "build:web": "npx shx rm -rf out/web && cd web && npm run build && npx shx mkdir -p ../out/web && npx shx cp -r dist/* ../out/web/",
+    "precompile": "node scripts/generate-version.mjs",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "type-check": "tsc --noEmit",
+    "lint": "npm run type-check && eslint src tests",
+    "lint:fix": "eslint src tests --fix",
+    "format": "prettier --write src/**/*.ts *.json tests/**/*.ts scripts/*.mjs",
+    "format:check": "prettier --check src/**/*.ts *.json tests/**/*.ts scripts/*.mjs",
+    "test": "npm run test:unit",
+    "test:unit": "vitest run tests/unit",
+    "test:watch": "vitest tests/unit",
+    "test:coverage": "vitest run tests/unit --coverage",
+    "test:e2e": "node ./out/test/runTest.js",
+    "package": "npm run build && npx shx mkdir -p dists && vsce package --out dists",
+    "package:dev": "./scripts/package.sh dev",
+    "package:prod": "./scripts/package.sh prod",
+    "package:beta": "node scripts/version-beta.mjs && npm run package",
+    "package:release": "node scripts/version-release.mjs && npm run package"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0",
+    "pg": "^8.18.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.19.11",
+    "@types/pg": "^8.16.0",
+    "@types/vscode": "^1.80.0",
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
+    "@vitest/coverage-v8": "^4.0.18",
+    "@vscode/vsce": "^3.7.1",
+    "eslint": "^9.39.2",
+    "prettier": "^3.8.1",
+    "typescript": "^5.0.4",
+    "vitest": "^4.0.18"
+  }
+}
