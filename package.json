@@ -5,6 +5,15 @@
   "description": "VSCode extension with built-in API proxy server - switch between AI providers seamlessly",
   "version": "0.1.1",
   "publisher": "inflab",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/inflaborg/ccrelay.git"
+  },
+  "bugs": {
+    "url": "https://github.com/inflaborg/ccrelay/issues"
+  },
+  "homepage": "https://github.com/inflaborg/ccrelay#readme",
   "engines": {
     "vscode": "^1.80.0"
   },
