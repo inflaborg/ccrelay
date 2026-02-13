@@ -56,8 +56,10 @@ try {
 // Get base version (remove any existing hash suffix)
 const baseVersion = packageJson.version.replace(/-\w+$/, "");
 
-// Build version string: version-githash (same code = same filename)
-const buildVersion = `${baseVersion}-${gitHash}`;
+// Build version string:
+// - Dev: version-githash (for tracking builds during development)
+// - Prod: version only (clean release version)
+const buildVersion = env === "dev" ? `${baseVersion}-${gitHash}` : baseVersion;
 
 const content = `/**
  * Auto-generated build configuration
