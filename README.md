@@ -73,7 +73,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/inflab/ccrelay.git
+git clone https://github.com/inflaborg/ccrelay.git
 cd ccrelay
 
 # Install dependencies
@@ -204,6 +204,8 @@ Supports wildcard pattern matching for model names:
 
 ### OpenAI Format Conversion
 
+> 📋 **Feature Note**: OpenAI format conversion enables CCRelay to work with OpenAI-compatible providers (Gemini, OpenRouter, etc.). This feature handles bidirectional conversion between Anthropic and OpenAI API formats. If you encounter any compatibility issues, please report them on GitHub.
+
 CCRelay supports OpenAI-compatible providers (like Gemini):
 
 ```json
@@ -225,8 +227,6 @@ Conversion process:
 - **Request**: Anthropic Messages API format → OpenAI Chat Completions format
 - **Response**: OpenAI format → Anthropic format
 
-> ⚠️ **Note**: The Anthropic to OpenAI format conversion logic has not been thoroughly tested and may have issues. Bug reports and pull requests are welcome!
-
 ### Web UI Dashboard
 
 CCRelay has a built-in Web UI dashboard that provides:
@@ -234,6 +234,10 @@ CCRelay has a built-in Web UI dashboard that provides:
 - **Dashboard**: Server status, current provider, request statistics
 - **Providers**: View and switch providers
 - **Logs**: Request/response log viewer (requires enabling log storage)
+
+![Request Logs](docs/screenshot-ccrelay-1.png)
+
+![Log Details](docs/screenshot-ccrelay-3.png)
 
 Access methods:
 - Command Palette: `CCRelay: Open Web UI`
@@ -553,8 +557,6 @@ ccrelay/
 ## Contributing
 
 Issues and Pull Requests are welcome!
-
-> ⚠️ **Note**: The Anthropic to OpenAI format conversion logic has not been thoroughly tested and may have issues. Bug reports and pull requests to improve this functionality are especially welcome!
 
 ---
 

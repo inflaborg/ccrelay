@@ -73,7 +73,7 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/inflab/ccrelay.git
+git clone https://github.com/inflaborg/ccrelay.git
 cd ccrelay
 
 # 安装依赖
@@ -204,6 +204,8 @@ claude
 
 ### OpenAI 格式转换
 
+> 📋 **功能说明**: OpenAI 格式转换功能让 CCRelay 能够支持 OpenAI 兼容的提供商（如 Gemini、OpenRouter 等）。此功能负责 Anthropic 和 OpenAI API 格式之间的双向转换。如果你遇到任何兼容性问题，欢迎在 GitHub 上反馈。
+
 CCRelay 支持 OpenAI 兼容的提供商（如 Gemini）：
 
 ```json
@@ -225,8 +227,6 @@ CCRelay 支持 OpenAI 兼容的提供商（如 Gemini）：
 - **请求**: Anthropic Messages API 格式 → OpenAI Chat Completions 格式
 - **响应**: OpenAI 格式 → Anthropic 格式
 
-> ⚠️ **注意**: Anthropic 转 OpenAI 的逻辑并没有经过良好的测试，可能存在问题，欢迎提出问题或 PR！
-
 ### Web UI 管理界面
 
 CCRelay 内置 Web UI 管理界面，提供：
@@ -234,6 +234,10 @@ CCRelay 内置 Web UI 管理界面，提供：
 - **Dashboard**: 服务器状态、当前提供商、请求统计
 - **Providers**: 查看和切换提供商
 - **Logs**: 请求/响应日志查看器（需启用日志存储）
+
+![请求日志](docs/screenshot-ccrelay-1.png)
+
+![日志详情](docs/screenshot-ccrelay-3.png)
 
 访问方式：
 - 命令面板：`CCRelay: Open Web UI`
@@ -553,8 +557,6 @@ ccrelay/
 ## 贡献
 
 欢迎提交 Issue 和 Pull Request！
-
-> ⚠️ **注意**: Anthropic 转 OpenAI 的逻辑并没有经过良好的测试，可能存在问题，欢迎提出问题或 PR 来改进这个功能！
 
 ---
 
