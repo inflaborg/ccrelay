@@ -240,7 +240,7 @@ CCRelay 内置 Web UI 管理界面，提供：
 ![日志详情](docs/screenshot-ccrelay-3.png)
 
 访问方式：
-- 命令面板：`CCRelay: Open Web UI`
+- 命令面板：`CCRelay: Open Dashboard`
 - 浏览器访问：`http://127.0.0.1:7575/ccrelay/`
 
 ---
@@ -484,7 +484,7 @@ enableLogStorage: true
 | CCRelay: Open Settings | `ccrelay.openSettings` | 打开扩展设置 |
 | CCRelay: Show Logs | `ccrelay.showLogs` | 查看输出日志 |
 | CCRelay: Clear Logs | `ccrelay.clearLogs` | 清除输出日志 |
-| CCRelay: Open Web UI | `ccrelay.openWebUI` | 打开 Web 管理界面 |
+| CCRelay: Open Dashboard | `ccrelay.openWebUI` | 打开管理面板 |
 
 ---
 

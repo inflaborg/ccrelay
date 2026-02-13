@@ -94,8 +94,8 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.window.showInformationMessage("CCRelay logs cleared");
   });
 
-  const showLogViewerCommand = vscode.commands.registerCommand("ccrelay.showLogViewer", () => {
-    if (!server) {
+  const openWebUICommand = vscode.commands.registerCommand("ccrelay.openWebUI", () => {
+    if (!server || !configManager) {
       vscode.window.showErrorMessage("CCRelay server not initialized");
       return;
     }
@@ -110,31 +110,6 @@ export function activate(context: vscode.ExtensionContext) {
     LogViewerPanel.createOrShow(leaderUrl, role, host, port, context.extensionUri);
   });
 
-  const openWebUICommand = vscode.commands.registerCommand("ccrelay.openWebUI", () => {
-    if (!server || !configManager) {
-      vscode.window.showErrorMessage("CCRelay server not initialized");
-      return;
-    }
-
-    // In follower mode, open the Leader's URL
-    const role = server.getRole();
-    const leaderUrl = server.getLeaderUrl();
-
-    let url: string;
-    if (role === "follower" && leaderUrl) {
-      // Follower should open Leader's URL with /ccrelay/ path
-      url = leaderUrl.endsWith("/") ? `${leaderUrl}ccrelay/` : `${leaderUrl}/ccrelay/`;
-    } else {
-      // Leader or standalone: open local URL
-      const config = vscode.workspace.getConfiguration("ccrelay");
-      const port = config.get<number>("port", 7575);
-      const host = config.get<string>("host", "127.0.0.1");
-      url = `http://${host}:${port}/ccrelay/`;
-    }
-
-    vscode.env.openExternal(vscode.Uri.parse(url));
-  });
-
   context.subscriptions.push(
     showMenuCommand,
     switchProviderCommand,
@@ -143,7 +118,6 @@ export function activate(context: vscode.ExtensionContext) {
     openSettingsCommand,
     showLogsCommand,
     clearLogsCommand,
-    showLogViewerCommand,
     openWebUICommand,
     statusBar,
     logger

@@ -57,8 +57,8 @@
       },
       {
         "command": "ccrelay.openWebUI",
-        "title": "CCRelay: Open Web UI",
-        "icon": "$(browser)"
+        "title": "CCRelay: Open Dashboard",
+        "icon": "$(dashboard)"
       }
     ],
     "configuration": {

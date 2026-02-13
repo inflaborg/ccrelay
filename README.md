@@ -240,7 +240,7 @@ CCRelay has a built-in Web UI dashboard that provides:
 ![Log Details](docs/screenshot-ccrelay-3.png)
 
 Access methods:
-- Command Palette: `CCRelay: Open Web UI`
+- Command Palette: `CCRelay: Open Dashboard`
 - Browser: `http://127.0.0.1:7575/ccrelay/`
 
 ---
@@ -484,7 +484,7 @@ All other requests are proxied to the current provider.
 | CCRelay: Open Settings | `ccrelay.openSettings` | Open extension settings |
 | CCRelay: Show Logs | `ccrelay.showLogs` | View output logs |
 | CCRelay: Clear Logs | `ccrelay.clearLogs` | Clear output logs |
-| CCRelay: Open Web UI | `ccrelay.openWebUI` | Open Web dashboard |
+| CCRelay: Open Dashboard | `ccrelay.openWebUI` | Open dashboard panel |
 
 ---
 

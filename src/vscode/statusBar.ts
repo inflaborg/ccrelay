@@ -195,8 +195,8 @@ export class StatusBarManager implements vscode.Disposable {
         description: "Change the active AI provider",
       },
       {
-        label: "$(database) Request Log Viewer",
-        description: "View stored request/response logs",
+        label: "$(dashboard) Dashboard",
+        description: "Open CCRelay dashboard",
       },
       {
         label: "$(output) Show Output Logs",
@@ -240,8 +240,8 @@ export class StatusBarManager implements vscode.Disposable {
       case "$(arrow-swap) Switch Provider":
         await this.showProviderPicker();
         break;
-      case "$(database) Request Log Viewer":
-        await vscode.commands.executeCommand("ccrelay.showLogViewer");
+      case "$(dashboard) Dashboard":
+        await vscode.commands.executeCommand("ccrelay.openWebUI");
         break;
       case "$(output) Show Output Logs":
         await vscode.commands.executeCommand("ccrelay.showLogs");
