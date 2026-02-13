@@ -565,7 +565,7 @@ ccrelay/
 本项目代码 **100% 由 AI 生成**。特别感谢：
 
 - **[Claude Code](https://claude.ai/code)** - 编写了全部代码的 AI 编程助手
-- **[GLM](https://www.z.ai/)** - GLM 模型（glm-4.7，后切换至 glm-5）作为后端提供商
+- **[GLM](https://z.ai/model-api)** - GLM 模型（glm-4.7，后切换至 glm-5）作为后端提供商
 
 ---
 

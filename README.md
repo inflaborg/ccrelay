@@ -565,7 +565,7 @@ Issues and Pull Requests are welcome!
 This project is **100% AI-generated code**. Special thanks to:
 
 - **[Claude Code](https://claude.ai/code)** - The AI coding assistant that wrote all the code
-- **[GLM](https://www.z.ai/)** - GLM models (glm-4.7, later glm-5) served as the backend provider
+- **[GLM](https://z.ai/model-api)** - GLM models (glm-4.7, later glm-5) served as the backend provider
 
 ---
 
