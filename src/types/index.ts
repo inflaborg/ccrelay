@@ -71,6 +71,17 @@ export const ConcurrencyConfigSchema = z.object({
 
 export type ConcurrencyConfigInput = z.infer<typeof ConcurrencyConfigSchema>;
 
+// Route-based queue configuration schema
+export const RouteQueueConfigSchema = z.object({
+  pathPattern: z.string().min(1), // Regex pattern to match request path
+  maxConcurrency: z.number().int().positive().default(10),
+  maxQueueSize: z.number().int().positive().optional(),
+  timeout: z.number().int().positive().optional(),
+  name: z.string().optional(), // Optional name for logging
+});
+
+export type RouteQueueConfigInput = z.infer<typeof RouteQueueConfigSchema>;
+
 // SQLite configuration schema
 export const SqliteConfigSchema = z.object({
   type: z.literal("sqlite"),
@@ -110,6 +121,7 @@ export const FileConfigSchema = z.object({
   blockPatterns: z.array(BlockPatternSchema).optional(),
   openaiBlockPatterns: z.array(BlockPatternSchema).optional(),
   concurrency: ConcurrencyConfigSchema.optional(),
+  routeQueues: z.array(RouteQueueConfigSchema).optional(), // Route-based queue configs
   database: DatabaseConfigSchema.optional(),
   enableLogStorage: z.boolean().optional(),
 });
@@ -166,6 +178,7 @@ export interface RouterConfig {
   blockPatterns: BlockPattern[];
   openaiBlockPatterns: BlockPattern[];
   concurrency?: ConcurrencyConfig;
+  routeQueues?: RouteQueueConfig[]; // Route-based queue configurations
   database?: DatabaseConfig;
   enableLogStorage: boolean;
 }
@@ -364,6 +377,18 @@ export interface ConcurrencyConfig {
   maxConcurrency: number;
   maxQueueSize?: number;
   timeout?: number;
+}
+
+/**
+ * Route-based queue configuration for handling specific paths with different concurrency
+ */
+export interface RouteQueueConfig {
+  pathPattern: string; // Regex pattern to match request path
+  maxConcurrency: number;
+  maxQueueSize?: number;
+  timeout?: number;
+  name?: string;
+  compiledPattern?: RegExp; // Compiled regex for matching
 }
 
 /**

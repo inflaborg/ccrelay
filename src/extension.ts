@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { ConfigManager } from "./config";
+import { initializeDefaultConfig } from "./config/initializer";
 import { ProxyServer } from "./server/handler";
 import { StatusBarManager } from "./vscode/statusBar";
 import { LogViewerPanel } from "./vscode/logViewer";
@@ -13,7 +14,7 @@ let configManager: ConfigManager | null = null;
 let logger: Logger | null = null;
 let leaderElection: LeaderElection | null = null;
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
   const activationStart = Date.now();
   const instanceId = Math.random().toString(36).substring(2, 9);
 
@@ -23,6 +24,9 @@ export function activate(context: vscode.ExtensionContext) {
     `[Extension:${instanceId}] ===== ACTIVATION START ===== at ${new Date().toISOString()}`
   );
   logger.info(`[Extension:${instanceId}] Process ID: ${process.pid}`);
+
+  // Initialize default configuration values
+  await initializeDefaultConfig();
 
   // Initialize configuration manager
   const configStart = Date.now();

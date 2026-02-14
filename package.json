@@ -3,7 +3,7 @@
   "displayName": "CCRelay",
   "icon": "assets/icon-128.png",
   "description": "VSCode extension with built-in API proxy server - switch between AI providers seamlessly",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publisher": "inflab",
   "license": "MIT",
   "repository": {
@@ -151,7 +151,8 @@
           "default": [
             {
               "path": "/api/event_logging/*",
-              "response": "{\"ok\": true}"
+              "response": "",
+              "responseCode": 200
             }
           ],
           "description": "Paths that return custom response in inject mode"
@@ -177,17 +178,23 @@
               "response"
             ]
           },
-          "default": [],
+          "default": [
+            {
+              "path": "/v1/messages/count_tokens",
+              "response": "{\"input_tokens\": 0}",
+              "responseCode": 200
+            }
+          ],
           "description": "OpenAI API paths that return custom response"
         },
         "ccrelay.concurrency.enabled": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "Enable concurrency control for requests"
         },
         "ccrelay.concurrency.maxConcurrency": {
           "type": "number",
-          "default": 5,
+          "default": 3,
           "description": "Maximum number of concurrent requests to provider",
           "minimum": 1
         },
@@ -200,6 +207,49 @@
           "type": "number",
           "description": "Request timeout in milliseconds",
           "minimum": 0
+        },
+        "ccrelay.concurrency.routeQueues": {
+          "type": "array",
+          "default": [
+            {
+              "pathPattern": "/v1/messages/count_tokens",
+              "maxConcurrency": 30,
+              "name": "count_tokens"
+            }
+          ],
+          "description": "Route-based queue configurations for handling specific paths with different concurrency",
+          "items": {
+            "type": "object",
+            "properties": {
+              "pathPattern": {
+                "type": "string",
+                "description": "Regex pattern to match request path (e.g., '/v1/messages/count_tokens')"
+              },
+              "maxConcurrency": {
+                "type": "number",
+                "default": 10,
+                "description": "Maximum number of concurrent requests for this route",
+                "minimum": 1
+              },
+              "maxQueueSize": {
+                "type": "number",
+                "description": "Maximum queue size for this route (0 or undefined = unlimited)",
+                "minimum": 0
+              },
+              "timeout": {
+                "type": "number",
+                "description": "Request timeout in milliseconds for this route",
+                "minimum": 0
+              },
+              "name": {
+                "type": "string",
+                "description": "Optional name for this queue (for logging)"
+              }
+            },
+            "required": [
+              "pathPattern"
+            ]
+          }
         },
         "ccrelay.log.enableStorage": {
           "type": "boolean",

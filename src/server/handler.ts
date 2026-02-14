@@ -57,6 +57,9 @@ export class ProxyServer {
   // Concurrency manager for rate limiting
   private concurrencyManager: ConcurrencyManager | null = null;
 
+  // Route-specific concurrency managers (key is queue name)
+  private routeQueues: Map<string, ConcurrencyManager> = new Map();
+
   // Role change callbacks for external listeners (e.g., StatusBarManager)
   private roleChangeCallbacks: Set<(info: RoleChangeInfo) => void> = new Set();
 
@@ -89,6 +92,27 @@ export class ProxyServer {
           concurrencyConfig ?? "undefined"
         )}`
       );
+    }
+
+    // Initialize route-specific concurrency managers
+    const routeQueueConfigs = config.routeQueues;
+    if (routeQueueConfigs && routeQueueConfigs.length > 0) {
+      for (const routeConfig of routeQueueConfigs) {
+        const queueName = routeConfig.name ?? routeConfig.pathPattern;
+        const queueConcurrencyConfig = {
+          enabled: true,
+          maxConcurrency: routeConfig.maxConcurrency,
+          maxQueueSize: routeConfig.maxQueueSize,
+          timeout: routeConfig.timeout,
+        };
+        const routeQueue = new ConcurrencyManager(queueConcurrencyConfig, (task: RequestTask) =>
+          this.executeProxyRequest(task)
+        );
+        this.routeQueues.set(queueName, routeQueue);
+        this.log.info(
+          `RouteQueue "${queueName}" initialized: pattern=${routeConfig.pathPattern}, maxConcurrency=${routeConfig.maxConcurrency}, maxQueueSize=${routeConfig.maxQueueSize ?? "unlimited"}`
+        );
+      }
     }
   }
 
@@ -431,6 +455,30 @@ export class ProxyServer {
   }
 
   /**
+   * Find matching route queue for a given path
+   * Returns the queue name if matched, undefined otherwise
+   */
+  private findMatchingRouteQueue(
+    path: string
+  ): { name: string; queue: ConcurrencyManager } | undefined {
+    const routeQueueConfigs = this.config.routeQueues;
+    if (!routeQueueConfigs || routeQueueConfigs.length === 0) {
+      return undefined;
+    }
+
+    for (const routeConfig of routeQueueConfigs) {
+      if (routeConfig.compiledPattern && routeConfig.compiledPattern.test(path)) {
+        const queueName = routeConfig.name ?? routeConfig.pathPattern;
+        const queue = this.routeQueues.get(queueName);
+        if (queue) {
+          return { name: queueName, queue };
+        }
+      }
+    }
+    return undefined;
+  }
+
+  /**
    * Set CORS headers for response
    */
   private setCorsHeaders(res: http.ServerResponse): void {
@@ -663,13 +711,15 @@ export class ProxyServer {
       targetUrl += parsedUrl.search;
     }
 
-    // Prepare body
+    // Prepare body - track timing for client request receive
+    const requestReceiveStart = Date.now();
     let bodyChunks: Buffer[] = [];
     req.on("data", (chunk: Buffer) => {
       bodyChunks.push(chunk);
     });
 
     req.on("end", () => {
+      const bodyReceiveTime = Date.now() - requestReceiveStart;
       let body: Buffer | null = null;
       let originalModel: string | undefined;
       // Track original request body before any conversion (for all providers)
@@ -677,6 +727,9 @@ export class ProxyServer {
 
       if (bodyChunks.length > 0) {
         body = Buffer.concat(bodyChunks);
+        this.log.info(
+          `[Perf] RequestBodyReceived: ${body.length} bytes in ${bodyReceiveTime}ms from client`
+        );
 
         // Save original body before any processing (for all providers)
         if (this.database.enabled) {
@@ -780,9 +833,18 @@ export class ProxyServer {
 
       // If concurrency manager is enabled, submit to queue
       if (this.concurrencyManager) {
-        this.concurrencyManager
+        // Check if there's a matching route-specific queue
+        const matchedRoute = this.findMatchingRouteQueue(path);
+        const targetQueue = matchedRoute?.queue ?? this.concurrencyManager;
+        const queueName = matchedRoute?.name ?? "default";
+
+        this.log.info(
+          `[Perf:${clientId}] TaskSubmit: submitting to queue "${queueName}" (body ready in ${bodyReceiveTime}ms, matched route: ${matchedRoute ? "yes" : "no"})`
+        );
+        targetQueue
           .submit(task)
           .then(result => {
+            const totalTime = Date.now() - requestReceiveStart;
             // Write response from result
             if (result.error) {
               // This is a logic error that happened during execution
@@ -797,8 +859,8 @@ export class ProxyServer {
 
             // If streaming was already handled, skip writing response
             if (result.streamed) {
-              this.log.debug(
-                `[Server] Task ${task.id} completed with streaming, response already sent`
+              this.log.info(
+                `[Perf:${clientId}] TaskComplete: streaming done, total time: ${totalTime}ms`
               );
               return;
             }
@@ -812,11 +874,14 @@ export class ProxyServer {
             } else {
               res.end();
             }
+            this.log.info(
+              `[Perf:${clientId}] TaskComplete: non-streaming done, total time: ${totalTime}ms`
+            );
           })
           .catch(err => {
             // This is an error from the queue submission itself (e.g. queue full)
             const errMsg = err instanceof Error ? err.message : String(err);
-            this.log.warn(`Task ${task.id} rejected: ${errMsg}`);
+            this.log.warn(`Task ${task.id} rejected from queue "${queueName}": ${errMsg}`);
 
             if (!res.headersSent) {
               // 503 Service Unavailable is appropriate for queue full/timeout
@@ -881,13 +946,28 @@ export class ProxyServer {
       headers: requestHeaders,
     };
 
+    // Performance timing markers
     const startTime = Date.now();
+    let requestSentTime: number = 0;
+    let firstByteTime: number = 0;
+    let firstByteLogged = false;
+    let streamChunkCount = 0;
+    let streamTotalBytes = 0;
+    let lastChunkTime = 0;
+
     let responseChunks: Buffer[] = [];
     let hasLogged = false;
 
     const proxyReq = httpModule.request(options, proxyRes => {
       const duration = Date.now() - startTime;
       const status = proxyRes.statusCode || 200;
+
+      // Record TTFB (Time To First Byte)
+      firstByteTime = Date.now();
+      const ttfb = firstByteTime - requestSentTime;
+      this.log.info(
+        `[Perf:${clientId}] TTFB: ${ttfb}ms (upstream response headers received, total: ${duration}ms)`
+      );
 
       // Log response
       if (status >= 400) {
@@ -998,10 +1078,48 @@ export class ProxyServer {
           }
         });
       } else {
-        // Capture response chunks for logging if enabled
-        if (this.database.enabled) {
+        // Check if this is a streaming (SSE) response
+        const isSSEResponse = proxyRes.headers["content-type"]?.includes("text/event-stream");
+
+        if (isSSEResponse) {
+          this.log.info(`[Perf:${clientId}] SSE streaming mode detected`);
+
+          // Capture response chunks for logging and performance tracking
           proxyRes.on("data", (chunk: Buffer) => {
-            responseChunks.push(chunk);
+            streamChunkCount++;
+            streamTotalBytes += chunk.length;
+            lastChunkTime = Date.now();
+
+            // Log first chunk separately (helps identify prefill delay)
+            if (!firstByteLogged) {
+              firstByteLogged = true;
+              const firstChunkDelay = Date.now() - firstByteTime;
+              this.log.info(
+                `[Perf:${clientId}] FirstChunk: ${firstChunkDelay}ms after headers, ${chunk.length} bytes`
+              );
+            }
+
+            // Log every 10 chunks or large chunks (>10KB)
+            if (streamChunkCount % 10 === 0 || chunk.length > 10240) {
+              const chunkDuration = Date.now() - startTime;
+              this.log.info(
+                `[Perf:${clientId}] Chunk#${streamChunkCount}: ${chunk.length} bytes, total: ${streamTotalBytes} bytes, elapsed: ${chunkDuration}ms`
+              );
+            }
+
+            if (this.database.enabled) {
+              responseChunks.push(chunk);
+            }
+          });
+        } else {
+          // Non-SSE: simpler logging
+          proxyRes.on("data", (chunk: Buffer) => {
+            streamChunkCount++;
+            streamTotalBytes += chunk.length;
+
+            if (this.database.enabled) {
+              responseChunks.push(chunk);
+            }
           });
         }
 
@@ -1010,8 +1128,15 @@ export class ProxyServer {
 
         // Log after response completes
         proxyRes.on("end", () => {
+          const totalDuration = Date.now() - startTime;
+          const avgChunkSize =
+            streamChunkCount > 0 ? Math.round(streamTotalBytes / streamChunkCount) : 0;
+          const timeSinceLastChunk = lastChunkTime > 0 ? Date.now() - lastChunkTime : 0;
+          this.log.info(
+            `[Perf:${clientId}] ResponseEnd: ${streamChunkCount} chunks, ${streamTotalBytes} total bytes, avg ${avgChunkSize} bytes/chunk, total: ${totalDuration}ms, lastChunkGap: ${timeSinceLastChunk}ms, mode: ${isSSEResponse ? "SSE" : "non-SSE"}`
+          );
           if (!hasLogged) {
-            this.logResponse(clientId, duration, status, responseChunks, undefined);
+            this.logResponse(clientId, totalDuration, status, responseChunks, undefined);
             hasLogged = true;
           }
         });
@@ -1077,9 +1202,14 @@ export class ProxyServer {
 
     if (body) {
       proxyReq.write(body);
+      this.log.info(`[Perf:${clientId}] RequestBodySent: ${body.length} bytes to upstream`);
     }
 
     proxyReq.end();
+    requestSentTime = Date.now();
+    this.log.info(
+      `[Perf:${clientId}] RequestSent: total setup time ${requestSentTime - startTime}ms, waiting for upstream response...`
+    );
   }
 
   /**
@@ -1344,13 +1474,28 @@ export class ProxyServer {
     };
 
     const startTime = Date.now();
+    let requestSentTime = 0;
+    let firstByteTime = 0;
+    let streamChunkCount = 0;
+    let streamTotalBytes = 0;
+    let firstChunkLogged = false;
     let responseChunks: Buffer[] = [];
     let originalResponseBody: string | undefined;
 
+    this.log.info(
+      `[Perf:${clientId}] ExecuteRequestStart: starting upstream request to ${provider.id}`
+    );
+
     return new Promise<ProxyResult>((resolve, reject) => {
       const proxyReq = httpModule.request(options, proxyRes => {
+        const ttfb = Date.now() - requestSentTime;
         const duration = Date.now() - startTime;
         const status = proxyRes.statusCode || 200;
+        firstByteTime = Date.now();
+
+        this.log.info(
+          `[Perf:${clientId}] TTFB: ${ttfb}ms (upstream response headers, total elapsed: ${duration}ms)`
+        );
 
         // Log response
         if (status >= 400) {
@@ -1456,7 +1601,7 @@ export class ProxyServer {
 
           // If SSE and we have a client response object, stream directly
           if (isSSEResponse && clientRes) {
-            this.log.debug(`[Server] SSE streaming mode enabled for task ${task.id}`);
+            this.log.info(`[Perf:${clientId}] SSE streaming mode enabled`);
 
             // Write headers immediately
             clientRes.writeHead(status, responseHeaders);
@@ -1464,19 +1609,45 @@ export class ProxyServer {
             // Pipe the response directly to client
             proxyRes.pipe(clientRes);
 
-            // Still collect chunks for logging (but don't block streaming)
-            if (this.database.enabled) {
-              proxyRes.on("data", (chunk: Buffer) => {
+            // Track streaming performance
+            proxyRes.on("data", (chunk: Buffer) => {
+              streamChunkCount++;
+              streamTotalBytes += chunk.length;
+
+              // Log first chunk (helps identify prefill delay)
+              if (!firstChunkLogged) {
+                firstChunkLogged = true;
+                const firstChunkDelay = Date.now() - firstByteTime;
+                this.log.info(
+                  `[Perf:${clientId}] FirstChunk: ${firstChunkDelay}ms after headers, ${chunk.length} bytes`
+                );
+              }
+
+              // Log every 10 chunks or large chunks (>10KB)
+              if (streamChunkCount % 10 === 0 || chunk.length > 10240) {
+                const chunkDuration = Date.now() - startTime;
+                this.log.info(
+                  `[Perf:${clientId}] Chunk#${streamChunkCount}: ${chunk.length} bytes, total: ${streamTotalBytes} bytes, elapsed: ${chunkDuration}ms`
+                );
+              }
+
+              if (this.database.enabled) {
                 responseChunks.push(chunk);
-              });
-            }
+              }
+            });
 
             proxyRes.on("end", () => {
-              this.logResponse(clientId, duration, status, responseChunks, undefined);
+              const totalDuration = Date.now() - startTime;
+              const avgChunkSize =
+                streamChunkCount > 0 ? Math.round(streamTotalBytes / streamChunkCount) : 0;
+              this.log.info(
+                `[Perf:${clientId}] StreamEnd: ${streamChunkCount} chunks, ${streamTotalBytes} total bytes, avg ${avgChunkSize} bytes/chunk, total: ${totalDuration}ms`
+              );
+              this.logResponse(clientId, totalDuration, status, responseChunks, undefined);
               resolve({
                 statusCode: status,
                 headers: responseHeaders,
-                duration,
+                duration: totalDuration,
                 responseBodyChunks: responseChunks,
                 streamed: true,
               });
@@ -1484,16 +1655,22 @@ export class ProxyServer {
           } else {
             // Non-streaming: buffer the response
             proxyRes.on("data", (chunk: Buffer) => {
+              streamChunkCount++;
+              streamTotalBytes += chunk.length;
               responseChunks.push(chunk);
             });
 
             proxyRes.on("end", () => {
-              this.logResponse(clientId, duration, status, responseChunks, undefined);
+              const totalDuration = Date.now() - startTime;
+              this.log.info(
+                `[Perf:${clientId}] ResponseEnd: ${streamChunkCount} chunks, ${streamTotalBytes} total bytes, total: ${totalDuration}ms`
+              );
+              this.logResponse(clientId, totalDuration, status, responseChunks, undefined);
               resolve({
                 statusCode: status,
                 headers: responseHeaders,
                 body: responseChunks.length > 0 ? Buffer.concat(responseChunks) : undefined,
-                duration,
+                duration: totalDuration,
                 responseBodyChunks: responseChunks,
               });
             });
@@ -1536,9 +1713,14 @@ export class ProxyServer {
 
       if (body) {
         proxyReq.write(body);
+        this.log.info(`[Perf:${clientId}] RequestBodySent: ${body.length} bytes to upstream`);
       }
 
       proxyReq.end();
+      requestSentTime = Date.now();
+      this.log.info(
+        `[Perf:${clientId}] RequestSent: setup time ${requestSentTime - startTime}ms, waiting for upstream...`
+      );
     });
   }
 
