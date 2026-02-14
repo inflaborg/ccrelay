@@ -23,7 +23,7 @@
   "activationEvents": [
     "onStartupFinished"
   ],
-  "main": "./out/dist/extension.js",
+  "main": "./out/dist/extension.cjs",
   "contributes": {
     "commands": [
       {
@@ -280,7 +280,7 @@
     "precompile": "node scripts/generate-version.mjs",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "bundle": "esbuild ./src/extension.ts --bundle --outfile=out/dist/extension.js --external:vscode --external:pg --external:pg-cloudflare --external:pg-connection-string --external:pg-int8 --external:pg-pool --external:pg-protocol --external:pg-types --external:pgpass --external:postgres-array --external:postgres-bytea --external:postgres-date --external:postgres-interval --format=cjs --platform=node --minify --footer:js=\"module.exports={activate,deactivate};\"",
+    "bundle": "node scripts/esbuild.config.mjs",
     "type-check": "tsc --noEmit",
     "lint": "npm run type-check && eslint src tests",
     "lint:fix": "eslint src tests --fix",
