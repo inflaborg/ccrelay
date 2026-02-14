@@ -1,0 +1,67 @@
+name: Build Dev (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      suffix:
+        description: 'Optional suffix for artifact name (e.g., test, debug)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build dev package
+        run: npm run package:dev
+
+      - name: Get package version and build info
+        id: info
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+
+      - name: Set build suffix
+        id: suffix
+        run: |
+          INPUT_SUFFIX="${{ github.event.inputs.suffix }}"
+          if [ -n "$INPUT_SUFFIX" ]; then
+            SUFFIX="-manual-${INPUT_SUFFIX}"
+          else
+            SUFFIX="-manual-${{ github.run_number }}"
+          fi
+          echo "suffix=$SUFFIX" >> $GITHUB_OUTPUT
+
+      - name: Rename vsix file
+        run: |
+          SUFFIX="${{ steps.suffix.outputs.suffix }}"
+          cd dists
+          for file in *.vsix; do
+            BASENAME="${file%.vsix}"
+            mv "$file" "${BASENAME}${SUFFIX}.vsix"
+          done
+          ls -la
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ccrelay-dev-${{ steps.info.outputs.version }}${{ steps.suffix.outputs.suffix }}
+          path: dists/*.vsix
+          retention-days: 30
