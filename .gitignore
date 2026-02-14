@@ -9,3 +9,4 @@ dists/
 src/config/build-config.generated.ts
 src/api/version.generated.ts
 .DS_Store
+/dist

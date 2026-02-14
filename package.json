@@ -23,7 +23,7 @@
   "activationEvents": [
     "onStartupFinished"
   ],
-  "main": "./out/src/extension.js",
+  "main": "./out/dist/extension.js",
   "contributes": {
     "commands": [
       {
@@ -269,7 +269,7 @@
   },
   "scripts": {
     "clean": "npx shx rm -rf out web/dist",
-    "vscode:prepublish": "npm run build:prod",
+    "vscode:prepublish": "node scripts/build-config.mjs prod && npm run build:web && node scripts/generate-version.mjs && npm run bundle",
     "dev": "npm run watch",
     "dev:web": "cd web && npm run dev",
     "prebuild": "node scripts/generate-version.mjs",
@@ -280,6 +280,7 @@
     "precompile": "node scripts/generate-version.mjs",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
+    "bundle": "esbuild ./src/extension.ts --bundle --outfile=out/dist/extension.js --external:vscode --external:pg --external:pg-cloudflare --external:pg-connection-string --external:pg-int8 --external:pg-pool --external:pg-protocol --external:pg-types --external:pgpass --external:postgres-array --external:postgres-bytea --external:postgres-date --external:postgres-interval --format=cjs --platform=node --minify --footer:js=\"module.exports={activate,deactivate};\"",
     "type-check": "tsc --noEmit",
     "lint": "npm run type-check && eslint src tests",
     "lint:fix": "eslint src tests --fix",
@@ -290,7 +291,7 @@
     "test:watch": "vitest tests/unit",
     "test:coverage": "vitest run tests/unit --coverage",
     "test:e2e": "node ./out/test/runTest.js",
-    "package": "npm run build && npx shx mkdir -p dists && vsce package --out dists",
+    "package": "npm run build:web && node scripts/generate-version.mjs && npm run bundle && npx shx mkdir -p dists && vsce package --out dists",
     "package:dev": "./scripts/package.sh dev",
     "package:prod": "./scripts/package.sh prod",
     "package:beta": "node scripts/version-beta.mjs && npm run package",
@@ -311,6 +312,7 @@
     "@typescript-eslint/parser": "^8.54.0",
     "@vitest/coverage-v8": "^4.0.18",
     "@vscode/vsce": "^3.7.1",
+    "esbuild": "^0.27.3",
     "eslint": "^9.39.2",
     "prettier": "^3.8.1",
     "typescript": "^5.0.4",
