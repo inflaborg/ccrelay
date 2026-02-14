@@ -3,7 +3,7 @@
 export interface Provider {
   id: string;
   name: string;
-  mode: 'inject' | 'passthrough';
+  mode: "inject" | "passthrough";
   baseUrl?: string;
   active: boolean;
 }
@@ -14,10 +14,10 @@ export interface ProvidersResponse {
 }
 
 export interface ServerStatus {
-  status: 'running' | 'stopped';
+  status: "running" | "stopped";
   currentProvider: string;
   providerName: string | null;
-  providerMode: 'inject' | 'passthrough' | null;
+  providerMode: "inject" | "passthrough" | null;
   port: number;
   host: string;
 }
@@ -27,15 +27,15 @@ export interface SwitchRequest {
 }
 
 export interface SwitchResponse {
-  status: 'ok' | 'error';
+  status: "ok" | "error";
   provider?: string;
   name?: string;
   message?: string;
   available?: string[];
 }
 
-export type RequestStatus = 'pending' | 'completed';
-export type RouteType = 'block' | 'passthrough' | 'router';
+export type RequestStatus = "pending" | "completed";
+export type RouteType = "block" | "passthrough" | "router";
 
 export interface LogEntry {
   id: number;
@@ -104,7 +104,7 @@ export interface Config {
 export interface ProviderConfig {
   name: string;
   baseUrl?: string;
-  mode: 'inject' | 'passthrough';
+  mode: "inject" | "passthrough";
   authHeader?: string;
   apiKey?: string;
   modelMap?: Record<string, string>;
