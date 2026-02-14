@@ -151,7 +151,8 @@
           "default": [
             {
               "path": "/api/event_logging/*",
-              "response": "{\"ok\": true}"
+              "response": "",
+              "responseCode": 200
             }
           ],
           "description": "Paths that return custom response in inject mode"
@@ -177,17 +178,23 @@
               "response"
             ]
           },
-          "default": [],
+          "default": [
+            {
+              "path": "/v1/messages/count_tokens",
+              "response": "{\"input_tokens\": 0}",
+              "responseCode": 200
+            }
+          ],
           "description": "OpenAI API paths that return custom response"
         },
         "ccrelay.concurrency.enabled": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "Enable concurrency control for requests"
         },
         "ccrelay.concurrency.maxConcurrency": {
           "type": "number",
-          "default": 5,
+          "default": 3,
           "description": "Maximum number of concurrent requests to provider",
           "minimum": 1
         },
@@ -203,7 +210,13 @@
         },
         "ccrelay.concurrency.routeQueues": {
           "type": "array",
-          "default": [],
+          "default": [
+            {
+              "pathPattern": "/v1/messages/count_tokens",
+              "maxConcurrency": 30,
+              "name": "count_tokens"
+            }
+          ],
           "description": "Route-based queue configurations for handling specific paths with different concurrency",
           "items": {
             "type": "object",
