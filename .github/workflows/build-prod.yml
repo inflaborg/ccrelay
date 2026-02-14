@@ -1,9 +1,12 @@
 name: Build Prod
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name to release (e.g., v1.0.0), will use package.json version if empty'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -33,7 +36,12 @@ jobs:
         id: version
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          TAG_NAME=${GITHUB_REF#refs/tags/}
+          # Use input tag_name if provided, otherwise use package version
+          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            TAG_NAME="${{ github.event.inputs.tag_name }}"
+          else
+            TAG_NAME="v${VERSION}"
+          fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
 

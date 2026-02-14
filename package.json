@@ -282,7 +282,7 @@
     "watch": "tsc -watch -p ./",
     "bundle": "node scripts/esbuild.config.mjs",
     "type-check": "tsc --noEmit",
-    "lint": "npm run type-check && eslint src tests",
+    "lint": "npm run type-check && eslint src tests --max-warnings=0",
     "lint:fix": "eslint src tests --fix",
     "format": "prettier --write src/**/*.ts *.json tests/**/*.ts scripts/*.mjs",
     "format:check": "prettier --check src/**/*.ts *.json tests/**/*.ts scripts/*.mjs",
@@ -295,7 +295,8 @@
     "package:dev": "./scripts/package.sh dev",
     "package:prod": "./scripts/package.sh prod",
     "package:beta": "node scripts/version-beta.mjs && npm run package",
-    "package:release": "node scripts/version-release.mjs && npm run package"
+    "package:release": "node scripts/version-release.mjs && npm run package",
+    "prepare": "husky"
   },
   "dependencies": {
     "js-yaml": "^4.1.0",
@@ -314,6 +315,8 @@
     "@vscode/vsce": "^3.7.1",
     "esbuild": "^0.27.3",
     "eslint": "^9.39.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
     "prettier": "^3.8.1",
     "typescript": "^5.0.4",
     "vitest": "^4.0.18"
