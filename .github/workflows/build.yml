@@ -1,0 +1,161 @@
+name: Build Packages
+
+on:
+  # 1. Manual trigger - build dev package on current branch
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Build environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+      suffix:
+        description: 'Optional suffix for artifact name (e.g., test, debug)'
+        required: false
+        type: string
+
+  # 2. Auto trigger - build dev package on main branch push
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+
+  # 3. Auto trigger - build prod package on tag push
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  # Job 1 & 2: Build dev package
+  build-dev:
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'dev') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build dev package
+        run: npm run package:dev
+
+      - name: Get package version and build info
+        id: info
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          DATE=$(date +%Y%m%d)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "date=$DATE" >> $GITHUB_OUTPUT
+
+      - name: Set build suffix
+        id: suffix
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            # Manual trigger
+            INPUT_SUFFIX="${{ github.event.inputs.suffix }}"
+            if [ -n "$INPUT_SUFFIX" ]; then
+              SUFFIX="-manual-${INPUT_SUFFIX}"
+            else
+              SUFFIX="-manual-${{ github.run_number }}"
+            fi
+          else
+            # Auto trigger (main push)
+            SUFFIX="-auto-${{ steps.info.outputs.date }}-${{ steps.info.outputs.short_sha }}"
+          fi
+          echo "suffix=$SUFFIX" >> $GITHUB_OUTPUT
+
+      - name: Rename vsix file
+        run: |
+          VERSION="${{ steps.info.outputs.version }}"
+          SUFFIX="${{ steps.suffix.outputs.suffix }}"
+          cd dists
+          for file in *.vsix; do
+            # ccrelay-vscode-0.1.1.vsix -> ccrelay-vscode-0.1.1-manual-test.vsix
+            BASENAME="${file%.vsix}"
+            mv "$file" "${BASENAME}${SUFFIX}.vsix"
+          done
+          ls -la
+
+      - name: Upload dev artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ccrelay-dev-${{ steps.info.outputs.version }}${{ steps.suffix.outputs.suffix }}
+          path: dists/*.vsix
+          retention-days: 30
+
+      - name: Create dev release (on main push only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: dev-${{ steps.info.outputs.version }}-${{ github.run_number }}
+          name: Dev Build ${{ steps.info.outputs.version }} (#${{ github.run_number }})
+          prerelease: true
+          files: dists/*.vsix
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Job 3: Build prod package
+  build-prod:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build prod package
+        run: npm run package:prod
+
+      - name: Get package version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+
+      - name: Upload prod artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ccrelay-prod-${{ steps.version.outputs.version }}
+          path: dists/*.vsix
+          retention-days: 90
+
+      - name: Create prod release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.tag_name }}
+          name: Release ${{ steps.version.outputs.tag_name }}
+          prerelease: false
+          files: dists/*.vsix
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
