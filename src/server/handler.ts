@@ -1832,6 +1832,11 @@ export class ProxyServer {
             `Proxy connection error to ${provider.id} (attempt ${attempt}/${maxRetries}): ${err.message}, retrying in ${attempt}s...`
           );
 
+          // Clean up listeners before retry
+          if (clientRes) {
+            clientRes.off("close", onClientDisconnect);
+          }
+
           setTimeout(() => {
             this.executeProxyRequest({ ...task, attempt: attempt + 1 })
               .then(resolve)
