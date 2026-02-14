@@ -20,6 +20,8 @@ import {
   type ProviderConfigInput,
   type ConcurrencyConfig,
   type DatabaseConfig,
+  type RouteQueueConfig,
+  type RouteQueueConfigInput,
 } from "../types";
 
 const CONFIG_STATE_KEY = "ccrelay.currentProvider";
@@ -268,6 +270,48 @@ function getConcurrencyConfig(
 }
 
 /**
+ * Extract route-based queue configs from file and VSCode settings
+ */
+function getRouteQueuesConfig(
+  fileConfig: FileConfigInput,
+  vscodeConfig: vscode.WorkspaceConfiguration
+): RouteQueueConfig[] | undefined {
+  // Get from file config
+  const fileRouteQueues = fileConfig.routeQueues;
+
+  // Also check VSCode settings for routeQueues
+  const vscodeRouteQueues = vscodeConfig.get<RouteQueueConfigInput[]>("concurrency.routeQueues");
+
+  const routeQueuesConfig = vscodeRouteQueues ?? fileRouteQueues;
+
+  if (!routeQueuesConfig || routeQueuesConfig.length === 0) {
+    return undefined;
+  }
+
+  // Compile regex patterns and validate
+  return routeQueuesConfig.map((config, index) => {
+    let compiledPattern: RegExp;
+    try {
+      compiledPattern = new RegExp(config.pathPattern);
+    } catch {
+      console.warn(
+        `[ConfigManager] Invalid regex pattern "${config.pathPattern}" at index ${index}, skipping`
+      );
+      compiledPattern = /^$/; // Match nothing on error
+    }
+
+    return {
+      pathPattern: config.pathPattern,
+      maxConcurrency: config.maxConcurrency ?? 10,
+      maxQueueSize: config.maxQueueSize,
+      timeout: config.timeout,
+      name: config.name,
+      compiledPattern,
+    };
+  });
+}
+
+/**
  * Extract database config from file and VSCode settings
  */
 function getDatabaseConfig(
@@ -418,6 +462,10 @@ export class ConfigManager {
     const concurrency = getConcurrencyConfig(fileConfig, vscodeConfig);
     console.log(`[ConfigManager] Concurrency config resolved: ${JSON.stringify(concurrency)}`);
 
+    // Get route-based queue configs
+    const routeQueues = getRouteQueuesConfig(fileConfig, vscodeConfig);
+    console.log(`[ConfigManager] Route queues config resolved: ${JSON.stringify(routeQueues)}`);
+
     // Get log storage enabled setting
     const enableLogStorage = vscodeConfig.get<boolean>(
       "log.enableStorage",
@@ -440,6 +488,7 @@ export class ConfigManager {
       blockPatterns,
       openaiBlockPatterns,
       concurrency,
+      routeQueues,
       database,
       enableLogStorage,
     };
@@ -504,6 +553,10 @@ export class ConfigManager {
 
   get openaiBlockPatterns(): { path: string; response: string; responseCode?: number }[] {
     return this.config.openaiBlockPatterns;
+  }
+
+  get routeQueues(): RouteQueueConfig[] | undefined {
+    return this.config.routeQueues;
   }
 
   get database(): DatabaseConfig | undefined {
