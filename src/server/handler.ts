@@ -1531,8 +1531,10 @@ export class ProxyServer {
     const requestHeaders: Record<string, string> = { ...taskHeaders };
     requestHeaders["accept-encoding"] = "identity";
 
-    // Create AbortController for timeout cancellation
-    const abortController = new AbortController();
+    // Use task's abortController if provided by ConcurrencyManager (queue mode),
+    // otherwise create a local AbortController (non-queue mode)
+    const abortController = task.abortController ?? new AbortController();
+    const abortSignal = abortController.signal;
 
     const options: http.RequestOptions = {
       hostname: urlParsed.hostname,
@@ -1540,7 +1542,7 @@ export class ProxyServer {
       path: urlParsed.path,
       method,
       headers: requestHeaders,
-      signal: abortController.signal,
+      signal: abortSignal,
     };
 
     const startTime = Date.now();
@@ -1813,7 +1815,7 @@ export class ProxyServer {
         }
 
         // Check if aborted by client disconnect
-        if (abortController.signal.aborted) {
+        if (abortSignal.aborted) {
           this.log.info(`[${clientId}] Request aborted (client disconnect) after ${duration}ms`);
           this.logResponse(clientId, duration, 499, responseChunks, "Client disconnected");
           resolve({

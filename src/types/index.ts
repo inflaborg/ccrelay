@@ -425,6 +425,8 @@ export interface RequestTask {
   cancelled?: boolean;
   /** Reason for cancellation */
   cancelledReason?: string;
+  /** AbortController for cancelling the underlying HTTP request */
+  abortController?: AbortController;
 }
 
 /**

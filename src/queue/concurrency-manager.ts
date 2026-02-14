@@ -153,6 +153,11 @@ export class ConcurrencyManager {
       `[Task ${task.id}] Started (wait: ${waitTime}ms, queue: ${this.queue.size()}, active: ${this.processingTasks.size})`
     );
 
+    // Create AbortController for timeout cancellation
+    const abortController = new AbortController();
+    // Pass the AbortController to the task so executeProxyRequest can use its signal
+    task.abortController = abortController;
+
     let timeoutHandle: NodeJS.Timeout | undefined;
 
     try {
@@ -162,6 +167,8 @@ export class ConcurrencyManager {
       const timeoutPromise = new Promise<ProxyResult>((_, timeoutReject) => {
         if (timeout) {
           timeoutHandle = setTimeout(() => {
+            // Abort the underlying HTTP request when timeout triggers
+            abortController.abort(new Error(`Task timeout after ${timeout}ms`));
             timeoutReject(new Error(`Task timeout after ${timeout}ms`));
           }, timeout);
         }
@@ -191,6 +198,9 @@ export class ConcurrencyManager {
       if (timeoutHandle) {
         clearTimeout(timeoutHandle);
       }
+
+      // Clean up abortController
+      task.abortController = undefined;
 
       // Clean up
       this.processingTasks.delete(task.id);
