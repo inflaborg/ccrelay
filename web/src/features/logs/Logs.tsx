@@ -459,7 +459,7 @@ export default function Logs() {
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <Select
-            value={filter.providerId || ""}
+            value={(filter.providerId as string) || ""}
             options={[
               { value: "", label: "All Providers" },
               ...providers.map(p => ({ value: p, label: p })),
@@ -468,7 +468,7 @@ export default function Logs() {
             className="h-7 w-auto min-w-[100px]"
           />
           <Select
-            value={filter.method || ""}
+            value={(filter.method as string) || ""}
             options={[
               { value: "", label: "All Methods" },
               { value: "GET", label: "GET" },
@@ -481,14 +481,14 @@ export default function Logs() {
           />
           <Input
             placeholder="Filter path..."
-            value={filter.pathPattern || ""}
+            value={(filter.pathPattern as string) || ""}
             onChange={e => handleFilterChange("pathPattern", e.target.value || undefined)}
             className="h-7 w-auto max-w-[140px]"
           />
           <label className="flex items-center gap-1.5 cursor-pointer">
             <input
               type="checkbox"
-              checked={filter.hasError || false}
+              checked={(filter.hasError as boolean) || false}
               onChange={e => handleFilterChange("hasError", e.target.checked ? true : undefined)}
               className="rounded h-3 w-3"
             />
