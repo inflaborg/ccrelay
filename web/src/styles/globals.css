@@ -3,7 +3,6 @@
 @tailwind utilities;
 
 @layer base {
-
   /* Dark theme - clean gray color palette */
   :root {
     --background: 0 0% 12%;

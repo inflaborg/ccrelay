@@ -21,7 +21,7 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
     const [open, setOpen] = React.useState(false);
     const containerRef = React.useRef<HTMLDivElement>(null);
 
-    const selectedOption = options.find((opt) => opt.value === value);
+    const selectedOption = options.find(opt => opt.value === value);
     const displayValue = selectedOption?.label || placeholder || "";
 
     // Close dropdown when clicking outside
@@ -89,7 +89,7 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
                   No options available
                 </div>
               ) : (
-                options.map((option) => {
+                options.map(option => {
                   const isSelected = option.value === value;
                   return (
                     <button
@@ -102,9 +102,7 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
                       onClick={() => handleSelect(option.value)}
                     >
                       <span className="flex-1 truncate">{option.label}</span>
-                      {isSelected && (
-                        <Check className="h-4 w-4 shrink-0" />
-                      )}
+                      {isSelected && <Check className="h-4 w-4 shrink-0" />}
                     </button>
                   );
                 })

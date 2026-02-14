@@ -1,56 +1,54 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
-import { Check, Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Select } from '@/components/ui/select'
-import { api } from '@/api/client'
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { Check, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Select } from "@/components/ui/select";
+import { api } from "@/api/client";
 
 export default function Providers() {
-  const queryClient = useQueryClient()
-  const [selectedProvider, setSelectedProvider] = useState<string>('')
+  const queryClient = useQueryClient();
+  const [selectedProvider, setSelectedProvider] = useState<string>("");
 
   const { data: providersData, isLoading } = useQuery({
-    queryKey: ['providers'],
+    queryKey: ["providers"],
     queryFn: () => api.getProviders(),
-  })
+  });
 
   const { data: status } = useQuery({
-    queryKey: ['status'],
+    queryKey: ["status"],
     queryFn: () => api.getStatus(),
-  })
+  });
 
   const switchMutation = useMutation({
     mutationFn: (providerId: string) => api.switchProvider(providerId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['status'] })
-      queryClient.invalidateQueries({ queryKey: ['providers'] })
+      queryClient.invalidateQueries({ queryKey: ["status"] });
+      queryClient.invalidateQueries({ queryKey: ["providers"] });
     },
-  })
+  });
 
   const handleSwitch = () => {
     if (selectedProvider) {
-      switchMutation.mutate(selectedProvider)
+      switchMutation.mutate(selectedProvider);
     }
-  }
+  };
 
-  const providers = providersData?.providers || []
-  const currentProvider = status?.currentProvider || providersData?.current
+  const providers = providersData?.providers || [];
+  const currentProvider = status?.currentProvider || providersData?.current;
 
   // Build select options
-  const selectOptions = providers.map((p) => ({
+  const selectOptions = providers.map(p => ({
     value: p.id,
     label: `${p.name} (${p.mode})`,
-  }))
+  }));
 
   return (
     <div className="space-y-3">
       <div>
         <h2 className="text-base font-semibold tracking-tight">Providers</h2>
-        <p className="text-xs text-muted-foreground">
-          Manage and switch between AI API providers
-        </p>
+        <p className="text-xs text-muted-foreground">Manage and switch between AI API providers</p>
       </div>
 
       {/* Switch Provider - Compact */}
@@ -62,9 +60,9 @@ export default function Providers() {
           <div className="flex items-center gap-2">
             <div className="flex-1">
               <Select
-                value={selectedProvider || currentProvider || ''}
+                value={selectedProvider || currentProvider || ""}
                 options={selectOptions}
-                onChange={(value) => setSelectedProvider(value)}
+                onChange={value => setSelectedProvider(value)}
                 placeholder="Select a provider"
                 className="h-7 text-xs"
               />
@@ -75,11 +73,7 @@ export default function Providers() {
               onClick={handleSwitch}
               disabled={switchMutation.isPending || !selectedProvider}
             >
-              {switchMutation.isPending ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                'Switch'
-              )}
+              {switchMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Switch"}
             </Button>
           </div>
           {switchMutation.error && (
@@ -106,11 +100,8 @@ export default function Providers() {
             </Card>
           </>
         ) : (
-          providers.map((provider) => (
-            <Card
-              key={provider.id}
-              className={`p-0 ${provider.active ? 'border-primary' : ''}`}
-            >
+          providers.map(provider => (
+            <Card key={provider.id} className={`p-0 ${provider.active ? "border-primary" : ""}`}>
               <CardHeader className="p-3 pb-1">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm">{provider.name}</CardTitle>
@@ -129,7 +120,9 @@ export default function Providers() {
                 </div>
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-muted-foreground">Mode</span>
-                  <Badge variant="outline" className="text-[10px] px-1 py-0">{provider.mode}</Badge>
+                  <Badge variant="outline" className="text-[10px] px-1 py-0">
+                    {provider.mode}
+                  </Badge>
                 </div>
                 {provider.baseUrl && (
                   <div className="flex items-center justify-between text-xs">
@@ -153,5 +146,5 @@ export default function Providers() {
         </Card>
       )}
     </div>
-  )
+  );
 }
