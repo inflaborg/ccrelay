@@ -26,7 +26,9 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm ci
+          cd web && npm ci
 
       - name: Build dev package
         run: npm run package:dev
