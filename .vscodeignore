@@ -1,15 +1,25 @@
-.vscode/**
+# VS Code configuration
+.vscode**
 .vscode-test/**
+
+# GitHub configuration
+.github/**
+
+# Source code
 src/**
+tests/**
+
+# Git
 .gitignore
 .yarnrc
-vsc-extension-quickstart.md
+
+# TypeScript configuration
 **/tsconfig.json
 **/.eslintrc.json
 **/*.map
 **/*.ts
 
-# Web source directory (产物已在 out/web/)
+# Web source directory
 web/**
 !out/web/**
 
@@ -19,8 +29,8 @@ web/node_modules/**
 # Scripts
 scripts/**
 
-# Exclude tests
-tests/**
+# Compiled output
+out/src/**
 out/tests/**
 
 # Dev config files
@@ -28,6 +38,27 @@ out/tests/**
 eslint.config.js
 eslint.config.mjs
 .prettierrc
+vsc-extension-quickstart.md
 
 # Documentation
 docs/**
+
+# Exclude all node_modules
+node_modules/**
+
+# Only keep runtime dependencies
+!out/dist/**
+!node_modules/pg/**
+!node_modules/pg-*/
+!node_modules/pg-protocol/**
+!node_modules/pg-pool/**
+!node_modules/pg-types/**
+!node_modules/postgres-array/**
+!node_modules/postgres-bytea/**
+!node_modules/postgres-date/**
+!node_modules/postgres-interval/**
+!node_modules/pgpass/**
+!node_modules/pg-int8/**
+!node_modules/pg-cloudflare/**
+!node_modules/split2/**
+!node_modules/xtend/**
