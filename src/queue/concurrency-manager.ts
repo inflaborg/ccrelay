@@ -129,6 +129,17 @@ export class ConcurrencyManager {
     const startedAt = Date.now();
     const waitTime = startedAt - queuedAt;
 
+    // Check if task was cancelled while waiting in queue
+    if (task.cancelled) {
+      this.log.info(
+        `[Task ${task.id}] Skipped (cancelled while queuing): ${task.cancelledReason ?? "unknown"}`
+      );
+      reject(new Error(task.cancelledReason ?? "Task cancelled"));
+      lease.release();
+      await this.processNext();
+      return;
+    }
+
     // Track the task
     const processingTask: ProcessingTask = {
       task,
@@ -273,6 +284,34 @@ export class ConcurrencyManager {
 
     this.log.info(`Cleared ${cleared} pending tasks from queue`);
     return cleared;
+  }
+
+  /**
+   * Cancel a specific task by ID
+   * Returns true if the task was found and cancelled in the queue
+   * Returns false if the task is already being processed or not found
+   */
+  cancelTask(taskId: string, reason: string): boolean {
+    // Check if task is currently being processed
+    const processingTask = this.processingTasks.get(taskId);
+    if (processingTask) {
+      // Task is already running, mark it as cancelled so it can stop gracefully
+      processingTask.task.cancelled = true;
+      processingTask.task.cancelledReason = reason;
+      this.log.info(`[Task ${taskId}] Marked as cancelled (currently processing): ${reason}`);
+      return false;
+    }
+
+    // Try to find and remove from queue
+    const queuedTask = this.queue.remove(item => item.task.id === taskId);
+    if (queuedTask) {
+      queuedTask.reject(new Error(reason));
+      this.log.info(`[Task ${taskId}] Cancelled from queue: ${reason}`);
+      return true;
+    }
+
+    this.log.debug(`[Task ${taskId}] Not found in queue or processing`);
+    return false;
   }
 
   /**

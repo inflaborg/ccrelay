@@ -421,6 +421,10 @@ export interface RequestTask {
   startedAt?: number;
   /** Optional response object for streaming support in queue mode */
   res?: http.ServerResponse;
+  /** Whether the task has been cancelled */
+  cancelled?: boolean;
+  /** Reason for cancellation */
+  cancelledReason?: string;
 }
 
 /**

@@ -841,10 +841,42 @@ export class ProxyServer {
         this.log.info(
           `[Perf:${clientId}] TaskSubmit: submitting to queue "${queueName}" (body ready in ${bodyReceiveTime}ms, matched route: ${matchedRoute ? "yes" : "no"})`
         );
+
+        // Track if client disconnected while queuing
+        let clientDisconnected = false;
+
+        const onClientDisconnect = () => {
+          if (!clientDisconnected) {
+            clientDisconnected = true;
+            task.cancelled = true;
+            task.cancelledReason = "Client disconnected while queuing";
+            this.log.info(`[${clientId}] Client disconnected, marking task as cancelled`);
+            // Try to cancel from queue
+            targetQueue.cancelTask(clientId, "Client disconnected");
+          }
+        };
+
+        // Listen for client disconnect
+
+        res.on("close", onClientDisconnect);
+
         targetQueue
           .submit(task)
           .then(result => {
+            // Clean up listeners
+
+            res.off("close", onClientDisconnect);
+
             const totalTime = Date.now() - requestReceiveStart;
+
+            // Check if client disconnected
+            if (clientDisconnected || res.writableEnded) {
+              this.log.info(
+                `[Perf:${clientId}] TaskComplete: client disconnected, skipping response (status: ${result.statusCode}, time: ${totalTime}ms)`
+              );
+              return;
+            }
+
             // Write response from result
             if (result.error) {
               // This is a logic error that happened during execution
@@ -879,11 +911,16 @@ export class ProxyServer {
             );
           })
           .catch(err => {
+            // Clean up listeners
+
+            res.off("close", onClientDisconnect);
+
             // This is an error from the queue submission itself (e.g. queue full)
             const errMsg = err instanceof Error ? err.message : String(err);
             this.log.warn(`Task ${task.id} rejected from queue "${queueName}": ${errMsg}`);
 
-            if (!res.headersSent) {
+            // Don't write if client disconnected
+            if (!clientDisconnected && !res.headersSent && !res.writableEnded) {
               // 503 Service Unavailable is appropriate for queue full/timeout
               res.writeHead(503, { "Content-Type": "application/json" });
               res.end(JSON.stringify({ error: errMsg, code: "QUEUE_FULL_OR_TIMEOUT" }));
@@ -1197,8 +1234,13 @@ export class ProxyServer {
       }
     });
 
-    // Set timeout (5 minutes for code generation)
-    proxyReq.setTimeout(300000);
+    // Set configurable timeout (default 5 minutes for long code generation)
+    // Config value is in seconds, convert to milliseconds
+    const requestTimeoutSeconds = this.config.getSetting("proxy.requestTimeout", 300);
+    const requestTimeoutMs = requestTimeoutSeconds * 1000;
+    if (requestTimeoutMs > 0) {
+      proxyReq.setTimeout(requestTimeoutMs);
+    }
 
     if (body) {
       proxyReq.write(body);
@@ -1456,6 +1498,30 @@ export class ProxyServer {
       res: clientRes,
     } = task;
 
+    // Check if task was cancelled before starting
+    if (task.cancelled) {
+      this.log.info(`[${clientId}] Task cancelled before execution: ${task.cancelledReason}`);
+      return {
+        statusCode: 499,
+        headers: {},
+        error: new Error(task.cancelledReason ?? "Task cancelled"),
+        errorMessage: task.cancelledReason ?? "Task cancelled",
+        duration: 0,
+      };
+    }
+
+    // Check if client connection is still alive
+    if (clientRes && clientRes.writableEnded) {
+      this.log.info(`[${clientId}] Client connection already closed, skipping execution`);
+      return {
+        statusCode: 499,
+        headers: {},
+        error: new Error("Client disconnected"),
+        errorMessage: "Client disconnected",
+        duration: 0,
+      };
+    }
+
     const maxRetries = 2;
     const urlParsed = url.parse(targetUrl);
     const isHttps = urlParsed.protocol === "https:";
@@ -1465,12 +1531,16 @@ export class ProxyServer {
     const requestHeaders: Record<string, string> = { ...taskHeaders };
     requestHeaders["accept-encoding"] = "identity";
 
+    // Create AbortController for timeout cancellation
+    const abortController = new AbortController();
+
     const options: http.RequestOptions = {
       hostname: urlParsed.hostname,
       port: urlParsed.port || (isHttps ? 443 : 80),
       path: urlParsed.path,
       method,
       headers: requestHeaders,
+      signal: abortController.signal,
     };
 
     const startTime = Date.now();
@@ -1481,6 +1551,18 @@ export class ProxyServer {
     let firstChunkLogged = false;
     let responseChunks: Buffer[] = [];
     let originalResponseBody: string | undefined;
+    let clientDisconnected = false;
+
+    // Track client disconnect during streaming
+    const onClientDisconnect = () => {
+      clientDisconnected = true;
+      this.log.info(`[${clientId}] Client disconnected during streaming`);
+      abortController.abort();
+    };
+
+    if (clientRes) {
+      clientRes.on("close", onClientDisconnect);
+    }
 
     this.log.info(
       `[Perf:${clientId}] ExecuteRequestStart: starting upstream request to ${provider.id}`
@@ -1609,6 +1691,24 @@ export class ProxyServer {
             // Pipe the response directly to client
             proxyRes.pipe(clientRes);
 
+            // Handle upstream errors during streaming
+            proxyRes.on("error", (err: Error) => {
+              this.log.error(`[${clientId}] SSE upstream error: ${err.message}`);
+              if (!clientRes.writableEnded) {
+                try {
+                  clientRes.end();
+                } catch {
+                  // Ignore errors when ending already-closed stream
+                }
+              }
+            });
+
+            // Handle client errors during streaming
+            clientRes.on("error", (err: Error) => {
+              this.log.error(`[${clientId}] Client connection error: ${err.message}`);
+              proxyRes.destroy();
+            });
+
             // Track streaming performance
             proxyRes.on("data", (chunk: Buffer) => {
               streamChunkCount++;
@@ -1640,16 +1740,35 @@ export class ProxyServer {
               const totalDuration = Date.now() - startTime;
               const avgChunkSize =
                 streamChunkCount > 0 ? Math.round(streamTotalBytes / streamChunkCount) : 0;
-              this.log.info(
-                `[Perf:${clientId}] StreamEnd: ${streamChunkCount} chunks, ${streamTotalBytes} total bytes, avg ${avgChunkSize} bytes/chunk, total: ${totalDuration}ms`
+
+              // Clean up client disconnect listener
+              if (clientRes) {
+                clientRes.off("close", onClientDisconnect);
+              }
+
+              if (clientDisconnected) {
+                this.log.info(
+                  `[Perf:${clientId}] StreamEnd (client disconnected): ${streamChunkCount} chunks, ${streamTotalBytes} bytes, total: ${totalDuration}ms`
+                );
+              } else {
+                this.log.info(
+                  `[Perf:${clientId}] StreamEnd: ${streamChunkCount} chunks, ${streamTotalBytes} total bytes, avg ${avgChunkSize} bytes/chunk, total: ${totalDuration}ms`
+                );
+              }
+              this.logResponse(
+                clientId,
+                totalDuration,
+                clientDisconnected ? 499 : status,
+                responseChunks,
+                clientDisconnected ? "Client disconnected" : undefined
               );
-              this.logResponse(clientId, totalDuration, status, responseChunks, undefined);
               resolve({
-                statusCode: status,
+                statusCode: clientDisconnected ? 499 : status,
                 headers: responseHeaders,
                 duration: totalDuration,
                 responseBodyChunks: responseChunks,
                 streamed: true,
+                errorMessage: clientDisconnected ? "Client disconnected" : undefined,
               });
             });
           } else {
@@ -1662,6 +1781,12 @@ export class ProxyServer {
 
             proxyRes.on("end", () => {
               const totalDuration = Date.now() - startTime;
+
+              // Clean up client disconnect listener
+              if (clientRes) {
+                clientRes.off("close", onClientDisconnect);
+              }
+
               this.log.info(
                 `[Perf:${clientId}] ResponseEnd: ${streamChunkCount} chunks, ${streamTotalBytes} total bytes, total: ${totalDuration}ms`
               );
@@ -1681,6 +1806,24 @@ export class ProxyServer {
       // Handle connection errors
       proxyReq.on("error", (err: NodeJS.ErrnoException) => {
         const duration = Date.now() - startTime;
+
+        // Clean up client disconnect listener
+        if (clientRes) {
+          clientRes.off("close", onClientDisconnect);
+        }
+
+        // Check if aborted by client disconnect
+        if (abortController.signal.aborted) {
+          this.log.info(`[${clientId}] Request aborted (client disconnect) after ${duration}ms`);
+          this.logResponse(clientId, duration, 499, responseChunks, "Client disconnected");
+          resolve({
+            statusCode: 499,
+            headers: {},
+            duration,
+            errorMessage: "Client disconnected",
+          });
+          return;
+        }
 
         // Retry on connection-phase errors
         const retryableCodes = ["ECONNREFUSED", "ECONNRESET", "ENOTFOUND", "ETIMEDOUT"];
@@ -1705,11 +1848,25 @@ export class ProxyServer {
       proxyReq.on("timeout", () => {
         const duration = Date.now() - startTime;
         this.log.error(`Proxy timeout to ${provider.id} (${duration}ms)`);
+
+        // Clean up client disconnect listener
+        if (clientRes) {
+          clientRes.off("close", onClientDisconnect);
+        }
+
+        // Abort the request
+        abortController.abort();
         this.logResponse(clientId, duration, 0, responseChunks, "Timeout");
         reject(new Error("Proxy timeout"));
       });
 
-      proxyReq.setTimeout(300000);
+      // Set configurable timeout (default 5 minutes for long code generation)
+      // Config value is in seconds, convert to milliseconds
+      const requestTimeoutSeconds = this.config.getSetting("proxy.requestTimeout", 300);
+      const requestTimeoutMs = requestTimeoutSeconds * 1000;
+      if (requestTimeoutMs > 0) {
+        proxyReq.setTimeout(requestTimeoutMs);
+      }
 
       if (body) {
         proxyReq.write(body);

@@ -250,16 +250,29 @@ export async function deactivate(): Promise<void> {
     // Note: leaderElection.stop() is already called inside server.stop()
     // No need to call it again here
   } catch (err) {
-    console.error("Error during deactivation cleanup:", err);
-    logger?.error("Error during deactivation cleanup", err);
+    // Falls back to console.error which should always work
+    console.error("[Extension] Error during deactivation cleanup:", err);
+    // Try to log to our logger if it's still alive, but safely
+    try {
+      logger?.error("Error during deactivation cleanup", err);
+    } catch {
+      // ignore
+    }
   } finally {
     // Always cleanup these resources
     if (configManager) {
       configManager.dispose();
     }
 
+    // Dispose logger safely
     if (logger) {
-      logger.dispose();
+      try {
+        logger.dispose();
+      } catch {
+        // ignore
+      }
+      // Nullify global logger reference to prevent further usage
+      logger = null;
     }
 
     // Clear references to help GC

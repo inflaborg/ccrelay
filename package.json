@@ -300,6 +300,11 @@
           "default": false,
           "description": "Enable SSL for PostgreSQL connection"
         },
+        "ccrelay.proxy.requestTimeout": {
+          "type": "number",
+          "default": 300,
+          "description": "Proxy request timeout in seconds (0 = no timeout, default 5 minutes for long code generation)"
+        },
         "ccrelay.ui.statusBarPosition": {
           "type": "string",
           "enum": [
