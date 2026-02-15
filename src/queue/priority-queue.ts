@@ -125,4 +125,18 @@ export class PriorityQueue<T> {
 
     return true;
   }
+
+  /**
+   * Remove and return an item matching the predicate
+   * Returns the removed item, or undefined if not found
+   */
+  remove(predicate: (item: T) => boolean): T | undefined {
+    const index = this.items.findIndex(p => predicate(p.item));
+    if (index === -1) {
+      return undefined;
+    }
+
+    const [removed] = this.items.splice(index, 1);
+    return removed.item;
+  }
 }

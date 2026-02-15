@@ -113,6 +113,13 @@ export class LogDatabase {
   }
 
   /**
+   * Update a log entry by clientId with custom status (cancelled, timeout, etc.)
+   */
+  updateLogStatus(...args: Parameters<DatabaseDriver["updateLogStatus"]>): void {
+    this.driver?.updateLogStatus(...args);
+  }
+
+  /**
    * Query logs with filter
    */
   async queryLogs(filter?: Parameters<DatabaseDriver["queryLogs"]>[0]) {

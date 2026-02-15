@@ -54,13 +54,19 @@ function getDefaultLogLevel(): LogLevel {
 
 export class Logger {
   private static instance: Logger | null = null;
-  private outputChannel: vscode.OutputChannel;
+  private outputChannel: vscode.OutputChannel | null = null;
   private logBuffer: string[] = [];
   private maxBufferSize = 1000;
   private minLevel: LogLevel = getDefaultLogLevel();
 
+  private isDisposed: boolean = false;
+
   private constructor() {
-    this.outputChannel = vscode.window.createOutputChannel("CCRelay");
+    try {
+      this.outputChannel = vscode.window.createOutputChannel("CCRelay");
+    } catch (err) {
+      console.error("[CCRelay] Failed to create output channel", err);
+    }
   }
 
   static getInstance(): Logger {
@@ -93,7 +99,21 @@ export class Logger {
       this.logBuffer.shift();
     }
 
-    this.outputChannel.appendLine(formatted);
+    if (!this.isDisposed && this.outputChannel) {
+      try {
+        this.outputChannel.appendLine(formatted);
+      } catch (error) {
+        // If the channel is closed or disposed, we can't do much but maybe log to console
+        // This prevents the "Channel has been closed" error from crashing/polluting the extension host logs
+        // Only log once to avoid spamming console
+        if (!this.isDisposed) {
+          console.error(
+            `[CCRelay Logger Error] Failed to write to output channel: ${String(error)}`
+          );
+          this.isDisposed = true; // Mark as disposed on first error to stop trying
+        }
+      }
+    }
   }
 
   debug(message: string): void {
@@ -140,7 +160,7 @@ export class Logger {
    * Show the output channel
    */
   show(): void {
-    this.outputChannel.show();
+    this.outputChannel?.show();
   }
 
   /**
@@ -148,7 +168,7 @@ export class Logger {
    */
   clear(): void {
     this.logBuffer = [];
-    this.outputChannel.clear();
+    this.outputChannel?.clear();
   }
 
   /**
@@ -159,7 +179,15 @@ export class Logger {
   }
 
   dispose(): void {
-    this.outputChannel.dispose();
+    this.isDisposed = true;
+    if (this.outputChannel) {
+      try {
+        this.outputChannel.dispose();
+      } catch {
+        // Ignore disposal errors
+      }
+      this.outputChannel = null;
+    }
   }
 }
 

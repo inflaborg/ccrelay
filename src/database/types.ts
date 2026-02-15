@@ -6,7 +6,7 @@
 /**
  * Request status type
  */
-export type RequestStatus = "pending" | "completed";
+export type RequestStatus = "pending" | "completed" | "cancelled" | "timeout";
 
 /**
  * Route type
@@ -135,6 +135,17 @@ export interface DatabaseDriver {
     success: boolean,
     errorMessage: string | undefined,
     originalResponseBody?: string
+  ): void;
+
+  /**
+   * Update a log entry by clientId with custom status (cancelled, timeout, etc.)
+   */
+  updateLogStatus(
+    clientId: string,
+    status: RequestStatus,
+    statusCode: number,
+    duration: number,
+    errorMessage: string | undefined
   ): void;
 
   /**

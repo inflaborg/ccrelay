@@ -82,6 +82,10 @@ const DEFAULT_CONFIGS: DefaultConfigEntry[] = [
     key: "log.enableStorage",
     value: false,
   },
+  {
+    key: "proxy.requestTimeout",
+    value: 300,
+  },
 ];
 
 /**

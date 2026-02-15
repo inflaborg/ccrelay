@@ -85,4 +85,51 @@ describe("PriorityQueue", () => {
       expect(queue.size()).toBe(0);
     });
   });
+
+  describe("PQ009-PQ010: remove", () => {
+    it("PQ009: should return undefined when removing from empty queue", () => {
+      const queue = new PriorityQueue<string>();
+      const result = queue.remove(item => item === "anything");
+      expect(result).toBeUndefined();
+    });
+
+    it("PQ009: should return undefined when item not found", () => {
+      const queue = new PriorityQueue<string>();
+      queue.enqueue("item1", 1);
+      queue.enqueue("item2", 2);
+
+      const result = queue.remove(item => item === "notfound");
+      expect(result).toBeUndefined();
+      expect(queue.size()).toBe(2);
+    });
+
+    it("PQ010: should remove and return matching item", () => {
+      const queue = new PriorityQueue<string>();
+      queue.enqueue("item1", 1);
+      queue.enqueue("item2", 2);
+      queue.enqueue("item3", 3);
+
+      const result = queue.remove(item => item === "item2");
+      expect(result).toBe("item2");
+      expect(queue.size()).toBe(2);
+
+      // Remaining items should be item3 (highest) then item1
+      expect(queue.dequeue()).toBe("item3");
+      expect(queue.dequeue()).toBe("item1");
+    });
+
+    it("PQ010: should maintain priority order after removal", () => {
+      const queue = new PriorityQueue<string>();
+      queue.enqueue("low", 1);
+      queue.enqueue("medium", 5);
+      queue.enqueue("high", 10);
+
+      // Remove medium
+      queue.remove(item => item === "medium");
+
+      // Remaining should be high then low
+      expect(queue.dequeue()).toBe("high");
+      expect(queue.dequeue()).toBe("low");
+    });
+  });
 });

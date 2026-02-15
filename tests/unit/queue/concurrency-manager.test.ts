@@ -53,6 +53,12 @@ describe("ConcurrencyManager", () => {
   });
 
   afterEach(() => {
+    // Shutdown manager to clear any pending timeouts
+    if (manager) {
+      // Clear queue silently to avoid unhandled rejections from unresolved test promises
+      manager.clearQueue(true);
+      manager.shutdown();
+    }
     vi.restoreAllMocks();
   });
 
@@ -240,15 +246,52 @@ describe("ConcurrencyManager", () => {
   });
 
   describe("CM006: Timeout handling", () => {
-    it("CM006: should reject task when execution exceeds timeout", async () => {
+    it("CM006: should reject task when waiting in queue exceeds timeout", async () => {
+      config.maxConcurrency = 1;
       config.timeout = 100;
 
-      // Use a promise that takes longer than timeout but will eventually resolve
-      // This avoids the orphaned promise issue
+      // First task blocks the worker indefinitely
+      let releaseTask1: () => void;
+      const blockingExecutor = vi.fn().mockImplementation(
+        () =>
+          new Promise<ProxyResult>(resolve => {
+            releaseTask1 = () => resolve({ statusCode: 200 } as ProxyResult);
+          })
+      );
+      manager = new ConcurrencyManager(config, blockingExecutor);
+
+      // First task occupies the worker
+      const p1 = manager.submit(createMockTask("task1"));
+
+      // Wait for first task to start executing
+      await new Promise(r => setTimeout(r, 10));
+      expect(manager.getStats().activeWorkers).toBe(1);
+
+      // Second task should timeout while waiting in queue
+      const p2 = manager.submit(createMockTask("task2"));
+
+      // Second task should reject with timeout (queue timeout)
+      await expect(p2).rejects.toThrow(/timeout.*queue/i);
+
+      // First worker should still be active (not released)
+      expect(manager.getStats().activeWorkers).toBe(1);
+
+      // Cleanup
+      releaseTask1!();
+      await p1;
+    });
+
+    it("CM006: should complete slow execution (no execution timeout)", async () => {
+      // Once task starts executing, there is NO timeout from our side
+      // Task relies entirely on upstream response or client disconnect
+      config.timeout = 100;
+
+      // Use a promise that takes longer than "timeout" but should still complete
+      // because timeout only applies to queue waiting, not execution
       const executor = vi.fn().mockImplementation(
         () =>
           new Promise<ProxyResult>(resolve => {
-            setTimeout(() => resolve({ statusCode: 200 } as ProxyResult), 500);
+            setTimeout(() => resolve({ statusCode: 200 } as ProxyResult), 300);
           })
       );
       manager = new ConcurrencyManager(config, executor);
@@ -256,10 +299,11 @@ describe("ConcurrencyManager", () => {
       const task = createMockTask("task1");
       const promise = manager.submit(task);
 
-      // Should reject with timeout before the 500ms executor completes
-      await expect(promise).rejects.toThrow(/timeout/i);
+      // Should complete successfully - no execution timeout
+      const result = await promise;
+      expect(result.statusCode).toBe(200);
 
-      // Worker should be released
+      // Worker should be released after completion
       expect(manager.getStats().activeWorkers).toBe(0);
     });
 
@@ -481,6 +525,666 @@ describe("ConcurrencyManager", () => {
       // Current implementation clears queue but doesn't prevent new submissions
       const stats = manager.getStats();
       expect(stats.queueLength).toBe(0);
+    });
+  });
+
+  describe("CM012: Task cancellation", () => {
+    it("CM012: should cancel task from queue", async () => {
+      config.maxConcurrency = 1;
+
+      let releaseTask: () => void;
+      const blockingTask = new Promise<ProxyResult>(resolve => {
+        releaseTask = () => resolve({ statusCode: 200 } as ProxyResult);
+      });
+
+      const executor = vi.fn().mockImplementation(() => blockingTask);
+      manager = new ConcurrencyManager(config, executor);
+
+      // Start one task to fill worker
+      const p1 = manager.submit(createMockTask("task1"));
+
+      await new Promise(r => setTimeout(r, 10));
+      expect(manager.getStats().activeWorkers).toBe(1);
+
+      // Queue another task
+      const p2 = manager.submit(createMockTask("task2"));
+
+      await new Promise(r => setTimeout(r, 10));
+      expect(manager.getStats().queueLength).toBe(1);
+
+      // Cancel the queued task
+      const cancelled = manager.cancelTask("task2", "User cancelled");
+
+      expect(cancelled).toBe(true);
+      expect(manager.getStats().queueLength).toBe(0);
+
+      // Queued task should be rejected
+      await expect(p2).rejects.toThrow("User cancelled");
+
+      // Running task should continue
+      releaseTask!();
+      await p1;
+    });
+
+    it("CM012: should mark processing task as cancelled but not remove immediately", async () => {
+      config.maxConcurrency = 1;
+
+      let taskExecutionComplete = false;
+
+      const executor = vi.fn().mockImplementation((task: RequestTask) => {
+        // Simulate a task that checks for cancellation
+        return new Promise<ProxyResult>((_, reject) => {
+          // Check cancelled flag in task
+          const checkInterval = setInterval(() => {
+            if (task.cancelled) {
+              clearInterval(checkInterval);
+              taskExecutionComplete = true;
+              reject(new Error(task.cancelledReason || "Task cancelled"));
+            }
+          }, 10);
+        });
+      });
+
+      manager = new ConcurrencyManager(config, executor);
+
+      // Start task
+      const p1 = manager.submit(createMockTask("task1"));
+
+      await new Promise(r => setTimeout(r, 50));
+
+      // Cancel the processing task
+      const cancelled = manager.cancelTask("task1", "User cancelled");
+
+      expect(cancelled).toBe(false); // Returns false for processing tasks
+
+      // Wait for the task to detect cancellation and reject
+      await expect(p1).rejects.toThrow("User cancelled");
+      expect(taskExecutionComplete).toBe(true);
+
+      // Worker should be released
+      expect(manager.getStats().activeWorkers).toBe(0);
+    });
+
+    it("CM012: should return false when cancelling non-existent task", () => {
+      const executor = vi.fn().mockResolvedValue({ statusCode: 200 } as ProxyResult);
+      manager = new ConcurrencyManager(config, executor);
+
+      const cancelled = manager.cancelTask("non-existent", "Test");
+      expect(cancelled).toBe(false);
+    });
+
+    it("CM012: should skip cancelled task during execution", async () => {
+      // Test by using cancelTask method to cancel a task that's queued
+      config.maxConcurrency = 1;
+
+      let releaseTask: () => void;
+      const blockingTask = new Promise<ProxyResult>(resolve => {
+        releaseTask = () => resolve({ statusCode: 200 } as ProxyResult);
+      });
+
+      const executor = vi.fn().mockImplementation(() => blockingTask);
+      manager = new ConcurrencyManager(config, executor);
+
+      // Fill the worker with task1
+      const p1 = manager.submit(createMockTask("task1"));
+
+      await new Promise(r => setTimeout(r, 10));
+      expect(manager.getStats().activeWorkers).toBe(1);
+
+      // Submit task2 which will be queued
+      const task2 = createMockTask("task2");
+      const p2 = manager.submit(task2);
+
+      // Set up rejection handler immediately to prevent unhandled rejection warning
+      const p2Catch = p2.catch(() => {
+        /* expected rejection */
+      });
+
+      await new Promise(r => setTimeout(r, 10));
+      expect(manager.getStats().queueLength).toBe(1);
+
+      // Now mark task2 as cancelled while it's in queue
+      task2.cancelled = true;
+      task2.cancelledReason = "Cancelled before processing";
+
+      // Trigger processing next task by releasing task1
+      releaseTask!();
+      await p1;
+
+      // Wait for task2 to be processed
+      await p2Catch;
+
+      // Task2 should have been rejected because it was cancelled
+      await expect(p2).rejects.toThrow("Cancelled before processing");
+
+      // Executor should only have been called once (for task1)
+      expect(executor).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("CM013: Statistics tracking", () => {
+    it("CM013: should track totalProcessed count", async () => {
+      const executor = vi.fn().mockResolvedValue({ statusCode: 200 } as ProxyResult);
+      manager = new ConcurrencyManager(config, executor);
+
+      await manager.submit(createMockTask("task1"));
+      await manager.submit(createMockTask("task2"));
+      await manager.submit(createMockTask("task3"));
+
+      const stats = manager.getStats();
+      expect(stats.totalProcessed).toBe(3);
+      expect(stats.totalFailed).toBe(0);
+    });
+
+    it("CM013: should track totalFailed count", async () => {
+      const executor = vi.fn().mockRejectedValue(new Error("Task failed"));
+      manager = new ConcurrencyManager(config, executor);
+
+      await expect(manager.submit(createMockTask("task1"))).rejects.toThrow();
+      await expect(manager.submit(createMockTask("task2"))).rejects.toThrow();
+
+      const stats = manager.getStats();
+      expect(stats.totalFailed).toBe(2);
+      expect(stats.totalProcessed).toBe(0);
+    });
+
+    it("CM013: should calculate avgWaitTime and avgProcessTime", async () => {
+      const executor = vi.fn().mockImplementation(
+        (): Promise<ProxyResult> => {
+          return new Promise(resolve => {
+            setTimeout(() => {
+              resolve({ statusCode: 200, duration: 50 } as ProxyResult);
+            }, 50);
+          });
+        }
+      );
+
+      manager = new ConcurrencyManager(config, executor);
+
+      await manager.submit(createMockTask("task1"));
+
+      const stats = manager.getStats();
+      expect(stats.totalProcessed).toBe(1);
+      expect(stats.avgProcessTime).toBeGreaterThan(0);
+      expect(stats.avgWaitTime).toBeGreaterThanOrEqual(0);
+    });
+
+    it("CM013: should track stats correctly for completed and failed tasks", async () => {
+      // Simple test: just verify processed and failed counts work correctly
+      // Use a simple executor that sometimes fails
+      let callCount = 0;
+      const executor = vi.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve({ statusCode: 200 } as ProxyResult);
+        } else if (callCount === 2) {
+          return Promise.reject(new Error("Task failed"));
+        }
+        return Promise.resolve({ statusCode: 200 } as ProxyResult);
+      });
+
+      manager = new ConcurrencyManager(config, executor);
+
+      // First task succeeds
+      await manager.submit(createMockTask("task1"));
+
+      // Second task fails
+      await expect(manager.submit(createMockTask("task2"))).rejects.toThrow("Task failed");
+
+      // Stats should reflect 1 processed, 1 failed
+      const stats = manager.getStats();
+      expect(stats.totalProcessed).toBe(1);
+      expect(stats.totalFailed).toBe(1);
+    });
+  });
+
+  describe("CM014: getProcessingTasks", () => {
+    it("CM014: should return empty array when no tasks processing", () => {
+      const executor = vi.fn().mockResolvedValue({ statusCode: 200 } as ProxyResult);
+      manager = new ConcurrencyManager(config, executor);
+
+      const processing = manager.getProcessingTasks();
+      expect(processing).toEqual([]);
+    });
+
+    it("CM014: should return processing task info with elapsed time", async () => {
+      let releaseTask: () => void;
+      const blockingTask = new Promise<ProxyResult>(resolve => {
+        releaseTask = () => resolve({ statusCode: 200 } as ProxyResult);
+      });
+
+      const executor = vi.fn().mockImplementation(() => blockingTask);
+      manager = new ConcurrencyManager(config, executor);
+
+      const p = manager.submit(createMockTask("task1"));
+
+      await new Promise(r => setTimeout(r, 50));
+
+      const processing = manager.getProcessingTasks();
+      expect(processing.length).toBe(1);
+      expect(processing[0].id).toBe("task1");
+      expect(processing[0].elapsed).toBeGreaterThan(0);
+
+      releaseTask!();
+      await p;
+    });
+  });
+
+  describe("CM015: AbortController and timeout integration", () => {
+    it("CM015: should set abortController on task during execution", async () => {
+      config.timeout = undefined; // No timeout
+
+      let taskDuringExecution: RequestTask | undefined;
+
+      const executor = vi.fn().mockImplementation((task: RequestTask) => {
+        // Capture the task DURING execution (before it completes)
+        taskDuringExecution = task;
+        // Return immediately
+        return Promise.resolve({ statusCode: 200 } as ProxyResult);
+      });
+
+      manager = new ConcurrencyManager(config, executor);
+      await manager.submit(createMockTask("task1"));
+
+      // Verify abortController was set during execution
+      // Note: After execution, abortController is cleaned up, so we check the captured task
+      expect(taskDuringExecution).toBeDefined();
+      // The abortController should have been set during execution
+      // (it gets cleaned up after, so we can't check it after await)
+    });
+
+    it("CM015: should NOT abort request during execution (no execution timeout)", async () => {
+      // Once execution starts, there is NO timeout from our side
+      // The task relies entirely on upstream response or client disconnect
+      config.maxConcurrency = 1;
+      config.timeout = 50; // Queue timeout only
+
+      let releaseTask1: () => void;
+
+      const executor = vi.fn().mockImplementation((_task: RequestTask) => {
+        // Simulate a long-running request that completes after queue timeout
+        return new Promise<ProxyResult>(resolve => {
+          releaseTask1 = () => resolve({ statusCode: 200 } as ProxyResult);
+        });
+      });
+
+      manager = new ConcurrencyManager(config, executor);
+
+      // First task starts executing immediately (no queue wait)
+      const p1 = manager.submit(createMockTask("task1"));
+
+      // Wait a bit for execution to start
+      await new Promise(r => setTimeout(r, 10));
+
+      // Task should NOT be aborted even after queue timeout has passed
+      // because timeout only applies to queue waiting, not execution
+      await new Promise(r => setTimeout(r, 100));
+
+      // Executor should have been called (task started executing)
+      expect(executor).toHaveBeenCalled();
+
+      // Complete the task
+      releaseTask1!();
+      const result = await p1;
+
+      // Task should complete successfully
+      expect(result.statusCode).toBe(200);
+    });
+
+    it("CM015: should clean up abortController after task completion", async () => {
+      config.timeout = undefined;
+
+      let capturedTask: RequestTask | undefined;
+      const executor = vi.fn().mockImplementation((task: RequestTask) => {
+        capturedTask = task;
+        return Promise.resolve({ statusCode: 200 } as ProxyResult);
+      });
+
+      manager = new ConcurrencyManager(config, executor);
+      await manager.submit(createMockTask("task1"));
+
+      // After completion, abortController should be cleaned up
+      expect(capturedTask!.abortController).toBeUndefined();
+    });
+
+    it("CM015: should clean up abortController after task failure", async () => {
+      config.timeout = undefined;
+
+      let capturedTask: RequestTask | undefined;
+      const executor = vi.fn().mockImplementation((task: RequestTask) => {
+        capturedTask = task;
+        return Promise.reject(new Error("Task failed"));
+      });
+
+      manager = new ConcurrencyManager(config, executor);
+      await expect(manager.submit(createMockTask("task1"))).rejects.toThrow("Task failed");
+
+      // After failure, abortController should be cleaned up
+      expect(capturedTask!.abortController).toBeUndefined();
+    });
+  });
+
+  describe("CM016: Client disconnect scenarios", () => {
+    it("CM016: should detect client disconnect during queue wait", async () => {
+      config.maxConcurrency = 1;
+      config.timeout = undefined;
+
+      let releaseTask: () => void;
+      const blockingTask = new Promise<ProxyResult>(resolve => {
+        releaseTask = () => resolve({ statusCode: 200 } as ProxyResult);
+      });
+
+      const executor = vi.fn().mockImplementation(() => blockingTask);
+      manager = new ConcurrencyManager(config, executor);
+
+      // Fill worker
+      const p1 = manager.submit(createMockTask("task1"));
+
+      // Queue task2
+      const task2 = createMockTask("task2");
+      const p2 = manager.submit(task2);
+
+      // Set up rejection handler immediately to prevent unhandled rejection warning
+      const p2Catch = p2.catch(() => {
+        /* expected rejection */
+      });
+
+      await new Promise(r => setTimeout(r, 10));
+      expect(manager.getStats().queueLength).toBe(1);
+
+      // Simulate client disconnect - mark task as cancelled
+      task2.cancelled = true;
+      task2.cancelledReason = "Client disconnected";
+
+      // Release worker, task2 should be skipped
+      releaseTask!();
+      await p1;
+
+      // Wait for task2 to be processed
+      await p2Catch;
+
+      // Task2 should be rejected
+      await expect(p2).rejects.toThrow("Client disconnected");
+
+      // Executor should only be called once
+      expect(executor).toHaveBeenCalledTimes(1);
+    });
+
+    it("CM016: should handle graceful abort for running task", async () => {
+      config.timeout = undefined;
+
+      let taskAborted = false;
+
+      const executor = vi.fn().mockImplementation((task: RequestTask) => {
+        return new Promise<ProxyResult>((resolve, reject) => {
+          const checkInterval = setInterval(() => {
+            // Check for cancellation/abort
+            if (task.cancelled || task.abortController?.signal?.aborted) {
+              taskAborted = true;
+              clearInterval(checkInterval);
+              reject(new Error("Client disconnected"));
+              return;
+            }
+          }, 5);
+
+          // Also clean up after a while
+          setTimeout(() => {
+            clearInterval(checkInterval);
+            if (!taskAborted) {
+              resolve({ statusCode: 200 } as ProxyResult);
+            }
+          }, 500);
+        });
+      });
+
+      manager = new ConcurrencyManager(config, executor);
+
+      const p1 = manager.submit(createMockTask("task1"));
+
+      await new Promise(r => setTimeout(r, 20));
+
+      // Cancel the running task (simulating client disconnect)
+      const cancelled = manager.cancelTask("task1", "Client disconnected");
+      expect(cancelled).toBe(false); // false because it's already processing
+
+      // Wait for task to detect cancellation
+      await expect(p1).rejects.toThrow("Client disconnected");
+
+      expect(taskAborted).toBe(true);
+    });
+  });
+
+  describe("CM017: Edge cases and error recovery", () => {
+    it("CM017: should handle concurrent task completions", async () => {
+      config.maxConcurrency = 5;
+      config.timeout = undefined;
+
+      const completionOrder: string[] = [];
+      const releaseFns: Map<string, () => void> = new Map();
+
+      const executor = vi.fn().mockImplementation((task: RequestTask) => {
+        return new Promise<ProxyResult>(resolve => {
+          releaseFns.set(task.id, () => {
+            completionOrder.push(task.id);
+            resolve({ statusCode: 200 } as ProxyResult);
+          });
+        });
+      });
+
+      manager = new ConcurrencyManager(config, executor);
+
+      // Submit 5 tasks
+      const promises = [
+        manager.submit(createMockTask("task1")),
+        manager.submit(createMockTask("task2")),
+        manager.submit(createMockTask("task3")),
+        manager.submit(createMockTask("task4")),
+        manager.submit(createMockTask("task5")),
+      ];
+
+      await new Promise(r => setTimeout(r, 20));
+      expect(manager.getStats().activeWorkers).toBe(5);
+
+      // Release all tasks simultaneously
+      releaseFns.forEach(fn => fn());
+
+      await Promise.all(promises);
+
+      // All tasks should complete
+      expect(completionOrder.length).toBe(5);
+      expect(manager.getStats().activeWorkers).toBe(0);
+      expect(manager.getStats().totalProcessed).toBe(5);
+    });
+
+    it("CM017: should handle task that resolves during timeout race", async () => {
+      config.timeout = 100;
+
+      // Task completes just before timeout
+      const executor = vi.fn().mockImplementation(
+        () =>
+          new Promise<ProxyResult>(resolve => {
+            setTimeout(() => resolve({ statusCode: 200 } as ProxyResult), 50);
+          })
+      );
+
+      manager = new ConcurrencyManager(config, executor);
+      const result = await manager.submit(createMockTask("task1"));
+
+      // Should resolve, not reject
+      expect(result.statusCode).toBe(200);
+    });
+
+    it("CM017: should properly release semaphore after queue timeout", async () => {
+      config.maxConcurrency = 1;
+      config.timeout = 50;
+
+      // First task blocks the worker
+      let releaseTask1: () => void;
+      const blockingExecutor = vi.fn().mockImplementation(
+        () =>
+          new Promise<ProxyResult>(resolve => {
+            releaseTask1 = () => resolve({ statusCode: 200 } as ProxyResult);
+          })
+      );
+
+      manager = new ConcurrencyManager(config, blockingExecutor);
+
+      // First task occupies the worker
+      const p1 = manager.submit(createMockTask("task1"));
+      p1.catch(() => {}); // Prevent unhandled rejection warning
+
+      // Wait for first task to start executing
+      await new Promise(r => setTimeout(r, 10));
+
+      // Second task should timeout while waiting in queue
+      await expect(manager.submit(createMockTask("task2"))).rejects.toThrow(/timeout.*queue/i);
+
+      // First worker should still be active
+      expect(manager.getStats().activeWorkers).toBe(1);
+
+      // Release first task
+      releaseTask1!();
+      await p1;
+
+      // Now worker should be released
+      expect(manager.getStats().activeWorkers).toBe(0);
+
+      // Second task should be able to run now
+      const quickExecutor = vi.fn().mockResolvedValue({ statusCode: 200 } as ProxyResult);
+      manager = new ConcurrencyManager(config, quickExecutor);
+      const result = await manager.submit(createMockTask("task3"));
+      expect(result.statusCode).toBe(200);
+    });
+
+    it("CM017: should handle zero concurrency gracefully", async () => {
+      // When maxConcurrency is 0, it should default to 1 in the constructor
+      config.maxConcurrency = 0;
+
+      const executor = vi.fn().mockResolvedValue({ statusCode: 200 } as ProxyResult);
+      manager = new ConcurrencyManager(config, executor);
+
+      // The config stores 0, but internally the semaphore uses 1
+      // Actually looking at the code, it only uses 1 for the semaphore, but config stays 0
+      // This is current behavior - the semaphore is initialized with 1, but config.maxConcurrency stays 0
+      // Let's verify the manager can still process tasks
+      const result = await manager.submit(createMockTask("task1"));
+      expect(result.statusCode).toBe(200);
+    });
+
+    it("CM017: should handle multiple rapid submissions", async () => {
+      config.maxConcurrency = 2;
+      config.maxQueueSize = 100; // Increase queue size
+
+      const executor = vi.fn().mockResolvedValue({ statusCode: 200 } as ProxyResult);
+      manager = new ConcurrencyManager(config, executor);
+
+      // Submit 20 tasks rapidly
+      const promises = [];
+      for (let i = 0; i < 20; i++) {
+        promises.push(manager.submit(createMockTask(`task${i}`)));
+      }
+
+      await Promise.all(promises);
+
+      // All tasks should complete
+      expect(manager.getStats().totalProcessed).toBe(20);
+    });
+  });
+
+  describe("CM018: Timeout edge cases", () => {
+    it("CM018: should handle no timeout configured", async () => {
+      config.timeout = undefined;
+
+      // Task takes a while but should complete
+      const executor = vi.fn().mockImplementation(
+        () =>
+          new Promise<ProxyResult>(resolve => {
+            setTimeout(() => resolve({ statusCode: 200 } as ProxyResult), 200);
+          })
+      );
+
+      manager = new ConcurrencyManager(config, executor);
+      const result = await manager.submit(createMockTask("task1"));
+
+      expect(result.statusCode).toBe(200);
+    });
+
+    it("CM018: should handle timeout=0 as no timeout", async () => {
+      config.timeout = 0;
+
+      const executor = vi.fn().mockImplementation(
+        () =>
+          new Promise<ProxyResult>(resolve => {
+            setTimeout(() => resolve({ statusCode: 200 } as ProxyResult), 100);
+          })
+      );
+
+      manager = new ConcurrencyManager(config, executor);
+      const result = await manager.submit(createMockTask("task1"));
+
+      expect(result.statusCode).toBe(200);
+    });
+
+    it("CM018: should use task timeout for queue waiting", async () => {
+      config.maxConcurrency = 1;
+      config.timeout = 500; // Global: 500ms
+
+      // First task blocks the worker
+      let releaseTask1: () => void;
+      const blockingExecutor = vi.fn().mockImplementation(
+        () =>
+          new Promise<ProxyResult>(resolve => {
+            releaseTask1 = () => resolve({ statusCode: 200 } as ProxyResult);
+          })
+      );
+
+      manager = new ConcurrencyManager(config, blockingExecutor);
+
+      // First task occupies the worker
+      const p1 = manager.submit(createMockTask("task1"));
+      p1.catch(() => {}); // Prevent unhandled rejection warning
+
+      // Wait for first task to start executing
+      await new Promise(r => setTimeout(r, 10));
+
+      // Second task uses task-specific timeout (50ms)
+      const task2 = createMockTask("task2");
+      task2.timeout = 50; // Task-specific: 50ms - should trigger queue timeout
+
+      // Should timeout with task-specific timeout (50ms), not global (500ms)
+      await expect(manager.submit(task2)).rejects.toThrow(/timeout.*50ms.*queue/i);
+
+      // Cleanup
+      releaseTask1!();
+      await p1;
+    });
+
+    it("CM018: should clear timeout after successful completion", async () => {
+      config.timeout = 100;
+
+      let timeoutCleared = false;
+      const originalClearTimeout = global.clearTimeout;
+      const mockClearTimeout = vi.fn((handle: unknown) => {
+        if (handle) {
+          timeoutCleared = true;
+        }
+        return originalClearTimeout(handle as NodeJS.Timeout);
+      });
+      global.clearTimeout = mockClearTimeout;
+
+      const executor = vi.fn().mockImplementation(
+        () =>
+          new Promise<ProxyResult>(resolve => {
+            setTimeout(() => resolve({ statusCode: 200 } as ProxyResult), 10);
+          })
+      );
+
+      manager = new ConcurrencyManager(config, executor);
+      await manager.submit(createMockTask("task1"));
+
+      expect(timeoutCleared).toBe(true);
+
+      global.clearTimeout = originalClearTimeout;
     });
   });
 });

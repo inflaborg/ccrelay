@@ -300,6 +300,11 @@
           "default": false,
           "description": "Enable SSL for PostgreSQL connection"
         },
+        "ccrelay.proxy.requestTimeout": {
+          "type": "number",
+          "default": 300,
+          "description": "Proxy request timeout in seconds (0 = no timeout, default 5 minutes for long code generation)"
+        },
         "ccrelay.ui.statusBarPosition": {
           "type": "string",
           "enum": [
@@ -338,6 +343,8 @@
     "format:check": "prettier --check src/**/*.ts *.json tests/**/*.ts scripts/*.mjs",
     "test": "npm run test:unit",
     "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:all": "vitest run",
     "test:watch": "vitest tests/unit",
     "test:coverage": "vitest run tests/unit --coverage",
     "test:e2e": "node ./out/test/runTest.js",
@@ -358,6 +365,7 @@
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.19.11",
     "@types/pg": "^8.16.0",
+    "@types/supertest": "^6.0.3",
     "@types/vscode": "^1.80.0",
     "@typescript-eslint/eslint-plugin": "^8.54.0",
     "@typescript-eslint/parser": "^8.54.0",
@@ -365,9 +373,12 @@
     "@vscode/vsce": "^3.7.1",
     "esbuild": "^0.27.3",
     "eslint": "^9.39.2",
+    "get-port": "^7.1.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
+    "nock": "^14.0.11",
     "prettier": "^3.8.1",
+    "supertest": "^7.2.2",
     "typescript": "^5.0.4",
     "vitest": "^4.0.18"
   }
