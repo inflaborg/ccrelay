@@ -19,16 +19,15 @@ import {
   ProxyResult,
   QueueStats,
 } from "../types";
-import { convertRequestToOpenAI } from "../converter";
 import { ScopedLogger } from "../utils/logger";
 import { getDatabase, LogDatabase, RequestStatus } from "../database";
 import { LeaderElection } from "./leaderElection";
 import { isStaticRequest, serveStatic } from "./static";
 import { isApiRequest, handleApiRequest } from "../api";
-import { applyModelMapping } from "./proxy/modelMapping";
 import { ProxyExecutor } from "./proxy/executor";
 import { QueueManager } from "./queueManager";
 import { ResponseLogger } from "./responseLogger";
+import { checkBlocked, handleBlocked, resolveRouting, processBody } from "./proxy/requestProcessor";
 
 export class ProxyServer {
   private server: http.Server | null = null;
@@ -445,70 +444,14 @@ export class ProxyServer {
     const method = req.method || "GET";
 
     // Check if path should be blocked
-    const blockResult = this.router.shouldBlock(path);
+    const blockResult = checkBlocked(this.router, path);
     if (blockResult.blocked) {
-      this.log.info(`${method} ${path} -> [BLOCKED]`);
-      const response = blockResult.response ?? JSON.stringify({ ok: true });
-      const statusCode = blockResult.responseCode ?? 200;
-
-      // Log block request (single write, completed status)
-      if (this.database.enabled) {
-        const routeType: RouteType = "block";
-        this.database.insertLog({
-          timestamp: Date.now(),
-          providerId: "blocked",
-          providerName: "blocked",
-          method,
-          path,
-          targetUrl: undefined,
-          responseBody: response,
-          statusCode,
-          duration: 0,
-          success: true,
-          status: "completed",
-          routeType,
-        });
-      }
-
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- JSON.parse returns any
-        const jsonResponse = JSON.parse(response);
-        this.sendJson(res, statusCode, jsonResponse);
-      } catch {
-        res.writeHead(statusCode, { "Content-Type": "application/json" });
-        res.end(response);
-      }
+      handleBlocked(res, path, method, blockResult, this.database);
       return;
     }
 
-    // Get target provider
-    const provider = this.router.getTargetProvider(path);
-    const isRouted = this.router.shouldRoute(path);
-    const isOpenAIProvider = provider.providerType === "openai";
-
-    // Log routing decision
-    const routeType = isRouted ? "ROUTE" : "PASSTHROUGH";
-    this.log.info(
-      `${method} ${path} -> [${routeType}] ${provider.id} (${provider.name})` +
-        (isOpenAIProvider ? " [OpenAI]" : "")
-    );
-
-    // Prepare headers
-    const originalHeaders: Record<string, string> = {};
-    for (const [key, value] of Object.entries(req.headers)) {
-      if (value) {
-        originalHeaders[key] = Array.isArray(value) ? value[0] : value;
-      }
-    }
-
-    const headers = this.router.prepareHeaders(originalHeaders, provider);
-
-    // Build target URL and convert path if needed
-    let targetPath = path;
-    let targetUrl = this.router.getTargetUrl(path, provider);
-    if (parsedUrl.search) {
-      targetUrl += parsedUrl.search;
-    }
+    // Resolve routing info
+    const routing = resolveRouting(req, path, parsedUrl, this.router);
 
     // Prepare body - track timing for client request receive
     const requestReceiveStart = Date.now();
@@ -519,72 +462,24 @@ export class ProxyServer {
 
     req.on("end", () => {
       const bodyReceiveTime = Date.now() - requestReceiveStart;
-      let body: Buffer | null = null;
-      let originalModel: string | undefined;
-      // Track original request body before any conversion (for all providers)
-      let originalRequestBody: string | undefined;
+
+      // Build raw body from chunks
+      const rawBody = bodyChunks.length > 0 ? Buffer.concat(bodyChunks) : Buffer.alloc(0);
 
       if (bodyChunks.length > 0) {
-        body = Buffer.concat(bodyChunks);
         this.log.info(
-          `[Perf] RequestBodyReceived: ${body.length} bytes in ${bodyReceiveTime}ms from client`
+          `[Perf] RequestBodyReceived: ${rawBody.length} bytes in ${bodyReceiveTime}ms from client`
         );
-
-        // Save original body before any processing (for all providers)
-        if (this.database.enabled) {
-          try {
-            originalRequestBody = body.toString("utf-8");
-          } catch {
-            originalRequestBody = undefined;
-          }
-        }
-
-        // Apply model mapping (e.g., claude-* -> glm-4.7)
-        // This must be done BEFORE conversion so that isGemini checks work correctly
-        body = applyModelMapping(body, provider);
-
-        // Convert request format if using OpenAI provider
-        if (isOpenAIProvider && body) {
-          const conversionResult = this.convertRequestForOpenAI(body, targetPath);
-          if (conversionResult) {
-            body = Buffer.from(JSON.stringify(conversionResult.request), "utf-8");
-            const oldPath = targetPath;
-            targetPath = conversionResult.newPath;
-
-            // Rebuild target URL with new path (NOT including original query params)
-            const baseUrl = provider.baseUrl.replace(/\/$/, "");
-            targetUrl = `${baseUrl}${targetPath}`;
-
-            // Log the URL conversion for debugging
-            this.log.info(
-              `[OpenAI] URL conversion: baseUrl="${provider.baseUrl}" ${oldPath} -> ${targetPath}, final="${targetUrl}"`
-            );
-
-            // Extract original model for response conversion
-            try {
-              const originalData = JSON.parse(bodyChunks[0].toString("utf-8")) as Record<
-                string,
-                unknown
-              >;
-              originalModel = originalData.model as string | undefined;
-            } catch {
-              // ignore
-            }
-
-            this.log.debug(`[OpenAI Conversion] ${conversionResult.originalPath} -> ${targetPath}`);
-          }
-        }
       }
 
-      // Capture request body for logging
-      let requestBodyLog: string | undefined;
-      if (this.database.enabled && body) {
-        try {
-          requestBodyLog = body.toString("utf-8");
-        } catch {
-          requestBodyLog = undefined;
-        }
-      }
+      // Apply model mapping and OpenAI conversion
+      const bodyProcessResult = processBody(rawBody, routing, this.database.enabled);
+
+      // Extract values from processing result
+      const body = bodyProcessResult.body;
+      const originalModel = bodyProcessResult.originalModel;
+      const originalRequestBody = bodyProcessResult.originalRequestBody;
+      const requestBodyLog = bodyProcessResult.requestBodyLog;
 
       // Generate unique clientId for this request
       const clientId = `req-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
@@ -593,11 +488,11 @@ export class ProxyServer {
       if (this.database.enabled) {
         this.database.insertLogPending({
           timestamp: Date.now(),
-          providerId: provider.id,
-          providerName: provider.name,
+          providerId: routing.provider.id,
+          providerName: routing.provider.name,
           method,
           path,
-          targetUrl,
+          targetUrl: routing.targetUrl,
           requestBody: requestBodyLog,
           originalRequestBody,
           statusCode: undefined,
@@ -605,7 +500,7 @@ export class ProxyServer {
           success: false,
           clientId,
           status: "pending",
-          routeType: (isRouted ? "router" : "passthrough") as RouteType,
+          routeType: (routing.isRouted ? "router" : "passthrough") as RouteType,
         });
       }
 
@@ -613,14 +508,14 @@ export class ProxyServer {
       const task: RequestTask = {
         id: clientId,
         method,
-        targetUrl,
-        headers,
+        targetUrl: routing.targetUrl,
+        headers: routing.headers,
         body,
-        provider,
-        requestPath: targetPath,
+        provider: routing.provider,
+        requestPath: routing.targetPath,
         requestBodyLog,
         originalRequestBody,
-        isOpenAIProvider,
+        isOpenAIProvider: routing.isOpenAIProvider,
         originalModel,
         clientId,
         createdAt: Date.now(),
@@ -738,14 +633,14 @@ export class ProxyServer {
         const task: RequestTask = {
           id: clientId,
           method,
-          targetUrl,
-          headers,
+          targetUrl: routing.targetUrl,
+          headers: routing.headers,
           body,
-          provider,
-          requestPath: targetPath,
+          provider: routing.provider,
+          requestPath: routing.targetPath,
           requestBodyLog,
           originalRequestBody,
-          isOpenAIProvider,
+          isOpenAIProvider: routing.isOpenAIProvider,
           originalModel,
           clientId,
           createdAt: Date.now(),
@@ -799,33 +694,5 @@ export class ProxyServer {
    */
   private async executeProxyRequest(task: RequestTask): Promise<ProxyResult> {
     return this.proxyExecutor.execute(task);
-  }
-
-  /**
-   * Convert Anthropic API request to OpenAI API format
-   * Returns null if conversion is not needed or fails
-   */
-  private convertRequestForOpenAI(
-    body: Buffer,
-    path: string
-  ): { request: unknown; originalPath: string; newPath: string } | null {
-    try {
-      const bodyStr = body.toString("utf-8");
-      const anthropicRequest = JSON.parse(bodyStr) as Record<string, unknown>;
-
-      // Check if this looks like an Anthropic Messages API request
-      if (!anthropicRequest.messages || !Array.isArray(anthropicRequest.messages)) {
-        return null; // Not an Anthropic request
-      }
-
-      // Convert to OpenAI format
-      return convertRequestToOpenAI(
-        anthropicRequest as unknown as Parameters<typeof convertRequestToOpenAI>[0],
-        path
-      );
-    } catch (err) {
-      this.log.error("[OpenAI Conversion] Failed to convert request", err);
-      return null;
-    }
   }
 }
