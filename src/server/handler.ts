@@ -7,9 +7,7 @@
 // External API fields use snake_case (Content-Type, tool_call_id, etc.)
 
 import * as http from "http";
-import * as https from "https";
 import * as url from "url";
-import * as zlib from "zlib";
 import { Router } from "./router";
 import { ConfigManager } from "../config";
 import {
@@ -21,15 +19,16 @@ import {
   ProxyResult,
   QueueStats,
 } from "../types";
-import { convertRequestToOpenAI, convertResponseToAnthropic } from "../converter";
-import type { OpenAIChatCompletionResponse } from "../converter/openai-to-anthropic";
+import { convertRequestToOpenAI } from "../converter";
 import { ScopedLogger } from "../utils/logger";
 import { getDatabase, LogDatabase, RequestStatus } from "../database";
 import { LeaderElection } from "./leaderElection";
 import { isStaticRequest, serveStatic } from "./static";
 import { isApiRequest, handleApiRequest } from "../api";
 import { applyModelMapping } from "./proxy/modelMapping";
+import { ProxyExecutor } from "./proxy/executor";
 import { QueueManager } from "./queueManager";
+import { ResponseLogger } from "./responseLogger";
 
 export class ProxyServer {
   private server: http.Server | null = null;
@@ -54,6 +53,12 @@ export class ProxyServer {
   // Queue manager for concurrency control
   private queueManager: QueueManager;
 
+  // Response logger
+  private responseLogger: ResponseLogger;
+
+  // Proxy executor
+  private proxyExecutor: ProxyExecutor;
+
   // Role change callbacks for external listeners (e.g., StatusBarManager)
   private roleChangeCallbacks: Set<(info: RoleChangeInfo) => void> = new Set();
 
@@ -63,6 +68,12 @@ export class ProxyServer {
     this.database = getDatabase();
     this.leaderElection = leaderElection;
     this.instanceId = `Server-${process.pid}-${Math.random().toString(36).substring(2, 6)}`;
+
+    // Initialize response logger
+    this.responseLogger = new ResponseLogger(this.database);
+
+    // Initialize proxy executor (executeFn set after construction for retry support)
+    this.proxyExecutor = new ProxyExecutor(config, this.responseLogger);
 
     // Initialize queue manager (executor set after construction to avoid circular dependency)
     this.queueManager = new QueueManager(config);
@@ -177,6 +188,9 @@ export class ProxyServer {
       this.log.info(`[Server:${this.instanceId}] Already running as ${this.role}`);
       return { role: this.role, leaderUrl: this.leaderUrl ?? undefined };
     }
+
+    // Initialize proxy executor's retry handler
+    this.proxyExecutor.setExecuteFn((task: RequestTask) => this.proxyExecutor.execute(task));
 
     // Initialize queue executor (deferred to avoid circular dependency)
     this.queueManager.setExecutor((task: RequestTask) => this.executeProxyRequest(task));
@@ -775,478 +789,16 @@ export class ProxyServer {
     });
   }
 
-  /**
-   * Log request/response to database - updates existing pending log by clientId
-   */
-  private logResponse(
-    clientId: string,
-    duration: number,
-    statusCode: number,
-    responseChunks: Buffer[],
-    errorMessage: string | undefined,
-    originalResponseBody?: string
-  ): void {
-    if (!this.database.enabled) {
-      this.log.info(`[Server] logResponse skipped - database not enabled. clientId=${clientId}`);
-      return;
-    }
-
-    this.log.info(
-      `[Server] logResponse called - clientId=${clientId}, status=${statusCode}, duration=${duration}ms`
-    );
-
-    let responseBodyLog: string | undefined;
-    if (responseChunks.length > 0) {
-      try {
-        const rawBuffer = Buffer.concat(responseChunks);
-        // Try to detect and decompress gzip data
-        // Gzip magic number: 1f 8b
-        const isGzip = rawBuffer.length >= 2 && rawBuffer[0] === 0x1f && rawBuffer[1] === 0x8b;
-        if (isGzip) {
-          try {
-            const decompressed = zlib.gunzipSync(rawBuffer);
-            responseBodyLog = decompressed.toString("utf-8");
-            this.log.debug(
-              `[Server] Decompressed gzip response: ${rawBuffer.length} -> ${decompressed.length} bytes`
-            );
-          } catch (decompressErr: unknown) {
-            const errMsg =
-              decompressErr instanceof Error ? decompressErr.message : String(decompressErr);
-            this.log.warn(`[Server] Failed to decompress gzip data: ${errMsg}`);
-            responseBodyLog = rawBuffer.toString("utf-8");
-          }
-        } else {
-          responseBodyLog = rawBuffer.toString("utf-8");
-        }
-      } catch {
-        responseBodyLog = undefined;
-      }
-    }
-
-    const success = statusCode >= 200 && statusCode < 300 && !errorMessage;
-
-    this.database.updateLogCompleted(
-      clientId,
-      statusCode,
-      responseBodyLog,
-      duration,
-      success,
-      errorMessage,
-      originalResponseBody
-    );
-  }
-
   private sendJson(res: http.ServerResponse, status: number, data: unknown): void {
     res.writeHead(status, { "Content-Type": "application/json" });
     res.end(JSON.stringify(data));
   }
 
   /**
-   * Execute a proxy request and return the result (for concurrency manager)
-   * Wraps makeProxyRequest logic but returns a ProxyResult instead of writing to response
+   * Execute a proxy request using the ProxyExecutor
    */
   private async executeProxyRequest(task: RequestTask): Promise<ProxyResult> {
-    const {
-      method,
-      targetUrl,
-      headers: taskHeaders,
-      body,
-      provider,
-      isOpenAIProvider,
-      originalModel,
-      clientId,
-      attempt = 1,
-      res: clientRes,
-    } = task;
-
-    // Check if task was cancelled before starting
-    if (task.cancelled) {
-      this.log.info(`[${clientId}] Task cancelled before execution: ${task.cancelledReason}`);
-      return {
-        statusCode: 499,
-        headers: {},
-        error: new Error(task.cancelledReason ?? "Task cancelled"),
-        errorMessage: task.cancelledReason ?? "Task cancelled",
-        duration: 0,
-      };
-    }
-
-    // Check if client connection is still alive
-    if (clientRes && clientRes.writableEnded) {
-      this.log.info(`[${clientId}] Client connection already closed, skipping execution`);
-      return {
-        statusCode: 499,
-        headers: {},
-        error: new Error("Client disconnected"),
-        errorMessage: "Client disconnected",
-        duration: 0,
-      };
-    }
-
-    const maxRetries = 2;
-    const urlParsed = url.parse(targetUrl);
-    const isHttps = urlParsed.protocol === "https:";
-    const httpModule = isHttps ? https : http;
-
-    // Disable compression to avoid gzip response issues when logging to database
-    const requestHeaders: Record<string, string> = { ...taskHeaders };
-    requestHeaders["accept-encoding"] = "identity";
-
-    // Use task's abortController if provided by ConcurrencyManager (queue mode),
-    // otherwise create a local AbortController (non-queue mode)
-    const abortController = task.abortController ?? new AbortController();
-    const abortSignal = abortController.signal;
-
-    const options: http.RequestOptions = {
-      hostname: urlParsed.hostname,
-      port: urlParsed.port || (isHttps ? 443 : 80),
-      path: urlParsed.path,
-      method,
-      headers: requestHeaders,
-      signal: abortSignal,
-    };
-
-    const startTime = Date.now();
-    let requestSentTime = 0;
-    let firstByteTime = 0;
-    let streamChunkCount = 0;
-    let streamTotalBytes = 0;
-    let firstChunkLogged = false;
-    let responseChunks: Buffer[] = [];
-    let originalResponseBody: string | undefined;
-    let clientDisconnected = false;
-
-    // Track client disconnect during streaming
-    const onClientDisconnect = () => {
-      clientDisconnected = true;
-      this.log.info(`[${clientId}] Client disconnected during streaming`);
-      abortController.abort();
-    };
-
-    if (clientRes) {
-      clientRes.on("close", onClientDisconnect);
-    }
-
-    this.log.info(
-      `[Perf:${clientId}] ExecuteRequestStart: starting upstream request to ${provider.id}`
-    );
-
-    return new Promise<ProxyResult>((resolve, reject) => {
-      const proxyReq = httpModule.request(options, proxyRes => {
-        const ttfb = Date.now() - requestSentTime;
-        const duration = Date.now() - startTime;
-        const status = proxyRes.statusCode || 200;
-        firstByteTime = Date.now();
-
-        this.log.info(
-          `[Perf:${clientId}] TTFB: ${ttfb}ms (upstream response headers, total elapsed: ${duration}ms)`
-        );
-
-        // Log response
-        if (status >= 400) {
-          this.log.warn(`Response from ${provider.id}: ${status} (${duration}ms)`);
-        } else {
-          this.log.debug(`Response from ${provider.id}: ${status} (${duration}ms)`);
-        }
-
-        // Collect response headers
-        const excludedHeaders = new Set([
-          "content-encoding",
-          "content-length",
-          "transfer-encoding",
-          "connection",
-          "keep-alive",
-        ]);
-        const responseHeaders: Record<string, string | string[]> = {};
-        for (const [key, value] of Object.entries(proxyRes.headers)) {
-          if (value && !excludedHeaders.has(key.toLowerCase())) {
-            responseHeaders[key] = value;
-          }
-        }
-
-        // Handle OpenAI response conversion
-        if (
-          isOpenAIProvider &&
-          status === 200 &&
-          proxyRes.headers["content-type"]?.includes("application/json")
-        ) {
-          let responseBody = "";
-          proxyRes.on("data", (chunk: Buffer) => {
-            responseBody += chunk.toString();
-          });
-
-          proxyRes.on("end", () => {
-            originalResponseBody = responseBody;
-
-            try {
-              const openaiResponse = JSON.parse(responseBody) as OpenAIChatCompletionResponse;
-              const anthropicResponse = convertResponseToAnthropic(
-                openaiResponse,
-                originalModel || "none"
-              );
-
-              responseChunks.push(Buffer.from(JSON.stringify(anthropicResponse), "utf-8"));
-
-              this.logResponse(
-                clientId,
-                duration,
-                status,
-                responseChunks,
-                undefined,
-                originalResponseBody
-              );
-
-              resolve({
-                statusCode: status,
-                headers: responseHeaders,
-                body: JSON.stringify(anthropicResponse),
-                duration,
-                responseBodyChunks: responseChunks,
-                originalResponseBody,
-              });
-            } catch (err) {
-              const errMsg = err instanceof Error ? err.message : String(err);
-              this.log.warn(
-                `[OpenAI Conversion] Response conversion failed for ${provider.id}: ${errMsg}`
-              );
-
-              const errorResponse = {
-                type: "error",
-                error: {
-                  type: "api_error",
-                  message: `Response format conversion failed: ${errMsg}`,
-                },
-              };
-              const errorBody = JSON.stringify(errorResponse);
-
-              responseChunks.push(Buffer.from(errorBody, "utf-8"));
-
-              this.logResponse(
-                clientId,
-                duration,
-                502,
-                responseChunks,
-                `OpenAI conversion failed: ${errMsg}`,
-                originalResponseBody
-              );
-
-              resolve({
-                statusCode: 502,
-                headers: { "Content-Type": "application/json" },
-                body: errorBody,
-                duration,
-                responseBodyChunks: responseChunks,
-                errorMessage: `OpenAI conversion failed: ${errMsg}`,
-              });
-            }
-          });
-        } else {
-          // Non-OpenAI response
-          const isSSEResponse = proxyRes.headers["content-type"]?.includes("text/event-stream");
-
-          // If SSE and we have a client response object, stream directly
-          if (isSSEResponse && clientRes) {
-            this.log.info(`[Perf:${clientId}] SSE streaming mode enabled`);
-
-            // Write headers immediately
-            clientRes.writeHead(status, responseHeaders);
-
-            // Pipe the response directly to client
-            proxyRes.pipe(clientRes);
-
-            // Handle upstream errors during streaming
-            proxyRes.on("error", (err: Error) => {
-              this.log.error(`[${clientId}] SSE upstream error: ${err.message}`);
-              if (!clientRes.writableEnded) {
-                try {
-                  clientRes.end();
-                } catch {
-                  // Ignore errors when ending already-closed stream
-                }
-              }
-            });
-
-            // Handle client errors during streaming
-            clientRes.on("error", (err: Error) => {
-              this.log.error(`[${clientId}] Client connection error: ${err.message}`);
-              proxyRes.destroy();
-            });
-
-            // Track streaming performance
-            proxyRes.on("data", (chunk: Buffer) => {
-              streamChunkCount++;
-              streamTotalBytes += chunk.length;
-
-              // Log first chunk (helps identify prefill delay)
-              if (!firstChunkLogged) {
-                firstChunkLogged = true;
-                const firstChunkDelay = Date.now() - firstByteTime;
-                this.log.info(
-                  `[Perf:${clientId}] FirstChunk: ${firstChunkDelay}ms after headers, ${chunk.length} bytes`
-                );
-              }
-
-              // Log every 10 chunks or large chunks (>10KB)
-              if (streamChunkCount % 10 === 0 || chunk.length > 10240) {
-                const chunkDuration = Date.now() - startTime;
-                this.log.info(
-                  `[Perf:${clientId}] Chunk#${streamChunkCount}: ${chunk.length} bytes, total: ${streamTotalBytes} bytes, elapsed: ${chunkDuration}ms`
-                );
-              }
-
-              if (this.database.enabled) {
-                responseChunks.push(chunk);
-              }
-            });
-
-            proxyRes.on("end", () => {
-              const totalDuration = Date.now() - startTime;
-              const avgChunkSize =
-                streamChunkCount > 0 ? Math.round(streamTotalBytes / streamChunkCount) : 0;
-
-              // Clean up client disconnect listener
-              if (clientRes) {
-                clientRes.off("close", onClientDisconnect);
-              }
-
-              if (clientDisconnected) {
-                this.log.info(
-                  `[Perf:${clientId}] StreamEnd (client disconnected): ${streamChunkCount} chunks, ${streamTotalBytes} bytes, total: ${totalDuration}ms`
-                );
-              } else {
-                this.log.info(
-                  `[Perf:${clientId}] StreamEnd: ${streamChunkCount} chunks, ${streamTotalBytes} total bytes, avg ${avgChunkSize} bytes/chunk, total: ${totalDuration}ms`
-                );
-              }
-              this.logResponse(
-                clientId,
-                totalDuration,
-                clientDisconnected ? 499 : status,
-                responseChunks,
-                clientDisconnected ? "Client disconnected" : undefined
-              );
-              resolve({
-                statusCode: clientDisconnected ? 499 : status,
-                headers: responseHeaders,
-                duration: totalDuration,
-                responseBodyChunks: responseChunks,
-                streamed: true,
-                errorMessage: clientDisconnected ? "Client disconnected" : undefined,
-              });
-            });
-          } else {
-            // Non-streaming: buffer the response
-            proxyRes.on("data", (chunk: Buffer) => {
-              streamChunkCount++;
-              streamTotalBytes += chunk.length;
-              responseChunks.push(chunk);
-            });
-
-            proxyRes.on("end", () => {
-              const totalDuration = Date.now() - startTime;
-
-              // Clean up client disconnect listener
-              if (clientRes) {
-                clientRes.off("close", onClientDisconnect);
-              }
-
-              this.log.info(
-                `[Perf:${clientId}] ResponseEnd: ${streamChunkCount} chunks, ${streamTotalBytes} total bytes, total: ${totalDuration}ms`
-              );
-              this.logResponse(clientId, totalDuration, status, responseChunks, undefined);
-              resolve({
-                statusCode: status,
-                headers: responseHeaders,
-                body: responseChunks.length > 0 ? Buffer.concat(responseChunks) : undefined,
-                duration: totalDuration,
-                responseBodyChunks: responseChunks,
-              });
-            });
-          }
-        }
-      });
-
-      // Handle connection errors
-      proxyReq.on("error", (err: NodeJS.ErrnoException) => {
-        const duration = Date.now() - startTime;
-
-        // Clean up client disconnect listener
-        if (clientRes) {
-          clientRes.off("close", onClientDisconnect);
-        }
-
-        // Check if aborted by client disconnect
-        if (abortSignal.aborted) {
-          this.log.info(`[${clientId}] Request aborted (client disconnect) after ${duration}ms`);
-          this.logResponse(clientId, duration, 499, responseChunks, "Client disconnected");
-          resolve({
-            statusCode: 499,
-            headers: {},
-            duration,
-            errorMessage: "Client disconnected",
-          });
-          return;
-        }
-
-        // Retry on connection-phase errors
-        const retryableCodes = ["ECONNREFUSED", "ECONNRESET", "ENOTFOUND", "ETIMEDOUT"];
-        if (attempt < maxRetries && err.code && retryableCodes.includes(err.code)) {
-          this.log.warn(
-            `Proxy connection error to ${provider.id} (attempt ${attempt}/${maxRetries}): ${err.message}, retrying in ${attempt}s...`
-          );
-
-          // Clean up listeners before retry
-          if (clientRes) {
-            clientRes.off("close", onClientDisconnect);
-          }
-
-          setTimeout(() => {
-            this.executeProxyRequest({ ...task, attempt: attempt + 1 })
-              .then(resolve)
-              .catch(reject);
-          }, 1000 * attempt);
-          return;
-        }
-
-        this.log.error(`Proxy error to ${provider.id} (${duration}ms): ${err.message}`);
-        this.logResponse(clientId, duration, 0, responseChunks, err.message);
-        reject(new Error(`Proxy error: ${err.message}`));
-      });
-
-      proxyReq.on("timeout", () => {
-        const duration = Date.now() - startTime;
-        this.log.error(`Proxy timeout to ${provider.id} (${duration}ms)`);
-
-        // Clean up client disconnect listener
-        if (clientRes) {
-          clientRes.off("close", onClientDisconnect);
-        }
-
-        // Abort the request
-        abortController.abort();
-        this.logResponse(clientId, duration, 0, responseChunks, "Timeout");
-        reject(new Error("Proxy timeout"));
-      });
-
-      // Set configurable timeout (default 5 minutes for long code generation)
-      // Config value is in seconds, convert to milliseconds
-      const requestTimeoutSeconds = this.config.getSetting("proxy.requestTimeout", 300);
-      const requestTimeoutMs = requestTimeoutSeconds * 1000;
-      if (requestTimeoutMs > 0) {
-        proxyReq.setTimeout(requestTimeoutMs);
-      }
-
-      if (body) {
-        proxyReq.write(body);
-        this.log.info(`[Perf:${clientId}] RequestBodySent: ${body.length} bytes to upstream`);
-      }
-
-      proxyReq.end();
-      requestSentTime = Date.now();
-      this.log.info(
-        `[Perf:${clientId}] RequestSent: setup time ${requestSentTime - startTime}ms, waiting for upstream...`
-      );
-    });
+    return this.proxyExecutor.execute(task);
   }
 
   /**
