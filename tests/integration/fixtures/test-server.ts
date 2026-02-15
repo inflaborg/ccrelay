@@ -29,6 +29,8 @@ export class TestServer {
   private log = new ScopedLogger("TestServer");
   private concurrencyManager: ConcurrencyManager | null = null;
   private routeQueues: Map<string, ConcurrencyManager> = new Map();
+  private activeConnections: Set<http.ServerResponse> = new Set();
+  private connectionCount = 0;
 
   constructor(options: TestServerOptions) {
     this.config = options.config;
@@ -160,17 +162,45 @@ export class TestServer {
   }
 
   /**
+   * Get resource statistics for leak detection
+   */
+  getResourceStats(): {
+    activeWorkers: number;
+    queueLength: number;
+    activeConnections: number;
+    totalConnectionsCreated: number;
+  } {
+    return {
+      activeWorkers: this.concurrencyManager?.getStats().activeWorkers ?? 0,
+      queueLength: this.concurrencyManager?.getStats().queueLength ?? 0,
+      activeConnections: this.activeConnections.size,
+      totalConnectionsCreated: this.connectionCount,
+    };
+  }
+
+  /**
    * Handle incoming HTTP request
    */
   private async handleRequest(
     req: http.IncomingMessage,
     res: http.ServerResponse
   ): Promise<void> {
+    // Track active connections
+    this.activeConnections.add(res);
+    this.connectionCount++;
+
     const clientId = `test-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const path = req.url ?? "/";
     const method = req.method ?? "GET";
 
     this.log.info(`[${clientId}] ${method} ${path}`);
+
+    // Cleanup connection tracking on close
+    const cleanupConnection = () => {
+      this.activeConnections.delete(res);
+    };
+    res.on("close", cleanupConnection);
+    res.on("finish", cleanupConnection);
 
     // Read request body
     const body = await this.readBody(req);
