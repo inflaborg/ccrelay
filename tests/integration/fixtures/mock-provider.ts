@@ -403,6 +403,10 @@ export class MockProvider extends EventEmitter {
     return this;
   }
 
+  onPostDynamic(path: string, handler: (req: http.IncomingMessage) => MockResponse): this {
+    return this.onDynamic(path, "POST", handler);
+  }
+
   // === Pause/Resume Control ===
 
   pauseResponses(): void {
