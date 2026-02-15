@@ -108,6 +108,17 @@ export class ConcurrencyManager {
       return; // No tasks in queue
     }
 
+    // Check if task was cancelled while waiting in queue (before acquiring semaphore)
+    if (queuedTask.task.cancelled) {
+      this.log.info(
+        `[Task ${queuedTask.task.id}] Skipped (cancelled while queuing): ${queuedTask.task.cancelledReason ?? "unknown"}`
+      );
+      queuedTask.reject(new Error(queuedTask.task.cancelledReason ?? "Task cancelled"));
+      // Process next task
+      void this.processNext();
+      return;
+    }
+
     // Acquire semaphore (non-blocking check)
     const stats = this.semaphore.getStats();
     if (stats.available <= 0) {
@@ -128,17 +139,6 @@ export class ConcurrencyManager {
     const { task, resolve, reject, queuedAt } = queuedTask;
     const startedAt = Date.now();
     const waitTime = startedAt - queuedAt;
-
-    // Check if task was cancelled while waiting in queue
-    if (task.cancelled) {
-      this.log.info(
-        `[Task ${task.id}] Skipped (cancelled while queuing): ${task.cancelledReason ?? "unknown"}`
-      );
-      reject(new Error(task.cancelledReason ?? "Task cancelled"));
-      lease.release();
-      await this.processNext();
-      return;
-    }
 
     // Track the task
     const processingTask: ProcessingTask = {

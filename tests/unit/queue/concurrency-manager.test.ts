@@ -483,4 +483,246 @@ describe("ConcurrencyManager", () => {
       expect(stats.queueLength).toBe(0);
     });
   });
+
+  describe("CM012: Task cancellation", () => {
+    it("CM012: should cancel task from queue", async () => {
+      config.maxConcurrency = 1;
+
+      let releaseTask: () => void;
+      const blockingTask = new Promise<ProxyResult>(resolve => {
+        releaseTask = () => resolve({ statusCode: 200 } as ProxyResult);
+      });
+
+      const executor = vi.fn().mockImplementation(() => blockingTask);
+      manager = new ConcurrencyManager(config, executor);
+
+      // Start one task to fill worker
+      const p1 = manager.submit(createMockTask("task1"));
+
+      await new Promise(r => setTimeout(r, 10));
+      expect(manager.getStats().activeWorkers).toBe(1);
+
+      // Queue another task
+      const p2 = manager.submit(createMockTask("task2"));
+
+      await new Promise(r => setTimeout(r, 10));
+      expect(manager.getStats().queueLength).toBe(1);
+
+      // Cancel the queued task
+      const cancelled = manager.cancelTask("task2", "User cancelled");
+
+      expect(cancelled).toBe(true);
+      expect(manager.getStats().queueLength).toBe(0);
+
+      // Queued task should be rejected
+      await expect(p2).rejects.toThrow("User cancelled");
+
+      // Running task should continue
+      releaseTask!();
+      await p1;
+    });
+
+    it("CM012: should mark processing task as cancelled but not remove immediately", async () => {
+      config.maxConcurrency = 1;
+
+      let taskExecutionComplete = false;
+
+      const executor = vi.fn().mockImplementation((task: RequestTask) => {
+        // Simulate a task that checks for cancellation
+        return new Promise<ProxyResult>((_, reject) => {
+          // Check cancelled flag in task
+          const checkInterval = setInterval(() => {
+            if (task.cancelled) {
+              clearInterval(checkInterval);
+              taskExecutionComplete = true;
+              reject(new Error(task.cancelledReason || "Task cancelled"));
+            }
+          }, 10);
+        });
+      });
+
+      manager = new ConcurrencyManager(config, executor);
+
+      // Start task
+      const p1 = manager.submit(createMockTask("task1"));
+
+      await new Promise(r => setTimeout(r, 50));
+
+      // Cancel the processing task
+      const cancelled = manager.cancelTask("task1", "User cancelled");
+
+      expect(cancelled).toBe(false); // Returns false for processing tasks
+
+      // Wait for the task to detect cancellation and reject
+      await expect(p1).rejects.toThrow("User cancelled");
+      expect(taskExecutionComplete).toBe(true);
+
+      // Worker should be released
+      expect(manager.getStats().activeWorkers).toBe(0);
+    });
+
+    it("CM012: should return false when cancelling non-existent task", () => {
+      const executor = vi.fn().mockResolvedValue({ statusCode: 200 } as ProxyResult);
+      manager = new ConcurrencyManager(config, executor);
+
+      const cancelled = manager.cancelTask("non-existent", "Test");
+      expect(cancelled).toBe(false);
+    });
+
+    it("CM012: should skip cancelled task during execution", async () => {
+      // Test by using cancelTask method to cancel a task that's queued
+      config.maxConcurrency = 1;
+
+      let releaseTask: () => void;
+      const blockingTask = new Promise<ProxyResult>(resolve => {
+        releaseTask = () => resolve({ statusCode: 200 } as ProxyResult);
+      });
+
+      const executor = vi.fn().mockImplementation(() => blockingTask);
+      manager = new ConcurrencyManager(config, executor);
+
+      // Fill the worker with task1
+      const p1 = manager.submit(createMockTask("task1"));
+
+      await new Promise(r => setTimeout(r, 10));
+      expect(manager.getStats().activeWorkers).toBe(1);
+
+      // Submit task2 which will be queued
+      const task2 = createMockTask("task2");
+      const p2 = manager.submit(task2);
+
+      // Set up rejection handler immediately to prevent unhandled rejection warning
+      const p2Catch = p2.catch(() => {
+        /* expected rejection */
+      });
+
+      await new Promise(r => setTimeout(r, 10));
+      expect(manager.getStats().queueLength).toBe(1);
+
+      // Now mark task2 as cancelled while it's in queue
+      task2.cancelled = true;
+      task2.cancelledReason = "Cancelled before processing";
+
+      // Trigger processing next task by releasing task1
+      releaseTask!();
+      await p1;
+
+      // Wait for task2 to be processed
+      await p2Catch;
+
+      // Task2 should have been rejected because it was cancelled
+      await expect(p2).rejects.toThrow("Cancelled before processing");
+
+      // Executor should only have been called once (for task1)
+      expect(executor).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("CM013: Statistics tracking", () => {
+    it("CM013: should track totalProcessed count", async () => {
+      const executor = vi.fn().mockResolvedValue({ statusCode: 200 } as ProxyResult);
+      manager = new ConcurrencyManager(config, executor);
+
+      await manager.submit(createMockTask("task1"));
+      await manager.submit(createMockTask("task2"));
+      await manager.submit(createMockTask("task3"));
+
+      const stats = manager.getStats();
+      expect(stats.totalProcessed).toBe(3);
+      expect(stats.totalFailed).toBe(0);
+    });
+
+    it("CM013: should track totalFailed count", async () => {
+      const executor = vi.fn().mockRejectedValue(new Error("Task failed"));
+      manager = new ConcurrencyManager(config, executor);
+
+      await expect(manager.submit(createMockTask("task1"))).rejects.toThrow();
+      await expect(manager.submit(createMockTask("task2"))).rejects.toThrow();
+
+      const stats = manager.getStats();
+      expect(stats.totalFailed).toBe(2);
+      expect(stats.totalProcessed).toBe(0);
+    });
+
+    it("CM013: should calculate avgWaitTime and avgProcessTime", async () => {
+      const executor = vi.fn().mockImplementation(
+        (): Promise<ProxyResult> => {
+          return new Promise(resolve => {
+            setTimeout(() => {
+              resolve({ statusCode: 200, duration: 50 } as ProxyResult);
+            }, 50);
+          });
+        }
+      );
+
+      manager = new ConcurrencyManager(config, executor);
+
+      await manager.submit(createMockTask("task1"));
+
+      const stats = manager.getStats();
+      expect(stats.totalProcessed).toBe(1);
+      expect(stats.avgProcessTime).toBeGreaterThan(0);
+      expect(stats.avgWaitTime).toBeGreaterThanOrEqual(0);
+    });
+
+    it("CM013: should track stats correctly for completed and failed tasks", async () => {
+      // Simple test: just verify processed and failed counts work correctly
+      // Use a simple executor that sometimes fails
+      let callCount = 0;
+      const executor = vi.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve({ statusCode: 200 } as ProxyResult);
+        } else if (callCount === 2) {
+          return Promise.reject(new Error("Task failed"));
+        }
+        return Promise.resolve({ statusCode: 200 } as ProxyResult);
+      });
+
+      manager = new ConcurrencyManager(config, executor);
+
+      // First task succeeds
+      await manager.submit(createMockTask("task1"));
+
+      // Second task fails
+      await expect(manager.submit(createMockTask("task2"))).rejects.toThrow("Task failed");
+
+      // Stats should reflect 1 processed, 1 failed
+      const stats = manager.getStats();
+      expect(stats.totalProcessed).toBe(1);
+      expect(stats.totalFailed).toBe(1);
+    });
+  });
+
+  describe("CM014: getProcessingTasks", () => {
+    it("CM014: should return empty array when no tasks processing", () => {
+      const executor = vi.fn().mockResolvedValue({ statusCode: 200 } as ProxyResult);
+      manager = new ConcurrencyManager(config, executor);
+
+      const processing = manager.getProcessingTasks();
+      expect(processing).toEqual([]);
+    });
+
+    it("CM014: should return processing task info with elapsed time", async () => {
+      let releaseTask: () => void;
+      const blockingTask = new Promise<ProxyResult>(resolve => {
+        releaseTask = () => resolve({ statusCode: 200 } as ProxyResult);
+      });
+
+      const executor = vi.fn().mockImplementation(() => blockingTask);
+      manager = new ConcurrencyManager(config, executor);
+
+      const p = manager.submit(createMockTask("task1"));
+
+      await new Promise(r => setTimeout(r, 50));
+
+      const processing = manager.getProcessingTasks();
+      expect(processing.length).toBe(1);
+      expect(processing[0].id).toBe("task1");
+      expect(processing[0].elapsed).toBeGreaterThan(0);
+
+      releaseTask!();
+      await p;
+    });
+  });
 });
