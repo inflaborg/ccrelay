@@ -230,3 +230,89 @@ export class AbortTracker {
     this.abortReason = undefined;
   }
 }
+
+/**
+ * Wait for multiple conditions in parallel
+ */
+export async function waitForAll(
+  conditions: Array<() => boolean | Promise<boolean>>,
+  options: { timeout?: number; interval?: number } = {}
+): Promise<void> {
+  const { timeout = 10000, interval = 50 } = options;
+
+  return new Promise((resolve, reject) => {
+    const start = Date.now();
+
+    const check = () => {
+      void (async () => {
+        try {
+          const results = await Promise.all(
+            conditions.map(c => Promise.resolve(c()))
+          );
+          if (results.every(Boolean)) {
+            resolve();
+          } else if (Date.now() - start > timeout) {
+            const indices = results.map((r, i) => (r ? -1 : i)).filter(i => i >= 0);
+            reject(new Error(`Timeout waiting for conditions [${indices.join(", ")}]`));
+          } else {
+            setTimeout(check, interval);
+          }
+        } catch (err) {
+          if (Date.now() - start > timeout) {
+            reject(err instanceof Error ? err : new Error(String(err)));
+          } else {
+            setTimeout(check, interval);
+          }
+        }
+      })();
+    };
+
+    check();
+  });
+}
+
+/**
+ * Create a promise that resolves when an event is emitted
+ */
+export function waitForEvent<T = unknown>(
+  emitter: { on: (event: string, listener: (data: T) => void) => void; removeListener: (event: string, listener: (data: T) => void) => void },
+  eventName: string,
+  timeout = 10000
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      emitter.removeListener(eventName, listener);
+      reject(new Error(`Timeout waiting for event "${eventName}"`));
+    }, timeout);
+
+    const listener = (data: T) => {
+      clearTimeout(timer);
+      emitter.removeListener(eventName, listener);
+      resolve(data);
+    };
+
+    emitter.on(eventName, listener);
+  });
+}
+
+/**
+ * Retry an action until it succeeds or times out
+ */
+export async function retryUntil<T>(
+  action: () => T | Promise<T>,
+  predicate: (result: T) => boolean,
+  options: { timeout?: number; interval?: number } = {}
+): Promise<T> {
+  const { timeout = 10000, interval = 100 } = options;
+  const start = Date.now();
+
+  let result = await action();
+  while (!predicate(result)) {
+    if (Date.now() - start > timeout) {
+      throw new Error("Timeout in retryUntil");
+    }
+    await sleep(interval);
+    result = await action();
+  }
+  return result;
+}

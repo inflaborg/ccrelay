@@ -9,6 +9,7 @@
 
 import { describe, it, expect, afterEach } from "vitest";
 import request from "supertest";
+import http from "http";
 import { MockConfig, MockProvider, TestServer } from "../fixtures";
 import { createTestProvider, createTestConcurrencyConfig, sleep, createSSEStreamChunks } from "../utils";
 
@@ -180,8 +181,7 @@ describe("Integration: SSE Stream", () => {
     });
   });
 
-  describe.skip("IT02-B: SSE with queue", () => {
-    // Skipped due to timing issues with supertest and mock servers
+  describe("IT02-B: SSE with queue", () => {
     it("IT02-05: should queue SSE requests when at capacity", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
@@ -191,43 +191,73 @@ describe("Integration: SSE Stream", () => {
         concurrency: createTestConcurrencyConfig({
           maxConcurrency: 1, // Only one at a time
           maxQueueSize: 10,
+          timeout: 10000,
         }),
       });
 
       testServer = new TestServer({ config });
       await testServer.start();
 
-      // Mock a hanging response to ensure first request stays active
-      mockProvider.onHanging("/v1/messages", "POST");
+      // Mock a slow response (3 seconds) to ensure first request stays active
+      mockProvider.onPost("/v1/messages", {
+        status: 200,
+        body: { content: "ok" },
+        delay: 3000,
+      });
 
-      // Start first request
-      const req1 = request(testServer.baseUrl)
-        .post("/v1/messages")
-        .set("x-api-key", "test-key")
-        .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "first" }] });
+      // First request using raw HTTP to have control over timing
+      const url = new URL(`${testServer.baseUrl}/v1/messages`);
+      const req1 = http.request({
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": "test-key",
+        },
+      }, () => {});
 
-      // Wait for first request to start processing
-      await sleep(300);
+      // Suppress socket errors from abort
+      req1.on("error", () => {});
 
-      // Verify queue stats
+      req1.write(JSON.stringify({ model: "claude-3-sonnet", messages: [{ role: "user", content: "first" }] }));
+      req1.end();
+
+      // Wait for first request to reach upstream
+      await mockProvider.waitForRequestTo("/v1/messages", 2000);
+
+      // Verify queue stats - one worker active
       const stats = testServer.getQueueStats();
       expect(stats.default?.activeWorkers).toBeGreaterThanOrEqual(1);
 
       // Second request should queue
-      const req2 = request(testServer.baseUrl)
-        .post("/v1/messages")
-        .set("x-api-key", "test-key")
-        .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "second" }] });
+      const req2 = http.request({
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": "test-key",
+        },
+      }, () => {});
 
-      await sleep(200);
+      // Suppress socket errors from abort
+      req2.on("error", () => {});
+
+      req2.write(JSON.stringify({ model: "claude-3-sonnet", messages: [{ role: "user", content: "second" }] }));
+      req2.end();
+
+      await sleep(300);
 
       // Should have one in queue
       const statsWithQueue = testServer.getQueueStats();
       expect(statsWithQueue.default?.queueLength).toBeGreaterThanOrEqual(1);
 
-      // Clean up
-      req1.abort();
-      req2.abort();
+      // Cleanup
+      req1.destroy();
+      req2.destroy();
     });
   });
 });

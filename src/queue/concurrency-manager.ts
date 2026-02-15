@@ -68,14 +68,20 @@ export class ConcurrencyManager {
    */
   async submit(task: RequestTask): Promise<ProxyResult> {
     // Check queue size limit
+    // maxQueueSize refers to the waiting queue size, not including actively processing tasks
     // If maxQueueSize is 0 or undefined, use safe fallback of 10000
     const maxQueueLimit =
       this.config.maxQueueSize && this.config.maxQueueSize > 0 ? this.config.maxQueueSize : 10000;
 
-    const currentSize = this.queue.size() + this.processingTasks.size;
+    // Only count tasks waiting in queue, not those being processed
+    const currentQueueSize = this.queue.size();
 
-    if (currentSize >= maxQueueLimit) {
-      throw new Error(`Queue is full (${currentSize}/${maxQueueLimit}). Please try again later.`);
+    // Total capacity = maxConcurrency (processing) + maxQueueSize (waiting)
+    // Check if the waiting queue is full
+    if (currentQueueSize >= maxQueueLimit) {
+      throw new Error(
+        `Queue is full (${currentQueueSize}/${maxQueueLimit} waiting). Please try again later.`
+      );
     }
 
     return new Promise<ProxyResult>((resolve, reject) => {
