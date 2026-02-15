@@ -1,12 +1,15 @@
 /**
- * Integration Test: Task Timeout Cancellation
+ * Integration Test: Task Timeout and Client Disconnect
  *
- * Tests that verify task timeout and abort controller behavior:
- * 1. Task timeout returns 503 with error message
- * 2. Worker is released after timeout (no leak)
- * 3. New requests work after timeout (recovery)
- * 4. Concurrent timeouts handled correctly
- * 5. Task completing before timeout works normally
+ * Tests that verify task behavior:
+ * 1. Queue timeout - task times out while waiting in queue
+ * 2. Client disconnect handling - release worker when client disconnects
+ * 3. Slow responses complete successfully (no execution timeout)
+ *
+ * IMPORTANT: Timeout Behavior:
+ * - QUEUE TIMEOUT: Only applies while task is waiting in queue
+ * - Once task starts executing, there is NO timeout from our side
+ * - Execution relies entirely on upstream response or client disconnect
  */
 
 /* eslint-disable @typescript-eslint/naming-convention */
@@ -18,7 +21,7 @@ import http from "http";
 import { MockConfig, MockProvider, TestServer } from "../fixtures";
 import { createTestProvider, createTestConcurrencyConfig, sleep } from "../utils";
 
-describe("Integration: Task Timeout Cancellation", () => {
+describe("Integration: Task Timeout and Client Disconnect", () => {
   let testServer: TestServer;
   let mockProvider: MockProvider;
 
@@ -31,8 +34,8 @@ describe("Integration: Task Timeout Cancellation", () => {
     }
   });
 
-  describe("IT08: Task timeout and cancellation", () => {
-    it("IT08-01: should timeout and return 503 when task exceeds timeout", async () => {
+  describe("IT08: Queue timeout and client disconnect", () => {
+    it("IT08-01: should complete slow response (no execution timeout)", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
@@ -41,33 +44,34 @@ describe("Integration: Task Timeout Cancellation", () => {
         concurrency: createTestConcurrencyConfig({
           maxConcurrency: 2,
           maxQueueSize: 10,
-          timeout: 300, // 300ms timeout
+          timeout: 500, // 500ms queue timeout
         }),
-        proxyTimeout: 1,
+        proxyTimeout: 10,
       });
 
       testServer = new TestServer({ config });
       await testServer.start();
 
-      // Mock hanging response
+      // Mock slow response (2 seconds) - much longer than queue timeout
+      // But since there's no queue, it should complete successfully
       mockProvider.onPost("/v1/messages", {
         status: 200,
-        body: { content: "hanging" },
-        delay: 60000, // 60 seconds
+        body: { content: "slow but completed" },
+        delay: 2000,
       });
 
       const res = await request(testServer.baseUrl)
         .post("/v1/messages")
         .set("x-api-key", "test-key")
         .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] })
-        .timeout(5000);
+        .timeout(10000);
 
-      // Task timeout should return 503 with timeout error message
-      expect(res.status).toBe(503);
-      expect(res.body.error).toMatch(/timeout/i);
+      // Should complete successfully - no execution timeout
+      expect(res.status).toBe(200);
+      expect(res.body.content).toBe("slow but completed");
     });
 
-    it("IT08-02: should release worker after timeout (no resource leak)", async () => {
+    it("IT08-02: should release worker after client disconnect (no resource leak)", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
@@ -76,9 +80,9 @@ describe("Integration: Task Timeout Cancellation", () => {
         concurrency: createTestConcurrencyConfig({
           maxConcurrency: 1, // Only 1 worker
           maxQueueSize: 10,
-          timeout: 300,
+          timeout: 30000, // Long queue timeout (30 seconds)
         }),
-        proxyTimeout: 1,
+        proxyTimeout: 30,
       });
 
       testServer = new TestServer({ config });
@@ -111,18 +115,22 @@ describe("Integration: Task Timeout Cancellation", () => {
       // Wait for request to reach upstream
       await mockProvider.waitForRequestTo("/v1/messages", 2000);
 
-      // Wait for timeout to occur (300ms timeout + buffer)
+      // Verify worker is active
+      const statsDuring = testServer.getQueueStats();
+      expect(statsDuring.default?.activeWorkers).toBe(1);
+
+      // Disconnect client
+      req.destroy();
+
+      // Wait for server to detect disconnect
       await sleep(500);
 
       // Worker should be released
-      const stats = testServer.getQueueStats();
-      expect(stats.default?.activeWorkers).toBe(0);
-
-      // Cleanup
-      req.destroy();
+      const statsAfter = testServer.getQueueStats();
+      expect(statsAfter.default?.activeWorkers).toBe(0);
     });
 
-    it("IT08-03: should allow new requests after timeout (recovery)", async () => {
+    it("IT08-03: should allow new requests after client disconnect (recovery)", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
@@ -131,9 +139,9 @@ describe("Integration: Task Timeout Cancellation", () => {
         concurrency: createTestConcurrencyConfig({
           maxConcurrency: 1,
           maxQueueSize: 10,
-          timeout: 300,
+          timeout: 30000,
         }),
-        proxyTimeout: 1,
+        proxyTimeout: 30,
       });
 
       testServer = new TestServer({ config });
@@ -146,17 +154,31 @@ describe("Integration: Task Timeout Cancellation", () => {
         delay: 60000,
       });
 
-      // First request times out
-      const res1 = await request(testServer.baseUrl)
-        .post("/v1/messages")
-        .set("x-api-key", "test-key")
-        .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "first" }] })
-        .timeout(5000);
+      // First request - disconnect mid-stream
+      const url = new URL(`${testServer.baseUrl}/v1/messages`);
+      const req1 = http.request({
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": "test-key",
+        },
+      }, () => {});
 
-      expect(res1.status).toBe(503);
+      req1.on("error", () => {});
+      req1.write(JSON.stringify({ model: "claude-3-sonnet", messages: [{ role: "user", content: "first" }] }));
+      req1.end();
+
+      // Wait for request to reach upstream
+      await mockProvider.waitForRequestTo("/v1/messages", 2000);
+
+      // Disconnect client
+      req1.destroy();
 
       // Wait for cleanup
-      await sleep(200);
+      await sleep(500);
 
       // Verify worker released
       const stats = testServer.getQueueStats();
@@ -180,7 +202,7 @@ describe("Integration: Task Timeout Cancellation", () => {
       expect(res2.body.content).toBe("success");
     });
 
-    it("IT08-04: should handle multiple concurrent timeouts without deadlock", async () => {
+    it("IT08-04: should handle multiple concurrent client disconnects without deadlock", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
@@ -189,9 +211,9 @@ describe("Integration: Task Timeout Cancellation", () => {
         concurrency: createTestConcurrencyConfig({
           maxConcurrency: 3,
           maxQueueSize: 10,
-          timeout: 300,
+          timeout: 30000,
         }),
-        proxyTimeout: 1,
+        proxyTimeout: 30,
       });
 
       testServer = new TestServer({ config });
@@ -205,40 +227,48 @@ describe("Integration: Task Timeout Cancellation", () => {
       });
 
       // Start multiple concurrent requests
-      const results = await Promise.allSettled([
-        request(testServer.baseUrl)
-          .post("/v1/messages")
-          .set("x-api-key", "test-key")
-          .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "1" }] })
-          .timeout(5000),
-        request(testServer.baseUrl)
-          .post("/v1/messages")
-          .set("x-api-key", "test-key")
-          .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "2" }] })
-          .timeout(5000),
-        request(testServer.baseUrl)
-          .post("/v1/messages")
-          .set("x-api-key", "test-key")
-          .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "3" }] })
-          .timeout(5000),
-      ]);
+      const url = new URL(`${testServer.baseUrl}/v1/messages`);
+      const requests: http.ClientRequest[] = [];
 
-      // All should have timed out with 503
-      for (const result of results) {
-        if (result.status === "fulfilled") {
-          expect(result.value.status).toBe(503);
-        }
+      for (let i = 0; i < 3; i++) {
+        const req = http.request({
+          hostname: url.hostname,
+          port: url.port,
+          path: url.pathname,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": "test-key",
+          },
+        }, () => {});
+
+        req.on("error", () => {});
+        req.write(JSON.stringify({ model: "claude-3-sonnet", messages: [{ role: "user", content: String(i + 1) }] }));
+        req.end();
+        requests.push(req);
+      }
+
+      // Wait for all requests to reach upstream
+      await sleep(500);
+
+      // Verify workers are active
+      const statsDuring = testServer.getQueueStats();
+      expect(statsDuring.default?.activeWorkers).toBe(3);
+
+      // Disconnect all clients
+      for (const req of requests) {
+        req.destroy();
       }
 
       // Wait for cleanup
-      await sleep(200);
+      await sleep(500);
 
       // All workers should be released (no leak)
-      const stats = testServer.getQueueStats();
-      expect(stats.default?.activeWorkers).toBe(0);
+      const statsAfter = testServer.getQueueStats();
+      expect(statsAfter.default?.activeWorkers).toBe(0);
     });
 
-    it("IT08-05: should complete task that finishes before timeout (normal case)", async () => {
+    it("IT08-05: should complete task that finishes quickly (normal case)", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
@@ -247,14 +277,14 @@ describe("Integration: Task Timeout Cancellation", () => {
         concurrency: createTestConcurrencyConfig({
           maxConcurrency: 2,
           maxQueueSize: 10,
-          timeout: 1000, // 1 second timeout
+          timeout: 1000, // 1 second queue timeout
         }),
       });
 
       testServer = new TestServer({ config });
       await testServer.start();
 
-      // Mock response that completes in 200ms (before 1s timeout)
+      // Mock response that completes in 200ms
       mockProvider.onPost("/v1/messages", {
         status: 200,
         body: { content: "completed", id: "msg_123" },

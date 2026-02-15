@@ -1,20 +1,18 @@
 /**
  * Integration Test: Queue Timeout and Task Cleanup
  *
- * Tests that verify correct handling of tasks that timeout while:
- * 1. Waiting in queue (current behavior: task may still execute, but response is 503)
- * 2. Being processed (proxy timeout should return appropriate error)
- * 3. Queue is full with many tasks accumulating
+ * Tests that verify correct handling of tasks that timeout while waiting in queue.
  *
- * IMPORTANT: Current ConcurrencyManager behavior:
- * - Task timeout starts when task is submitted (not when execution starts)
- * - If task timeout expires, client receives 503
- * - BUT the task execution may still continue (request sent to upstream)
- * - This is a known behavior that could be improved in future
+ * IMPORTANT: Timeout Behavior:
+ * - QUEUE TIMEOUT: Only applies while task is waiting in queue
+ * - Once task starts executing (request sent to upstream), there is NO timeout
+ * - Execution relies entirely on:
+ *   1. Upstream server response
+ *   2. Client disconnection detection
  *
  * Key verification points:
- * - Tasks timing out should return 503 to client
- * - Tasks timing out should be properly removed from queue
+ * - Tasks timing out in queue should return 503 to client
+ * - Upstream should NOT be called for queue-timed-out tasks
  * - No resource leaks after mass timeout scenarios
  */
 
@@ -40,7 +38,7 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
   });
 
   describe("IT10: Task timeout while waiting in queue", () => {
-    it("IT10-01: should return 503 when task times out (task may still execute upstream)", async () => {
+    it("IT10-01: should return 503 when task times out in queue (upstream NOT called)", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
@@ -49,9 +47,9 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
         concurrency: createTestConcurrencyConfig({
           maxConcurrency: 1, // Only 1 worker
           maxQueueSize: 5,
-          timeout: 500, // 500ms timeout - includes queue wait time
+          timeout: 300, // 300ms queue timeout
         }),
-        proxyTimeout: 10,
+        proxyTimeout: 30, // Long proxy timeout (execution has no timeout from our side)
       });
 
       testServer = new TestServer({ config });
@@ -61,10 +59,10 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
       mockProvider.onPost("/v1/messages", {
         status: 200,
         body: { content: "slow" },
-        delay: 5000, // 5 seconds
+        delay: 10000, // 10 seconds - much longer than queue timeout
       });
 
-      // First request occupies the worker for 5 seconds
+      // First request occupies the worker for 10 seconds
       const url = new URL(`${testServer.baseUrl}/v1/messages`);
       const req1 = http.request({
         hostname: url.hostname,
@@ -84,24 +82,30 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
       // Wait for first request to reach upstream
       await mockProvider.waitForRequestTo("/v1/messages", 2000);
 
+      // Track upstream calls before second request
+      const upstreamCountBefore = mockProvider.getRequestCount("/v1/messages");
+
       // Second request will queue and should timeout while waiting
-      // Note: Current behavior - task may still execute upstream, but client gets 503
       const res2 = await request(testServer.baseUrl)
         .post("/v1/messages")
         .set("x-api-key", "test-key")
         .send({ model: "second", messages: [] })
-        .timeout(3000);
+        .timeout(5000);
 
       // Should get 503 (timeout while waiting in queue)
       expect(res2.status).toBe(503);
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       expect(res2.body.error).toMatch(/timeout/i);
 
+      // Upstream should NOT have been called for second request
+      const upstreamCountAfter = mockProvider.getRequestCount("/v1/messages");
+      expect(upstreamCountAfter).toBe(upstreamCountBefore);
+
       // Cleanup
       req1.destroy();
     });
 
-    it("IT10-02: should properly release worker after task timeout", async () => {
+    it("IT10-02: should properly release worker after queue timeout", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
@@ -110,19 +114,19 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
         concurrency: createTestConcurrencyConfig({
           maxConcurrency: 1,
           maxQueueSize: 10,
-          timeout: 500, // 500ms timeout
+          timeout: 300, // 300ms queue timeout
         }),
-        proxyTimeout: 10,
+        proxyTimeout: 30,
       });
 
       testServer = new TestServer({ config });
       await testServer.start();
 
-      // Mock slow response - longer than timeout
+      // Mock slow response
       mockProvider.onPost("/v1/messages", {
         status: 200,
         body: { content: "slow" },
-        delay: 3000, // 3 seconds
+        delay: 10000, // 10 seconds
       });
 
       // First request occupies worker
@@ -178,9 +182,9 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
         concurrency: createTestConcurrencyConfig({
           maxConcurrency: 1,
           maxQueueSize: 20,
-          timeout: 400, // 400ms timeout
+          timeout: 300, // 300ms queue timeout
         }),
-        proxyTimeout: 10,
+        proxyTimeout: 30,
       });
 
       testServer = new TestServer({ config });
@@ -246,8 +250,14 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
     });
   });
 
-  describe("IT11: Proxy timeout (upstream hanging)", () => {
-    it("IT11-01: should return 502/503 when upstream hangs beyond timeout", async () => {
+  describe("IT11: Proxy timeout (upstream hanging, client disconnect)", () => {
+    /**
+     * Once task starts executing:
+     * - NO timeout from our side
+     * - Relies on upstream response or client disconnect
+     * - proxyTimeout is for connection-level issues, not execution timeout
+     */
+    it("IT11-01: should handle upstream hanging via client disconnect", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
@@ -256,9 +266,9 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
         concurrency: createTestConcurrencyConfig({
           maxConcurrency: 2,
           maxQueueSize: 10,
-          timeout: 5000, // Long task timeout
+          timeout: 30000, // Long queue timeout (30 seconds)
         }),
-        proxyTimeout: 1, // 1 second proxy timeout (shorter than task timeout)
+        proxyTimeout: 1,
       });
 
       testServer = new TestServer({ config });
@@ -267,17 +277,42 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
       // Mock hanging response - sends headers but never completes
       mockProvider.onHanging("/v1/messages", "POST");
 
-      const res = await request(testServer.baseUrl)
-        .post("/v1/messages")
-        .set("x-api-key", "test-key")
-        .send({ model: "test", messages: [] })
-        .timeout(5000);
+      // Use raw HTTP to control disconnect
+      const url = new URL(`${testServer.baseUrl}/v1/messages`);
+      const req = http.request({
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": "test-key",
+        },
+      }, () => {});
 
-      // Should return error (502 or 503 depending on which timeout triggers)
-      expect([502, 503]).toContain(res.status);
+      req.on("error", () => {});
+      req.write(JSON.stringify({ model: "test", messages: [] }));
+      req.end();
+
+      // Wait for request to reach upstream
+      await mockProvider.waitForRequestTo("/v1/messages", 2000);
+
+      // Verify worker is active
+      const statsDuring = testServer.getResourceStats();
+      expect(statsDuring.activeWorkers).toBe(1);
+
+      // Disconnect client to release the hanging request
+      req.destroy();
+
+      // Wait for cleanup
+      await sleep(500);
+
+      // Verify worker released
+      const statsAfter = testServer.getResourceStats();
+      expect(statsAfter.activeWorkers).toBe(0);
     });
 
-    it("IT11-02: should release worker after proxy timeout", async () => {
+    it("IT11-02: should release worker after client disconnect", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
@@ -286,34 +321,53 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
         concurrency: createTestConcurrencyConfig({
           maxConcurrency: 1,
           maxQueueSize: 10,
-          timeout: 10000, // Long task timeout
+          timeout: 30000,
         }),
-        proxyTimeout: 1, // 1 second proxy timeout
+        proxyTimeout: 30,
       });
 
       testServer = new TestServer({ config });
       await testServer.start();
 
-      // Mock hanging response
-      mockProvider.onHanging("/v1/messages", "POST");
+      // Mock very slow response
+      mockProvider.onPost("/v1/messages", {
+        status: 200,
+        body: { content: "hanging" },
+        delay: 60000,
+      });
 
-      // Get initial stats
-      const initialStats = testServer.getResourceStats();
+      const url = new URL(`${testServer.baseUrl}/v1/messages`);
+      const req = http.request({
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": "test-key",
+        },
+      }, () => {});
 
-      // Send request
-      await request(testServer.baseUrl)
-        .post("/v1/messages")
-        .set("x-api-key", "test-key")
-        .send({ model: "test", messages: [] })
-        .timeout(5000);
+      req.on("error", () => {});
+      req.write(JSON.stringify({ model: "test", messages: [] }));
+      req.end();
+
+      // Wait for request to reach upstream
+      await mockProvider.waitForRequestTo("/v1/messages", 2000);
+
+      // Verify worker is active
+      const statsBefore = testServer.getResourceStats();
+      expect(statsBefore.activeWorkers).toBe(1);
+
+      // Disconnect client
+      req.destroy();
 
       // Wait for cleanup
-      await sleep(200);
+      await sleep(300);
 
       // Verify worker released
-      const finalStats = testServer.getResourceStats();
-      expect(finalStats.activeWorkers).toBe(0);
-      expect(finalStats.activeWorkers).toBe(initialStats.activeWorkers);
+      const statsAfter = testServer.getResourceStats();
+      expect(statsAfter.activeWorkers).toBe(0);
     });
   });
 
@@ -327,9 +381,9 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
         concurrency: createTestConcurrencyConfig({
           maxConcurrency: 1,
           maxQueueSize: 2, // Small queue
-          timeout: 800, // 800ms timeout
+          timeout: 300, // 300ms queue timeout
         }),
-        proxyTimeout: 10,
+        proxyTimeout: 30,
       });
 
       testServer = new TestServer({ config });
@@ -339,7 +393,7 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
       mockProvider.onPost("/v1/messages", {
         status: 200,
         body: { content: "slow" },
-        delay: 5000,
+        delay: 10000,
       });
 
       const url = new URL(`${testServer.baseUrl}/v1/messages`);
@@ -372,17 +426,14 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
         )
       );
 
-      // Some should timeout (503), some might get queue full (503)
+      // All should have received 503 (either queue full or timeout)
       let errorCount = 0;
-
       for (const result of results) {
         if (result.status === "fulfilled") {
           expect(result.value.status).toBe(503);
           errorCount++;
         }
       }
-
-      // All should have received 503
       expect(errorCount).toBe(5);
 
       // Wait for cleanup
@@ -405,9 +456,9 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
         concurrency: createTestConcurrencyConfig({
           maxConcurrency: 1,
           maxQueueSize: 2,
-          timeout: 500,
+          timeout: 300,
         }),
-        proxyTimeout: 1,
+        proxyTimeout: 30,
       });
 
       testServer = new TestServer({ config });
@@ -417,7 +468,7 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
       mockProvider.onPost("/v1/messages", {
         status: 200,
         body: { content: "slow" },
-        delay: 3000,
+        delay: 10000,
       });
 
       const url = new URL(`${testServer.baseUrl}/v1/messages`);
@@ -450,12 +501,12 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
         )
       );
 
-      // Wait for all to complete/timesout
-      await sleep(600);
+      // Wait for all to complete/timeout
+      await sleep(500);
 
       // Cleanup first request
       req1.destroy();
-      await sleep(200);
+      await sleep(300);
 
       // Phase 2: Verify recovery
       mockProvider.reset();
@@ -479,60 +530,6 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
       const stats = testServer.getResourceStats();
       expect(stats.activeWorkers).toBe(0);
       expect(stats.queueLength).toBe(0);
-    });
-  });
-
-  describe("IT13: Timeout race conditions", () => {
-    it("IT13-01: should handle task timeout vs proxy timeout race correctly", async () => {
-      mockProvider = new MockProvider();
-      await mockProvider.start();
-
-      // Both timeouts set to similar values to test race condition handling
-      const config = new MockConfig({
-        provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
-        concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
-          maxQueueSize: 10,
-          timeout: 1000, // 1 second task timeout
-        }),
-        proxyTimeout: 1, // 1 second proxy timeout
-      });
-
-      testServer = new TestServer({ config });
-      await testServer.start();
-
-      // Mock hanging response
-      mockProvider.onHanging("/v1/messages", "POST");
-
-      // Get initial stats
-      const initialStats = testServer.getResourceStats();
-
-      // Send multiple concurrent requests
-      const results = await Promise.allSettled(
-        Array.from({ length: 3 }, (_, i) =>
-          request(testServer.baseUrl)
-            .post("/v1/messages")
-            .set("x-api-key", "test-key")
-            .send({ model: `race-${i}`, messages: [] })
-            .timeout(5000)
-        )
-      );
-
-      // All should have failed
-      for (const result of results) {
-        if (result.status === "fulfilled") {
-          expect([502, 503]).toContain(result.value.status);
-        }
-      }
-
-      // Wait for cleanup
-      await sleep(500);
-
-      // Verify complete cleanup
-      const finalStats = testServer.getResourceStats();
-      expect(finalStats.activeWorkers).toBe(0);
-      expect(finalStats.queueLength).toBe(0);
-      expect(finalStats.activeWorkers).toBe(initialStats.activeWorkers);
     });
   });
 });
