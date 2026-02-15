@@ -3,8 +3,7 @@
  * Supports Leader/Follower mode for multi-instance coordination
  */
 
-/* eslint-disable @typescript-eslint/naming-convention */
-// External API fields use snake_case (Content-Type, tool_call_id, etc.)
+// External API fields use snake_case (Content-Type, Access-Control-Allow-Origin, etc.)
 
 import * as http from "http";
 import * as url from "url";
@@ -14,20 +13,19 @@ import {
   InstanceRole,
   RoleChangeInfo,
   ElectionState,
-  RouteType,
   RequestTask,
   ProxyResult,
   QueueStats,
 } from "../types";
 import { ScopedLogger } from "../utils/logger";
-import { getDatabase, LogDatabase, RequestStatus } from "../database";
+import { getDatabase, LogDatabase } from "../database";
 import { LeaderElection } from "./leaderElection";
 import { isStaticRequest, serveStatic } from "./static";
 import { isApiRequest, handleApiRequest } from "../api";
 import { ProxyExecutor } from "./proxy/executor";
 import { QueueManager } from "./queueManager";
 import { ResponseLogger } from "./responseLogger";
-import { checkBlocked, handleBlocked, resolveRouting, processBody } from "./proxy/requestProcessor";
+import { RequestHandler } from "./request";
 
 export class ProxyServer {
   private server: http.Server | null = null;
@@ -441,252 +439,23 @@ export class ProxyServer {
     path: string,
     parsedUrl: url.UrlWithParsedQuery
   ): void {
-    const method = req.method || "GET";
-
-    // Check if path should be blocked
-    const blockResult = checkBlocked(this.router, path);
-    if (blockResult.blocked) {
-      handleBlocked(res, path, method, blockResult, this.database);
-      return;
-    }
-
-    // Resolve routing info
-    const routing = resolveRouting(req, path, parsedUrl, this.router);
-
-    // Prepare body - track timing for client request receive
-    const requestReceiveStart = Date.now();
-    let bodyChunks: Buffer[] = [];
-    req.on("data", (chunk: Buffer) => {
-      bodyChunks.push(chunk);
-    });
-
-    req.on("end", () => {
-      const bodyReceiveTime = Date.now() - requestReceiveStart;
-
-      // Build raw body from chunks
-      const rawBody = bodyChunks.length > 0 ? Buffer.concat(bodyChunks) : Buffer.alloc(0);
-
-      if (bodyChunks.length > 0) {
-        this.log.info(
-          `[Perf] RequestBodyReceived: ${rawBody.length} bytes in ${bodyReceiveTime}ms from client`
-        );
-      }
-
-      // Apply model mapping and OpenAI conversion
-      const bodyProcessResult = processBody(rawBody, routing, this.database.enabled);
-
-      // Extract values from processing result
-      const body = bodyProcessResult.body;
-      const originalModel = bodyProcessResult.originalModel;
-      const originalRequestBody = bodyProcessResult.originalRequestBody;
-      const requestBodyLog = bodyProcessResult.requestBodyLog;
-
-      // Generate unique clientId for this request
-      const clientId = `req-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
-
-      // Insert pending log immediately after request body is ready
-      if (this.database.enabled) {
-        this.database.insertLogPending({
-          timestamp: Date.now(),
-          providerId: routing.provider.id,
-          providerName: routing.provider.name,
-          method,
-          path,
-          targetUrl: routing.targetUrl,
-          requestBody: requestBodyLog,
-          originalRequestBody,
-          statusCode: undefined,
-          duration: 0,
-          success: false,
-          clientId,
-          status: "pending",
-          routeType: (routing.isRouted ? "router" : "passthrough") as RouteType,
-        });
-      }
-
-      // Create task for concurrency manager
-      const task: RequestTask = {
-        id: clientId,
-        method,
-        targetUrl: routing.targetUrl,
-        headers: routing.headers,
-        body,
-        provider: routing.provider,
-        requestPath: routing.targetPath,
-        requestBodyLog,
-        originalRequestBody,
-        isOpenAIProvider: routing.isOpenAIProvider,
-        originalModel,
-        clientId,
-        createdAt: Date.now(),
-        // Default priority is 0, can be extended later based on user/role
-        priority: 0,
-        // Pass response object for SSE streaming support
-        res,
-      };
-
-      // If concurrency manager is enabled, submit to queue
-      const queueInfo = this.queueManager.getQueueForPath(path);
-      if (queueInfo) {
-        const { name: queueName, queue: targetQueue } = queueInfo;
-
-        this.log.info(
-          `[Perf:${clientId}] TaskSubmit: submitting to queue "${queueName}" (body ready in ${bodyReceiveTime}ms)`
-        );
-
-        // Track if client disconnected while queuing
-        let clientDisconnected = false;
-
-        const onClientDisconnect = () => {
-          if (!clientDisconnected) {
-            clientDisconnected = true;
-            task.cancelled = true;
-            task.cancelledReason = "Client disconnected while queuing";
-            this.log.info(`[${clientId}] Client disconnected, marking task as cancelled`);
-            // Try to cancel from queue
-            targetQueue.cancelTask(clientId, "Client disconnected");
-          }
-        };
-
-        // Listen for client disconnect
-
-        res.on("close", onClientDisconnect);
-
-        targetQueue
-          .submit(task)
-          .then(result => {
-            // Clean up listeners
-
-            res.off("close", onClientDisconnect);
-
-            const totalTime = Date.now() - requestReceiveStart;
-
-            // Check if client disconnected
-            if (clientDisconnected || res.writableEnded) {
-              this.log.info(
-                `[Perf:${clientId}] TaskComplete: client disconnected, skipping response (status: ${result.statusCode}, time: ${totalTime}ms)`
-              );
-              return;
-            }
-
-            // Write response from result
-            if (result.error) {
-              // This is a logic error that happened during execution
-              const errMsg = result.error.message;
-              this.log.error(`Task ${task.id} failed: ${errMsg}`);
-              if (!res.headersSent) {
-                res.writeHead(502, { "Content-Type": "application/json" });
-                res.end(JSON.stringify({ error: errMsg }));
-              }
-              return;
-            }
-
-            // If streaming was already handled, skip writing response
-            if (result.streamed) {
-              this.log.info(
-                `[Perf:${clientId}] TaskComplete: streaming done, total time: ${totalTime}ms`
-              );
-              return;
-            }
-
-            // Success response (non-streaming)
-            const responseHeaders = result.headers as Record<string, string | number | string[]>;
-            res.writeHead(result.statusCode, responseHeaders);
-
-            if (result.body) {
-              res.end(result.body);
-            } else {
-              res.end();
-            }
-            this.log.info(
-              `[Perf:${clientId}] TaskComplete: non-streaming done, total time: ${totalTime}ms`
-            );
-          })
-          .catch(err => {
-            // Clean up listeners
-
-            res.off("close", onClientDisconnect);
-
-            // This is an error from the queue submission itself (e.g. queue full, timeout, cancelled)
-            const errMsg = err instanceof Error ? err.message : String(err);
-            this.log.warn(`Task ${task.id} rejected from queue "${queueName}": ${errMsg}`);
-
-            // Update request log status based on error type
-            const totalTime = Date.now() - requestReceiveStart;
-            if (this.database.enabled) {
-              let logStatus: RequestStatus = "cancelled";
-              if (errMsg.includes("timeout")) {
-                logStatus = "timeout";
-              }
-              this.database.updateLogStatus(clientId, logStatus, 503, totalTime, errMsg);
-            }
-
-            // Don't write if client disconnected
-            if (!clientDisconnected && !res.headersSent && !res.writableEnded) {
-              // 503 Service Unavailable is appropriate for queue full/timeout
-              res.writeHead(503, { "Content-Type": "application/json" });
-              res.end(JSON.stringify({ error: errMsg, code: "QUEUE_FULL_OR_TIMEOUT" }));
-            }
-          });
-      } else {
-        // Direct execution without queue
-        const task: RequestTask = {
-          id: clientId,
-          method,
-          targetUrl: routing.targetUrl,
-          headers: routing.headers,
-          body,
-          provider: routing.provider,
-          requestPath: routing.targetPath,
-          requestBodyLog,
-          originalRequestBody,
-          isOpenAIProvider: routing.isOpenAIProvider,
-          originalModel,
-          clientId,
-          createdAt: Date.now(),
-          priority: 0,
-          res,
-        };
-
-        this.executeProxyRequest(task)
-          .then(result => {
-            if (res.writableEnded) {
-              return;
-            }
-
-            if (result.error) {
-              if (!res.headersSent) {
-                res.writeHead(result.statusCode || 502, { "Content-Type": "application/json" });
-                res.end(JSON.stringify({ error: result.errorMessage || result.error.message }));
-              }
-              return;
-            }
-
-            if (result.streamed) {
-              return;
-            }
-
-            const responseHeaders = result.headers as Record<string, string | number | string[]>;
-            res.writeHead(result.statusCode, responseHeaders);
-            if (result.body) {
-              res.end(result.body);
-            } else {
-              res.end();
-            }
-          })
-          .catch(err => {
-            if (!res.writableEnded && !res.headersSent) {
-              res.writeHead(502, { "Content-Type": "application/json" });
-              res.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
-            }
-          });
-      }
-    });
+    // Delegate to RequestHandler
+    this.requestHandler.handle(req, res, path, parsedUrl);
   }
 
-  private sendJson(res: http.ServerResponse, status: number, data: unknown): void {
-    res.writeHead(status, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(data));
+  // Request handler instance (lazy initialized)
+  private _requestHandler: RequestHandler | null = null;
+
+  private get requestHandler(): RequestHandler {
+    if (!this._requestHandler) {
+      this._requestHandler = new RequestHandler(
+        this.router,
+        this.queueManager,
+        this.proxyExecutor,
+        this.database
+      );
+    }
+    return this._requestHandler;
   }
 
   /**
