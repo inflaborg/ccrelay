@@ -13,10 +13,6 @@ import * as zlib from "zlib";
 import { Router } from "./router";
 import { ConfigManager } from "../config";
 import {
-  RouterStatus,
-  ProvidersResponse,
-  SwitchResponse,
-  Provider,
   InstanceRole,
   RoleChangeInfo,
   ElectionState,
@@ -25,7 +21,6 @@ import {
   ProxyResult,
   QueueStats,
 } from "../types";
-import { ConcurrencyManager } from "../queue";
 import { convertRequestToOpenAI, convertResponseToAnthropic } from "../converter";
 import type { OpenAIChatCompletionResponse } from "../converter/openai-to-anthropic";
 import { ScopedLogger } from "../utils/logger";
@@ -33,6 +28,8 @@ import { getDatabase, LogDatabase, RequestStatus } from "../database";
 import { LeaderElection } from "./leaderElection";
 import { isStaticRequest, serveStatic } from "./static";
 import { isApiRequest, handleApiRequest } from "../api";
+import { applyModelMapping } from "./proxy/modelMapping";
+import { QueueManager } from "./queueManager";
 
 export class ProxyServer {
   private server: http.Server | null = null;
@@ -54,11 +51,8 @@ export class ProxyServer {
   // Client for follower mode
   private httpClient: http.Agent | null = null;
 
-  // Concurrency manager for rate limiting
-  private concurrencyManager: ConcurrencyManager | null = null;
-
-  // Route-specific concurrency managers (key is queue name)
-  private routeQueues: Map<string, ConcurrencyManager> = new Map();
+  // Queue manager for concurrency control
+  private queueManager: QueueManager;
 
   // Role change callbacks for external listeners (e.g., StatusBarManager)
   private roleChangeCallbacks: Set<(info: RoleChangeInfo) => void> = new Set();
@@ -70,49 +64,14 @@ export class ProxyServer {
     this.leaderElection = leaderElection;
     this.instanceId = `Server-${process.pid}-${Math.random().toString(36).substring(2, 6)}`;
 
+    // Initialize queue manager (executor set after construction to avoid circular dependency)
+    this.queueManager = new QueueManager(config);
+
     // Listen for role changes if election is enabled
     if (leaderElection) {
       leaderElection.onRoleChanged((info: RoleChangeInfo) => {
         this.handleRoleChange(info);
       });
-    }
-
-    // Initialize concurrency manager if enabled in config
-    const concurrencyConfig = config.configValue.concurrency;
-    if (concurrencyConfig?.enabled) {
-      this.concurrencyManager = new ConcurrencyManager(concurrencyConfig, (task: RequestTask) =>
-        this.executeProxyRequest(task)
-      );
-      this.log.info(
-        `ConcurrencyManager initialized: maxConcurrency=${concurrencyConfig.maxConcurrency}, maxQueueSize=${concurrencyConfig.maxQueueSize ?? "unlimited"}`
-      );
-    } else {
-      this.log.info(
-        `ConcurrencyManager disabled or not configured. Config: ${JSON.stringify(
-          concurrencyConfig ?? "undefined"
-        )}`
-      );
-    }
-
-    // Initialize route-specific concurrency managers
-    const routeQueueConfigs = config.routeQueues;
-    if (routeQueueConfigs && routeQueueConfigs.length > 0) {
-      for (const routeConfig of routeQueueConfigs) {
-        const queueName = routeConfig.name ?? routeConfig.pathPattern;
-        const queueConcurrencyConfig = {
-          enabled: true,
-          maxConcurrency: routeConfig.maxConcurrency,
-          maxQueueSize: routeConfig.maxQueueSize,
-          timeout: routeConfig.timeout,
-        };
-        const routeQueue = new ConcurrencyManager(queueConcurrencyConfig, (task: RequestTask) =>
-          this.executeProxyRequest(task)
-        );
-        this.routeQueues.set(queueName, routeQueue);
-        this.log.info(
-          `RouteQueue "${queueName}" initialized: pattern=${routeConfig.pathPattern}, maxConcurrency=${routeConfig.maxConcurrency}, maxQueueSize=${routeConfig.maxQueueSize ?? "unlimited"}`
-        );
-      }
     }
   }
 
@@ -218,6 +177,9 @@ export class ProxyServer {
       this.log.info(`[Server:${this.instanceId}] Already running as ${this.role}`);
       return { role: this.role, leaderUrl: this.leaderUrl ?? undefined };
     }
+
+    // Initialize queue executor (deferred to avoid circular dependency)
+    this.queueManager.setExecutor((task: RequestTask) => this.executeProxyRequest(task));
 
     // Initialize database (async for sqlite3 CLI)
     const logStorageEnabled = this.config.getSetting("log.enableStorage") === true;
@@ -401,14 +363,14 @@ export class ProxyServer {
    * Get queue statistics if concurrency manager is enabled
    */
   getQueueStats(): QueueStats | null {
-    return this.concurrencyManager?.getStats() ?? null;
+    return this.queueManager.getStats();
   }
 
   /**
    * Clear the waiting queue if concurrency manager is enabled
    */
   clearQueue(): number {
-    return this.concurrencyManager?.clearQueue() ?? 0;
+    return this.queueManager.clearQueue();
   }
 
   /**
@@ -438,44 +400,14 @@ export class ProxyServer {
       return;
     }
 
-    // Handle API requests
+    // Handle API requests (/ccrelay/api/*)
     if (isApiRequest(path)) {
       handleApiRequest(req, res);
       return;
     }
 
-    // Legacy API endpoints (for backward compatibility)
-    if (path.startsWith("/ccrelay/")) {
-      this.handleLegacyApi(req, res, path);
-      return;
-    }
-
     // Proxy request to target provider
     this.proxyRequest(req, res, path, parsedUrl);
-  }
-
-  /**
-   * Find matching route queue for a given path
-   * Returns the queue name if matched, undefined otherwise
-   */
-  private findMatchingRouteQueue(
-    path: string
-  ): { name: string; queue: ConcurrencyManager } | undefined {
-    const routeQueueConfigs = this.config.routeQueues;
-    if (!routeQueueConfigs || routeQueueConfigs.length === 0) {
-      return undefined;
-    }
-
-    for (const routeConfig of routeQueueConfigs) {
-      if (routeConfig.compiledPattern && routeConfig.compiledPattern.test(path)) {
-        const queueName = routeConfig.name ?? routeConfig.pathPattern;
-        const queue = this.routeQueues.get(queueName);
-        if (queue) {
-          return { name: queueName, queue };
-        }
-      }
-    }
-    return undefined;
   }
 
   /**
@@ -485,153 +417,6 @@ export class ProxyServer {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key");
-  }
-
-  /**
-   * Handle legacy API endpoints (for backward compatibility)
-   */
-  private handleLegacyApi(req: http.IncomingMessage, res: http.ServerResponse, path: string): void {
-    const method = req.method || "GET";
-
-    switch (path) {
-      case "/ccrelay/status":
-        if (method === "GET") {
-          this.handleStatus(req, res);
-        } else {
-          this.sendMethodNotAllowed(res);
-        }
-        break;
-
-      case "/ccrelay/providers":
-        if (method === "GET") {
-          this.handleListProviders(req, res);
-        } else {
-          this.sendMethodNotAllowed(res);
-        }
-        break;
-
-      case "/ccrelay/switch":
-        if (method === "POST") {
-          this.handleSwitchProvider(req, res);
-        } else {
-          this.sendMethodNotAllowed(res);
-        }
-        break;
-
-      default:
-        // Check for /ccrelay/switch/{id} pattern
-        const switchMatch = path.match(/^\/ccrelay\/switch\/([^\/]+)$/);
-        if (switchMatch && method === "GET") {
-          void this.handleSwitchProviderById(req, res, switchMatch[1]);
-        } else {
-          this.sendNotFound(res);
-        }
-        break;
-    }
-  }
-
-  /**
-   * Handle GET /ccrelay/status
-   */
-  private handleStatus(req: http.IncomingMessage, res: http.ServerResponse): void {
-    const provider = this.router.getCurrentProvider();
-    const status: RouterStatus = {
-      status: this.isRunning ? "running" : "stopped",
-      currentProvider: this.router.getCurrentProviderId(),
-      providerName: provider?.name,
-      providerMode: provider?.mode,
-      port: this.config.port,
-    };
-
-    this.sendJson(res, 200, status);
-  }
-
-  /**
-   * Handle GET /ccrelay/providers
-   */
-  private handleListProviders(req: http.IncomingMessage, res: http.ServerResponse): void {
-    const currentId = this.router.getCurrentProviderId();
-    const providers = this.config.enabledProviders.map(p => ({
-      id: p.id,
-      name: p.name,
-      mode: p.mode,
-      providerType: p.providerType,
-      active: p.id === currentId,
-    }));
-
-    const response: ProvidersResponse = {
-      providers,
-      current: currentId,
-    };
-
-    this.sendJson(res, 200, response);
-  }
-
-  /**
-   * Handle POST /ccrelay/switch
-   */
-  private handleSwitchProvider(req: http.IncomingMessage, res: http.ServerResponse): void {
-    let body = "";
-
-    req.on("data", (chunk: Buffer) => {
-      body += chunk.toString();
-    });
-
-    req.on("end", () => {
-      void (async () => {
-        try {
-          const data = JSON.parse(body || "{}") as { provider?: string };
-          const providerId = data.provider;
-
-          if (!providerId) {
-            const error: SwitchResponse = {
-              status: "error",
-              message: "Missing provider field in request body",
-            };
-            this.sendJson(res, 400, error);
-            return;
-          }
-
-          await this.handleSwitchProviderById(req, res, providerId);
-        } catch {
-          const error: SwitchResponse = {
-            status: "error",
-            message: "Invalid JSON in request body",
-          };
-          this.sendJson(res, 400, error);
-        }
-      })();
-    });
-  }
-
-  /**
-   * Handle GET /ccrelay/switch/{id}
-   */
-  private async handleSwitchProviderById(
-    req: http.IncomingMessage,
-    res: http.ServerResponse,
-    providerId: string
-  ): Promise<void> {
-    const success = await this.router.switchProvider(providerId);
-
-    if (success) {
-      const provider = this.router.getCurrentProvider();
-      this.log.info(`Switched to provider: ${providerId} (${provider?.name})`);
-      const response: SwitchResponse = {
-        status: "ok",
-        provider: providerId,
-        name: provider?.name,
-      };
-      this.sendJson(res, 200, response);
-    } else {
-      this.log.warn(`Failed to switch to provider: ${providerId}`);
-      const error: SwitchResponse = {
-        status: "error",
-        message: `Provider '${providerId}' not found`,
-        available: Object.keys(this.config.providers),
-      };
-      this.sendJson(res, 404, error);
-    }
   }
 
   /**
@@ -742,7 +527,7 @@ export class ProxyServer {
 
         // Apply model mapping (e.g., claude-* -> glm-4.7)
         // This must be done BEFORE conversion so that isGemini checks work correctly
-        body = this.applyModelMapping(body, provider);
+        body = applyModelMapping(body, provider);
 
         // Convert request format if using OpenAI provider
         if (isOpenAIProvider && body) {
@@ -832,14 +617,12 @@ export class ProxyServer {
       };
 
       // If concurrency manager is enabled, submit to queue
-      if (this.concurrencyManager) {
-        // Check if there's a matching route-specific queue
-        const matchedRoute = this.findMatchingRouteQueue(path);
-        const targetQueue = matchedRoute?.queue ?? this.concurrencyManager;
-        const queueName = matchedRoute?.name ?? "default";
+      const queueInfo = this.queueManager.getQueueForPath(path);
+      if (queueInfo) {
+        const { name: queueName, queue: targetQueue } = queueInfo;
 
         this.log.info(
-          `[Perf:${clientId}] TaskSubmit: submitting to queue "${queueName}" (body ready in ${bodyReceiveTime}ms, matched route: ${matchedRoute ? "yes" : "no"})`
+          `[Perf:${clientId}] TaskSubmit: submitting to queue "${queueName}" (body ready in ${bodyReceiveTime}ms)`
         );
 
         // Track if client disconnected while queuing
@@ -937,331 +720,59 @@ export class ProxyServer {
             }
           });
       } else {
-        // Direct execution (legacy behavior)
-        this.makeProxyRequest(
+        // Direct execution without queue
+        const task: RequestTask = {
+          id: clientId,
           method,
           targetUrl,
           headers,
           body,
-          res,
           provider,
-          targetPath,
+          requestPath: targetPath,
           requestBodyLog,
           originalRequestBody,
           isOpenAIProvider,
           originalModel,
-          clientId
-        );
-      }
-    });
-  }
+          clientId,
+          createdAt: Date.now(),
+          priority: 0,
+          res,
+        };
 
-  /**
-   * Make the actual proxy request to the target provider
-   */
-  private makeProxyRequest(
-    method: string,
-    targetUrl: string,
-    headers: Record<string, string>,
-    body: Buffer | null,
-    res: http.ServerResponse,
-    provider: Provider,
-    requestPath: string,
-    requestBodyLog: string | undefined,
-    originalRequestBody: string | undefined,
-    isOpenAIProvider: boolean = false,
-    originalModel: string | undefined = undefined,
-    clientId: string = "",
-    attempt: number = 1
-  ): void {
-    const maxRetries = 2;
-    const urlParsed = url.parse(targetUrl);
-    const isHttps = urlParsed.protocol === "https:";
-    const httpModule = isHttps ? https : http;
-
-    // Disable compression to avoid gzip response issues when logging to database
-    // Without this, responseChunks would contain compressed data that becomes garbled
-    // when converted to string for database storage
-    const requestHeaders: Record<string, string> = { ...headers };
-    requestHeaders["accept-encoding"] = "identity";
-
-    const options: http.RequestOptions = {
-      hostname: urlParsed.hostname,
-      port: urlParsed.port || (isHttps ? 443 : 80),
-      path: urlParsed.path,
-      method,
-      headers: requestHeaders,
-    };
-
-    // Performance timing markers
-    const startTime = Date.now();
-    let requestSentTime: number = 0;
-    let firstByteTime: number = 0;
-    let firstByteLogged = false;
-    let streamChunkCount = 0;
-    let streamTotalBytes = 0;
-    let lastChunkTime = 0;
-
-    let responseChunks: Buffer[] = [];
-    let hasLogged = false;
-
-    const proxyReq = httpModule.request(options, proxyRes => {
-      const duration = Date.now() - startTime;
-      const status = proxyRes.statusCode || 200;
-
-      // Record TTFB (Time To First Byte)
-      firstByteTime = Date.now();
-      const ttfb = firstByteTime - requestSentTime;
-      this.log.info(
-        `[Perf:${clientId}] TTFB: ${ttfb}ms (upstream response headers received, total: ${duration}ms)`
-      );
-
-      // Log response
-      if (status >= 400) {
-        this.log.warn(`Response from ${provider.id}: ${status} (${duration}ms)`);
-      } else {
-        this.log.debug(`Response from ${provider.id}: ${status} (${duration}ms)`);
-      }
-
-      // Copy status code
-      res.statusCode = status;
-
-      // Copy headers (excluding hop-by-hop headers)
-      const excludedHeaders = new Set([
-        "content-encoding",
-        "content-length",
-        "transfer-encoding",
-        "connection",
-        "keep-alive",
-      ]);
-
-      for (const [key, value] of Object.entries(proxyRes.headers)) {
-        if (value && !excludedHeaders.has(key.toLowerCase())) {
-          res.setHeader(key, value);
-        }
-      }
-
-      // For OpenAI provider, we need to buffer the response and convert it back to Anthropic format
-      if (
-        isOpenAIProvider &&
-        status === 200 &&
-        proxyRes.headers["content-type"]?.includes("application/json")
-      ) {
-        let responseBody = "";
-        proxyRes.on("data", (chunk: Buffer) => {
-          responseBody += chunk.toString();
-        });
-
-        proxyRes.on("end", () => {
-          // Store original response before conversion
-          const originalResponseBody = responseBody;
-
-          try {
-            const openaiResponse = JSON.parse(responseBody) as OpenAIChatCompletionResponse;
-
-            // Convert OpenAI response to Anthropic format
-            // Signature handling is now done inline in the converter (no external storage)
-            const anthropicResponse = convertResponseToAnthropic(
-              openaiResponse,
-              originalModel || "claude-3-5-sonnet-20241022"
-            );
-            res.end(JSON.stringify(anthropicResponse));
-
-            // Log the converted response
-            if (this.database.enabled) {
-              responseChunks.push(Buffer.from(JSON.stringify(anthropicResponse), "utf-8"));
+        this.executeProxyRequest(task)
+          .then(result => {
+            if (res.writableEnded) {
+              return;
             }
 
-            // Log after response completes with original content
-            if (!hasLogged) {
-              this.logResponse(
-                clientId,
-                duration,
-                status,
-                responseChunks,
-                undefined,
-                originalResponseBody
-              );
-              hasLogged = true;
+            if (result.error) {
+              if (!res.headersSent) {
+                res.writeHead(result.statusCode || 502, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ error: result.errorMessage || result.error.message }));
+              }
+              return;
             }
-          } catch (err) {
-            // Log conversion failure at warn level for visibility
-            const errMsg = err instanceof Error ? err.message : String(err);
-            this.log.warn(
-              `[OpenAI Conversion] Response conversion failed for ${provider.id}: ${errMsg}`
-            );
 
-            // Return Anthropic-format error instead of unparseable OpenAI response
-            const errorResponse = {
-              type: "error",
-              error: {
-                type: "api_error",
-                message: `Response format conversion failed: ${err instanceof Error ? err.message : String(err)}`,
-              },
-            };
-            const errorBody = JSON.stringify(errorResponse);
+            if (result.streamed) {
+              return;
+            }
 
-            if (!res.headersSent) {
+            const responseHeaders = result.headers as Record<string, string | number | string[]>;
+            res.writeHead(result.statusCode, responseHeaders);
+            if (result.body) {
+              res.end(result.body);
+            } else {
+              res.end();
+            }
+          })
+          .catch(err => {
+            if (!res.writableEnded && !res.headersSent) {
               res.writeHead(502, { "Content-Type": "application/json" });
-            }
-            res.end(errorBody);
-
-            if (this.database.enabled) {
-              responseChunks.push(Buffer.from(errorBody, "utf-8"));
-            }
-
-            // Log after response completes
-            if (!hasLogged) {
-              this.logResponse(
-                clientId,
-                duration,
-                502,
-                responseChunks,
-                `OpenAI conversion failed: ${err instanceof Error ? err.message : String(err)}`,
-                originalResponseBody
-              );
-              hasLogged = true;
-            }
-          }
-        });
-      } else {
-        // Check if this is a streaming (SSE) response
-        const isSSEResponse = proxyRes.headers["content-type"]?.includes("text/event-stream");
-
-        if (isSSEResponse) {
-          this.log.info(`[Perf:${clientId}] SSE streaming mode detected`);
-
-          // Capture response chunks for logging and performance tracking
-          proxyRes.on("data", (chunk: Buffer) => {
-            streamChunkCount++;
-            streamTotalBytes += chunk.length;
-            lastChunkTime = Date.now();
-
-            // Log first chunk separately (helps identify prefill delay)
-            if (!firstByteLogged) {
-              firstByteLogged = true;
-              const firstChunkDelay = Date.now() - firstByteTime;
-              this.log.info(
-                `[Perf:${clientId}] FirstChunk: ${firstChunkDelay}ms after headers, ${chunk.length} bytes`
-              );
-            }
-
-            // Log every 10 chunks or large chunks (>10KB)
-            if (streamChunkCount % 10 === 0 || chunk.length > 10240) {
-              const chunkDuration = Date.now() - startTime;
-              this.log.info(
-                `[Perf:${clientId}] Chunk#${streamChunkCount}: ${chunk.length} bytes, total: ${streamTotalBytes} bytes, elapsed: ${chunkDuration}ms`
-              );
-            }
-
-            if (this.database.enabled) {
-              responseChunks.push(chunk);
+              res.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
             }
           });
-        } else {
-          // Non-SSE: simpler logging
-          proxyRes.on("data", (chunk: Buffer) => {
-            streamChunkCount++;
-            streamTotalBytes += chunk.length;
-
-            if (this.database.enabled) {
-              responseChunks.push(chunk);
-            }
-          });
-        }
-
-        // Pipe response
-        proxyRes.pipe(res);
-
-        // Log after response completes
-        proxyRes.on("end", () => {
-          const totalDuration = Date.now() - startTime;
-          const avgChunkSize =
-            streamChunkCount > 0 ? Math.round(streamTotalBytes / streamChunkCount) : 0;
-          const timeSinceLastChunk = lastChunkTime > 0 ? Date.now() - lastChunkTime : 0;
-          this.log.info(
-            `[Perf:${clientId}] ResponseEnd: ${streamChunkCount} chunks, ${streamTotalBytes} total bytes, avg ${avgChunkSize} bytes/chunk, total: ${totalDuration}ms, lastChunkGap: ${timeSinceLastChunk}ms, mode: ${isSSEResponse ? "SSE" : "non-SSE"}`
-          );
-          if (!hasLogged) {
-            this.logResponse(clientId, totalDuration, status, responseChunks, undefined);
-            hasLogged = true;
-          }
-        });
       }
     });
-
-    proxyReq.on("error", (err: NodeJS.ErrnoException) => {
-      const duration = Date.now() - startTime;
-
-      // Retry on connection-phase errors (not response errors)
-      const retryableCodes = ["ECONNREFUSED", "ECONNRESET", "ENOTFOUND", "ETIMEDOUT"];
-      if (attempt < maxRetries && err.code && retryableCodes.includes(err.code)) {
-        this.log.warn(
-          `Proxy connection error to ${provider.id} (attempt ${attempt}/${maxRetries}): ${err.message}, retrying in ${attempt}s...`
-        );
-        setTimeout(() => {
-          this.makeProxyRequest(
-            method,
-            targetUrl,
-            headers,
-            body,
-            res,
-            provider,
-            requestPath,
-            requestBodyLog,
-            originalRequestBody,
-            isOpenAIProvider,
-            originalModel,
-            clientId,
-            attempt + 1
-          );
-        }, 1000 * attempt);
-        return;
-      }
-
-      this.log.error(`Proxy error to ${provider.id} (${duration}ms): ${err.message}`);
-      if (!hasLogged) {
-        this.logResponse(clientId, duration, 0, responseChunks, err.message);
-        hasLogged = true;
-      }
-      if (!res.headersSent) {
-        res.writeHead(502, { "Content-Type": "text/plain" });
-        res.end(`Proxy error: ${err.message}`);
-      }
-    });
-
-    proxyReq.on("timeout", () => {
-      const duration = Date.now() - startTime;
-      this.log.error(`Proxy timeout to ${provider.id} (${duration}ms)`);
-      if (!hasLogged) {
-        this.logResponse(clientId, duration, 0, responseChunks, "Timeout");
-        hasLogged = true;
-      }
-      proxyReq.destroy();
-      if (!res.headersSent) {
-        res.writeHead(504, { "Content-Type": "text/plain" });
-        res.end("Proxy timeout");
-      }
-    });
-
-    // Set configurable timeout (default 5 minutes for long code generation)
-    // Config value is in seconds, convert to milliseconds
-    const requestTimeoutSeconds = this.config.getSetting("proxy.requestTimeout", 300);
-    const requestTimeoutMs = requestTimeoutSeconds * 1000;
-    if (requestTimeoutMs > 0) {
-      proxyReq.setTimeout(requestTimeoutMs);
-    }
-
-    if (body) {
-      proxyReq.write(body);
-      this.log.info(`[Perf:${clientId}] RequestBodySent: ${body.length} bytes to upstream`);
-    }
-
-    proxyReq.end();
-    requestSentTime = Date.now();
-    this.log.info(
-      `[Perf:${clientId}] RequestSent: total setup time ${requestSentTime - startTime}ms, waiting for upstream response...`
-    );
   }
 
   /**
@@ -1328,166 +839,6 @@ export class ProxyServer {
   private sendJson(res: http.ServerResponse, status: number, data: unknown): void {
     res.writeHead(status, { "Content-Type": "application/json" });
     res.end(JSON.stringify(data));
-  }
-
-  private sendNotFound(res: http.ServerResponse): void {
-    this.sendJson(res, 404, { error: "Not found" });
-  }
-
-  private sendMethodNotAllowed(res: http.ServerResponse): void {
-    this.sendJson(res, 405, { error: "Method not allowed" });
-  }
-
-  /**
-   * Detect if request body contains image content
-   * Follows Anthropic API standard for message content
-   */
-  private containsImageContent(data: unknown): boolean {
-    if (!data || typeof data !== "object") {
-      return false;
-    }
-
-    const body = data as Record<string, unknown>;
-
-    // Check for messages array (Anthropic Messages API)
-    if (body.messages && Array.isArray(body.messages)) {
-      for (const message of body.messages) {
-        if (message && typeof message === "object") {
-          const msg = message as Record<string, unknown>;
-          if (msg.content && Array.isArray(msg.content)) {
-            for (const item of msg.content) {
-              if (item && typeof item === "object") {
-                const contentItem = item as Record<string, unknown>;
-                // Check for image type (Anthropic format)
-                if (contentItem.type === "image") {
-                  return true;
-                }
-                // Also check for OpenAI-compatible format (image_url)
-                if (contentItem.type === "image_url") {
-                  return true;
-                }
-                // Check nested image_url object
-                if (contentItem.image_url && typeof contentItem.image_url === "object") {
-                  return true;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-    return false;
-  }
-
-  /**
-   * Match a model against a model map (supports exact match and wildcards)
-   */
-  private matchModel(
-    model: string,
-    modelMap: Record<string, string>
-  ): { targetModel: string; pattern: string } | null {
-    // Check for exact match first
-    if (modelMap[model]) {
-      return { targetModel: modelMap[model], pattern: model };
-    }
-
-    // Check for wildcard patterns
-    for (const [pattern, targetModel] of Object.entries(modelMap)) {
-      if (pattern.includes("*")) {
-        // Convert wildcard pattern to regex
-        const patternRegex = new RegExp(
-          "^" + pattern.replace(/\*/g, ".*").replace(/\?/g, ".") + "$"
-        );
-        if (patternRegex.test(model)) {
-          return { targetModel, pattern };
-        }
-      }
-    }
-
-    return null;
-  }
-
-  /**
-   * Apply model mapping based on provider's modelMap configuration
-   * Supports wildcard patterns (e.g., "claude-*" matches "claude-opus-4-5")
-   *
-   * Priority:
-   * 1. If request contains images and vlModelMap exists -> use vlModelMap
-   * 2. Otherwise, use modelMap
-   * 3. If no match in selected map, fall back to the other map
-   */
-  private applyModelMapping(body: Buffer, provider: Provider): Buffer {
-    if (!body) {
-      return body;
-    }
-
-    const hasVlMap = provider.vlModelMap && Object.keys(provider.vlModelMap).length > 0;
-    const hasRegularMap = provider.modelMap && Object.keys(provider.modelMap).length > 0;
-
-    if (!hasVlMap && !hasRegularMap) {
-      return body;
-    }
-
-    try {
-      const bodyStr = body.toString("utf-8");
-
-      const data = JSON.parse(bodyStr) as Record<string, unknown>;
-
-      if (data.model) {
-        const originalModel = data.model as string;
-        const hasImages = this.containsImageContent(data);
-
-        // Determine which map to use first
-        let result: { targetModel: string; pattern: string } | null = null;
-        const firstMap = hasImages && hasVlMap ? provider.vlModelMap : provider.modelMap;
-        const secondMap =
-          firstMap === provider.modelMap && hasVlMap
-            ? provider.vlModelMap
-            : hasRegularMap
-              ? provider.modelMap
-              : null;
-        // Determine mapping type for logging
-        const isVlMapping = firstMap === provider.vlModelMap;
-        const mappingType = isVlMapping ? "VL" : "Regular";
-
-        // Try first map
-        if (firstMap) {
-          result = this.matchModel(originalModel, firstMap);
-        }
-
-        // Fall back to second map if no match
-        if (!result && secondMap) {
-          result = this.matchModel(originalModel, secondMap);
-        }
-
-        // Apply mapping if found
-        if (result) {
-          data.model = result.targetModel;
-          const pattern = result.pattern;
-          const mappingTypeStr: string = mappingType as string;
-          const patternStr: string = String(pattern);
-          const targetModel: string = data.model as string;
-          const logMessage: string =
-            "[ModelMapping:" +
-            mappingTypeStr +
-            '] "' +
-            originalModel +
-            '" -> "' +
-            targetModel +
-            '" (pattern: ' +
-            patternStr +
-            ")";
-          this.log.info(logMessage);
-          return Buffer.from(JSON.stringify(data));
-        }
-      }
-
-      return body;
-    } catch (err) {
-      this.log.error("[ModelMapping] Failed to parse body", err);
-      return body;
-    }
   }
 
   /**
