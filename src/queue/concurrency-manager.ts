@@ -15,6 +15,8 @@ interface QueuedTask {
   resolve: (result: ProxyResult) => void;
   reject: (error: Error) => void;
   queuedAt: number;
+  timeoutHandle?: NodeJS.Timeout;
+  timedOut?: boolean;
 }
 
 interface ProcessingTask {
@@ -85,12 +87,32 @@ export class ConcurrencyManager {
     }
 
     return new Promise<ProxyResult>((resolve, reject) => {
+      const queuedAt = Date.now();
       const queuedTask: QueuedTask = {
         task,
         resolve,
         reject,
-        queuedAt: Date.now(),
+        queuedAt,
       };
+
+      // Set up queue timeout - if task times out while waiting in queue, reject immediately
+      const timeout = task.timeout ?? this.config.timeout;
+      if (timeout && timeout > 0) {
+        queuedTask.timeoutHandle = setTimeout(() => {
+          // Mark as timed out
+          queuedTask.timedOut = true;
+
+          // Try to remove from queue if still there
+          const removed = this.queue.remove(qt => qt === queuedTask);
+          if (removed) {
+            // Task was still in queue, reject it without sending to upstream
+            this.log.info(`[Task ${task.id}] Timed out while waiting in queue (${timeout}ms)`);
+            reject(new Error(`Task timeout after ${timeout}ms (waiting in queue)`));
+          }
+          // If not in queue, it's either being processed or already completed
+          // The executeTask will handle the timeout for processing tasks
+        }, timeout);
+      }
 
       // Add to queue
       this.queue.enqueue(queuedTask, task.priority ?? 0);
@@ -114,6 +136,35 @@ export class ConcurrencyManager {
       return; // No tasks in queue
     }
 
+    // Clear the queue timeout handle since we're about to process
+    if (queuedTask.timeoutHandle) {
+      clearTimeout(queuedTask.timeoutHandle);
+      queuedTask.timeoutHandle = undefined;
+    }
+
+    // Check if task was timed out while waiting in queue
+    if (queuedTask.timedOut) {
+      // Already rejected by timeout handler, just skip
+      this.log.info(`[Task ${queuedTask.task.id}] Skipped (already timed out in queue)`);
+      // Process next task
+      void this.processNext();
+      return;
+    }
+
+    // Check if task has already exceeded its timeout while waiting
+    const timeout = queuedTask.task.timeout ?? this.config.timeout;
+    const elapsed = Date.now() - queuedTask.queuedAt;
+    if (timeout && elapsed >= timeout) {
+      // Task has already exceeded its timeout, reject it
+      queuedTask.timedOut = true;
+      this.log.info(
+        `[Task ${queuedTask.task.id}] Rejected (timeout exceeded while waiting: ${elapsed}ms >= ${timeout}ms)`
+      );
+      queuedTask.reject(new Error(`Task timeout after ${timeout}ms (waiting in queue)`));
+      void this.processNext();
+      return;
+    }
+
     // Check if task was cancelled while waiting in queue (before acquiring semaphore)
     if (queuedTask.task.cancelled) {
       this.log.info(
@@ -129,6 +180,28 @@ export class ConcurrencyManager {
     const stats = this.semaphore.getStats();
     if (stats.available <= 0) {
       // No available workers, put task back
+      // Note: We've already cleared the timeout handle, need to set a new one based on remaining time
+      const remainingTimeout = timeout ? Math.max(0, timeout - elapsed) : undefined;
+
+      if (remainingTimeout !== undefined && remainingTimeout > 0) {
+        queuedTask.timeoutHandle = setTimeout(() => {
+          queuedTask.timedOut = true;
+          const removed = this.queue.remove(qt => qt === queuedTask);
+          if (removed) {
+            this.log.info(
+              `[Task ${queuedTask.task.id}] Timed out while waiting in queue (${timeout}ms)`
+            );
+            queuedTask.reject(new Error(`Task timeout after ${timeout}ms (waiting in queue)`));
+          }
+        }, remainingTimeout);
+      } else if (timeout && remainingTimeout === 0) {
+        // Already exceeded timeout, reject immediately
+        queuedTask.timedOut = true;
+        queuedTask.reject(new Error(`Task timeout after ${timeout}ms (waiting in queue)`));
+        void this.processNext();
+        return;
+      }
+
       this.queue.enqueue(queuedTask, queuedTask.task.priority ?? 0);
       return;
     }
@@ -164,24 +237,31 @@ export class ConcurrencyManager {
     // Pass the AbortController to the task so executeProxyRequest can use its signal
     task.abortController = abortController;
 
-    let timeoutHandle: NodeJS.Timeout | undefined;
+    // Set up execution timeout with remaining time
+    const totalTimeout = task.timeout ?? this.config.timeout;
+    const remainingTimeout = totalTimeout ? Math.max(0, totalTimeout - waitTime) : undefined;
+    let executionTimeoutHandle: NodeJS.Timeout | undefined;
+
+    // Create a deferred rejection that we can handle properly
+    let timeoutError: Error | undefined;
 
     try {
-      // Set timeout if configured
-      const timeout = task.timeout ?? this.config.timeout;
-
-      const timeoutPromise = new Promise<ProxyResult>((_, timeoutReject) => {
-        if (timeout) {
-          timeoutHandle = setTimeout(() => {
-            // Abort the underlying HTTP request when timeout triggers
-            abortController.abort(new Error(`Task timeout after ${timeout}ms`));
-            timeoutReject(new Error(`Task timeout after ${timeout}ms`));
-          }, timeout);
-        }
-      });
+      // Create timeout promise that rejects and aborts
+      const timeoutPromise =
+        remainingTimeout !== undefined && remainingTimeout > 0
+          ? new Promise<ProxyResult>((_, timeoutReject) => {
+              executionTimeoutHandle = setTimeout(() => {
+                abortController.abort(new Error(`Task timeout after ${totalTimeout}ms`));
+                timeoutError = new Error(`Task timeout after ${totalTimeout}ms`);
+                timeoutReject(timeoutError);
+              }, remainingTimeout);
+            })
+          : null;
 
       // Race between task execution and timeout
-      const result = await Promise.race([this.taskExecutor(task), timeoutPromise]);
+      const result = timeoutPromise
+        ? await Promise.race([this.taskExecutor(task), timeoutPromise])
+        : await this.taskExecutor(task);
 
       // Update statistics
       const completedAt = Date.now();
@@ -201,8 +281,8 @@ export class ConcurrencyManager {
       this.log.warn(`[Task ${task.id}] Failed: ${err.message}`);
       reject(err);
     } finally {
-      if (timeoutHandle) {
-        clearTimeout(timeoutHandle);
+      if (executionTimeoutHandle) {
+        clearTimeout(executionTimeoutHandle);
       }
 
       // Clean up abortController
@@ -212,8 +292,8 @@ export class ConcurrencyManager {
       this.processingTasks.delete(task.id);
       lease.release();
 
-      // Process next task
-      await this.processNext();
+      // Process next task (fire and forget to avoid error propagation)
+      void this.processNext();
     }
   }
 
@@ -286,15 +366,22 @@ export class ConcurrencyManager {
   /**
    * Clear all pending tasks from the queue
    * Does not affect currently running tasks
+   * @param silently If true, don't reject tasks (for cleanup without causing unhandled rejections)
    */
-  clearQueue(): number {
+  clearQueue(silently: boolean = false): number {
     const cleared = this.queue.size();
 
-    // Drain the queue and reject all tasks
+    // Drain the queue
     while (!this.queue.isEmpty()) {
       const item = this.queue.dequeue();
-      if (item) {
+      if (item && !silently) {
+        // Clear timeout handle before rejecting
+        if (item.timeoutHandle) {
+          clearTimeout(item.timeoutHandle);
+        }
         item.reject(new Error("Queue cleared"));
+      } else if (item?.timeoutHandle) {
+        clearTimeout(item.timeoutHandle);
       }
     }
 
@@ -341,6 +428,11 @@ export class ConcurrencyManager {
     while (!this.queue.isEmpty()) {
       const task = this.queue.dequeue();
       if (task) {
+        // Clear any timeout handle to prevent race conditions
+        if (task.timeoutHandle) {
+          clearTimeout(task.timeoutHandle);
+          task.timeoutHandle = undefined;
+        }
         task.reject(new Error("ConcurrencyManager is shutting down"));
       }
     }

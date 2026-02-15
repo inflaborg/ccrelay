@@ -53,6 +53,12 @@ describe("ConcurrencyManager", () => {
   });
 
   afterEach(() => {
+    // Shutdown manager to clear any pending timeouts
+    if (manager) {
+      // Clear queue silently to avoid unhandled rejections from unresolved test promises
+      manager.clearQueue(true);
+      manager.shutdown();
+    }
     vi.restoreAllMocks();
   });
 

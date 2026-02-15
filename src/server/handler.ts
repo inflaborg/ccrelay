@@ -29,7 +29,7 @@ import { ConcurrencyManager } from "../queue";
 import { convertRequestToOpenAI, convertResponseToAnthropic } from "../converter";
 import type { OpenAIChatCompletionResponse } from "../converter/openai-to-anthropic";
 import { ScopedLogger } from "../utils/logger";
-import { getDatabase, LogDatabase } from "../database";
+import { getDatabase, LogDatabase, RequestStatus } from "../database";
 import { LeaderElection } from "./leaderElection";
 import { isStaticRequest, serveStatic } from "./static";
 import { isApiRequest, handleApiRequest } from "../api";
@@ -915,9 +915,19 @@ export class ProxyServer {
 
             res.off("close", onClientDisconnect);
 
-            // This is an error from the queue submission itself (e.g. queue full)
+            // This is an error from the queue submission itself (e.g. queue full, timeout, cancelled)
             const errMsg = err instanceof Error ? err.message : String(err);
             this.log.warn(`Task ${task.id} rejected from queue "${queueName}": ${errMsg}`);
+
+            // Update request log status based on error type
+            const totalTime = Date.now() - requestReceiveStart;
+            if (this.database.enabled) {
+              let logStatus: RequestStatus = "cancelled";
+              if (errMsg.includes("timeout")) {
+                logStatus = "timeout";
+              }
+              this.database.updateLogStatus(clientId, logStatus, 503, totalTime, errMsg);
+            }
 
             // Don't write if client disconnected
             if (!clientDisconnected && !res.headersSent && !res.writableEnded) {

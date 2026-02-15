@@ -601,12 +601,22 @@ export class MockProvider extends EventEmitter {
     return this.getActiveRequests().length;
   }
 
+  /**
+   * Get count of requests to a specific path
+   */
+  getRequestCountByPath(path: string): number {
+    return Array.from(this.requestStates.values()).filter(r => r.path === path).length;
+  }
+
   // === Legacy Compatibility ===
 
   /**
    * @deprecated Use getReceivedRequestCount() instead
    */
-  getRequestCount(): number {
+  getRequestCount(path?: string): number {
+    if (path) {
+      return this.getRequestCountByPath(path);
+    }
     return this.getReceivedRequestCount();
   }
 

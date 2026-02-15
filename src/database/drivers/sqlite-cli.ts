@@ -16,6 +16,7 @@ import type {
   LogFilter,
   LogQueryResult,
   DatabaseStats,
+  RequestStatus,
 } from "../types";
 
 // Maximum database file size (50MB)
@@ -896,6 +897,39 @@ export class SqliteCliDriver implements DatabaseDriver {
       ]
     ).catch(err => {
       this.log.error("[SqliteCli] Failed to update log:", err);
+    });
+  }
+
+  /**
+   * Update a log entry by clientId with custom status
+   */
+  updateLogStatus(
+    clientId: string,
+    status: RequestStatus,
+    statusCode: number,
+    duration: number,
+    errorMessage: string | undefined
+  ): void {
+    if (!this.isEnabled) {return;}
+
+    this.exec(
+      `UPDATE request_logs
+       SET status_code = ?,
+           duration = ?,
+           success = ?,
+           error_message = ?,
+           status = ?
+       WHERE client_id = ?`,
+      [
+        statusCode,
+        duration,
+        0, // success is always false for cancelled/timeout
+        encodeForStorage(errorMessage),
+        status,
+        clientId,
+      ]
+    ).catch(err => {
+      this.log.error("[SqliteCli] Failed to update log status:", err);
     });
   }
 

@@ -13,6 +13,7 @@ import type {
   LogFilter,
   LogQueryResult,
   DatabaseStats,
+  RequestStatus,
 } from "../types";
 
 /**
@@ -349,6 +350,41 @@ export class PostgresDriver implements DatabaseDriver {
       )
       .catch(err => {
         this.log.error("[PostgresDriver] Failed to update log:", err);
+      });
+  }
+
+  /**
+   * Update a log entry by clientId with custom status
+   */
+  updateLogStatus(
+    clientId: string,
+    status: RequestStatus,
+    statusCode: number,
+    duration: number,
+    errorMessage: string | undefined
+  ): void {
+    if (!this.pool) {return;}
+
+    this.pool
+      .query(
+        `UPDATE request_logs
+         SET status_code = $1,
+             duration = $2,
+             success = $3,
+             error_message = $4,
+             status = $5
+         WHERE client_id = $6`,
+        [
+          statusCode,
+          duration,
+          false, // success is always false for cancelled/timeout
+          encodeForStorage(errorMessage),
+          status,
+          clientId,
+        ]
+      )
+      .catch(err => {
+        this.log.error("[PostgresDriver] Failed to update log status:", err);
       });
   }
 
