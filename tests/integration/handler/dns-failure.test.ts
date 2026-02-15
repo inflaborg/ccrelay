@@ -80,6 +80,8 @@ describe("Integration: DNS/Network Failure", () => {
 
     it("IT06-03: should return 502 on connection timeout (non-routable IP)", async () => {
       // Use a non-routable IP to trigger connection timeout
+      // Note: timeout must be > proxyTimeout to allow the proxy enough time to attempt connection
+      // and return 502 (Bad Gateway) instead of 503 (Queue Timeout)
       const config = new MockConfig({
         provider: createTestProvider({
           baseUrl: "http://10.255.255.1:9999", // Non-routable IP
@@ -87,7 +89,7 @@ describe("Integration: DNS/Network Failure", () => {
         concurrency: createTestConcurrencyConfig({
           maxConcurrency: 2,
           maxQueueSize: 10,
-          timeout: 2000, // Short timeout
+          timeout: 10000, // Must be > proxyTimeout to avoid queue timeout before proxy completes
         }),
         proxyTimeout: 2,
       });
