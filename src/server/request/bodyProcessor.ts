@@ -3,7 +3,7 @@
  */
 
 import type { RoutingContext, BodyProcessResult } from "./context";
-import { applyModelMapping } from "../proxy/modelMapping";
+import { applyModelMapping } from "./modelMapping";
 import { convertRequestToOpenAI } from "../../converter";
 import { ScopedLogger } from "../../utils/logger";
 
