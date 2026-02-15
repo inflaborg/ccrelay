@@ -63,7 +63,7 @@ describe("Integration: SSE Stream", () => {
       expect(res.text).toContain("Hello world!");
     });
 
-    it("IT02-02: should handle client disconnect during SSE stream", async () => {
+    it("IT02-02: should handle client disconnect during SSE stream and release worker", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
@@ -106,12 +106,28 @@ describe("Integration: SSE Stream", () => {
       // Abort mid-stream
       req.abort();
 
-      await sleep(100);
+      // Wait for disconnect to be detected and worker to be released
+      await sleep(500);
 
-      // Server should handle the disconnect gracefully
-      // The queue should be available for new requests
+      // Server should handle the disconnect gracefully - worker should be released
       const stats = testServer.getQueueStats();
-      expect(stats.default?.activeWorkers).toBeLessThanOrEqual(1);
+      expect(stats.default?.activeWorkers).toBe(0);
+
+      // Reset mock for quick response
+      mockProvider.reset();
+      mockProvider.onPost("/v1/messages", {
+        status: 200,
+        body: { content: "new request success" },
+        delay: 10,
+      });
+
+      // Verify new requests can be processed (queue is available)
+      const newRes = await request(testServer.baseUrl)
+        .post("/v1/messages")
+        .set("x-api-key", "test-key")
+        .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "test" }] });
+
+      expect(newRes.status).toBe(200);
     });
 
     it("IT02-03: should handle upstream SSE error", async () => {

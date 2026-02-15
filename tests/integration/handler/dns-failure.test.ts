@@ -1,14 +1,18 @@
 /**
  * Integration Test: DNS and Network Failure Handling
  *
- * Tests that verify correct handling of DNS failures and network errors
+ * Tests that verify correct handling of DNS failures and network errors.
+ * Each test verifies:
+ * 1. Correct HTTP status code returned
+ * 2. Worker is released after error (no resource leak)
+ *
  * Note: We use real non-existent domains to trigger actual network errors
  */
 
 import { describe, it, expect, afterEach } from "vitest";
 import request from "supertest";
 import { MockConfig, TestServer } from "../fixtures";
-import { createTestProvider, createTestConcurrencyConfig } from "../utils";
+import { createTestProvider, createTestConcurrencyConfig, sleep } from "../utils";
 
 describe("Integration: DNS/Network Failure", () => {
   let testServer: TestServer;
@@ -20,7 +24,7 @@ describe("Integration: DNS/Network Failure", () => {
   });
 
   describe("IT06: DNS resolution failure", () => {
-    it("IT06-01: should return error on DNS failure (ENOTFOUND)", async () => {
+    it("IT06-01: should return 502 on DNS failure (ENOTFOUND)", async () => {
       // Use a domain that definitely doesn't exist
       const config = new MockConfig({
         provider: createTestProvider({
@@ -29,9 +33,9 @@ describe("Integration: DNS/Network Failure", () => {
         concurrency: createTestConcurrencyConfig({
           maxConcurrency: 2,
           maxQueueSize: 10,
-          timeout: 30000,
+          timeout: 5000,
         }),
-        proxyTimeout: 5,
+        proxyTimeout: 3,
       });
 
       testServer = new TestServer({ config });
@@ -41,13 +45,13 @@ describe("Integration: DNS/Network Failure", () => {
         .post("/v1/messages")
         .set("x-api-key", "test-key")
         .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] })
-        .timeout(10000);
+        .timeout(15000);
 
-      // Should get error response (502, 503, or 500)
-      expect([502, 503, 500]).toContain(res.status);
+      // DNS failure should return 502 (Bad Gateway)
+      expect(res.status).toBe(502);
     });
 
-    it("IT06-02: should handle connection refused (ECONNREFUSED)", async () => {
+    it("IT06-02: should return 502 on connection refused (ECONNREFUSED)", async () => {
       // Use localhost with a port that's not listening
       const config = new MockConfig({
         provider: createTestProvider({
@@ -56,9 +60,9 @@ describe("Integration: DNS/Network Failure", () => {
         concurrency: createTestConcurrencyConfig({
           maxConcurrency: 2,
           maxQueueSize: 10,
-          timeout: 30000,
+          timeout: 5000,
         }),
-        proxyTimeout: 5,
+        proxyTimeout: 3,
       });
 
       testServer = new TestServer({ config });
@@ -70,11 +74,12 @@ describe("Integration: DNS/Network Failure", () => {
         .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] })
         .timeout(10000);
 
-      expect([502, 503, 500]).toContain(res.status);
+      // Connection refused should return 502
+      expect(res.status).toBe(502);
     });
 
-    it("IT06-03: should handle connection reset (ECONNRESET)", async () => {
-      // Use a non-routable IP to trigger connection issues
+    it("IT06-03: should return 502 on connection timeout (non-routable IP)", async () => {
+      // Use a non-routable IP to trigger connection timeout
       const config = new MockConfig({
         provider: createTestProvider({
           baseUrl: "http://10.255.255.1:9999", // Non-routable IP
@@ -82,7 +87,7 @@ describe("Integration: DNS/Network Failure", () => {
         concurrency: createTestConcurrencyConfig({
           maxConcurrency: 2,
           maxQueueSize: 10,
-          timeout: 30000,
+          timeout: 2000, // Short timeout
         }),
         proxyTimeout: 2,
       });
@@ -96,33 +101,123 @@ describe("Integration: DNS/Network Failure", () => {
         .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] })
         .timeout(10000);
 
-      expect([502, 503, 500]).toContain(res.status);
+      // Connection timeout should return 502
+      expect(res.status).toBe(502);
     });
 
-    it("IT06-04: should handle socket timeout (ETIMEDOUT)", async () => {
-      // Use a non-routable IP with short timeout
+    it("IT06-04: should release worker after DNS failure", async () => {
+      // Use a domain that definitely doesn't exist
       const config = new MockConfig({
         provider: createTestProvider({
-          baseUrl: "http://10.255.255.1:9999", // Non-routable IP
+          baseUrl: "https://this-domain-definitely-does-not-exist-12345.invalid",
         }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
+          maxConcurrency: 1, // Only 1 worker to verify release
           maxQueueSize: 10,
-          timeout: 1000, // Short timeout
+          timeout: 3000,
         }),
-        proxyTimeout: 1,
+        proxyTimeout: 2,
       });
 
       testServer = new TestServer({ config });
       await testServer.start();
 
-      const res = await request(testServer.baseUrl)
+      await request(testServer.baseUrl)
         .post("/v1/messages")
         .set("x-api-key", "test-key")
         .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] })
         .timeout(10000);
 
-      expect([502, 503, 500]).toContain(res.status);
+      // Wait for cleanup
+      await sleep(100);
+
+      // Worker should be released after error
+      const stats = testServer.getQueueStats();
+      expect(stats.default?.activeWorkers).toBe(0);
+    });
+  });
+
+  describe("IT06-B: Resource leak verification", () => {
+    it("IT06-05: should not leak workers on repeated network failures", async () => {
+      const config = new MockConfig({
+        provider: createTestProvider({
+          baseUrl: "http://127.0.0.1:1", // Will fail
+        }),
+        concurrency: createTestConcurrencyConfig({
+          maxConcurrency: 2,
+          maxQueueSize: 10,
+          timeout: 2000,
+        }),
+        proxyTimeout: 2,
+      });
+
+      testServer = new TestServer({ config });
+      await testServer.start();
+
+      // Make multiple failing requests sequentially
+      for (let i = 0; i < 3; i++) {
+        await request(testServer.baseUrl)
+          .post("/v1/messages")
+          .set("x-api-key", "test-key")
+          .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: `test ${i}` }] })
+          .timeout(10000);
+
+        await sleep(50);
+      }
+
+      // All workers should be released
+      const stats = testServer.getQueueStats();
+      expect(stats.default?.activeWorkers).toBe(0);
+    });
+
+    it("IT06-06: should handle concurrent network failures without deadlock", async () => {
+      const config = new MockConfig({
+        provider: createTestProvider({
+          baseUrl: "http://127.0.0.1:1",
+        }),
+        concurrency: createTestConcurrencyConfig({
+          maxConcurrency: 3,
+          maxQueueSize: 10,
+          timeout: 2000,
+        }),
+        proxyTimeout: 2,
+      });
+
+      testServer = new TestServer({ config });
+      await testServer.start();
+
+      // Make concurrent requests
+      const results = await Promise.allSettled([
+        request(testServer.baseUrl)
+          .post("/v1/messages")
+          .set("x-api-key", "test-key")
+          .send({ model: "claude-3-sonnet", messages: [] })
+          .timeout(10000),
+        request(testServer.baseUrl)
+          .post("/v1/messages")
+          .set("x-api-key", "test-key")
+          .send({ model: "claude-3-sonnet", messages: [] })
+          .timeout(10000),
+        request(testServer.baseUrl)
+          .post("/v1/messages")
+          .set("x-api-key", "test-key")
+          .send({ model: "claude-3-sonnet", messages: [] })
+          .timeout(10000),
+      ]);
+
+      // All should have failed with 502
+      for (const result of results) {
+        if (result.status === "fulfilled") {
+          expect(result.value.status).toBe(502);
+        }
+      }
+
+      // Wait for cleanup
+      await sleep(200);
+
+      // All workers should be released
+      const stats = testServer.getQueueStats();
+      expect(stats.default?.activeWorkers).toBe(0);
     });
   });
 });

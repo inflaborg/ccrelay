@@ -1,7 +1,10 @@
 /**
- * Integration Test: Retry Logic
+ * Integration Test: Error Pass-through and Connection Retry
  *
- * Tests that verify retry behavior for transient failures
+ * Tests that verify:
+ * 1. HTTP error responses (4xx, 5xx) are passed through to client
+ * 2. Connection-level errors trigger automatic retry
+ * 3. Resource cleanup after errors
  */
 
 /* eslint-disable @typescript-eslint/naming-convention */
@@ -9,9 +12,9 @@
 import { describe, it, expect, afterEach } from "vitest";
 import request from "supertest";
 import { MockConfig, MockProvider, TestServer } from "../fixtures";
-import { createTestProvider, createTestConcurrencyConfig } from "../utils";
+import { createTestProvider, createTestConcurrencyConfig, sleep } from "../utils";
 
-describe("Integration: Retry Logic", () => {
+describe("Integration: Error Pass-through and Retry", () => {
   let testServer: TestServer;
   let mockProvider: MockProvider;
 
@@ -24,8 +27,8 @@ describe("Integration: Retry Logic", () => {
     }
   });
 
-  describe("IT05: HTTP retry scenarios", () => {
-    it("IT05-01: should handle 500 error from upstream", async () => {
+  describe("IT05: HTTP error pass-through (no retry)", () => {
+    it("IT05-01: should pass through 500 error from upstream", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
@@ -34,7 +37,7 @@ describe("Integration: Retry Logic", () => {
         concurrency: createTestConcurrencyConfig({
           maxConcurrency: 2,
           maxQueueSize: 10,
-          timeout: 30000,
+          timeout: 10000,
         }),
       });
 
@@ -52,11 +55,12 @@ describe("Integration: Retry Logic", () => {
         .set("x-api-key", "test-key")
         .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] });
 
+      // HTTP 500 errors are passed through, no retry
       expect(res.status).toBe(500);
       expect(res.body).toHaveProperty("error");
     });
 
-    it("IT05-02: should handle 502 bad gateway", async () => {
+    it("IT05-02: should pass through 502 bad gateway", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
@@ -65,7 +69,7 @@ describe("Integration: Retry Logic", () => {
         concurrency: createTestConcurrencyConfig({
           maxConcurrency: 2,
           maxQueueSize: 10,
-          timeout: 30000,
+          timeout: 10000,
         }),
       });
 
@@ -83,10 +87,11 @@ describe("Integration: Retry Logic", () => {
         .set("x-api-key", "test-key")
         .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] });
 
+      // HTTP 502 errors are passed through, no retry
       expect(res.status).toBe(502);
     });
 
-    it("IT05-03: should handle 429 rate limit (no retry, pass through)", async () => {
+    it("IT05-03: should pass through 429 rate limit with headers", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
@@ -95,7 +100,7 @@ describe("Integration: Retry Logic", () => {
         concurrency: createTestConcurrencyConfig({
           maxConcurrency: 2,
           maxQueueSize: 10,
-          timeout: 30000,
+          timeout: 10000,
         }),
       });
 
@@ -108,7 +113,7 @@ describe("Integration: Retry Logic", () => {
         body: {
           error: { type: "rate_limit_error", message: "Rate limit exceeded" },
         },
-        headers: { "Retry-After": "30" },
+        headers: { "retry-after": "30" },
       });
 
       const res = await request(testServer.baseUrl)
@@ -116,11 +121,12 @@ describe("Integration: Retry Logic", () => {
         .set("x-api-key", "test-key")
         .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] });
 
-      // Should pass through 429
+      // 429 should be passed through with headers
       expect(res.status).toBe(429);
+      expect(res.headers["retry-after"]).toBe("30");
     });
 
-    it("IT05-04: should handle 400 bad request (no retry)", async () => {
+    it("IT05-04: should pass through 400 bad request (no retry)", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
@@ -129,7 +135,7 @@ describe("Integration: Retry Logic", () => {
         concurrency: createTestConcurrencyConfig({
           maxConcurrency: 2,
           maxQueueSize: 10,
-          timeout: 30000,
+          timeout: 10000,
         }),
       });
 
@@ -149,84 +155,24 @@ describe("Integration: Retry Logic", () => {
         .set("x-api-key", "test-key")
         .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] });
 
+      // HTTP 400 errors are passed through, no retry
       expect(res.status).toBe(400);
-    });
-
-    it("IT05-05: should successfully return after transient 500", async () => {
-      mockProvider = new MockProvider();
-      await mockProvider.start();
-
-      const config = new MockConfig({
-        provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
-        concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
-          maxQueueSize: 10,
-          timeout: 30000,
-        }),
-      });
-
-      testServer = new TestServer({ config });
-      await testServer.start();
-
-      let attemptCount = 0;
-
-      // First call returns 500, then reset to return 200
-      mockProvider.onDynamic("/v1/messages", "POST", () => {
-        attemptCount++;
-        if (attemptCount === 1) {
-          return {
-            status: 500,
-            body: { error: { message: "Temporary error" } },
-          };
-        }
-        return {
-          status: 200,
-          body: { content: "Success on retry", id: "msg_123" },
-        };
-      });
-
-      // First request gets 500
-      const res1 = await request(testServer.baseUrl)
-        .post("/v1/messages")
-        .set("x-api-key", "test-key")
-        .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] });
-
-      expect(res1.status).toBe(500);
-      expect(attemptCount).toBe(1);
-
-      // Reset and try again
-      mockProvider.reset();
-      mockProvider.onPost("/v1/messages", {
-        status: 200,
-        body: { content: "Success", id: "msg_456" },
-      });
-
-      const res2 = await request(testServer.baseUrl)
-        .post("/v1/messages")
-        .set("x-api-key", "test-key")
-        .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] });
-
-      expect(res2.status).toBe(200);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      expect(res2.body.content).toBe("Success");
     });
   });
 
   describe("IT05-B: Connection error handling", () => {
-    it("IT05-06: should handle connection reset", async () => {
-      // This test verifies behavior when connection is reset
-      // We simulate by using a URL that will fail
-
+    it("IT05-05: should return 502 on connection refused (ECONNREFUSED)", async () => {
+      // Use a port that's not listening
       const config = new MockConfig({
         provider: createTestProvider({
-          baseUrl: "http://127.0.0.1:1", // Will fail to connect
+          baseUrl: "http://127.0.0.1:1", // Port 1 is never used
         }),
         concurrency: createTestConcurrencyConfig({
           maxConcurrency: 2,
           maxQueueSize: 10,
-          timeout: 30000,
+          timeout: 5000,
         }),
-        proxyTimeout: 2,
+        proxyTimeout: 3,
       });
 
       testServer = new TestServer({ config });
@@ -236,10 +182,207 @@ describe("Integration: Retry Logic", () => {
         .post("/v1/messages")
         .set("x-api-key", "test-key")
         .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] })
+        .timeout(15000);
+
+      // Connection refused should return 502 (Bad Gateway)
+      expect(res.status).toBe(502);
+    });
+
+    it("IT05-06: should release worker after connection error", async () => {
+      // Use a port that's not listening
+      const config = new MockConfig({
+        provider: createTestProvider({
+          baseUrl: "http://127.0.0.1:1",
+        }),
+        concurrency: createTestConcurrencyConfig({
+          maxConcurrency: 1, // Only 1 worker
+          maxQueueSize: 10,
+          timeout: 2000,
+        }),
+        proxyTimeout: 2,
+      });
+
+      testServer = new TestServer({ config });
+      await testServer.start();
+
+      // Make request that will fail
+      await request(testServer.baseUrl)
+        .post("/v1/messages")
+        .set("x-api-key", "test-key")
+        .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] })
         .timeout(10000);
 
-      // Should get error response
-      expect([502, 503, 500]).toContain(res.status);
+      // Wait for cleanup
+      await sleep(100);
+
+      // Worker should be released after error
+      const stats = testServer.getQueueStats();
+      expect(stats.default?.activeWorkers).toBe(0);
+
+      // Now start a working provider
+      mockProvider = new MockProvider();
+      await mockProvider.start();
+
+      // Update config to use working provider
+      const workingConfig = new MockConfig({
+        provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
+        concurrency: createTestConcurrencyConfig({
+          maxConcurrency: 1,
+          maxQueueSize: 10,
+          timeout: 5000,
+        }),
+      });
+
+      // Stop old server and start new one
+      await testServer.stop();
+      testServer = new TestServer({ config: workingConfig });
+      await testServer.start();
+
+      mockProvider.onPost("/v1/messages", {
+        status: 200,
+        body: { content: "success" },
+      });
+
+      // New request should work
+      const res = await request(testServer.baseUrl)
+        .post("/v1/messages")
+        .set("x-api-key", "test-key")
+        .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] });
+
+      expect(res.status).toBe(200);
+    });
+  });
+
+  describe("IT05-C: Error recovery verification", () => {
+    it("IT05-07: should successfully handle request after upstream error", async () => {
+      mockProvider = new MockProvider();
+      await mockProvider.start();
+
+      const config = new MockConfig({
+        provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
+        concurrency: createTestConcurrencyConfig({
+          maxConcurrency: 2,
+          maxQueueSize: 10,
+          timeout: 10000,
+        }),
+      });
+
+      testServer = new TestServer({ config });
+      await testServer.start();
+
+      // First call returns 500
+      mockProvider.onPost("/v1/messages", {
+        status: 500,
+        body: { error: { message: "Temporary error" } },
+      });
+
+      const res1 = await request(testServer.baseUrl)
+        .post("/v1/messages")
+        .set("x-api-key", "test-key")
+        .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "first" }] });
+
+      expect(res1.status).toBe(500);
+
+      // Reset mock to return success
+      mockProvider.reset();
+      mockProvider.onPost("/v1/messages", {
+        status: 200,
+        body: { content: "Success", id: "msg_456" },
+      });
+
+      // Second request (new client request) should succeed
+      const res2 = await request(testServer.baseUrl)
+        .post("/v1/messages")
+        .set("x-api-key", "test-key")
+        .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "second" }] });
+
+      expect(res2.status).toBe(200);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(res2.body.content).toBe("Success");
+    });
+
+    it("IT05-08: should not leak workers on repeated errors", async () => {
+      const config = new MockConfig({
+        provider: createTestProvider({
+          baseUrl: "http://127.0.0.1:1", // Will fail
+        }),
+        concurrency: createTestConcurrencyConfig({
+          maxConcurrency: 2,
+          maxQueueSize: 10,
+          timeout: 2000,
+        }),
+        proxyTimeout: 2,
+      });
+
+      testServer = new TestServer({ config });
+      await testServer.start();
+
+      // Make multiple failing requests
+      for (let i = 0; i < 5; i++) {
+        await request(testServer.baseUrl)
+          .post("/v1/messages")
+          .set("x-api-key", "test-key")
+          .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: `test ${i}` }] })
+          .timeout(10000);
+
+        await sleep(50);
+      }
+
+      // All workers should be released
+      const stats = testServer.getQueueStats();
+      expect(stats.default?.activeWorkers).toBe(0);
+    });
+  });
+
+  describe("IT05-D: Concurrent error handling", () => {
+    it("IT05-09: should handle concurrent connection errors without deadlock", async () => {
+      const config = new MockConfig({
+        provider: createTestProvider({
+          baseUrl: "http://127.0.0.1:1",
+        }),
+        concurrency: createTestConcurrencyConfig({
+          maxConcurrency: 3,
+          maxQueueSize: 10,
+          timeout: 2000,
+        }),
+        proxyTimeout: 2,
+      });
+
+      testServer = new TestServer({ config });
+      await testServer.start();
+
+      // Make concurrent requests
+      const results = await Promise.allSettled([
+        request(testServer.baseUrl)
+          .post("/v1/messages")
+          .set("x-api-key", "test-key")
+          .send({ model: "claude-3-sonnet", messages: [] })
+          .timeout(10000),
+        request(testServer.baseUrl)
+          .post("/v1/messages")
+          .set("x-api-key", "test-key")
+          .send({ model: "claude-3-sonnet", messages: [] })
+          .timeout(10000),
+        request(testServer.baseUrl)
+          .post("/v1/messages")
+          .set("x-api-key", "test-key")
+          .send({ model: "claude-3-sonnet", messages: [] })
+          .timeout(10000),
+      ]);
+
+      // All should have failed with 502
+      for (const result of results) {
+        if (result.status === "fulfilled") {
+          expect(result.value.status).toBe(502);
+        }
+      }
+
+      // Wait for cleanup
+      await sleep(200);
+
+      // All workers should be released
+      const stats = testServer.getQueueStats();
+      expect(stats.default?.activeWorkers).toBe(0);
     });
   });
 });

@@ -2,15 +2,13 @@
  * Integration Test: Client Disconnect Scenarios
  *
  * Tests that verify correct handling of client disconnection
- * during different phases of request processing.
- *
- * Note: These tests use simplified verification methods because
- * supertest's lazy evaluation doesn't work well with event-based
- * request tracking.
+ * during different phases of request processing:
+ * 1. Client abort during slow response → worker released
+ * 2. After disconnect, next request processed normally
+ * 3. Multiple requests: one completes, queued one still processes
  */
 
 /* eslint-disable @typescript-eslint/naming-convention */
-// HTTP headers use kebab-case format
 
 import { describe, it, expect, afterEach } from "vitest";
 import request from "supertest";
@@ -32,7 +30,7 @@ describe("Integration: Client Disconnect", () => {
   });
 
   describe("IT01: Client disconnect detection", () => {
-    it("IT01-01: should handle client abort during slow response", async () => {
+    it("IT01-01: should detect client abort during slow response and release worker", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
@@ -100,7 +98,7 @@ describe("Integration: Client Disconnect", () => {
       expect(statsAfter.default?.activeWorkers).toBe(0);
     });
 
-    it("IT01-02: should process next request after client disconnect", async () => {
+    it("IT01-02: should process next request normally after client disconnect", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
@@ -153,6 +151,19 @@ describe("Integration: Client Disconnect", () => {
       req1.destroy();
       await mockProvider.waitForClientDisconnect(2000);
 
+      // Wait for worker to be released
+      await sleep(200);
+      const statsAfterDisconnect = testServer.getQueueStats();
+      expect(statsAfterDisconnect.default?.activeWorkers).toBe(0);
+
+      // Reset mock for quick response
+      mockProvider.reset();
+      mockProvider.onPost("/v1/messages", {
+        status: 200,
+        body: { content: "second success" },
+        delay: 10,
+      });
+
       // Second request should succeed
       const res2 = await request(testServer.baseUrl)
         .post("/v1/messages")
@@ -162,7 +173,7 @@ describe("Integration: Client Disconnect", () => {
       expect(res2.status).toBe(200);
     });
 
-    it("IT01-03: should handle queue with slow responses", async () => {
+    it("IT01-03: should queue and process second request while first is processing", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
@@ -209,25 +220,109 @@ describe("Integration: Client Disconnect", () => {
       // Wait for first request to reach upstream
       await mockProvider.waitForRequestTo("/v1/messages", 2000);
 
-      // Verify queue state
+      // Verify queue state - one worker active
       const stats1 = testServer.getQueueStats();
       expect(stats1.default?.activeWorkers).toBe(1);
 
-      // Second request should queue and eventually complete
-      const res2Promise = request(testServer.baseUrl)
-        .post("/v1/messages")
-        .set("x-api-key", "test-key")
-        .send({ model: "second", messages: [] });
+      // Second request using raw HTTP (to have more control)
+      const req2Promise = new Promise<void>((resolve) => {
+        const req2 = http.request({
+          hostname: url1.hostname,
+          port: url1.port,
+          path: url1.pathname,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": "test-key",
+          },
+        }, () => resolve());
+
+        req2.on("error", () => {});
+        req2.write(JSON.stringify({ model: "second", messages: [] }));
+        req2.end();
+      });
+
+      // Wait briefly for second to queue
+      await sleep(100);
+
+      // Verify second is queued
+      const statsWithQueue = testServer.getQueueStats();
+      expect(statsWithQueue.default?.queueLength).toBeGreaterThanOrEqual(1);
 
       // Wait for first to complete
       await req1Promise;
 
       // Second should also complete
-      const res2 = await res2Promise;
-      expect(res2.status).toBe(200);
+      await req2Promise;
 
       // Both should have been processed
       expect(mockProvider.getReceivedRequestCount()).toBe(2);
+    });
+  });
+
+  describe("IT01-B: Resource cleanup verification", () => {
+    it("IT01-04: should release worker after client disconnect (no leak)", async () => {
+      mockProvider = new MockProvider();
+      await mockProvider.start();
+
+      const config = new MockConfig({
+        provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
+        concurrency: createTestConcurrencyConfig({
+          maxConcurrency: 1,
+          maxQueueSize: 10,
+          timeout: 10000,
+        }),
+      });
+
+      testServer = new TestServer({ config });
+      await testServer.start();
+
+      // Mock slow response
+      mockProvider.onPost("/v1/messages", {
+        status: 200,
+        body: { content: "ok" },
+        delay: 5000,
+      });
+
+      const url = new URL(`${testServer.baseUrl}/v1/messages`);
+
+      // Make and abort multiple requests
+      for (let i = 0; i < 3; i++) {
+        const req = http.request({
+          hostname: url.hostname,
+          port: url.port,
+          path: url.pathname,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": "test-key",
+          },
+        }, () => {});
+
+        req.on("error", () => {});
+        req.write(JSON.stringify({ model: `test-${i}`, messages: [] }));
+        req.end();
+
+        // Wait for request to reach upstream
+        await mockProvider.waitForRequestTo("/v1/messages", 2000);
+
+        // Abort
+        req.destroy();
+        await mockProvider.waitForClientDisconnect(2000);
+        await sleep(100);
+
+        // Reset for next iteration
+        mockProvider.reset();
+        mockProvider.onPost("/v1/messages", {
+          status: 200,
+          body: { content: "ok" },
+          delay: 5000,
+        });
+      }
+
+      // All workers should be released
+      const stats = testServer.getQueueStats();
+      expect(stats.default?.activeWorkers).toBe(0);
     });
   });
 });

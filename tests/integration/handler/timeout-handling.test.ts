@@ -1,12 +1,18 @@
 /**
  * Integration Test: Timeout Handling
  *
- * Tests that verify correct handling of various timeout scenarios
- * including connection timeout, request timeout, and queue timeout.
+ * Tests that verify correct handling of various timeout scenarios:
+ * 1. Upstream timeout (hanging response) → 503/504
+ * 2. Slow but completing response → 200
+ * 3. Queue timeout (waiting too long) → 503
+ * 4. Resource cleanup after timeout
  */
+
+/* eslint-disable @typescript-eslint/naming-convention */
 
 import { describe, it, expect, afterEach } from "vitest";
 import request from "supertest";
+import http from "http";
 import { MockConfig, MockProvider, TestServer } from "../fixtures";
 import { createTestProvider, createTestConcurrencyConfig, sleep } from "../utils";
 
@@ -24,7 +30,7 @@ describe("Integration: Timeout Handling", () => {
   });
 
   describe("IT03: Upstream server connection timeout", () => {
-    it("IT03-01: should return 504 on upstream timeout (hanging response)", async () => {
+    it("IT03-01: should return 503 on upstream timeout (hanging response)", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
@@ -55,8 +61,10 @@ describe("Integration: Timeout Handling", () => {
         .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] })
         .timeout(5000);
 
-      // Should get 503 (queue timeout) or 504 (proxy timeout)
-      expect([503, 504]).toContain(res.status);
+      // Task timeout should return 503 with timeout error message
+      expect(res.status).toBe(503);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(res.body.error).toMatch(/timeout/i);
     });
 
     it("IT03-02: should handle slow but completing response", async () => {
@@ -89,11 +97,13 @@ describe("Integration: Timeout Handling", () => {
         .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] });
 
       expect(res.status).toBe(200);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(res.body.content).toBe("completed");
     });
   });
 
   describe("IT04: Socket timeout (request sent, no response)", () => {
-    it("IT04-01: should handle connection refused", async () => {
+    it("IT04-01: should return 502 on connection refused", async () => {
       // Use a non-existent URL to simulate connection refused
       const config = new MockConfig({
         provider: createTestProvider({
@@ -102,9 +112,9 @@ describe("Integration: Timeout Handling", () => {
         concurrency: createTestConcurrencyConfig({
           maxConcurrency: 2,
           maxQueueSize: 10,
-          timeout: 30000,
+          timeout: 5000,
         }),
-        proxyTimeout: 5,
+        proxyTimeout: 3,
       });
 
       testServer = new TestServer({ config });
@@ -116,11 +126,11 @@ describe("Integration: Timeout Handling", () => {
         .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] })
         .timeout(10000);
 
-      // Should get an error response (502 or 503)
-      expect([502, 503, 500]).toContain(res.status);
+      // Connection refused should return 502 (Bad Gateway)
+      expect(res.status).toBe(502);
     });
 
-    it("IT04-02: should release worker after timeout", async () => {
+    it("IT04-02: should release worker after timeout and allow new requests", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
@@ -144,15 +154,28 @@ describe("Integration: Timeout Handling", () => {
         delay: 60000,
       });
 
-      // Start request that will timeout
-      await request(testServer.baseUrl)
-        .post("/v1/messages")
-        .set("x-api-key", "test-key")
-        .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] })
-        .timeout(5000);
+      // Use raw HTTP to have control over timing
+      const url = new URL(`${testServer.baseUrl}/v1/messages`);
+      const req1 = http.request({
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": "test-key",
+        },
+      }, () => {});
 
-      // Wait for cleanup
-      await sleep(100);
+      req1.on("error", () => {}); // Suppress socket errors
+      req1.write(JSON.stringify({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] }));
+      req1.end();
+
+      // Wait for request to reach upstream
+      await mockProvider.waitForRequestTo("/v1/messages", 2000);
+
+      // Wait for timeout to occur (300ms timeout + buffer)
+      await sleep(500);
 
       // Worker should be released
       const stats = testServer.getQueueStats();
@@ -173,6 +196,9 @@ describe("Integration: Timeout Handling", () => {
         .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] });
 
       expect(res.status).toBe(200);
+
+      // Cleanup
+      req1.destroy();
     });
   });
 
@@ -202,12 +228,24 @@ describe("Integration: Timeout Handling", () => {
       });
 
       // First request occupies worker for 5 seconds
-      const req1 = request(testServer.baseUrl)
-        .post("/v1/messages")
-        .set("x-api-key", "test-key")
-        .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "first" }] });
+      const url = new URL(`${testServer.baseUrl}/v1/messages`);
+      const req1 = http.request({
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": "test-key",
+        },
+      }, () => {});
 
-      await sleep(50);
+      req1.on("error", () => {}); // Suppress socket errors
+      req1.write(JSON.stringify({ model: "claude-3-sonnet", messages: [{ role: "user", content: "first" }] }));
+      req1.end();
+
+      // Wait for first request to reach upstream
+      await mockProvider.waitForRequestTo("/v1/messages", 2000);
 
       // Second request should timeout while waiting in queue
       // (queue timeout is shorter than first request duration)
@@ -221,7 +259,7 @@ describe("Integration: Timeout Handling", () => {
       expect(res2.status).toBe(503);
 
       // Cleanup
-      req1.abort();
+      req1.destroy();
     });
   });
 });

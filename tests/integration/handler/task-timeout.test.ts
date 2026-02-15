@@ -1,13 +1,20 @@
 /**
  * Integration Test: Task Timeout Cancellation
  *
- * Tests that verify task timeout and abort controller behavior
+ * Tests that verify task timeout and abort controller behavior:
+ * 1. Task timeout returns 503 with error message
+ * 2. Worker is released after timeout (no leak)
+ * 3. New requests work after timeout (recovery)
+ * 4. Concurrent timeouts handled correctly
+ * 5. Task completing before timeout works normally
  */
 
+/* eslint-disable @typescript-eslint/naming-convention */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 
 import { describe, it, expect, afterEach } from "vitest";
 import request from "supertest";
+import http from "http";
 import { MockConfig, MockProvider, TestServer } from "../fixtures";
 import { createTestProvider, createTestConcurrencyConfig, sleep } from "../utils";
 
@@ -25,7 +32,7 @@ describe("Integration: Task Timeout Cancellation", () => {
   });
 
   describe("IT08: Task timeout and cancellation", () => {
-    it("IT08-01: should timeout and return error when task exceeds timeout", async () => {
+    it("IT08-01: should timeout and return 503 when task exceeds timeout", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
@@ -55,11 +62,12 @@ describe("Integration: Task Timeout Cancellation", () => {
         .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] })
         .timeout(5000);
 
+      // Task timeout should return 503 with timeout error message
       expect(res.status).toBe(503);
       expect(res.body.error).toMatch(/timeout/i);
     });
 
-    it("IT08-02: should release worker after timeout", async () => {
+    it("IT08-02: should release worker after timeout (no resource leak)", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
@@ -83,22 +91,38 @@ describe("Integration: Task Timeout Cancellation", () => {
         delay: 60000,
       });
 
-      // Start request that will timeout
-      await request(testServer.baseUrl)
-        .post("/v1/messages")
-        .set("x-api-key", "test-key")
-        .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] })
-        .timeout(5000);
+      // Use raw HTTP for better control
+      const url = new URL(`${testServer.baseUrl}/v1/messages`);
+      const req = http.request({
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": "test-key",
+        },
+      }, () => {});
 
-      // Wait for cleanup
-      await sleep(100);
+      req.on("error", () => {}); // Suppress socket errors
+      req.write(JSON.stringify({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] }));
+      req.end();
+
+      // Wait for request to reach upstream
+      await mockProvider.waitForRequestTo("/v1/messages", 2000);
+
+      // Wait for timeout to occur (300ms timeout + buffer)
+      await sleep(500);
 
       // Worker should be released
       const stats = testServer.getQueueStats();
       expect(stats.default?.activeWorkers).toBe(0);
+
+      // Cleanup
+      req.destroy();
     });
 
-    it("IT08-03: should allow new requests after timeout", async () => {
+    it("IT08-03: should allow new requests after timeout (recovery)", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
@@ -123,14 +147,20 @@ describe("Integration: Task Timeout Cancellation", () => {
       });
 
       // First request times out
-      await request(testServer.baseUrl)
+      const res1 = await request(testServer.baseUrl)
         .post("/v1/messages")
         .set("x-api-key", "test-key")
         .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "first" }] })
         .timeout(5000);
 
+      expect(res1.status).toBe(503);
+
       // Wait for cleanup
       await sleep(200);
+
+      // Verify worker released
+      const stats = testServer.getQueueStats();
+      expect(stats.default?.activeWorkers).toBe(0);
 
       // Reset mock for quick response
       mockProvider.reset();
@@ -141,15 +171,16 @@ describe("Integration: Task Timeout Cancellation", () => {
       });
 
       // New request should succeed
-      const res = await request(testServer.baseUrl)
+      const res2 = await request(testServer.baseUrl)
         .post("/v1/messages")
         .set("x-api-key", "test-key")
         .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "second" }] });
 
-      expect(res.status).toBe(200);
+      expect(res2.status).toBe(200);
+      expect(res2.body.content).toBe("success");
     });
 
-    it("IT08-04: should handle multiple concurrent timeouts", async () => {
+    it("IT08-04: should handle multiple concurrent timeouts without deadlock", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
@@ -192,7 +223,7 @@ describe("Integration: Task Timeout Cancellation", () => {
           .timeout(5000),
       ]);
 
-      // All should have timed out
+      // All should have timed out with 503
       for (const result of results) {
         if (result.status === "fulfilled") {
           expect(result.value.status).toBe(503);
@@ -202,12 +233,12 @@ describe("Integration: Task Timeout Cancellation", () => {
       // Wait for cleanup
       await sleep(200);
 
-      // All workers should be released
+      // All workers should be released (no leak)
       const stats = testServer.getQueueStats();
       expect(stats.default?.activeWorkers).toBe(0);
     });
 
-    it("IT08-05: should complete task that finishes before timeout", async () => {
+    it("IT08-05: should complete task that finishes before timeout (normal case)", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
@@ -235,6 +266,7 @@ describe("Integration: Task Timeout Cancellation", () => {
         .set("x-api-key", "test-key")
         .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] });
 
+      // Should complete normally
       expect(res.status).toBe(200);
       expect(res.body.content).toBe("completed");
     });
