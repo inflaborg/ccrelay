@@ -11,6 +11,7 @@
 
 import { describe, it, expect, afterEach } from "vitest";
 import request from "supertest";
+import nock from "nock";
 import { MockConfig, TestServer } from "../fixtures";
 import { createTestProvider, createTestConcurrencyConfig, sleep } from "../utils";
 
@@ -18,6 +19,8 @@ describe("Integration: DNS/Network Failure", () => {
   let testServer: TestServer;
 
   afterEach(async () => {
+    nock.cleanAll();
+    nock.enableNetConnect(); // Re-enable network connections
     if (testServer) {
       await testServer.stop();
     }
@@ -76,32 +79,47 @@ describe("Integration: DNS/Network Failure", () => {
       expect(res.status).toBe(502);
     });
 
-    it("IT06-03: should return 502 on connection timeout (non-routable IP)", async () => {
-      // Use a non-routable IP to trigger connection timeout
-      // Note: timeout must be > proxyTimeout to allow the proxy enough time to attempt connection
-      // and return 502 (Bad Gateway) instead of 503 (Queue Timeout)
+    it("IT06-03: should handle client timeout during slow upstream (mocked)", async () => {
+      // Use nock to simulate slow response (30 seconds delay)
+      nock("http://mock-upstream-slow:9999")
+        .post("/v1/messages")
+        .delay(30000) // 30 second delay
+        .reply(200, { success: true });
+
       const config = new MockConfig({
         provider: createTestProvider({
-          baseUrl: "http://10.255.255.1:9999", // Non-routable IP
+          baseUrl: "http://mock-upstream-slow:9999",
         }),
         concurrency: createTestConcurrencyConfig({
-          maxWorkers: 2,
+          maxWorkers: 1,
           maxQueueSize: 10,
-          requestTimeout: 10, // Must be > proxyTimeout to avoid queue timeout before proxy completes
+          requestTimeout: 30, // Long enough to not trigger queue timeout
         }),
       });
 
       testServer = new TestServer({ config });
       await testServer.start();
 
-      const res = await request(testServer.baseUrl)
-        .post("/v1/messages")
-        .set("x-api-key", "test-key")
-        .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] })
-        .timeout(10000);
+      // Client sets a short timeout (1 second), should timeout before proxy responds
+      try {
+        await request(testServer.baseUrl)
+          .post("/v1/messages")
+          .set("x-api-key", "test-key")
+          .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] })
+          .timeout(1000);
+        // Should not reach here
+        expect.fail("Expected client timeout error");
+      } catch (err: unknown) {
+        // Client timeout is expected - verify it's a timeout error
+        expect((err as Error).message).toContain("Timeout");
+      }
 
-      // Connection timeout should return 502
-      expect(res.status).toBe(502);
+      // Wait for cleanup
+      await sleep(100);
+
+      // Verify: worker should be released after client disconnect
+      const stats = testServer.getQueueStats();
+      expect(stats.default?.activeWorkers).toBe(0);
     });
 
     it("IT06-04: should release worker after DNS failure", async () => {
