@@ -9,7 +9,13 @@
 import * as http from "http";
 import type { ProxyServer } from "../server/handler";
 import { handleStatus, setServer as setStatusServer } from "./status";
-import { handleListProviders, setServer as setProvidersServer } from "./providers";
+import {
+  handleListProviders,
+  handleAddProvider,
+  handleDeleteProvider,
+  handleReloadConfig,
+  setServer as setProvidersServer,
+} from "./providers";
 import { handleSwitchProvider, setServer as setSwitchServer } from "./switch";
 import { handleLogs, handleLogDetail, handleDeleteLogs, handleClearLogs } from "./logs";
 import { handleStats } from "./stats";
@@ -111,6 +117,28 @@ export function handleApiRequest(req: http.IncomingMessage, res: http.ServerResp
     return true;
   }
 
+  // Check for POST /ccrelay/api/providers (add provider)
+  if (reqPath === "/ccrelay/api/providers" && method === "POST") {
+    handleAddProvider(req, res, {}).catch(err => {
+      log.error("Error handling POST /providers", err);
+      sendJson(res, 500, { error: "Internal server error" });
+    });
+    return true;
+  }
+
+  // Check for DELETE /ccrelay/api/providers/:id
+  const providersIdMatch = reqPath.match(/^\/ccrelay\/api\/providers\/([a-zA-Z0-9_-]+)$/);
+  if (providersIdMatch && method === "DELETE") {
+    handleDeleteProvider(req, res, { id: providersIdMatch[1] });
+    return true;
+  }
+
+  // Check for POST /ccrelay/api/reload
+  if (reqPath === "/ccrelay/api/reload" && method === "POST") {
+    handleReloadConfig(req, res, {});
+    return true;
+  }
+
   // Check for exact route matches
   if (API_ROUTES[reqPath]) {
     const handler = API_ROUTES[reqPath];
@@ -173,6 +201,9 @@ export async function parseJsonBody<T = unknown>(req: http.IncomingMessage): Pro
 export {
   handleStatus,
   handleListProviders,
+  handleAddProvider,
+  handleDeleteProvider,
+  handleReloadConfig,
   handleSwitchProvider,
   handleLogs,
   handleLogDetail,

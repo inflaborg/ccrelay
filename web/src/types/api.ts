@@ -4,6 +4,7 @@ export interface Provider {
   id: string;
   name: string;
   mode: "inject" | "passthrough";
+  providerType: "anthropic" | "openai";
   baseUrl?: string;
   active: boolean;
 }
@@ -32,6 +33,39 @@ export interface SwitchResponse {
   name?: string;
   message?: string;
   available?: string[];
+}
+
+// Add Provider Request
+export interface AddProviderRequest {
+  id: string;
+  name: string;
+  baseUrl: string;
+  providerType: "anthropic" | "openai";
+  mode: "passthrough" | "inject";
+  apiKey?: string;
+  enabled?: boolean;
+  // Advanced options
+  authHeader?: string;
+  modelMap?: Record<string, string>;
+  vlModelMap?: Record<string, string>;
+  headers?: Record<string, string>;
+}
+
+export interface AddProviderResponse {
+  status: "ok" | "error";
+  provider?: Provider;
+  message?: string;
+}
+
+export interface DeleteProviderResponse {
+  status: "ok" | "error";
+  message?: string;
+}
+
+export interface ReloadConfigResponse {
+  status: "ok" | "error";
+  message?: string;
+  providersCount?: number;
 }
 
 export type RequestStatus = "pending" | "completed";

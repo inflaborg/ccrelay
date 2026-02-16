@@ -111,29 +111,24 @@ claude
 
 ### 2. Configure providers
 
-Add provider configuration in VSCode settings:
+CCRelay uses a YAML configuration file (`~/.ccrelay/config.yaml` by default). The file is auto-created with defaults on first launch.
 
-```json
-{
-  "ccrelay.provider.list": {
-    "official": {
-      "name": "Claude Official",
-      "baseUrl": "https://api.anthropic.com",
-      "mode": "passthrough"
-    },
-    "glm": {
-      "name": "Z.AI-GLM-5",
-      "baseUrl": "https://api.z.ai/api/anthropic",
-      "mode": "inject",
-      "apiKey": "<YOUR-API-KEY>",
-      "modelMap": {
-        "claude-opus-*": "glm-5",
-        "claude-sonnet-*": "glm-5",
-        "claude-haiku-*": "glm-4.7"
-      }
-    }
-  }
-}
+Edit the config file to add your providers:
+
+```yaml
+providers:
+  glm:
+    name: "Z.AI-GLM-5"
+    baseUrl: "https://api.z.ai/api/anthropic"
+    mode: "inject"
+    apiKey: "${GLM_API_KEY}"  # Supports environment variables
+    modelMap:
+      "claude-opus-*": "glm-5"
+      "claude-sonnet-*": "glm-5"
+      "claude-haiku-*": "glm-4.7"
+    enabled: true
+
+defaultProvider: "glm"
 ```
 
 ### 3. Switch providers
@@ -148,9 +143,10 @@ Add provider configuration in VSCode settings:
 ### Basic Setup
 
 1. Install and enable the extension
-2. Configure providers in VSCode settings
-3. The server will auto-start (configurable via `ccrelay.server.autoStart`)
-4. Click the status bar to switch providers or access the menu
+2. The config file (`~/.ccrelay/config.yaml`) is auto-created with defaults
+3. Edit the config file to add your providers
+4. The server will auto-start (configurable via `server.autoStart` in config)
+5. Click the status bar to switch providers or access the menu
 
 ### Multi-Instance Mode
 

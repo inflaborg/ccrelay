@@ -7,6 +7,10 @@ import type {
   LogsQuery,
   LogStats,
   VersionResponse,
+  AddProviderRequest,
+  AddProviderResponse,
+  DeleteProviderResponse,
+  ReloadConfigResponse,
 } from "../types/api";
 
 // Re-export types for convenience
@@ -50,6 +54,22 @@ export const api = {
     fetchAPI<SwitchResponse>("/switch", {
       method: "POST",
       body: JSON.stringify({ provider: providerId }),
+    }),
+
+  addProvider: (data: AddProviderRequest): Promise<AddProviderResponse> =>
+    fetchAPI<AddProviderResponse>("/providers", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  deleteProvider: (id: string): Promise<DeleteProviderResponse> =>
+    fetchAPI<DeleteProviderResponse>(`/providers/${id}`, {
+      method: "DELETE",
+    }),
+
+  reloadConfig: (): Promise<ReloadConfigResponse> =>
+    fetchAPI<ReloadConfigResponse>("/reload", {
+      method: "POST",
     }),
 
   // Logs
