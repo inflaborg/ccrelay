@@ -12,7 +12,6 @@ import { ScopedLogger } from "../../utils/logger";
 import { convertResponseToAnthropic } from "../../converter";
 import type { OpenAIChatCompletionResponse } from "../../converter/openai-to-anthropic";
 import type { RequestTask, ProxyResult } from "../../types";
-import type { ConfigManager } from "../../config";
 import type { ResponseLogger } from "../responseLogger";
 
 const log = new ScopedLogger("ProxyExecutor");
@@ -50,7 +49,7 @@ interface ExecutionContext {
 export class ProxyExecutor {
   private executeFn: ((task: RequestTask) => Promise<ProxyResult>) | null = null;
 
-  constructor(private config: ConfigManager, private responseLogger: ResponseLogger) {}
+  constructor(private responseLogger: ResponseLogger) {}
 
   /**
    * Set the execute function (for retry support, called after full initialization)
@@ -176,12 +175,8 @@ export class ProxyExecutor {
         reject
       );
 
-      // Set configurable timeout (default 5 minutes for long code generation)
-      const requestTimeoutSeconds = this.config.getSetting("proxy.requestTimeout", 300);
-      const requestTimeoutMs = requestTimeoutSeconds * 1000;
-      if (requestTimeoutMs > 0) {
-        proxyReq.setTimeout(requestTimeoutMs);
-      }
+      // No request timeout - rely on client disconnect detection
+      // Long-running LLM requests can take arbitrary time
 
       if (body) {
         proxyReq.write(body);

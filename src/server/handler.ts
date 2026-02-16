@@ -70,7 +70,7 @@ export class ProxyServer {
     this.responseLogger = new ResponseLogger(this.database);
 
     // Initialize proxy executor (executeFn set after construction for retry support)
-    this.proxyExecutor = new ProxyExecutor(config, this.responseLogger);
+    this.proxyExecutor = new ProxyExecutor(this.responseLogger);
 
     // Initialize queue manager (executor set after construction to avoid circular dependency)
     this.queueManager = new QueueManager(config);
@@ -193,7 +193,7 @@ export class ProxyServer {
     this.queueManager.setExecutor((task: RequestTask) => this.executeProxyRequest(task));
 
     // Initialize database (async for sqlite3 CLI)
-    const logStorageEnabled = this.config.getSetting("log.enableStorage") === true;
+    const logStorageEnabled = this.config.enableLogStorage;
     this.log.info(
       `[Server:${this.instanceId}] Initializing database. config setting: ${logStorageEnabled}`
     );

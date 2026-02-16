@@ -50,7 +50,7 @@ export class Router {
 
     for (const pattern of this.config.blockPatterns) {
       if (minimatch(normalizedPath, pattern.path)) {
-        return { blocked: true, response: pattern.response, responseCode: pattern.responseCode };
+        return { blocked: true, response: pattern.response, responseCode: pattern.code };
       }
     }
 
@@ -58,7 +58,7 @@ export class Router {
     if (provider.providerType === "openai") {
       for (const pattern of this.config.openaiBlockPatterns) {
         if (minimatch(normalizedPath, pattern.path)) {
-          return { blocked: true, response: pattern.response, responseCode: pattern.responseCode };
+          return { blocked: true, response: pattern.response, responseCode: pattern.code };
         }
       }
     }

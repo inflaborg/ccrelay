@@ -37,9 +37,9 @@ describe("Integration: Client Disconnect", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
+          maxWorkers: 2,
           maxQueueSize: 10,
-          timeout: 10000,
+          requestTimeout: 10,
         }),
       });
 
@@ -105,9 +105,9 @@ describe("Integration: Client Disconnect", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 1, // Only 1 at a time
+          maxWorkers: 1, // Only 1 at a time
           maxQueueSize: 10,
-          timeout: 10000,
+          requestTimeout: 10,
         }),
       });
 
@@ -180,9 +180,9 @@ describe("Integration: Client Disconnect", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 1,
+          maxWorkers: 1,
           maxQueueSize: 10,
-          timeout: 10000,
+          requestTimeout: 10,
         }),
       });
 
@@ -268,9 +268,9 @@ describe("Integration: Client Disconnect", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 1,
+          maxWorkers: 1,
           maxQueueSize: 10,
-          timeout: 10000,
+          requestTimeout: 10,
         }),
       });
 

@@ -11,7 +11,6 @@ export interface MockConfigOptions {
   provider?: Provider;
   concurrency?: ConcurrencyConfig;
   routeQueues?: RouteQueueConfig[];
-  proxyTimeout?: number;
 }
 
 export class MockConfig {
@@ -20,7 +19,6 @@ export class MockConfig {
   public provider: Provider;
   public concurrency: ConcurrencyConfig | undefined;
   public routeQueues: RouteQueueConfig[];
-  public proxyTimeout: number;
 
   constructor(options: MockConfigOptions = {}) {
     this.port = options.port ?? 7575;
@@ -35,7 +33,6 @@ export class MockConfig {
     };
     this.concurrency = options.concurrency;
     this.routeQueues = options.routeQueues ?? [];
-    this.proxyTimeout = options.proxyTimeout ?? 300;
   }
 
   // Minimal interface compatible with ConfigManager methods used by ProxyServer
@@ -43,25 +40,27 @@ export class MockConfig {
     return {
       port: this.port,
       host: this.host,
+      autoStart: true,
       defaultProvider: this.provider.id,
       providers: {
         [this.provider.id]: this.provider,
       },
-      routePatterns: [],
-      passthroughPatterns: [],
-      blockPatterns: [],
-      openaiBlockPatterns: [],
+      routing: {
+        proxy: [],
+        passthrough: [],
+        block: [],
+        openaiBlock: [],
+      },
       concurrency: this.concurrency,
       routeQueues: this.routeQueues,
-      enableLogStorage: false,
+      logging: {
+        enabled: false,
+      },
     };
   }
 
-  getSetting(key: string, defaultValue: unknown): unknown {
-    if (key === "proxy.requestTimeout") {
-      return this.proxyTimeout;
-    }
-    return defaultValue;
+  get enableLogStorage(): boolean {
+    return false;
   }
 
   getCurrentProvider(): Provider {

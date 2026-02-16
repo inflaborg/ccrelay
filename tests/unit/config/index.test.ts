@@ -266,7 +266,7 @@ describe("config: schema validation", () => {
 
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.responseCode).toBeUndefined();
+        expect(result.data.code).toBeUndefined();
       }
     });
 
@@ -274,14 +274,14 @@ describe("config: schema validation", () => {
       const input = {
         path: "/api/blocked",
         response: "Forbidden",
-        responseCode: 403,
+        code: 403,
       };
 
       const result = BlockPatternSchema.safeParse(input);
 
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.responseCode).toBe(403);
+        expect(result.data.code).toBe(403);
       }
     });
   });
@@ -307,21 +307,23 @@ describe("config: schema validation", () => {
           },
         },
         defaultProvider: "test",
-        routePatterns: ["/v1/messages"],
-        passthroughPatterns: ["/v1/users/*"],
-        blockPatterns: [
-          {
-            path: "/api/blocked",
-            response: "Blocked",
-          },
-        ],
-        openaiBlockPatterns: [
-          {
-            path: "/openai/blocked",
-            response: "Blocked",
-            responseCode: 403,
-          },
-        ],
+        routing: {
+          proxy: ["/v1/messages"],
+          passthrough: ["/v1/users/*"],
+          block: [
+            {
+              path: "/api/blocked",
+              response: "Blocked",
+            },
+          ],
+          openaiBlock: [
+            {
+              path: "/openai/blocked",
+              response: "Blocked",
+              code: 403,
+            },
+          ],
+        },
       };
 
       const result = FileConfigSchema.safeParse(input);
@@ -361,16 +363,18 @@ describe("config: schema validation", () => {
 
     it("should accept string arrays for patterns", () => {
       const input = {
-        routePatterns: ["/v1/messages", "/messages"],
-        passthroughPatterns: ["/v1/users/*", "/v1/orgs/*"],
+        routing: {
+          proxy: ["/v1/messages", "/messages"],
+          passthrough: ["/v1/users/*", "/v1/orgs/*"],
+        },
       };
 
       const result = FileConfigSchema.safeParse(input);
 
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.routePatterns).toEqual(["/v1/messages", "/messages"]);
-        expect(result.data.passthroughPatterns).toEqual(["/v1/users/*", "/v1/orgs/*"]);
+        expect(result.data.routing?.proxy).toEqual(["/v1/messages", "/messages"]);
+        expect(result.data.routing?.passthrough).toEqual(["/v1/users/*", "/v1/orgs/*"]);
       }
     });
   });

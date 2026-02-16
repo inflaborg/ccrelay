@@ -42,18 +42,18 @@ export class TestServer {
         this.executeProxyRequest(task)
       );
       this.log.info(
-        `ConcurrencyManager initialized: maxConcurrency=${concurrencyConfig.maxConcurrency}`
+        `ConcurrencyManager initialized: maxWorkers=${concurrencyConfig.maxWorkers}`
       );
     }
 
     // Initialize route-specific queues
     for (const routeConfig of this.config.routeQueues) {
-      const queueName = routeConfig.name ?? routeConfig.pathPattern;
+      const queueName = routeConfig.name ?? routeConfig.pattern;
       const queueConcurrencyConfig: ConcurrencyConfig = {
         enabled: true,
-        maxConcurrency: routeConfig.maxConcurrency,
+        maxWorkers: routeConfig.maxWorkers,
         maxQueueSize: routeConfig.maxQueueSize,
-        timeout: routeConfig.timeout,
+        requestTimeout: routeConfig.requestTimeout,
       };
       const routeQueue = new ConcurrencyManager(queueConcurrencyConfig, task =>
         this.executeProxyRequest(task)
@@ -61,7 +61,7 @@ export class TestServer {
       this.routeQueues.set(queueName, routeQueue);
       // Store compiled pattern
       (routeQueue as ConcurrencyManager & { pattern?: RegExp }).pattern = new RegExp(
-        routeConfig.pathPattern
+        routeConfig.pattern
       );
     }
   }
@@ -458,17 +458,8 @@ export class TestServer {
         reject(new Error(`Proxy error: ${err.message}`));
       });
 
-      // Set timeout
-      const timeoutMs = (this.config.proxyTimeout ?? 300) * 1000;
-      if (timeoutMs > 0) {
-        proxyReq.setTimeout(timeoutMs, () => {
-          if (clientRes) {
-            clientRes.off("close", onClientDisconnect);
-          }
-          abortController.abort();
-          reject(new Error("Proxy timeout"));
-        });
-      }
+      // No timeout - rely on client disconnect detection
+      // Long-running LLM requests can take arbitrary time
 
       if (body) {
         proxyReq.write(body);

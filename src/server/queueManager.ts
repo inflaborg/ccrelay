@@ -48,7 +48,7 @@ export class QueueManager {
     if (concurrencyConfig?.enabled) {
       this.defaultQueue = new ConcurrencyManager(concurrencyConfig, this.executor);
       log.info(
-        `Default queue initialized: maxConcurrency=${concurrencyConfig.maxConcurrency}, maxQueueSize=${concurrencyConfig.maxQueueSize ?? "unlimited"}`
+        `Default queue initialized: maxWorkers=${concurrencyConfig.maxWorkers}, maxQueueSize=${concurrencyConfig.maxQueueSize ?? "unlimited"}`
       );
     } else {
       log.info(
@@ -60,17 +60,17 @@ export class QueueManager {
     const routeQueueConfigs = this.config.routeQueues;
     if (routeQueueConfigs && routeQueueConfigs.length > 0) {
       for (const routeConfig of routeQueueConfigs) {
-        const queueName = routeConfig.name ?? routeConfig.pathPattern;
+        const queueName = routeConfig.name ?? routeConfig.pattern;
         const queueConfig = {
           enabled: true,
-          maxConcurrency: routeConfig.maxConcurrency,
+          maxWorkers: routeConfig.maxWorkers,
           maxQueueSize: routeConfig.maxQueueSize,
-          timeout: routeConfig.timeout,
+          requestTimeout: routeConfig.requestTimeout,
         };
         const routeQueue = new ConcurrencyManager(queueConfig, this.executor);
         this.routeQueues.set(queueName, routeQueue);
         log.info(
-          `RouteQueue "${queueName}" initialized: pattern=${routeConfig.pathPattern}, maxConcurrency=${routeConfig.maxConcurrency}, maxQueueSize=${routeConfig.maxQueueSize ?? "unlimited"}`
+          `RouteQueue "${queueName}" initialized: pattern=${routeConfig.pattern}, maxWorkers=${routeConfig.maxWorkers}, maxQueueSize=${routeConfig.maxQueueSize ?? "unlimited"}`
         );
       }
     }
@@ -94,7 +94,7 @@ export class QueueManager {
 
     for (const routeConfig of routeQueueConfigs) {
       if (routeConfig.compiledPattern && routeConfig.compiledPattern.test(path)) {
-        const queueName = routeConfig.name ?? routeConfig.pathPattern;
+        const queueName = routeConfig.name ?? routeConfig.pattern;
         const queue = this.routeQueues.get(queueName);
         if (queue) {
           return { name: queueName, queue };

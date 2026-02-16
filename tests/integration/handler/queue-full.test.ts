@@ -48,9 +48,9 @@ describe("Integration: Queue Full", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 1, // Only 1 worker
+          maxWorkers: 1, // Only 1 worker
           maxQueueSize: 1, // Only 1 queued request
-          timeout: 10000, // 10s timeout
+          requestTimeout: 10, // 10s timeout
         }),
       });
 
@@ -136,9 +136,9 @@ describe("Integration: Queue Full", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2, // 2 workers
+          maxWorkers: 2, // 2 workers
           maxQueueSize: 1, // 1 can queue
-          timeout: 10000,
+          requestTimeout: 10,
         }),
       });
 

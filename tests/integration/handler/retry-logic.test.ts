@@ -35,9 +35,9 @@ describe("Integration: Error Pass-through and Retry", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
+          maxWorkers: 2,
           maxQueueSize: 10,
-          timeout: 10000,
+          requestTimeout: 10,
         }),
       });
 
@@ -67,9 +67,9 @@ describe("Integration: Error Pass-through and Retry", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
+          maxWorkers: 2,
           maxQueueSize: 10,
-          timeout: 10000,
+          requestTimeout: 10,
         }),
       });
 
@@ -98,9 +98,9 @@ describe("Integration: Error Pass-through and Retry", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
+          maxWorkers: 2,
           maxQueueSize: 10,
-          timeout: 10000,
+          requestTimeout: 10,
         }),
       });
 
@@ -133,9 +133,9 @@ describe("Integration: Error Pass-through and Retry", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
+          maxWorkers: 2,
           maxQueueSize: 10,
-          timeout: 10000,
+          requestTimeout: 10,
         }),
       });
 
@@ -168,11 +168,10 @@ describe("Integration: Error Pass-through and Retry", () => {
           baseUrl: "http://127.0.0.1:1", // Port 1 is never used
         }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
+          maxWorkers: 2,
           maxQueueSize: 10,
-          timeout: 5000,
+          requestTimeout: 5,
         }),
-        proxyTimeout: 3,
       });
 
       testServer = new TestServer({ config });
@@ -195,11 +194,10 @@ describe("Integration: Error Pass-through and Retry", () => {
           baseUrl: "http://127.0.0.1:1",
         }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 1, // Only 1 worker
+          maxWorkers: 1, // Only 1 worker
           maxQueueSize: 10,
-          timeout: 2000,
+          requestTimeout: 2,
         }),
-        proxyTimeout: 2,
       });
 
       testServer = new TestServer({ config });
@@ -227,9 +225,9 @@ describe("Integration: Error Pass-through and Retry", () => {
       const workingConfig = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 1,
+          maxWorkers: 1,
           maxQueueSize: 10,
-          timeout: 5000,
+          requestTimeout: 5,
         }),
       });
 
@@ -261,9 +259,9 @@ describe("Integration: Error Pass-through and Retry", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
+          maxWorkers: 2,
           maxQueueSize: 10,
-          timeout: 10000,
+          requestTimeout: 10,
         }),
       });
 
@@ -307,11 +305,10 @@ describe("Integration: Error Pass-through and Retry", () => {
           baseUrl: "http://127.0.0.1:1", // Will fail
         }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
+          maxWorkers: 2,
           maxQueueSize: 10,
-          timeout: 2000,
+          requestTimeout: 2,
         }),
-        proxyTimeout: 2,
       });
 
       testServer = new TestServer({ config });
@@ -341,11 +338,10 @@ describe("Integration: Error Pass-through and Retry", () => {
           baseUrl: "http://127.0.0.1:1",
         }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 3,
+          maxWorkers: 3,
           maxQueueSize: 10,
-          timeout: 2000,
+          requestTimeout: 2,
         }),
-        proxyTimeout: 2,
       });
 
       testServer = new TestServer({ config });

@@ -42,11 +42,10 @@ describe("Integration: Task Timeout and Client Disconnect", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
+          maxWorkers: 2,
           maxQueueSize: 10,
-          timeout: 500, // 500ms queue timeout
+          requestTimeout: 0.5, // 500ms queue timeout
         }),
-        proxyTimeout: 10,
       });
 
       testServer = new TestServer({ config });
@@ -78,11 +77,10 @@ describe("Integration: Task Timeout and Client Disconnect", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 1, // Only 1 worker
+          maxWorkers: 1, // Only 1 worker
           maxQueueSize: 10,
-          timeout: 30000, // Long queue timeout (30 seconds)
+          requestTimeout: 30, // Long queue timeout (30 seconds)
         }),
-        proxyTimeout: 30,
       });
 
       testServer = new TestServer({ config });
@@ -137,11 +135,10 @@ describe("Integration: Task Timeout and Client Disconnect", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 1,
+          maxWorkers: 1,
           maxQueueSize: 10,
-          timeout: 30000,
+          requestTimeout: 30,
         }),
-        proxyTimeout: 30,
       });
 
       testServer = new TestServer({ config });
@@ -209,11 +206,10 @@ describe("Integration: Task Timeout and Client Disconnect", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 3,
+          maxWorkers: 3,
           maxQueueSize: 10,
-          timeout: 30000,
+          requestTimeout: 30,
         }),
-        proxyTimeout: 30,
       });
 
       testServer = new TestServer({ config });
@@ -275,9 +271,9 @@ describe("Integration: Task Timeout and Client Disconnect", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
+          maxWorkers: 2,
           maxQueueSize: 10,
-          timeout: 1000, // 1 second queue timeout
+          requestTimeout: 1, // 1 second queue timeout
         }),
       });
 

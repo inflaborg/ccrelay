@@ -39,8 +39,8 @@ describe("Integration: Timeout Handling", () => {
   describe("IT03-A: Queue Timeout (task times out while WAITING in queue)", () => {
     /**
      * Scenario: Queue Timeout
-     * - maxConcurrency: 1 (only one worker)
-     * - task timeout: 300ms (short)
+     * - maxWorkers: 1 (only one worker)
+     * - task requestTimeout: 0.3ms (short)
      * - first request: takes 10 seconds
      * - second request: should timeout in queue after 300ms
      *
@@ -56,11 +56,10 @@ describe("Integration: Timeout Handling", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 1, // Only 1 worker
+          maxWorkers: 1, // Only 1 worker
           maxQueueSize: 10,
-          timeout: 300, // 300ms queue timeout
+          requestTimeout: 0.3, // 300ms queue timeout
         }),
-        proxyTimeout: 30, // Long proxy timeout (don't trigger execution timeout)
       });
 
       testServer = new TestServer({ config });
@@ -135,11 +134,10 @@ describe("Integration: Timeout Handling", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 1,
+          maxWorkers: 1,
           maxQueueSize: 10,
-          timeout: 300, // 300ms queue timeout
+          requestTimeout: 0.3, // 300ms queue timeout
         }),
-        proxyTimeout: 30,
       });
 
       testServer = new TestServer({ config });
@@ -228,11 +226,10 @@ describe("Integration: Timeout Handling", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
+          maxWorkers: 2,
           maxQueueSize: 10,
-          timeout: 500, // 500ms queue timeout
+          requestTimeout: 0.5, // 500ms queue timeout
         }),
-        proxyTimeout: 10,
       });
 
       testServer = new TestServer({ config });
@@ -265,11 +262,10 @@ describe("Integration: Timeout Handling", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 1,
+          maxWorkers: 1,
           maxQueueSize: 10,
-          timeout: 1000,
+          requestTimeout: 1,
         }),
-        proxyTimeout: 30,
       });
 
       testServer = new TestServer({ config });
@@ -345,11 +341,10 @@ describe("Integration: Timeout Handling", () => {
           baseUrl: "http://127.0.0.1:1", // Invalid port - connection refused
         }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
+          maxWorkers: 2,
           maxQueueSize: 10,
-          timeout: 5000,
+          requestTimeout: 5,
         }),
-        proxyTimeout: 3,
       });
 
       testServer = new TestServer({ config });
