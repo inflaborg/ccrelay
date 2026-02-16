@@ -287,7 +287,10 @@ export class TestServer {
         const errMsg = err instanceof Error ? err.message : String(err);
         if (!clientDisconnected && !res.headersSent && !res.writableEnded) {
           // Distinguish between queue/timeout errors (503) and proxy/network errors (502)
-          const isQueueError = errMsg.includes("Queue is full") || errMsg.includes("timeout");
+          // Queue errors: "Queue is full", "Task timeout after Xms (waiting in queue)"
+          // Proxy errors: "Proxy timeout", "Proxy error: ..."
+          const isQueueError =
+            errMsg.includes("Queue is full") || errMsg.includes("waiting in queue");
           const statusCode = isQueueError ? 503 : 502;
           const code = isQueueError ? "QUEUE_FULL_OR_TIMEOUT" : "PROXY_ERROR";
           res.writeHead(statusCode, { "Content-Type": "application/json" });

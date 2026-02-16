@@ -395,10 +395,11 @@ describe("Integration: Resource Leak Detection", () => {
         )
       );
 
-      // All should have timed out
+      // All should have timed out - either queue timeout (503) or proxy timeout (502)
       for (const result of results) {
         if (result.status === "fulfilled") {
-          expect(result.value.status).toBe(503);
+          // Requests in queue return 503 (queue timeout), requests being processed return 502 (proxy timeout)
+          expect([502, 503]).toContain(result.value.status);
         }
       }
 
