@@ -31,15 +31,15 @@ const ENV_VAR_PATTERN = /\$\{(\w+)\}/g;
 
 // Default config with comments template
 const DEFAULT_CONFIG_YAML = `# CCRelay Configuration
-# 文档: https://github.com/inflaborg/ccrelay#configuration
+# Docs: https://github.com/inflaborg/ccrelay#configuration
 
-# ==================== 服务配置 ====================
+# ==================== Server Configuration ====================
 server:
-  port: 7575                    # 代理服务端口
-  host: "127.0.0.1"             # 绑定地址
-  autoStart: true               # 插件启动时自动启动服务
+  port: 7575                    # Proxy server port
+  host: "127.0.0.1"             # Bind address
+  autoStart: true               # Auto-start server when extension loads
 
-# ==================== 供应商配置 ====================
+# ==================== Provider Configuration ====================
 providers:
   official:
     name: "Claude Official"
@@ -48,73 +48,73 @@ providers:
     providerType: "anthropic"   # anthropic | openai
     enabled: true
 
-  # 示例：自定义供应商
+  # Example: Custom provider
   # custom:
   #   name: "Custom Provider"
   #   baseUrl: "https://api.example.com/anthropic"
   #   mode: "inject"
   #   providerType: "anthropic"
-  #   apiKey: "\${API_KEY}"      # 支持环境变量
+  #   apiKey: "\${API_KEY}"      # Supports environment variables
   #   authHeader: "authorization"
   #   modelMap:
   #     "claude-*": "custom-model"
   #   enabled: true
 
-# 默认供应商 ID
+# Default provider ID
 defaultProvider: "official"
 
-# ==================== 路由配置 ====================
+# ==================== Routing Configuration ====================
 routing:
-  # 代理路由: 转发到当前供应商
+  # Proxy routes: Forward to current provider
   proxy:
     - "/v1/messages"
     - "/messages"
 
-  # 直通路由: 始终发往官方 API
+  # Passthrough routes: Always go to official API
   passthrough:
     - "/v1/users/*"
     - "/v1/organizations/*"
 
-  # 阻断路由 (inject 模式): 返回自定义响应
+  # Block routes (inject mode): Return custom response
   block:
     - path: "/api/event_logging/*"
       response: ""
       code: 200
 
-  # OpenAI 格式阻断路由
+  # OpenAI format block routes
   openaiBlock:
     - path: "/v1/messages/count_tokens"
       response: '{"input_tokens": 0}'
       code: 200
 
-# ==================== 并发控制 ====================
+# ==================== Concurrency Control ====================
 concurrency:
-  enabled: true                 # 启用并发队列
-  maxWorkers: 3                 # 最大并发数
-  maxQueueSize: 100             # 最大队列长度 (0=无限制)
+  enabled: true                 # Enable concurrency queue
+  maxWorkers: 3                 # Maximum concurrent workers
+  maxQueueSize: 100             # Maximum queue size (0=unlimited)
 
-  # 请求超时: 排队等待的最长时间 (秒)
-  # 超过此时间的请求将返回 503
-  # 0 或不设置 = 无限制
+  # Request timeout: Maximum wait time in queue (seconds)
+  # Requests exceeding this will return 503
+  # 0 or not set = unlimited
   requestTimeout: 60
 
-  # 按路由的独立队列配置
+  # Per-route queue configuration
   routes:
     - pattern: "/v1/messages/count_tokens"
       name: "count_tokens"
       maxWorkers: 30
       maxQueueSize: 1000
 
-# ==================== 日志存储 ====================
+# ==================== Logging Storage ====================
 logging:
-  enabled: false                # 启用请求日志存储
+  enabled: false                # Enable request log storage
 
   database:
     type: "sqlite"              # sqlite | postgres
-    # SQLite 配置 (默认)
-    path: ""                    # 空 = ~/.ccrelay/logs.db
+    # SQLite configuration (default)
+    path: ""                    # Empty = ~/.ccrelay/logs.db
 
-    # PostgreSQL 配置
+    # PostgreSQL configuration
     # type: "postgres"
     # host: "localhost"
     # port: 5432
