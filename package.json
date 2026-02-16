@@ -3,7 +3,7 @@
   "displayName": "CCRelay",
   "icon": "assets/icon-128.png",
   "description": "VSCode extension with built-in API proxy server - switch between AI providers seamlessly",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "publisher": "inflab",
   "license": "MIT",
   "repository": {
@@ -123,6 +123,7 @@
   "dependencies": {
     "js-yaml": "^4.1.0",
     "pg": "^8.18.0",
+    "ws": "^8.18.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -132,6 +133,7 @@
     "@types/pg": "^8.16.0",
     "@types/supertest": "^6.0.3",
     "@types/vscode": "^1.80.0",
+    "@types/ws": "^8.5.13",
     "@typescript-eslint/eslint-plugin": "^8.54.0",
     "@typescript-eslint/parser": "^8.54.0",
     "@vitest/coverage-v8": "^4.0.18",

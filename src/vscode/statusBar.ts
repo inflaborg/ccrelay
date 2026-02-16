@@ -22,12 +22,22 @@ export class StatusBarManager implements vscode.Disposable {
 
     // Subscribe to role changes from server
     this.server.onRoleChanged(this.handleRoleChange);
+
+    // Subscribe to provider changes from server (for follower sync)
+    this.server.onProviderChanged(this.handleProviderChange);
   }
 
   /**
    * Handle role change events from server
    */
   private handleRoleChange = (_info: RoleChangeInfo): void => {
+    this.update();
+  };
+
+  /**
+   * Handle provider change events from server (synced from leader)
+   */
+  private handleProviderChange = (_providerId: string): void => {
     this.update();
   };
 
@@ -305,20 +315,22 @@ export class StatusBarManager implements vscode.Disposable {
     if (selected) {
       const provider = providers.find(p => p.id === selected.description);
       if (provider) {
-        const success = await router.switchProvider(provider.id);
-        if (success) {
+        const result = await this.server.switchProvider(provider.id);
+        if (result.success) {
           vscode.window.showInformationMessage(`Switched to ${provider.name}`);
-          this.update();
         } else {
-          vscode.window.showErrorMessage(`Failed to switch to ${provider.name}`);
+          vscode.window.showErrorMessage(
+            `Failed to switch to ${provider.name}: ${result.error || "Unknown error"}`
+          );
         }
       }
     }
   }
 
   dispose(): void {
-    // Unsubscribe from role changes
+    // Unsubscribe from events
     this.server.offRoleChanged(this.handleRoleChange);
+    this.server.offProviderChanged(this.handleProviderChange);
     this.statusBarItem.dispose();
   }
 }

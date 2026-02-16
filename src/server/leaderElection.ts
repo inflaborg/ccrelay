@@ -114,13 +114,13 @@ export class LeaderElection {
         {
           hostname: this.host,
           port: this.port,
-          path: "/ccrelay/status",
+          path: "/ccrelay/api/status",
           method: "GET",
           timeout: PROBE_TIMEOUT_MS,
         },
         res => {
           const duration = Date.now() - probeStart;
-          // Any response from /ccrelay/status means CCRelay is running
+          // Any response from /ccrelay/api/status means CCRelay is running
           if (res.statusCode === 200) {
             this.log.info(
               `[LeaderElection] Found existing CCRelay server at ${this.host}:${this.port} in ${duration}ms`
@@ -499,6 +499,7 @@ export class LeaderElection {
 
   /**
    * Check if leader is still alive, trigger re-election if needed
+   * Also checks for provider changes from leader
    */
   private async checkLeaderAndReelectIfNeeded(): Promise<void> {
     // Skip if we're not a follower anymore

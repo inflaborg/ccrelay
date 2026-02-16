@@ -6,9 +6,13 @@ import { Provider } from "../types";
 import { ConfigManager } from "../config";
 import { minimatch } from "../utils/helpers";
 
+// Callback type for provider changes
+type ProviderChangeCallback = (providerId: string) => void;
+
 export class Router {
   private config: ConfigManager;
   private currentProviderId: string;
+  private providerChangeCallbacks: Set<ProviderChangeCallback> = new Set();
 
   constructor(config: ConfigManager) {
     this.config = config;
@@ -17,6 +21,16 @@ export class Router {
 
   getCurrentProviderId(): string {
     return this.currentProviderId;
+  }
+
+  /**
+   * Set current provider ID without persisting (for follower sync from leader)
+   */
+  setCurrentProviderId(id: string): void {
+    if (this.config.getProvider(id) && this.currentProviderId !== id) {
+      this.currentProviderId = id;
+      this.notifyProviderChange(id);
+    }
   }
 
   getCurrentProvider(): Provider | undefined {
@@ -32,8 +46,38 @@ export class Router {
       return false;
     }
     await this.config.setCurrentProviderId(id);
-    this.currentProviderId = id;
+    if (this.currentProviderId !== id) {
+      this.currentProviderId = id;
+      this.notifyProviderChange(id);
+    }
     return true;
+  }
+
+  /**
+   * Register a callback for provider changes
+   */
+  onProviderChanged(callback: ProviderChangeCallback): void {
+    this.providerChangeCallbacks.add(callback);
+  }
+
+  /**
+   * Unregister a provider change callback
+   */
+  offProviderChanged(callback: ProviderChangeCallback): void {
+    this.providerChangeCallbacks.delete(callback);
+  }
+
+  /**
+   * Notify all registered callbacks of provider change
+   */
+  private notifyProviderChange(providerId: string): void {
+    for (const callback of this.providerChangeCallbacks) {
+      try {
+        callback(providerId);
+      } catch {
+        // Ignore callback errors
+      }
+    }
   }
 
   /**
