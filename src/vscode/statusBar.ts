@@ -23,8 +23,10 @@ export class StatusBarManager implements vscode.Disposable {
     // Subscribe to role changes from server
     this.server.onRoleChanged(this.handleRoleChange);
 
-    // Subscribe to provider changes from server (for follower sync)
-    this.server.onProviderChanged(this.handleProviderChange);
+    // Subscribe to provider changes from Router (single source of truth)
+    // Router is updated by WebSocket client for all instances (Leader + Followers)
+    const router = this.server.getRouter();
+    router.onProviderChanged(this.handleProviderChange);
   }
 
   /**
@@ -35,7 +37,7 @@ export class StatusBarManager implements vscode.Disposable {
   };
 
   /**
-   * Handle provider change events from server (synced from leader)
+   * Handle provider change events from Router
    */
   private handleProviderChange = (_providerId: string): void => {
     this.update();
@@ -330,7 +332,8 @@ export class StatusBarManager implements vscode.Disposable {
   dispose(): void {
     // Unsubscribe from events
     this.server.offRoleChanged(this.handleRoleChange);
-    this.server.offProviderChanged(this.handleProviderChange);
+    const router = this.server.getRouter();
+    router.offProviderChanged(this.handleProviderChange);
     this.statusBarItem.dispose();
   }
 }

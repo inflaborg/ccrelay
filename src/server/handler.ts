@@ -60,9 +60,6 @@ export class ProxyServer {
   // Role change callbacks for external listeners (e.g., StatusBarManager)
   private roleChangeCallbacks: Set<(info: RoleChangeInfo) => void> = new Set();
 
-  // Provider change callbacks for UI updates
-  private providerChangeCallbacks: Set<(providerId: string) => void> = new Set();
-
   // WebSocket for real-time communication
   private wsBroadcaster: WsBroadcaster | null = null;
   private wsClient: WsFollowerClient | null = null;
@@ -84,8 +81,8 @@ export class ProxyServer {
     this.queueManager = new QueueManager(config);
 
     // Listen to Router's provider changes - this is the single source of truth
-    // - For Leader: broadcasts to Followers via WebSocket + notifies local UI
-    // - For Follower: WebSocket client updates Router, which triggers UI update
+    // - For Leader: broadcasts to Followers via WebSocket
+    // - For Follower: no action (received broadcast already updated Router)
     this.router.onProviderChanged((providerId: string) => {
       this.handleProviderChangeFromRouter(providerId);
     });
@@ -179,6 +176,7 @@ export class ProxyServer {
 
   /**
    * Start WebSocket server (Leader only)
+   * Also creates a local WebSocket client that connects to itself for unified notification flow
    */
   private startWsServer(): void {
     if (this.wsBroadcaster) {
@@ -189,7 +187,7 @@ export class ProxyServer {
       this.wsBroadcaster = new WsBroadcaster(this.instanceId);
       this.wsBroadcaster.attach(this.server);
 
-      // Set callback for handling switch provider requests from Followers
+      // Set callback for handling switch provider requests from ALL instances (including Leader)
       this.wsBroadcaster.setSwitchProviderCallback(async (providerId: string) => {
         const success = await this.router.switchProvider(providerId);
         const provider = this.config.getProvider(providerId);
@@ -202,7 +200,37 @@ export class ProxyServer {
       });
 
       this.log.info("[Server] WebSocket server started");
+
+      // Create local WebSocket client that connects to itself
+      // This ensures Leader receives notifications through the same channel as Followers
+      const localWsUrl = `http://${this.config.host}:${this.config.port}`;
+      this.connectToLocalServer(localWsUrl);
     }
+  }
+
+  /**
+   * Connect to local WebSocket server (Leader only)
+   * This ensures Leader receives provider_changed messages like Followers
+   */
+  private connectToLocalServer(leaderUrl: string): void {
+    this.disconnectFromLeader(); // Clear any existing connection
+
+    this.wsClient = new WsFollowerClient(leaderUrl);
+    this.wsClient.setCallbacks({
+      onProviderChange: (providerId: string, _providerName: string) => {
+        // Update local Router - UI will be updated via Router's callback
+        this.router.setCurrentProviderId(providerId);
+      },
+      onServerStopping: () => {
+        this.log.info("[Server] Local WebSocket connection closing");
+        this.disconnectFromLeader();
+      },
+      onConnectionStateChange: state => {
+        this.log.info(`[Server] Local WebSocket state: ${state}`);
+      },
+    });
+    this.wsClient.connect();
+    this.log.info(`[Server] Connected to local WebSocket at ${leaderUrl}`);
   }
 
   /**
@@ -253,20 +281,17 @@ export class ProxyServer {
   }
 
   /**
-   * Handle provider change from Router (single source of truth)
-   * - For Leader: Broadcast to Followers via WebSocket + notify local UI
-   * - For Follower: Just notify local UI (change came from WebSocket)
+   * Handle provider change from Router
+   * - Leader: Broadcast to ALL instances (including self via local WS client)
+   * - Follower: No action (this shouldn't happen for followers)
    */
   private handleProviderChangeFromRouter(providerId: string): void {
     const provider = this.config.getProvider(providerId);
 
-    // If we're the leader, broadcast to all connected Followers
-    if (this.role === "leader" && this.wsBroadcaster) {
+    // Broadcast to all connected clients (including Leader's local client)
+    if (this.wsBroadcaster) {
       this.wsBroadcaster.broadcastProviderChange(providerId, provider?.name || "");
     }
-
-    // Always notify local UI listeners (StatusBarManager)
-    this.notifyProviderChangeListeners(providerId);
   }
 
   /**
@@ -297,54 +322,19 @@ export class ProxyServer {
   }
 
   /**
-   * Register a callback for provider changes (from leader sync)
-   */
-  onProviderChanged(callback: (providerId: string) => void): void {
-    this.providerChangeCallbacks.add(callback);
-  }
-
-  /**
-   * Unregister a provider change callback
-   */
-  offProviderChanged(callback: (providerId: string) => void): void {
-    this.providerChangeCallbacks.delete(callback);
-  }
-
-  /**
-   * Notify all registered provider change listeners
-   */
-  private notifyProviderChangeListeners(providerId: string): void {
-    for (const callback of this.providerChangeCallbacks) {
-      try {
-        callback(providerId);
-      } catch (err) {
-        this.log.error("[Server] Error in provider change callback", err);
-      }
-    }
-  }
-
-  /**
-   * Switch provider - unified method for both Leader and Follower
-   * - Leader: Switches directly and broadcasts to Followers
-   * - Follower: Sends request to Leader via WebSocket
+   * Switch provider - unified method for all instances
+   * All requests go through WebSocket for consistent notification flow
    */
   async switchProvider(providerId: string): Promise<{ success: boolean; error?: string }> {
-    // If we're the leader or standalone, switch directly
-    if (this.role === "leader" || this.role === "standalone") {
-      const success = await this.router.switchProvider(providerId);
-      return {
-        success,
-        error: success ? undefined : `Provider "${providerId}" not found`,
-      };
-    }
-
-    // If we're a follower, send request to Leader via WebSocket
-    if (this.role === "follower" && this.wsClient) {
+    // All instances (Leader and Follower) send request via WebSocket
+    // Leader's local WS client connects to its own server
+    // Follower's WS client connects to Leader's server
+    if (this.wsClient) {
       const result = await this.wsClient.switchProvider(providerId);
       return result;
     }
 
-    return { success: false, error: "No connection to Leader" };
+    return { success: false, error: "No WebSocket connection available" };
   }
 
   /**
