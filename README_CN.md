@@ -111,29 +111,24 @@ claude
 
 ### 2. 配置提供商
 
-在 VSCode 设置中添加提供商配置：
+CCRelay 使用 YAML 配置文件（默认为 `~/.ccrelay/config.yaml`）。首次启动时会自动创建默认配置文件。
 
-```json
-{
-  "ccrelay.provider.list": {
-    "official": {
-      "name": "Claude Official",
-      "baseUrl": "https://api.anthropic.com",
-      "mode": "passthrough"
-    },
-    "glm": {
-      "name": "Z.AI-GLM-5",
-      "baseUrl": "https://api.z.ai/api/anthropic",
-      "mode": "inject",
-      "apiKey": "<YOUR-API-KEY>",
-      "modelMap": {
-        "claude-opus-*": "glm-5",
-        "claude-sonnet-*": "glm-5",
-        "claude-haiku-*": "glm-4.7"
-      }
-    }
-  }
-}
+编辑配置文件添加你的提供商：
+
+```yaml
+providers:
+  glm:
+    name: "Z.AI-GLM-5"
+    baseUrl: "https://api.z.ai/api/anthropic"
+    mode: "inject"
+    apiKey: "${GLM_API_KEY}"  # 支持环境变量
+    modelMap:
+      "claude-opus-*": "glm-5"
+      "claude-sonnet-*": "glm-5"
+      "claude-haiku-*": "glm-4.7"
+    enabled: true
+
+defaultProvider: "glm"
 ```
 
 ### 3. 切换提供商
@@ -148,9 +143,10 @@ claude
 ### 基础设置
 
 1. 安装并启用扩展
-2. 在 VSCode 设置中配置提供商
-3. 服务器将自动启动（可通过 `ccrelay.server.autoStart` 配置）
-4. 点击状态栏切换提供商或访问菜单
+2. 配置文件（`~/.ccrelay/config.yaml`）会自动创建
+3. 编辑配置文件添加你的提供商
+4. 服务器将自动启动（可通过配置中的 `server.autoStart` 设置）
+5. 点击状态栏切换提供商或访问菜单
 
 ### 多实例模式
 
@@ -247,28 +243,30 @@ CCRelay 内置 Web UI 管理界面，提供：
 
 ## 配置
 
+CCRelay 使用 YAML 配置文件（默认为 `~/.ccrelay/config.yaml`）。首次启动时会自动创建默认配置文件。
+
 ### VSCode 设置
 
-#### 服务器设置
+| 设置 | 默认值 | 描述 |
+|------|--------|------|
+| `ccrelay.configPath` | `~/.ccrelay/config.yaml` | YAML 配置文件路径 |
+
+### YAML 配置文件
+
+#### 服务器配置
 
 | 设置 | 默认值 | 描述 |
 |------|--------|------|
-| `ccrelay.server.port` | `7575` | 代理服务器端口 |
-| `ccrelay.server.host` | `127.0.0.1` | 代理服务器主机 |
-| `ccrelay.server.autoStart` | `true` | VSCode 启动时自动启动服务器 |
+| `server.port` | `7575` | 代理服务器端口 |
+| `server.host` | `127.0.0.1` | 绑定地址 |
+| `server.autoStart` | `true` | 扩展加载时自动启动服务器 |
 
-#### 配置文件设置
-
-| 设置 | 默认值 | 描述 |
-|------|--------|------|
-| `ccrelay.config.useFile` | `false` | 从 `~/.ccrelay/config.yaml` 读取配置 |
-
-#### 提供商设置
+#### 提供商配置
 
 | 设置 | 默认值 | 描述 |
 |------|--------|------|
-| `ccrelay.provider.default` | `official` | 默认提供商 ID |
-| `ccrelay.provider.list` | `{...}` | 提供商配置 |
+| `defaultProvider` | `official` | 默认提供商 ID |
+| `providers` | `{...}` | 提供商配置 |
 
 每个提供商支持：
 - `name` - 显示名称
@@ -282,175 +280,147 @@ CCRelay 内置 Web UI 管理界面，提供：
 - `headers` - 自定义请求头
 - `enabled` - 是否启用（默认：`true`）
 
-#### 路由设置
+#### 路由配置
 
 | 设置 | 默认值 | 描述 |
 |------|--------|------|
-| `ccrelay.route.patterns` | `["/v1/messages", "/messages"]` | 路由到当前提供商的路径 |
-| `ccrelay.route.passthroughPatterns` | `["/v1/users/*", "/v1/organizations/*"]` | 始终发送到官方 API 的路径 |
-| `ccrelay.route.blockPatterns` | `[{path: "/api/event_logging/*", response: "..."}]` | inject 模式下返回自定义响应的路径 |
-| `ccrelay.route.openaiBlockPatterns` | `[]` | OpenAI 提供商的阻塞路径 |
+| `routing.proxy` | `["/v1/messages", "/messages"]` | 路由到当前提供商的路径 |
+| `routing.passthrough` | `["/v1/users/*", "/v1/organizations/*"]` | 始终发送到官方 API 的路径 |
+| `routing.block` | `[{path: "/api/event_logging/*", ...}]` | inject 模式下返回自定义响应的路径 |
+| `routing.openaiBlock` | `[{path: "/v1/messages/count_tokens", ...}]` | OpenAI 提供商的阻塞路径 |
 
-#### 并发控制设置
-
-| 设置 | 默认值 | 描述 |
-|------|--------|------|
-| `ccrelay.concurrency.enabled` | `false` | 启用并发控制 |
-| `ccrelay.concurrency.maxConcurrency` | `5` | 最大并发请求数 |
-| `ccrelay.concurrency.maxQueueSize` | - | 最大排队请求数（0 或未设置 = 无限制） |
-| `ccrelay.concurrency.timeout` | - | 请求超时时间（毫秒） |
-
-#### 日志设置
+#### 并发控制
 
 | 设置 | 默认值 | 描述 |
 |------|--------|------|
-| `ccrelay.log.enableStorage` | `false` | 启用请求/响应日志存储到数据库 |
+| `concurrency.enabled` | `true` | 启用并发队列 |
+| `concurrency.maxWorkers` | `3` | 最大并发工作数 |
+| `concurrency.maxQueueSize` | `100` | 最大队列大小（0 = 无限制） |
+| `concurrency.requestTimeout` | `60` | 队列中请求超时时间（秒，0 = 无限制） |
+| `concurrency.routes` | `[]` | 按路由配置队列 |
 
-#### 数据库设置
-
-| 设置 | 默认值 | 描述 |
-|------|--------|------|
-| `ccrelay.database.type` | `sqlite` | 数据库类型（`sqlite` 或 `postgres`） |
-| `ccrelay.database.sqlitePath` | `""` | SQLite 数据库文件路径（默认：`~/.ccrelay/logs.db`） |
-| `ccrelay.database.postgresHost` | `localhost` | PostgreSQL 服务器主机 |
-| `ccrelay.database.postgresPort` | `5432` | PostgreSQL 服务器端口 |
-| `ccrelay.database.postgresDatabase` | `ccrelay` | PostgreSQL 数据库名 |
-| `ccrelay.database.postgresUser` | `""` | PostgreSQL 用户名 |
-| `ccrelay.database.postgresPassword` | `""` | PostgreSQL 密码（支持 `${ENV_VAR}`） |
-| `ccrelay.database.postgresSsl` | `false` | 启用 SSL 连接 |
-
-#### UI 设置
+#### 日志存储
 
 | 设置 | 默认值 | 描述 |
 |------|--------|------|
-| `ccrelay.ui.statusBarPosition` | `right` | 状态栏位置（`left` 或 `right`） |
-| `ccrelay.ui.statusBarPriority` | `100` | 状态栏优先级 |
+| `logging.enabled` | `false` | 启用请求日志存储 |
+| `logging.database.type` | `sqlite` | 数据库类型（`sqlite` 或 `postgres`） |
+
+**SQLite 配置：**
+| 设置 | 默认值 | 描述 |
+|------|--------|------|
+| `logging.database.path` | `""` | 数据库文件路径（空 = `~/.ccrelay/logs.db`） |
+
+**PostgreSQL 配置：**
+| 设置 | 默认值 | 描述 |
+|------|--------|------|
+| `logging.database.host` | `localhost` | 服务器主机 |
+| `logging.database.port` | `5432` | 服务器端口 |
+| `logging.database.name` | `ccrelay` | 数据库名 |
+| `logging.database.user` | `""` | 用户名 |
+| `logging.database.password` | `""` | 密码（支持 `${ENV_VAR}`） |
+| `logging.database.ssl` | `false` | 启用 SSL 连接 |
 
 ### 完整配置示例
 
-#### VSCode settings.json
-
-```json
-{
-  "ccrelay.server.port": 7575,
-  "ccrelay.server.autoStart": true,
-
-  "ccrelay.route.blockPatterns": [
-    {
-      "path": "/api/event_logging/*",
-      "response": "",
-      "responseCode": 200
-    }
-  ],
-  "ccrelay.route.passthroughPatterns": [
-    "/v1/users/*",
-    "/v1/organizations/*"
-  ],
-  "ccrelay.route.patterns": [
-    "/v1/messages",
-    "/messages"
-  ],
-  "ccrelay.route.openaiBlockPatterns": [
-    {
-      "path": "/v1/messages/count_tokens",
-      "response": "{\"input_tokens\": 0}",
-      "responseCode": 200
-    }
-  ],
-
-  "ccrelay.concurrency.enabled": true,
-  "ccrelay.concurrency.maxConcurrency": 3,
-
-  "ccrelay.log.enableStorage": true,
-  "ccrelay.database.type": "sqlite",
-
-  "ccrelay.provider.list": {
-    "official": {
-      "name": "Claude Official",
-      "baseUrl": "https://api.anthropic.com",
-      "mode": "passthrough"
-    },
-    "glm": {
-      "name": "Z.AI-GLM-5",
-      "baseUrl": "https://api.z.ai/api/anthropic",
-      "mode": "inject",
-      "authHeader": "authorization",
-      "apiKey": "<YOUR-API-KEY>",
-      "modelMap": {
-        "claude-opus-*": "glm-5",
-        "claude-sonnet-*": "glm-5",
-        "claude-haiku-*": "glm-4.7"
-      }
-    },
-    "gemini": {
-      "name": "Gemini",
-      "baseUrl": "https://generativelanguage.googleapis.com/v1beta/openai",
-      "providerType": "openai",
-      "mode": "inject",
-      "authHeader": "authorization",
-      "apiKey": "<YOUR-API-KEY>",
-      "modelMap": {
-        "claude-*": "gemini-3-pro-preview"
-      }
-    }
-  }
-}
-```
-
-#### YAML 配置文件（`~/.ccrelay/config.yaml`）
-
-启用方式：设置 `ccrelay.config.useFile: true`
-
 ```yaml
+# CCRelay 配置文件
+# 文档: https://github.com/inflaborg/ccrelay#configuration
+
+# ==================== 服务器配置 ====================
 server:
-  port: 7575
-  host: 127.0.0.1
+  port: 7575                    # 代理服务器端口
+  host: "127.0.0.1"             # 绑定地址
+  autoStart: true               # 扩展加载时自动启动服务器
 
-defaultProvider: official
-
+# ==================== 提供商配置 ====================
 providers:
   official:
-    name: Claude Official
-    baseUrl: https://api.anthropic.com
-    mode: passthrough
+    name: "Claude Official"
+    baseUrl: "https://api.anthropic.com"
+    mode: "passthrough"         # passthrough | inject
+    providerType: "anthropic"   # anthropic | openai
+    enabled: true
 
   glm:
-    name: Z.AI-GLM-5
-    base_url: https://api.z.ai/api/anthropic
-    mode: inject
-    api_key: ${GLM_API_KEY}
-    auth_header: authorization
-    model_map:
+    name: "Z.AI-GLM-5"
+    baseUrl: "https://api.z.ai/api/anthropic"
+    mode: "inject"
+    apiKey: "${GLM_API_KEY}"    # 支持环境变量
+    authHeader: "authorization"
+    modelMap:
       "claude-opus-*": "glm-5"
+      "claude-sonnet-*": "glm-5"
       "claude-haiku-*": "glm-4.7"
+    enabled: true
 
   gemini:
-    name: Gemini
-    base_url: https://generativelanguage.googleapis.com/v1beta/openai
-    provider_type: openai
-    mode: inject
-    api_key: ${GEMINI_API_KEY}
-    model_map:
-      "claude-*": "gemini-3-pro-preview"
+    name: "Gemini"
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai"
+    providerType: "openai"
+    mode: "inject"
+    apiKey: "${GEMINI_API_KEY}"
+    modelMap:
+      "claude-*": "gemini-2.5-pro"
+    enabled: true
 
-routePatterns:
-  - /v1/messages
-  - /messages
+# 默认提供商 ID
+defaultProvider: "official"
 
-passthroughPatterns:
-  - /v1/users/*
-  - /v1/organizations/*
+# ==================== 路由配置 ====================
+routing:
+  # 代理路由：转发到当前提供商
+  proxy:
+    - "/v1/messages"
+    - "/messages"
 
-blockPatterns:
-  - path: /api/event_logging/*
-    response: '{"ok": true}'
-    responseCode: 200
+  # 直通路由：始终发送到官方 API
+  passthrough:
+    - "/v1/users/*"
+    - "/v1/organizations/*"
 
+  # 阻塞路由（inject 模式）：返回自定义响应
+  block:
+    - path: "/api/event_logging/*"
+      response: ""
+      code: 200
+
+  # OpenAI 格式阻塞路由
+  openaiBlock:
+    - path: "/v1/messages/count_tokens"
+      response: '{"input_tokens": 0}'
+      code: 200
+
+# ==================== 并发控制 ====================
 concurrency:
-  enabled: true
-  maxConcurrency: 3
+  enabled: true                 # 启用并发队列
+  maxWorkers: 3                 # 最大并发工作数
+  maxQueueSize: 100             # 最大队列大小（0=无限制）
+  requestTimeout: 60            # 队列中请求超时时间（秒）
 
-enableLogStorage: true
+  # 按路由配置队列
+  routes:
+    - pattern: "/v1/messages/count_tokens"
+      name: "count_tokens"
+      maxWorkers: 30
+      maxQueueSize: 1000
+
+# ==================== 日志存储 ====================
+logging:
+  enabled: true                 # 启用请求日志存储
+
+  database:
+    type: "sqlite"              # sqlite | postgres
+    path: ""                    # 空 = ~/.ccrelay/logs.db
+
+    # PostgreSQL 配置
+    # type: "postgres"
+    # host: "localhost"
+    # port: 5432
+    # name: "ccrelay"
+    # user: ""
+    # password: "${POSTGRES_PASSWORD}"
+    # ssl: false
 ```
 
 > **注意**: YAML 配置支持 `camelCase` 和 `snake_case` 两种键名格式。
@@ -548,8 +518,7 @@ ccrelay/
 
 | 文件 | 位置 | 说明 |
 |------|------|------|
-| VSCode 设置 | VSCode `settings.json` | 主要配置方式（默认） |
-| YAML 配置 | `~/.ccrelay/config.yaml` | 可选配置（需设置 `ccrelay.config.useFile: true`） |
+| YAML 配置 | `~/.ccrelay/config.yaml` | 主配置文件（自动创建） |
 | 日志数据库 | `~/.ccrelay/logs.db` | 请求/响应日志（启用后） |
 
 ---

@@ -111,29 +111,24 @@ claude
 
 ### 2. Configure providers
 
-Add provider configuration in VSCode settings:
+CCRelay uses a YAML configuration file (`~/.ccrelay/config.yaml` by default). The file is auto-created with defaults on first launch.
 
-```json
-{
-  "ccrelay.provider.list": {
-    "official": {
-      "name": "Claude Official",
-      "baseUrl": "https://api.anthropic.com",
-      "mode": "passthrough"
-    },
-    "glm": {
-      "name": "Z.AI-GLM-5",
-      "baseUrl": "https://api.z.ai/api/anthropic",
-      "mode": "inject",
-      "apiKey": "<YOUR-API-KEY>",
-      "modelMap": {
-        "claude-opus-*": "glm-5",
-        "claude-sonnet-*": "glm-5",
-        "claude-haiku-*": "glm-4.7"
-      }
-    }
-  }
-}
+Edit the config file to add your providers:
+
+```yaml
+providers:
+  glm:
+    name: "Z.AI-GLM-5"
+    baseUrl: "https://api.z.ai/api/anthropic"
+    mode: "inject"
+    apiKey: "${GLM_API_KEY}"  # Supports environment variables
+    modelMap:
+      "claude-opus-*": "glm-5"
+      "claude-sonnet-*": "glm-5"
+      "claude-haiku-*": "glm-4.7"
+    enabled: true
+
+defaultProvider: "glm"
 ```
 
 ### 3. Switch providers
@@ -148,9 +143,10 @@ Add provider configuration in VSCode settings:
 ### Basic Setup
 
 1. Install and enable the extension
-2. Configure providers in VSCode settings
-3. The server will auto-start (configurable via `ccrelay.server.autoStart`)
-4. Click the status bar to switch providers or access the menu
+2. The config file (`~/.ccrelay/config.yaml`) is auto-created with defaults
+3. Edit the config file to add your providers
+4. The server will auto-start (configurable via `server.autoStart` in config)
+5. Click the status bar to switch providers or access the menu
 
 ### Multi-Instance Mode
 
@@ -247,28 +243,30 @@ Access methods:
 
 ## Configuration
 
+CCRelay uses a YAML configuration file (`~/.ccrelay/config.yaml` by default). The file is auto-created with defaults on first launch.
+
 ### VSCode Settings
 
-#### Server Settings
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `ccrelay.configPath` | `~/.ccrelay/config.yaml` | Path to the YAML configuration file |
+
+### YAML Configuration File
+
+#### Server Configuration
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `ccrelay.server.port` | `7575` | Proxy server port |
-| `ccrelay.server.host` | `127.0.0.1` | Proxy server host |
-| `ccrelay.server.autoStart` | `true` | Automatically start server on VSCode startup |
+| `server.port` | `7575` | Proxy server port |
+| `server.host` | `127.0.0.1` | Bind address |
+| `server.autoStart` | `true` | Auto-start server when extension loads |
 
-#### Config File Settings
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `ccrelay.config.useFile` | `false` | Read configuration from `~/.ccrelay/config.yaml` |
-
-#### Provider Settings
+#### Provider Configuration
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `ccrelay.provider.default` | `official` | Default provider ID |
-| `ccrelay.provider.list` | `{...}` | Provider configurations |
+| `defaultProvider` | `official` | Default provider ID |
+| `providers` | `{...}` | Provider configurations |
 
 Each provider supports:
 - `name` - Display name
@@ -282,175 +280,147 @@ Each provider supports:
 - `headers` - Custom request headers
 - `enabled` - Whether enabled (default: `true`)
 
-#### Routing Settings
+#### Routing Configuration
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `ccrelay.route.patterns` | `["/v1/messages", "/messages"]` | Paths routed to current provider |
-| `ccrelay.route.passthroughPatterns` | `["/v1/users/*", "/v1/organizations/*"]` | Paths always going to official API |
-| `ccrelay.route.blockPatterns` | `[{path: "/api/event_logging/*", response: "..."}]` | Paths returning custom response in inject mode |
-| `ccrelay.route.openaiBlockPatterns` | `[]` | Block patterns for OpenAI providers |
+| `routing.proxy` | `["/v1/messages", "/messages"]` | Paths routed to current provider |
+| `routing.passthrough` | `["/v1/users/*", "/v1/organizations/*"]` | Paths always going to official API |
+| `routing.block` | `[{path: "/api/event_logging/*", ...}]` | Paths returning custom response in inject mode |
+| `routing.openaiBlock` | `[{path: "/v1/messages/count_tokens", ...}]` | Block patterns for OpenAI providers |
 
-#### Concurrency Settings
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `ccrelay.concurrency.enabled` | `false` | Enable concurrency control |
-| `ccrelay.concurrency.maxConcurrency` | `5` | Maximum concurrent requests |
-| `ccrelay.concurrency.maxQueueSize` | - | Maximum queued requests (0 or unset = unlimited) |
-| `ccrelay.concurrency.timeout` | - | Request timeout in milliseconds |
-
-#### Logging Settings
+#### Concurrency Control
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `ccrelay.log.enableStorage` | `false` | Enable request/response logging to database |
+| `concurrency.enabled` | `true` | Enable concurrency queue |
+| `concurrency.maxWorkers` | `3` | Maximum concurrent workers |
+| `concurrency.maxQueueSize` | `100` | Maximum queue size (0 = unlimited) |
+| `concurrency.requestTimeout` | `60` | Request timeout in queue (seconds, 0 = unlimited) |
+| `concurrency.routes` | `[]` | Per-route queue configuration |
 
-#### Database Settings
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `ccrelay.database.type` | `sqlite` | Database type (`sqlite` or `postgres`) |
-| `ccrelay.database.sqlitePath` | `""` | SQLite database file path (default: `~/.ccrelay/logs.db`) |
-| `ccrelay.database.postgresHost` | `localhost` | PostgreSQL server host |
-| `ccrelay.database.postgresPort` | `5432` | PostgreSQL server port |
-| `ccrelay.database.postgresDatabase` | `ccrelay` | PostgreSQL database name |
-| `ccrelay.database.postgresUser` | `""` | PostgreSQL username |
-| `ccrelay.database.postgresPassword` | `""` | PostgreSQL password (supports `${ENV_VAR}`) |
-| `ccrelay.database.postgresSsl` | `false` | Enable SSL connection |
-
-#### UI Settings
+#### Logging Storage
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `ccrelay.ui.statusBarPosition` | `right` | Status bar position (`left` or `right`) |
-| `ccrelay.ui.statusBarPriority` | `100` | Status bar priority |
+| `logging.enabled` | `false` | Enable request log storage |
+| `logging.database.type` | `sqlite` | Database type (`sqlite` or `postgres`) |
+
+**SQLite Configuration:**
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `logging.database.path` | `""` | Database file path (empty = `~/.ccrelay/logs.db`) |
+
+**PostgreSQL Configuration:**
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `logging.database.host` | `localhost` | Server host |
+| `logging.database.port` | `5432` | Server port |
+| `logging.database.name` | `ccrelay` | Database name |
+| `logging.database.user` | `""` | Username |
+| `logging.database.password` | `""` | Password (supports `${ENV_VAR}`) |
+| `logging.database.ssl` | `false` | Enable SSL connection |
 
 ### Complete Configuration Example
 
-#### VSCode settings.json
-
-```json
-{
-  "ccrelay.server.port": 7575,
-  "ccrelay.server.autoStart": true,
-
-  "ccrelay.route.blockPatterns": [
-    {
-      "path": "/api/event_logging/*",
-      "response": "",
-      "responseCode": 200
-    }
-  ],
-  "ccrelay.route.passthroughPatterns": [
-    "/v1/users/*",
-    "/v1/organizations/*"
-  ],
-  "ccrelay.route.patterns": [
-    "/v1/messages",
-    "/messages"
-  ],
-  "ccrelay.route.openaiBlockPatterns": [
-    {
-      "path": "/v1/messages/count_tokens",
-      "response": "{\"input_tokens\": 0}",
-      "responseCode": 200
-    }
-  ],
-
-  "ccrelay.concurrency.enabled": true,
-  "ccrelay.concurrency.maxConcurrency": 3,
-
-  "ccrelay.log.enableStorage": true,
-  "ccrelay.database.type": "sqlite",
-
-  "ccrelay.provider.list": {
-    "official": {
-      "name": "Claude Official",
-      "baseUrl": "https://api.anthropic.com",
-      "mode": "passthrough"
-    },
-    "glm": {
-      "name": "Z.AI-GLM-5",
-      "baseUrl": "https://api.z.ai/api/anthropic",
-      "mode": "inject",
-      "authHeader": "authorization",
-      "apiKey": "<YOUR-API-KEY>",
-      "modelMap": {
-        "claude-opus-*": "glm-5",
-        "claude-sonnet-*": "glm-5",
-        "claude-haiku-*": "glm-4.7"
-      }
-    },
-    "gemini": {
-      "name": "Gemini",
-      "baseUrl": "https://generativelanguage.googleapis.com/v1beta/openai",
-      "providerType": "openai",
-      "mode": "inject",
-      "authHeader": "authorization",
-      "apiKey": "<YOUR-API-KEY>",
-      "modelMap": {
-        "claude-*": "gemini-3-pro-preview"
-      }
-    }
-  }
-}
-```
-
-#### YAML Configuration File (`~/.ccrelay/config.yaml`)
-
-Enable with: `ccrelay.config.useFile: true`
-
 ```yaml
+# CCRelay Configuration
+# Docs: https://github.com/inflaborg/ccrelay#configuration
+
+# ==================== Server Configuration ====================
 server:
-  port: 7575
-  host: 127.0.0.1
+  port: 7575                    # Proxy server port
+  host: "127.0.0.1"             # Bind address
+  autoStart: true               # Auto-start server when extension loads
 
-defaultProvider: official
-
+# ==================== Provider Configuration ====================
 providers:
   official:
-    name: Claude Official
-    baseUrl: https://api.anthropic.com
-    mode: passthrough
+    name: "Claude Official"
+    baseUrl: "https://api.anthropic.com"
+    mode: "passthrough"         # passthrough | inject
+    providerType: "anthropic"   # anthropic | openai
+    enabled: true
 
   glm:
-    name: Z.AI-GLM-5
-    base_url: https://api.z.ai/api/anthropic
-    mode: inject
-    api_key: ${GLM_API_KEY}
-    auth_header: authorization
-    model_map:
+    name: "Z.AI-GLM-5"
+    baseUrl: "https://api.z.ai/api/anthropic"
+    mode: "inject"
+    apiKey: "${GLM_API_KEY}"    # Supports environment variables
+    authHeader: "authorization"
+    modelMap:
       "claude-opus-*": "glm-5"
+      "claude-sonnet-*": "glm-5"
       "claude-haiku-*": "glm-4.7"
+    enabled: true
 
   gemini:
-    name: Gemini
-    base_url: https://generativelanguage.googleapis.com/v1beta/openai
-    provider_type: openai
-    mode: inject
-    api_key: ${GEMINI_API_KEY}
-    model_map:
-      "claude-*": "gemini-3-pro-preview"
+    name: "Gemini"
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai"
+    providerType: "openai"
+    mode: "inject"
+    apiKey: "${GEMINI_API_KEY}"
+    modelMap:
+      "claude-*": "gemini-2.5-pro"
+    enabled: true
 
-routePatterns:
-  - /v1/messages
-  - /messages
+# Default provider ID
+defaultProvider: "official"
 
-passthroughPatterns:
-  - /v1/users/*
-  - /v1/organizations/*
+# ==================== Routing Configuration ====================
+routing:
+  # Proxy routes: Forward to current provider
+  proxy:
+    - "/v1/messages"
+    - "/messages"
 
-blockPatterns:
-  - path: /api/event_logging/*
-    response: '{"ok": true}'
-    responseCode: 200
+  # Passthrough routes: Always go to official API
+  passthrough:
+    - "/v1/users/*"
+    - "/v1/organizations/*"
 
+  # Block routes (inject mode): Return custom response
+  block:
+    - path: "/api/event_logging/*"
+      response: ""
+      code: 200
+
+  # OpenAI format block routes
+  openaiBlock:
+    - path: "/v1/messages/count_tokens"
+      response: '{"input_tokens": 0}'
+      code: 200
+
+# ==================== Concurrency Control ====================
 concurrency:
-  enabled: true
-  maxConcurrency: 3
+  enabled: true                 # Enable concurrency queue
+  maxWorkers: 3                 # Maximum concurrent workers
+  maxQueueSize: 100             # Maximum queue size (0=unlimited)
+  requestTimeout: 60            # Request timeout in queue (seconds)
 
-enableLogStorage: true
+  # Per-route queue configuration
+  routes:
+    - pattern: "/v1/messages/count_tokens"
+      name: "count_tokens"
+      maxWorkers: 30
+      maxQueueSize: 1000
+
+# ==================== Logging Storage ====================
+logging:
+  enabled: true                 # Enable request log storage
+
+  database:
+    type: "sqlite"              # sqlite | postgres
+    path: ""                    # Empty = ~/.ccrelay/logs.db
+
+    # PostgreSQL configuration
+    # type: "postgres"
+    # host: "localhost"
+    # port: 5432
+    # name: "ccrelay"
+    # user: ""
+    # password: "${POSTGRES_PASSWORD}"
+    # ssl: false
 ```
 
 > **Note**: YAML config supports both `camelCase` and `snake_case` keys.
@@ -548,8 +518,7 @@ ccrelay/
 
 | File | Location | Description |
 |------|----------|-------------|
-| VSCode Settings | VSCode `settings.json` | Primary configuration (default) |
-| YAML Config | `~/.ccrelay/config.yaml` | Alternative config (requires `ccrelay.config.useFile: true`) |
+| YAML Config | `~/.ccrelay/config.yaml` | Main configuration file (auto-created) |
 | Log database | `~/.ccrelay/logs.db` | Request/response logs (when enabled) |
 
 ---

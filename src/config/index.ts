@@ -581,6 +581,122 @@ export class ConfigManager {
     return fs.existsSync(this.configPath);
   }
 
+  /**
+   * Add a new provider to the config file
+   */
+  addProvider(id: string, config: ProviderConfigInput): boolean {
+    try {
+      // Validate the provider config
+      const result = ProviderConfigSchema.safeParse(config);
+      if (!result.success) {
+        console.error("[ConfigManager] Provider validation failed:", result.error.format());
+        return false;
+      }
+
+      // Read current file content
+      const content = fs.readFileSync(this.configPath, "utf-8");
+      const rawConfig = yaml.load(content) as Record<string, unknown>;
+
+      // Ensure providers object exists
+      if (!rawConfig.providers) {
+        rawConfig.providers = {};
+      }
+
+      // Add the new provider (use snake_case for file)
+      const providers = rawConfig.providers as Record<string, ProviderConfigInput>;
+      providers[id] = {
+        name: config.name,
+        baseUrl: config.baseUrl,
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        base_url: config.base_url,
+        mode: config.mode,
+        providerType: config.providerType,
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        provider_type: config.provider_type,
+        apiKey: config.apiKey,
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        api_key: config.api_key,
+        authHeader: config.authHeader,
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        auth_header: config.auth_header,
+        modelMap: config.modelMap,
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        model_map: config.model_map,
+        vlModelMap: config.vlModelMap,
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        vl_model_map: config.vl_model_map,
+        headers: config.headers,
+        enabled: config.enabled,
+      };
+
+      // Write back to file
+      const yamlContent = yaml.dump(rawConfig, {
+        indent: 2,
+        lineWidth: -1,
+        noRefs: true,
+        quotingType: '"',
+        forceQuotes: false,
+      });
+      fs.writeFileSync(this.configPath, yamlContent, "utf-8");
+
+      // Reload in-memory config
+      this.reload();
+
+      return true;
+    } catch (err) {
+      console.error("[ConfigManager] Failed to add provider:", err);
+      return false;
+    }
+  }
+
+  /**
+   * Delete a provider from the config file
+   */
+  deleteProvider(id: string): boolean {
+    try {
+      // Don't allow deleting the official provider
+      if (id === "official") {
+        console.error("[ConfigManager] Cannot delete the official provider");
+        return false;
+      }
+
+      // Read current file content
+      const content = fs.readFileSync(this.configPath, "utf-8");
+      const rawConfig = yaml.load(content) as Record<string, unknown>;
+
+      // Check if provider exists
+      const providers = rawConfig.providers as Record<string, unknown> | undefined;
+      if (!providers || !providers[id]) {
+        console.error(`[ConfigManager] Provider "${id}" not found`);
+        return false;
+      }
+
+      // Delete the provider
+      delete providers[id];
+
+      // If deleted provider was default, update default to official
+      if (rawConfig.defaultProvider === id) {
+        rawConfig.defaultProvider = "official";
+      }
+
+      // Write back to file
+      const yamlContent = yaml.dump(rawConfig, {
+        indent: 2,
+        lineWidth: -1,
+        noRefs: true,
+      });
+      fs.writeFileSync(this.configPath, yamlContent, "utf-8");
+
+      // Reload in-memory config
+      this.reload();
+
+      return true;
+    } catch (err) {
+      console.error("[ConfigManager] Failed to delete provider:", err);
+      return false;
+    }
+  }
+
   dispose(): void {
     for (const d of this.disposables) {
       d.dispose();
