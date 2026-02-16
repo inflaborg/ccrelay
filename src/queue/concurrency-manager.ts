@@ -46,8 +46,8 @@ export class ConcurrencyManager {
     this.taskExecutor = taskExecutor;
     this.log = new ScopedLogger("ConcurrencyManager");
 
-    const maxConcurrency = config.maxConcurrency > 0 ? config.maxConcurrency : 1;
-    this.semaphore = new Semaphore(maxConcurrency);
+    const maxWorkers = config.maxWorkers > 0 ? config.maxWorkers : 1;
+    this.semaphore = new Semaphore(maxWorkers);
     this.queue = new PriorityQueue<QueuedTask>((a, b) => {
       // Sort by priority (higher first), then by enqueue time (earlier first)
       if (a.task.priority !== b.task.priority) {
@@ -57,7 +57,7 @@ export class ConcurrencyManager {
     });
 
     this.log.info(
-      `ConcurrencyManager initialized: maxConcurrency=${maxConcurrency}, maxQueueSize=${
+      `ConcurrencyManager initialized: maxWorkers=${maxWorkers}, maxQueueSize=${
         config.maxQueueSize && config.maxQueueSize > 0
           ? config.maxQueueSize
           : "unlimited (capped at 10000)"
@@ -97,8 +97,11 @@ export class ConcurrencyManager {
       };
 
       // Set up queue timeout - if task times out while waiting in queue, reject immediately
-      const timeout = task.timeout ?? this.config.timeout;
-      if (timeout && timeout > 0) {
+      // requestTimeout is in seconds, convert to milliseconds
+      const timeoutMs =
+        task.timeout ??
+        (this.config.requestTimeout ? this.config.requestTimeout * 1000 : undefined);
+      if (timeoutMs && timeoutMs > 0) {
         queuedTask.timeoutHandle = setTimeout(() => {
           // Mark as timed out
           queuedTask.timedOut = true;
@@ -107,13 +110,13 @@ export class ConcurrencyManager {
           const removed = this.queue.remove(qt => qt === queuedTask);
           if (removed && !queuedTask.rejected) {
             // Task was still in queue, reject it without sending to upstream
-            this.log.info(`[Task ${task.id}] Timed out while waiting in queue (${timeout}ms)`);
+            this.log.info(`[Task ${task.id}] Timed out while waiting in queue (${timeoutMs}ms)`);
             queuedTask.rejected = true;
-            reject(new Error(`Task timeout after ${timeout}ms (waiting in queue)`));
+            reject(new Error(`Task timeout after ${timeoutMs}ms (waiting in queue)`));
           }
           // If not in queue, it's either being processed or already completed
           // The executeTask will handle the timeout for processing tasks
-        }, timeout);
+        }, timeoutMs);
       }
 
       // Add to queue
@@ -151,11 +154,11 @@ export class ConcurrencyManager {
       this.log.info(`[Task ${queuedTask.task.id}] Skipped (already timed out in queue)`);
       if (!queuedTask.rejected) {
         queuedTask.rejected = true;
-        queuedTask.reject(
-          new Error(
-            `Task timeout after ${queuedTask.task.timeout ?? this.config.timeout}ms (waiting in queue)`
-          )
-        );
+        // Use task.timeout (already in ms) or config.requestTimeout (converted to ms)
+        const timeoutMs =
+          queuedTask.task.timeout ??
+          (this.config.requestTimeout ? this.config.requestTimeout * 1000 : 0);
+        queuedTask.reject(new Error(`Task timeout after ${timeoutMs}ms (waiting in queue)`));
       }
       // Process next task
       void this.processNext();
@@ -163,17 +166,20 @@ export class ConcurrencyManager {
     }
 
     // Check if task has already exceeded its timeout while waiting
-    const timeout = queuedTask.task.timeout ?? this.config.timeout;
+    // requestTimeout is in seconds, convert to milliseconds
+    const timeoutMs =
+      queuedTask.task.timeout ??
+      (this.config.requestTimeout ? this.config.requestTimeout * 1000 : undefined);
     const elapsed = Date.now() - queuedTask.queuedAt;
-    if (timeout && elapsed >= timeout) {
+    if (timeoutMs && elapsed >= timeoutMs) {
       // Task has already exceeded its timeout, reject it
       queuedTask.timedOut = true;
       this.log.info(
-        `[Task ${queuedTask.task.id}] Rejected (timeout exceeded while waiting: ${elapsed}ms >= ${timeout}ms)`
+        `[Task ${queuedTask.task.id}] Rejected (timeout exceeded while waiting: ${elapsed}ms >= ${timeoutMs}ms)`
       );
       if (!queuedTask.rejected) {
         queuedTask.rejected = true;
-        queuedTask.reject(new Error(`Task timeout after ${timeout}ms (waiting in queue)`));
+        queuedTask.reject(new Error(`Task timeout after ${timeoutMs}ms (waiting in queue)`));
       }
       void this.processNext();
       return;
@@ -195,7 +201,7 @@ export class ConcurrencyManager {
     if (stats.available <= 0) {
       // No available workers, put task back
       // Note: We've already cleared the timeout handle, need to set a new one based on remaining time
-      const remainingTimeout = timeout ? Math.max(0, timeout - elapsed) : undefined;
+      const remainingTimeout = timeoutMs ? Math.max(0, timeoutMs - elapsed) : undefined;
 
       if (remainingTimeout !== undefined && remainingTimeout > 0) {
         queuedTask.timeoutHandle = setTimeout(() => {
@@ -204,20 +210,20 @@ export class ConcurrencyManager {
           const removed = this.queue.remove(qt => qt === queuedTask);
           if (removed && !queuedTask.rejected) {
             this.log.info(
-              `[Task ${queuedTask.task.id}] Timed out while waiting in queue (${timeout}ms)`
+              `[Task ${queuedTask.task.id}] Timed out while waiting in queue (${timeoutMs}ms)`
             );
             queuedTask.rejected = true;
-            queuedTask.reject(new Error(`Task timeout after ${timeout}ms (waiting in queue)`));
+            queuedTask.reject(new Error(`Task timeout after ${timeoutMs}ms (waiting in queue)`));
           }
           // If not removed, task was already dequeued
           // processNext will check timedOut flag and reject the task there
         }, remainingTimeout);
-      } else if (timeout && remainingTimeout === 0) {
+      } else if (timeoutMs && remainingTimeout === 0) {
         // Already exceeded timeout, reject immediately
         queuedTask.timedOut = true;
         if (!queuedTask.rejected) {
           queuedTask.rejected = true;
-          queuedTask.reject(new Error(`Task timeout after ${timeout}ms (waiting in queue)`));
+          queuedTask.reject(new Error(`Task timeout after ${timeoutMs}ms (waiting in queue)`));
         }
         void this.processNext();
         return;
@@ -304,7 +310,7 @@ export class ConcurrencyManager {
     return {
       queueLength: this.queue.size(),
       activeWorkers: this.processingTasks.size,
-      maxConcurrency: this.config.maxConcurrency,
+      maxWorkers: this.config.maxWorkers,
       totalProcessed: this.totalProcessed,
       totalFailed: this.totalFailed,
       avgWaitTime,
@@ -324,20 +330,20 @@ export class ConcurrencyManager {
   }
 
   /**
-   * Update the max concurrency limit
+   * Update the max workers limit
    */
-  updateMaxConcurrency(newMax: number): void {
+  updateMaxWorkers(newMax: number): void {
     if (newMax <= 0) {
-      throw new Error("Max concurrency must be greater than 0");
+      throw new Error("Max workers must be greater than 0");
     }
 
-    const oldMax = this.config.maxConcurrency;
-    this.config.maxConcurrency = newMax;
+    const oldMax = this.config.maxWorkers;
+    this.config.maxWorkers = newMax;
 
     // Update semaphore permits
     this.semaphore.updatePermits(newMax);
 
-    this.log.info(`Max concurrency updated: ${oldMax} -> ${newMax}`);
+    this.log.info(`Max workers updated: ${oldMax} -> ${newMax}`);
 
     // Trigger processNext to pick up any newly available capacity
     // We need to trigger this multiple times if we added multiple slots

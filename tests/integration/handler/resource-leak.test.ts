@@ -36,47 +36,75 @@ describe("Integration: Resource Leak Detection", () => {
   });
 
   describe("IT09: Worker leak verification", () => {
-    it("IT09-01: should not leak workers after timeout", async () => {
+    it("IT09-01: should not leak workers after queue timeout and client disconnect", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
+          maxWorkers: 1, // Only 1 worker so second request queues
           maxQueueSize: 10,
-          timeout: 300,
+          requestTimeout: 0.3, // 300ms queue timeout
         }),
-        proxyTimeout: 1,
       });
 
       testServer = new TestServer({ config });
       await testServer.start();
 
-      // Get initial resource stats
-      const initialStats = testServer.getResourceStats();
-
-      // Mock hanging response
+      // Mock hanging response for first request
       mockProvider.onPost("/v1/messages", {
         status: 200,
         body: { content: "hanging" },
         delay: 60000,
       });
 
-      // Send request that will timeout
-      await request(testServer.baseUrl)
+      // Send first request using raw http so we can abort it later
+      const url = new URL(`${testServer.baseUrl}/v1/messages`);
+      const req1 = http.request({
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": "test-key",
+        },
+      }, () => {});
+      req1.on("error", () => {}); // Ignore abort error
+      req1.write(JSON.stringify({ model: "test1", messages: [] }));
+      req1.end();
+
+      // Wait for first request to start processing
+      await mockProvider.waitForRequestTo("/v1/messages", 2000);
+
+      // First worker should be active
+      expect(testServer.getResourceStats().activeWorkers).toBe(1);
+
+      // Send second request that will queue and timeout
+      const res2 = await request(testServer.baseUrl)
         .post("/v1/messages")
         .set("x-api-key", "test-key")
-        .send({ model: "test", messages: [] })
-        .timeout(5000);
+        .send({ model: "test2", messages: [] });
+
+      // Second request should get queue timeout (503)
+      expect(res2.status).toBe(503);
+
+      // Wait a bit
+      await sleep(100);
+
+      // First worker should still be active
+      expect(testServer.getResourceStats().activeWorkers).toBe(1);
+
+      // Now abort first request (client disconnect)
+      req1.destroy();
 
       // Wait for cleanup
       await sleep(300);
 
-      // Verify no resource leak
+      // Verify no resource leak after client disconnect
       const finalStats = testServer.getResourceStats();
       expect(finalStats.activeWorkers).toBe(0);
-      expect(finalStats.activeWorkers).toBe(initialStats.activeWorkers);
       expect(finalStats.activeConnections).toBe(0);
     });
 
@@ -86,11 +114,10 @@ describe("Integration: Resource Leak Detection", () => {
           baseUrl: "http://127.0.0.1:1", // Will fail
         }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
+          maxWorkers: 2,
           maxQueueSize: 10,
-          timeout: 2000,
+          requestTimeout: 2,
         }),
-        proxyTimeout: 2,
       });
 
       testServer = new TestServer({ config });
@@ -99,12 +126,15 @@ describe("Integration: Resource Leak Detection", () => {
       // Get initial resource stats
       const initialStats = testServer.getResourceStats();
 
-      // Send request that will fail
-      await request(testServer.baseUrl)
+      // Send request that will fail with 502 (connection error)
+      const res = await request(testServer.baseUrl)
         .post("/v1/messages")
         .set("x-api-key", "test-key")
         .send({ model: "test", messages: [] })
         .timeout(10000);
+
+      // Should get 502 (proxy error)
+      expect(res.status).toBe(502);
 
       // Wait for cleanup
       await sleep(200);
@@ -123,9 +153,9 @@ describe("Integration: Resource Leak Detection", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
+          maxWorkers: 2,
           maxQueueSize: 10,
-          timeout: 10000,
+          requestTimeout: 10,
         }),
       });
 
@@ -183,11 +213,10 @@ describe("Integration: Resource Leak Detection", () => {
           baseUrl: "http://127.0.0.1:1", // Will fail
         }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
+          maxWorkers: 2,
           maxQueueSize: 10,
-          timeout: 1000,
+          requestTimeout: 1,
         }),
-        proxyTimeout: 1,
       });
 
       testServer = new TestServer({ config });
@@ -225,9 +254,9 @@ describe("Integration: Resource Leak Detection", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
+          maxWorkers: 2,
           maxQueueSize: 10,
-          timeout: 5000,
+          requestTimeout: 5,
         }),
       });
 
@@ -263,11 +292,10 @@ describe("Integration: Resource Leak Detection", () => {
             baseUrl: "http://127.0.0.1:1",
           }),
           concurrency: createTestConcurrencyConfig({
-            maxConcurrency: 2,
+            maxWorkers: 2,
             maxQueueSize: 10,
-            timeout: 1000,
+            requestTimeout: 1,
           }),
-          proxyTimeout: 1,
         });
         testServer = new TestServer({ config: errorConfig });
         await testServer.start();
@@ -288,9 +316,9 @@ describe("Integration: Resource Leak Detection", () => {
         const workingConfig = new MockConfig({
           provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
           concurrency: createTestConcurrencyConfig({
-            maxConcurrency: 2,
+            maxWorkers: 2,
             maxQueueSize: 10,
-            timeout: 5000,
+            requestTimeout: 5,
           }),
         });
         testServer = new TestServer({ config: workingConfig });
@@ -315,11 +343,10 @@ describe("Integration: Resource Leak Detection", () => {
           baseUrl: "http://127.0.0.1:1", // Will fail
         }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 5,
+          maxWorkers: 5,
           maxQueueSize: 10,
-          timeout: 1000,
+          requestTimeout: 1,
         }),
-        proxyTimeout: 1,
       });
 
       testServer = new TestServer({ config });
@@ -364,11 +391,10 @@ describe("Integration: Resource Leak Detection", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 5,
+          maxWorkers: 5,
           maxQueueSize: 10,
-          timeout: 300, // Short timeout
+          requestTimeout: 0.3, // Short timeout
         }),
-        proxyTimeout: 1,
       });
 
       testServer = new TestServer({ config });
@@ -423,11 +449,10 @@ describe("Integration: Resource Leak Detection", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 1, // Single worker to ensure sequential
+          maxWorkers: 1, // Single worker to ensure sequential
           maxQueueSize: 5,
-          timeout: 300,
+          requestTimeout: 0.3, // 300ms queue timeout
         }),
-        proxyTimeout: 1,
       });
 
       testServer = new TestServer({ config });
@@ -440,17 +465,50 @@ describe("Integration: Resource Leak Detection", () => {
         delay: 60000,
       });
 
-      // Send 5 requests that will timeout
-      for (let i = 0; i < 5; i++) {
-        await request(testServer.baseUrl)
-          .post("/v1/messages")
-          .set("x-api-key", "test-key")
-          .send({ model: `test-${i}`, messages: [] })
-          .timeout(5000);
+      // Send first request using raw http so we can abort it later
+      const url = new URL(`${testServer.baseUrl}/v1/messages`);
+      const req1 = http.request({
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": "test-key",
+        },
+      }, () => {});
+      req1.on("error", () => {}); // Ignore abort error
+      req1.write(JSON.stringify({ model: "test-0", messages: [] }));
+      req1.end();
+
+      // Wait for first request to start processing
+      await mockProvider.waitForRequestTo("/v1/messages", 2000);
+
+      // Send 4 more requests that will queue and timeout (queue timeout: 300ms)
+      const queuePromises: Promise<request.Response>[] = [];
+      for (let i = 1; i < 5; i++) {
+        queuePromises.push(
+          request(testServer.baseUrl)
+            .post("/v1/messages")
+            .set("x-api-key", "test-key")
+            .send({ model: `test-${i}`, messages: [] })
+        );
       }
 
+      // All queued requests should get 503 (queue timeout)
+      for (const p of queuePromises) {
+        const res = await p;
+        expect(res.status).toBe(503);
+      }
+
+      // Verify worker is still active (processing first request)
+      expect(testServer.getResourceStats().activeWorkers).toBe(1);
+
+      // Abort the first request (client disconnect)
+      req1.destroy();
+
       // Wait for cleanup
-      await sleep(500);
+      await sleep(300);
 
       // Verify cleanup
       let stats = testServer.getResourceStats();

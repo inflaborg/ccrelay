@@ -43,20 +43,19 @@ describe("Integration: Multi-Queue Concurrency", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: defaultConcurrency,
+          maxWorkers: defaultConcurrency,
           maxQueueSize: 20,
-          timeout: 30000,
+          requestTimeout: 30,
         }),
         routeQueues: [
           {
             name: "route-queue",
-            pathPattern: "^/route/.*",
-            maxConcurrency: routeConcurrency,
+            pattern: "^/route/.*",
+            maxWorkers: routeConcurrency,
             maxQueueSize: 20,
-            timeout: 30000,
+            requestTimeout: 30,
           },
         ],
-        proxyTimeout: 60,
       });
 
       testServer = new TestServer({ config });
@@ -150,20 +149,19 @@ describe("Integration: Multi-Queue Concurrency", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: defaultConcurrency,
+          maxWorkers: defaultConcurrency,
           maxQueueSize: 20,
-          timeout: 30000,
+          requestTimeout: 30,
         }),
         routeQueues: [
           {
             name: "route-queue",
-            pathPattern: "^/route/.*",
-            maxConcurrency: routeConcurrency,
+            pattern: "^/route/.*",
+            maxWorkers: routeConcurrency,
             maxQueueSize: 20,
-            timeout: 30000,
+            requestTimeout: 30,
           },
         ],
-        proxyTimeout: 60,
       });
 
       testServer = new TestServer({ config });
@@ -256,27 +254,26 @@ describe("Integration: Multi-Queue Concurrency", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: defaultConcurrency,
+          maxWorkers: defaultConcurrency,
           maxQueueSize: 20,
-          timeout: 30000,
+          requestTimeout: 30,
         }),
         routeQueues: [
           {
             name: "route-a",
-            pathPattern: "^/api-a/.*",
-            maxConcurrency: route1Concurrency,
+            pattern: "^/api-a/.*",
+            maxWorkers: route1Concurrency,
             maxQueueSize: 20,
-            timeout: 30000,
+            requestTimeout: 30,
           },
           {
             name: "route-b",
-            pathPattern: "^/api-b/.*",
-            maxConcurrency: route2Concurrency,
+            pattern: "^/api-b/.*",
+            maxWorkers: route2Concurrency,
             maxQueueSize: 20,
-            timeout: 30000,
+            requestTimeout: 30,
           },
         ],
-        proxyTimeout: 60,
       });
 
       testServer = new TestServer({ config });
@@ -367,20 +364,19 @@ describe("Integration: Multi-Queue Concurrency", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: defaultConcurrency,
+          maxWorkers: defaultConcurrency,
           maxQueueSize: 20,
-          timeout: 30000,
+          requestTimeout: 30,
         }),
         routeQueues: [
           {
             name: "slow-route",
-            pathPattern: "^/slow/.*",
-            maxConcurrency: routeConcurrency,
+            pattern: "^/slow/.*",
+            maxWorkers: routeConcurrency,
             maxQueueSize: 20,
-            timeout: 30000,
+            requestTimeout: 30,
           },
         ],
-        proxyTimeout: 60,
       });
 
       testServer = new TestServer({ config });
@@ -454,20 +450,19 @@ describe("Integration: Multi-Queue Concurrency", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
+          maxWorkers: 2,
           maxQueueSize: 20,
-          timeout: 30000,
+          requestTimeout: 30,
         }),
         routeQueues: [
           {
             name: "tracked-route",
-            pathPattern: "^/tracked/.*",
-            maxConcurrency: 3,
+            pattern: "^/tracked/.*",
+            maxWorkers: 3,
             maxQueueSize: 20,
-            timeout: 30000,
+            requestTimeout: 30,
           },
         ],
-        proxyTimeout: 60,
       });
 
       testServer = new TestServer({ config });

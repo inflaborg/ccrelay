@@ -46,9 +46,9 @@ describe("ConcurrencyManager", () => {
   beforeEach(() => {
     config = {
       enabled: true,
-      maxConcurrency: 2,
+      maxWorkers: 2,
       maxQueueSize: 5,
-      timeout: 1000,
+      requestTimeout: 1,
     };
   });
 
@@ -69,7 +69,7 @@ describe("ConcurrencyManager", () => {
     const stats = manager.getStats();
     expect(stats.activeWorkers).toBe(0);
     expect(stats.queueLength).toBe(0);
-    expect(stats.maxConcurrency).toBe(2);
+    expect(stats.maxWorkers).toBe(2);
   });
 
   it("should process task immediately if workers available", async () => {
@@ -201,7 +201,7 @@ describe("ConcurrencyManager", () => {
 
   it("should treat maxQueueSize=0 as unlimited (capped at 10000)", async () => {
     config.maxQueueSize = 0;
-    config.maxConcurrency = 1;
+    config.maxWorkers = 1;
 
     let releaseTask: (v?: unknown) => void;
     const taskPromise = new Promise(resolve => {
@@ -247,8 +247,8 @@ describe("ConcurrencyManager", () => {
 
   describe("CM006: Timeout handling", () => {
     it("CM006: should reject task when waiting in queue exceeds timeout", async () => {
-      config.maxConcurrency = 1;
-      config.timeout = 100;
+      config.maxWorkers = 1;
+      config.requestTimeout = 0.1;
 
       // First task blocks the worker indefinitely
       let releaseTask1: () => void;
@@ -284,7 +284,7 @@ describe("ConcurrencyManager", () => {
     it("CM006: should complete slow execution (no execution timeout)", async () => {
       // Once task starts executing, there is NO timeout from our side
       // Task relies entirely on upstream response or client disconnect
-      config.timeout = 100;
+      config.requestTimeout = 0.1;
 
       // Use a promise that takes longer than "timeout" but should still complete
       // because timeout only applies to queue waiting, not execution
@@ -308,7 +308,7 @@ describe("ConcurrencyManager", () => {
     });
 
     it("CM006: should use task-specific timeout if provided", async () => {
-      config.timeout = 1000; // Default 1s
+      config.requestTimeout = 1; // Default 1s
 
       const quickExecutor = vi.fn().mockImplementation(
         () =>
@@ -337,7 +337,7 @@ describe("ConcurrencyManager", () => {
 
   describe("CM008-CM009: Dynamic concurrency updates", () => {
     it("CM008: should increase concurrency and wake waiting tasks", async () => {
-      config.maxConcurrency = 1;
+      config.maxWorkers = 1;
 
       let releaseTask1: () => void;
       const blockingTask = new Promise<ProxyResult>(resolve => {
@@ -358,9 +358,9 @@ describe("ConcurrencyManager", () => {
       expect(manager.getStats().queueLength).toBe(1);
 
       // Increase concurrency
-      manager.updateMaxConcurrency(2);
+      manager.updateMaxWorkers(2);
 
-      // Wait longer for internal state to update (processNext call in updateMaxConcurrency doesn't trigger it)
+      // Wait longer for internal state to update (processNext call in updateMaxWorkers doesn't trigger it)
       await new Promise(r => setTimeout(r, 200));
 
       // Second task should be picked up
@@ -373,7 +373,7 @@ describe("ConcurrencyManager", () => {
     });
 
     it("CM009: should decrease concurrency without affecting running tasks", async () => {
-      config.maxConcurrency = 3;
+      config.maxWorkers = 3;
 
       let releaseTask1: () => void;
       let releaseTask2: () => void;
@@ -406,7 +406,7 @@ describe("ConcurrencyManager", () => {
       expect(manager.getStats().activeWorkers).toBe(2);
 
       // Reduce concurrency to 1
-      manager.updateMaxConcurrency(1);
+      manager.updateMaxWorkers(1);
 
       // Existing tasks continue running
       expect(manager.getStats().activeWorkers).toBe(2);
@@ -425,14 +425,14 @@ describe("ConcurrencyManager", () => {
     it("CM009: should throw error when setting invalid concurrency", () => {
       manager = new ConcurrencyManager(config, vi.fn());
 
-      expect(() => manager.updateMaxConcurrency(0)).toThrow("greater than 0");
-      expect(() => manager.updateMaxConcurrency(-1)).toThrow("greater than 0");
+      expect(() => manager.updateMaxWorkers(0)).toThrow("greater than 0");
+      expect(() => manager.updateMaxWorkers(-1)).toThrow("greater than 0");
     });
   });
 
   describe("CM010: Queue clearing", () => {
     it("CM010: should clear queue without affecting running tasks", async () => {
-      config.maxConcurrency = 1;
+      config.maxWorkers = 1;
 
       let releaseTask: () => void;
       const blockingTask = new Promise<ProxyResult>(resolve => {
@@ -474,7 +474,7 @@ describe("ConcurrencyManager", () => {
 
   describe("CM011: Shutdown", () => {
     it("CM011: should reject all pending tasks on shutdown", async () => {
-      config.maxConcurrency = 1;
+      config.maxWorkers = 1;
 
       let releaseTask: () => void;
       const blockingTask = new Promise<ProxyResult>(resolve => {
@@ -530,7 +530,7 @@ describe("ConcurrencyManager", () => {
 
   describe("CM012: Task cancellation", () => {
     it("CM012: should cancel task from queue", async () => {
-      config.maxConcurrency = 1;
+      config.maxWorkers = 1;
 
       let releaseTask: () => void;
       const blockingTask = new Promise<ProxyResult>(resolve => {
@@ -567,7 +567,7 @@ describe("ConcurrencyManager", () => {
     });
 
     it("CM012: should mark processing task as cancelled but not remove immediately", async () => {
-      config.maxConcurrency = 1;
+      config.maxWorkers = 1;
 
       let taskExecutionComplete = false;
 
@@ -615,7 +615,7 @@ describe("ConcurrencyManager", () => {
 
     it("CM012: should skip cancelled task during execution", async () => {
       // Test by using cancelTask method to cancel a task that's queued
-      config.maxConcurrency = 1;
+      config.maxWorkers = 1;
 
       let releaseTask: () => void;
       const blockingTask = new Promise<ProxyResult>(resolve => {
@@ -772,7 +772,7 @@ describe("ConcurrencyManager", () => {
 
   describe("CM015: AbortController and timeout integration", () => {
     it("CM015: should set abortController on task during execution", async () => {
-      config.timeout = undefined; // No timeout
+      config.requestTimeout = undefined; // No timeout
 
       let taskDuringExecution: RequestTask | undefined;
 
@@ -796,8 +796,8 @@ describe("ConcurrencyManager", () => {
     it("CM015: should NOT abort request during execution (no execution timeout)", async () => {
       // Once execution starts, there is NO timeout from our side
       // The task relies entirely on upstream response or client disconnect
-      config.maxConcurrency = 1;
-      config.timeout = 50; // Queue timeout only
+      config.maxWorkers = 1;
+      config.requestTimeout = 0.05; // Queue timeout only
 
       let releaseTask1: () => void;
 
@@ -832,7 +832,7 @@ describe("ConcurrencyManager", () => {
     });
 
     it("CM015: should clean up abortController after task completion", async () => {
-      config.timeout = undefined;
+      config.requestTimeout = undefined;
 
       let capturedTask: RequestTask | undefined;
       const executor = vi.fn().mockImplementation((task: RequestTask) => {
@@ -848,7 +848,7 @@ describe("ConcurrencyManager", () => {
     });
 
     it("CM015: should clean up abortController after task failure", async () => {
-      config.timeout = undefined;
+      config.requestTimeout = undefined;
 
       let capturedTask: RequestTask | undefined;
       const executor = vi.fn().mockImplementation((task: RequestTask) => {
@@ -866,8 +866,8 @@ describe("ConcurrencyManager", () => {
 
   describe("CM016: Client disconnect scenarios", () => {
     it("CM016: should detect client disconnect during queue wait", async () => {
-      config.maxConcurrency = 1;
-      config.timeout = undefined;
+      config.maxWorkers = 1;
+      config.requestTimeout = undefined;
 
       let releaseTask: () => void;
       const blockingTask = new Promise<ProxyResult>(resolve => {
@@ -911,7 +911,7 @@ describe("ConcurrencyManager", () => {
     });
 
     it("CM016: should handle graceful abort for running task", async () => {
-      config.timeout = undefined;
+      config.requestTimeout = undefined;
 
       let taskAborted = false;
 
@@ -956,8 +956,8 @@ describe("ConcurrencyManager", () => {
 
   describe("CM017: Edge cases and error recovery", () => {
     it("CM017: should handle concurrent task completions", async () => {
-      config.maxConcurrency = 5;
-      config.timeout = undefined;
+      config.maxWorkers = 5;
+      config.requestTimeout = undefined;
 
       const completionOrder: string[] = [];
       const releaseFns: Map<string, () => void> = new Map();
@@ -997,7 +997,7 @@ describe("ConcurrencyManager", () => {
     });
 
     it("CM017: should handle task that resolves during timeout race", async () => {
-      config.timeout = 100;
+      config.requestTimeout = 0.1;
 
       // Task completes just before timeout
       const executor = vi.fn().mockImplementation(
@@ -1015,8 +1015,8 @@ describe("ConcurrencyManager", () => {
     });
 
     it("CM017: should properly release semaphore after queue timeout", async () => {
-      config.maxConcurrency = 1;
-      config.timeout = 50;
+      config.maxWorkers = 1;
+      config.requestTimeout = 0.05;
 
       // First task blocks the worker
       let releaseTask1: () => void;
@@ -1058,21 +1058,21 @@ describe("ConcurrencyManager", () => {
 
     it("CM017: should handle zero concurrency gracefully", async () => {
       // When maxConcurrency is 0, it should default to 1 in the constructor
-      config.maxConcurrency = 0;
+      config.maxWorkers = 0;
 
       const executor = vi.fn().mockResolvedValue({ statusCode: 200 } as ProxyResult);
       manager = new ConcurrencyManager(config, executor);
 
       // The config stores 0, but internally the semaphore uses 1
       // Actually looking at the code, it only uses 1 for the semaphore, but config stays 0
-      // This is current behavior - the semaphore is initialized with 1, but config.maxConcurrency stays 0
+      // This is current behavior - the semaphore is initialized with 1, but config.maxWorkers stays 0
       // Let's verify the manager can still process tasks
       const result = await manager.submit(createMockTask("task1"));
       expect(result.statusCode).toBe(200);
     });
 
     it("CM017: should handle multiple rapid submissions", async () => {
-      config.maxConcurrency = 2;
+      config.maxWorkers = 2;
       config.maxQueueSize = 100; // Increase queue size
 
       const executor = vi.fn().mockResolvedValue({ statusCode: 200 } as ProxyResult);
@@ -1093,7 +1093,7 @@ describe("ConcurrencyManager", () => {
 
   describe("CM018: Timeout edge cases", () => {
     it("CM018: should handle no timeout configured", async () => {
-      config.timeout = undefined;
+      config.requestTimeout = undefined;
 
       // Task takes a while but should complete
       const executor = vi.fn().mockImplementation(
@@ -1110,7 +1110,7 @@ describe("ConcurrencyManager", () => {
     });
 
     it("CM018: should handle timeout=0 as no timeout", async () => {
-      config.timeout = 0;
+      config.requestTimeout = 0;
 
       const executor = vi.fn().mockImplementation(
         () =>
@@ -1126,8 +1126,8 @@ describe("ConcurrencyManager", () => {
     });
 
     it("CM018: should use task timeout for queue waiting", async () => {
-      config.maxConcurrency = 1;
-      config.timeout = 500; // Global: 500ms
+      config.maxWorkers = 1;
+      config.requestTimeout = 0.5; // Global: 500ms
 
       // First task blocks the worker
       let releaseTask1: () => void;
@@ -1160,7 +1160,7 @@ describe("ConcurrencyManager", () => {
     });
 
     it("CM018: should clear timeout after successful completion", async () => {
-      config.timeout = 100;
+      config.requestTimeout = 0.1;
 
       let timeoutCleared = false;
       const originalClearTimeout = global.clearTimeout;

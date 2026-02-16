@@ -4,7 +4,7 @@
  * Tests that verify workers are truly processing in parallel:
  * 1. Fixed response time with known concurrency → verify total execution time
  * 2. Variable response times → verify concurrent processing efficiency
- * 3. Peak concurrent workers should match maxConcurrency setting
+ * 3. Peak concurrent workers should match maxWorkers setting
  *
  * The key insight: If tasks are processed sequentially, total time = N * taskTime.
  * If processed concurrently, total time ≈ ceil(N/maxConcurrency) * taskTime.
@@ -35,18 +35,17 @@ describe("Integration: Concurrency Efficiency", () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
-      const maxConcurrency = 5;
+      const maxWorkers = 5;
       const totalTasks = 12;
       const taskDuration = 1000; // 1 second per task
 
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency,
+          maxWorkers,
           maxQueueSize: 20,
-          timeout: 30000, // Long timeout
+          requestTimeout: 30, // Long timeout
         }),
-        proxyTimeout: 60,
       });
 
       testServer = new TestServer({ config });
@@ -61,7 +60,7 @@ describe("Integration: Concurrency Efficiency", () => {
 
       // Expected rounds: ceil(12 / 5) = 3 rounds
       // Expected total time: 3 * 1s = 3s (plus overhead)
-      const expectedRounds = Math.ceil(totalTasks / maxConcurrency);
+      const expectedRounds = Math.ceil(totalTasks / maxWorkers);
       const expectedMinTime = expectedRounds * taskDuration;
       const expectedMaxTime = expectedMinTime * 1.15; // 15% overhead tolerance
 
@@ -94,7 +93,7 @@ describe("Integration: Concurrency Efficiency", () => {
 
       // This proves concurrency is working: 3s << 12s
       console.log(
-        `IT13-01: ${totalTasks} tasks with ${maxConcurrency} concurrency took ${totalTime}ms ` +
+        `IT13-01: ${totalTasks} tasks with ${maxWorkers} concurrency took ${totalTime}ms ` +
           `(expected ~${expectedMinTime}ms, sequential would be ${totalTasks * taskDuration}ms)`
       );
 
@@ -104,22 +103,21 @@ describe("Integration: Concurrency Efficiency", () => {
       expect(stats.queueLength).toBe(0);
     });
 
-    it("IT13-02: should maintain peak workers at maxConcurrency with variable response times", async () => {
+    it("IT13-02: should maintain peak workers at maxWorkers with variable response times", async () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
-      const maxConcurrency = 5;
+      const maxWorkers = 5;
       const totalTasks = 15;
       const baseDuration = 800; // Base duration in ms
 
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency,
+          maxWorkers,
           maxQueueSize: 20,
-          timeout: 30000,
+          requestTimeout: 30,
         }),
-        proxyTimeout: 60,
       });
 
       testServer = new TestServer({ config });
@@ -157,7 +155,7 @@ describe("Integration: Concurrency Efficiency", () => {
       // First batch starts immediately, subsequent batches start as workers free up
       // Expected: roughly 3-4 rounds with staggered completion
       const avgDuration = responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length;
-      const expectedRounds = Math.ceil(totalTasks / maxConcurrency);
+      const expectedRounds = Math.ceil(totalTasks / maxWorkers);
       const expectedMinTime = (expectedRounds - 1) * baseDuration + 400; // Conservative min
       const expectedMaxTime = expectedRounds * avgDuration * 1.3; // Generous max with overhead
 
@@ -181,9 +179,9 @@ describe("Integration: Concurrency Efficiency", () => {
         expect(result.status).toBe(200);
       }
 
-      // Verify peak workers didn't exceed maxConcurrency
-      expect(peakWorkers).toBeLessThanOrEqual(maxConcurrency);
-      expect(peakWorkers).toBeGreaterThanOrEqual(maxConcurrency - 1); // Should reach near max
+      // Verify peak workers didn't exceed maxWorkers
+      expect(peakWorkers).toBeLessThanOrEqual(maxWorkers);
+      expect(peakWorkers).toBeGreaterThanOrEqual(maxWorkers - 1); // Should reach near max
 
       // Verify total time shows concurrent processing
       // Sequential time would be sum of all durations
@@ -195,7 +193,7 @@ describe("Integration: Concurrency Efficiency", () => {
       expect(totalTime).toBeLessThan(expectedMaxTime);
 
       console.log(
-        `IT13-02: ${totalTasks} tasks with ${maxConcurrency} concurrency took ${totalTime}ms ` +
+        `IT13-02: ${totalTasks} tasks with ${maxWorkers} concurrency took ${totalTime}ms ` +
           `(peak workers: ${peakWorkers}, sequential would be ~${sequentialTime}ms)`
       );
 
@@ -209,18 +207,17 @@ describe("Integration: Concurrency Efficiency", () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
-      const maxConcurrency = 1;
+      const maxWorkers = 1;
       const totalTasks = 5;
       const taskDuration = 300; // 300ms per task
 
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency,
+          maxWorkers,
           maxQueueSize: 10,
-          timeout: 30000,
+          requestTimeout: 30,
         }),
-        proxyTimeout: 60,
       });
 
       testServer = new TestServer({ config });
@@ -276,11 +273,10 @@ describe("Integration: Concurrency Efficiency", () => {
       const config2 = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
+          maxWorkers: 2,
           maxQueueSize: 20,
-          timeout: 30000,
+          requestTimeout: 30,
         }),
-        proxyTimeout: 60,
       });
 
       const server2 = new TestServer({ config: config2 });
@@ -314,11 +310,10 @@ describe("Integration: Concurrency Efficiency", () => {
       const config5 = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 5,
+          maxWorkers: 5,
           maxQueueSize: 20,
-          timeout: 30000,
+          requestTimeout: 30,
         }),
-        proxyTimeout: 60,
       });
 
       const server5 = new TestServer({ config: config5 });
@@ -372,17 +367,16 @@ describe("Integration: Concurrency Efficiency", () => {
       mockProvider = new MockProvider();
       await mockProvider.start();
 
-      const maxConcurrency = 5;
+      const maxWorkers = 5;
       const taskDuration = 1500; // Long enough to observe peak
 
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency,
+          maxWorkers,
           maxQueueSize: 20,
-          timeout: 30000,
+          requestTimeout: 30,
         }),
-        proxyTimeout: 60,
       });
 
       testServer = new TestServer({ config });
@@ -421,11 +415,11 @@ describe("Integration: Concurrency Efficiency", () => {
 
       // Verify we hit max concurrency at some point
       const peakWorkers = Math.max(...workerSamples);
-      expect(peakWorkers).toBe(maxConcurrency);
+      expect(peakWorkers).toBe(maxWorkers);
 
       // Verify average utilization was reasonable (at least 60% of max)
       const avgWorkers = workerSamples.reduce((a, b) => a + b, 0) / workerSamples.length;
-      expect(avgWorkers).toBeGreaterThan(maxConcurrency * 0.4);
+      expect(avgWorkers).toBeGreaterThan(maxWorkers * 0.4);
 
       console.log(
         `IT14-01: Peak workers: ${peakWorkers}, Avg workers: ${avgWorkers.toFixed(1)}, ` +

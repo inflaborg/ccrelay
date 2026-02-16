@@ -45,11 +45,10 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 1, // Only 1 worker
+          maxWorkers: 1, // Only 1 worker
           maxQueueSize: 5,
-          timeout: 300, // 300ms queue timeout
+          requestTimeout: 0.3, // 300ms queue timeout
         }),
-        proxyTimeout: 30, // Long proxy timeout (execution has no timeout from our side)
       });
 
       testServer = new TestServer({ config });
@@ -112,11 +111,10 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 1,
+          maxWorkers: 1,
           maxQueueSize: 10,
-          timeout: 300, // 300ms queue timeout
+          requestTimeout: 0.3, // 300ms queue timeout
         }),
-        proxyTimeout: 30,
       });
 
       testServer = new TestServer({ config });
@@ -180,11 +178,10 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 1,
+          maxWorkers: 1,
           maxQueueSize: 20,
-          timeout: 300, // 300ms queue timeout
+          requestTimeout: 0.3, // 300ms queue timeout
         }),
-        proxyTimeout: 30,
       });
 
       testServer = new TestServer({ config });
@@ -264,11 +261,10 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
+          maxWorkers: 2,
           maxQueueSize: 10,
-          timeout: 30000, // Long queue timeout (30 seconds)
+          requestTimeout: 30, // Long queue timeout (30 seconds)
         }),
-        proxyTimeout: 1,
       });
 
       testServer = new TestServer({ config });
@@ -319,11 +315,10 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 1,
+          maxWorkers: 1,
           maxQueueSize: 10,
-          timeout: 30000,
+          requestTimeout: 30,
         }),
-        proxyTimeout: 30,
       });
 
       testServer = new TestServer({ config });
@@ -379,11 +374,10 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 1,
+          maxWorkers: 1,
           maxQueueSize: 2, // Small queue
-          timeout: 300, // 300ms queue timeout
+          requestTimeout: 0.3, // 300ms queue timeout
         }),
-        proxyTimeout: 30,
       });
 
       testServer = new TestServer({ config });
@@ -454,11 +448,10 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
       const config = new MockConfig({
         provider: createTestProvider({ baseUrl: mockProvider.baseUrl }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 1,
+          maxWorkers: 1,
           maxQueueSize: 2,
-          timeout: 300,
+          requestTimeout: 0.3,
         }),
-        proxyTimeout: 30,
       });
 
       testServer = new TestServer({ config });

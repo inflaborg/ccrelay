@@ -99,9 +99,9 @@ export function createTestConcurrencyConfig(
 ): ConcurrencyConfig {
   return {
     enabled: true,
-    maxConcurrency: 3,
+    maxWorkers: 3,
     maxQueueSize: 10,
-    timeout: 5000,
+    requestTimeout: 5, // 5 seconds (note: timeout is now in seconds, not ms)
     ...overrides,
   };
 }

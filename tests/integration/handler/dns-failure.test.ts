@@ -31,11 +31,10 @@ describe("Integration: DNS/Network Failure", () => {
           baseUrl: "https://this-domain-definitely-does-not-exist-12345.invalid",
         }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
+          maxWorkers: 2,
           maxQueueSize: 10,
-          timeout: 5000,
+          requestTimeout: 5,
         }),
-        proxyTimeout: 3,
       });
 
       testServer = new TestServer({ config });
@@ -58,11 +57,10 @@ describe("Integration: DNS/Network Failure", () => {
           baseUrl: "http://127.0.0.1:1", // Port 1 is almost never used
         }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
+          maxWorkers: 2,
           maxQueueSize: 10,
-          timeout: 5000,
+          requestTimeout: 5,
         }),
-        proxyTimeout: 3,
       });
 
       testServer = new TestServer({ config });
@@ -87,11 +85,10 @@ describe("Integration: DNS/Network Failure", () => {
           baseUrl: "http://10.255.255.1:9999", // Non-routable IP
         }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
+          maxWorkers: 2,
           maxQueueSize: 10,
-          timeout: 10000, // Must be > proxyTimeout to avoid queue timeout before proxy completes
+          requestTimeout: 10, // Must be > proxyTimeout to avoid queue timeout before proxy completes
         }),
-        proxyTimeout: 2,
       });
 
       testServer = new TestServer({ config });
@@ -114,11 +111,10 @@ describe("Integration: DNS/Network Failure", () => {
           baseUrl: "https://this-domain-definitely-does-not-exist-12345.invalid",
         }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 1, // Only 1 worker to verify release
+          maxWorkers: 1, // Only 1 worker to verify release
           maxQueueSize: 10,
-          timeout: 3000,
+          requestTimeout: 0.30,
         }),
-        proxyTimeout: 2,
       });
 
       testServer = new TestServer({ config });
@@ -146,11 +142,10 @@ describe("Integration: DNS/Network Failure", () => {
           baseUrl: "http://127.0.0.1:1", // Will fail
         }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 2,
+          maxWorkers: 2,
           maxQueueSize: 10,
-          timeout: 2000,
+          requestTimeout: 2,
         }),
-        proxyTimeout: 2,
       });
 
       testServer = new TestServer({ config });
@@ -178,11 +173,10 @@ describe("Integration: DNS/Network Failure", () => {
           baseUrl: "http://127.0.0.1:1",
         }),
         concurrency: createTestConcurrencyConfig({
-          maxConcurrency: 3,
+          maxWorkers: 3,
           maxQueueSize: 10,
-          timeout: 2000,
+          requestTimeout: 2,
         }),
-        proxyTimeout: 2,
       });
 
       testServer = new TestServer({ config });

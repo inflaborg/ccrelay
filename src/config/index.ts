@@ -1,7 +1,7 @@
 /**
  * Configuration management for CCRelay
- * Supports reading from ~/.ccrelay/config.yaml
- * and VSCode settings (which take precedence)
+ * Reads configuration from yaml file specified by vscode setting
+ * Auto-initializes config file with defaults if not exists
  */
 
 import * as vscode from "vscode";
@@ -21,19 +21,116 @@ import {
   type ConcurrencyConfig,
   type DatabaseConfig,
   type RouteQueueConfig,
-  type RouteQueueConfigInput,
+  type BlockPattern,
 } from "../types";
 
 const CONFIG_STATE_KEY = "ccrelay.currentProvider";
-const DEFAULT_PORT = 7575;
-const DEFAULT_HOST = "127.0.0.1";
-
-// Config directory and file
-const CONFIG_DIR = path.join(os.homedir(), ".ccrelay");
-const CONFIG_FILE = path.join(CONFIG_DIR, "config.yaml");
 
 // Environment variable pattern for substitution
 const ENV_VAR_PATTERN = /\$\{(\w+)\}/g;
+
+// Default config with comments template
+const DEFAULT_CONFIG_YAML = `# CCRelay Configuration
+# 文档: https://github.com/inflaborg/ccrelay#configuration
+
+# ==================== 服务配置 ====================
+server:
+  port: 7575                    # 代理服务端口
+  host: "127.0.0.1"             # 绑定地址
+  autoStart: true               # 插件启动时自动启动服务
+
+# ==================== 供应商配置 ====================
+providers:
+  official:
+    name: "Claude Official"
+    baseUrl: "https://api.anthropic.com"
+    mode: "passthrough"         # passthrough | inject
+    providerType: "anthropic"   # anthropic | openai
+    enabled: true
+
+  # 示例：自定义供应商
+  # custom:
+  #   name: "Custom Provider"
+  #   baseUrl: "https://api.example.com/anthropic"
+  #   mode: "inject"
+  #   providerType: "anthropic"
+  #   apiKey: "\${API_KEY}"      # 支持环境变量
+  #   authHeader: "authorization"
+  #   modelMap:
+  #     "claude-*": "custom-model"
+  #   enabled: true
+
+# 默认供应商 ID
+defaultProvider: "official"
+
+# ==================== 路由配置 ====================
+routing:
+  # 代理路由: 转发到当前供应商
+  proxy:
+    - "/v1/messages"
+    - "/messages"
+
+  # 直通路由: 始终发往官方 API
+  passthrough:
+    - "/v1/users/*"
+    - "/v1/organizations/*"
+
+  # 阻断路由 (inject 模式): 返回自定义响应
+  block:
+    - path: "/api/event_logging/*"
+      response: ""
+      code: 200
+
+  # OpenAI 格式阻断路由
+  openaiBlock:
+    - path: "/v1/messages/count_tokens"
+      response: '{"input_tokens": 0}'
+      code: 200
+
+# ==================== 并发控制 ====================
+concurrency:
+  enabled: true                 # 启用并发队列
+  maxWorkers: 3                 # 最大并发数
+  maxQueueSize: 100             # 最大队列长度 (0=无限制)
+
+  # 请求超时: 排队等待的最长时间 (秒)
+  # 超过此时间的请求将返回 503
+  # 0 或不设置 = 无限制
+  requestTimeout: 60
+
+  # 按路由的独立队列配置
+  routes:
+    - pattern: "/v1/messages/count_tokens"
+      name: "count_tokens"
+      maxWorkers: 30
+      maxQueueSize: 1000
+
+# ==================== 日志存储 ====================
+logging:
+  enabled: false                # 启用请求日志存储
+
+  database:
+    type: "sqlite"              # sqlite | postgres
+    # SQLite 配置 (默认)
+    path: ""                    # 空 = ~/.ccrelay/logs.db
+
+    # PostgreSQL 配置
+    # type: "postgres"
+    # host: "localhost"
+    # port: 5432
+    # name: "ccrelay"
+    # user: ""
+    # password: "\${POSTGRES_PASSWORD}"
+    # ssl: false
+`;
+
+/**
+ * Default configuration object (parsed from DEFAULT_CONFIG_YAML)
+ */
+function getDefaultConfig(): FileConfigInput {
+  const parsed = yaml.load(DEFAULT_CONFIG_YAML);
+  return FileConfigSchema.parse(parsed);
+}
 
 /**
  * Expand environment variables in a string
@@ -77,65 +174,40 @@ function expandEnvVarsInObject<T>(obj: T): T {
 }
 
 /**
- * Load and parse configuration from ~/.ccrelay/config.yaml
- * Returns the validated config or a default empty config
+ * Deep merge two objects, with source overwriting target
  */
-function loadFileConfig(): FileConfigInput {
-  if (fs.existsSync(CONFIG_FILE)) {
-    try {
-      const content = fs.readFileSync(CONFIG_FILE, "utf-8");
-      const rawConfig = yaml.load(content);
-      if (rawConfig && typeof rawConfig === "object") {
-        const expanded = expandEnvVarsInObject(rawConfig);
-        const result = FileConfigSchema.safeParse(expanded);
-        if (result.success) {
-          return result.data;
-        }
-        console.warn("Config file validation failed:", result.error.format());
+function deepMerge<T extends Record<string, unknown>>(target: T, source: Partial<T>): T {
+  const result = { ...target };
+  for (const key of Object.keys(source) as (keyof T)[]) {
+    if (source[key] !== undefined) {
+      if (
+        typeof source[key] === "object" &&
+        source[key] !== null &&
+        !Array.isArray(source[key]) &&
+        typeof target[key] === "object" &&
+        target[key] !== null &&
+        !Array.isArray(target[key])
+      ) {
+        result[key] = deepMerge(
+          target[key] as Record<string, unknown>,
+          source[key] as Record<string, unknown>
+        ) as T[keyof T];
+      } else {
+        result[key] = source[key] as T[keyof T];
       }
-    } catch (err) {
-      console.error(`Failed to load config from ${CONFIG_FILE}:`, err);
     }
   }
-  return {} as FileConfigInput;
+  return result;
 }
 
 /**
- * Get a string value from provider config with fallback
+ * Expand ~ to home directory in path
  */
-function getString(
-  config: ProviderConfigInput,
-  key: keyof ProviderConfigInput,
-  fallback: string
-): string {
-  const value = config[key];
-  return typeof value === "string" ? value : fallback;
-}
-
-/**
- * Get an optional string value from provider config
- */
-function getOptionalString(
-  config: ProviderConfigInput,
-  key: keyof ProviderConfigInput
-): string | undefined {
-  const value = config[key];
-  return typeof value === "string" ? value : undefined;
-}
-
-/**
- * Get a record value from provider config
- */
-function getRecord(
-  config: ProviderConfigInput,
-  key: keyof ProviderConfigInput
-): Record<string, string> {
-  const value = config[key];
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- Zod inferred type needs assertion
-    return value as Record<string, string>;
+function expandPath(filepath: string): string {
+  if (filepath.startsWith("~")) {
+    return path.join(os.homedir(), filepath.slice(1));
   }
-  return {};
+  return filepath;
 }
 
 /**
@@ -143,279 +215,141 @@ function getRecord(
  */
 function parseProvider(id: string, config: ProviderConfigInput): Provider {
   // Support both camelCase and snake_case variants
-  const baseUrl = getString(config, "baseUrl", "") || getString(config, "base_url", "");
-  const apiKey = getOptionalString(config, "apiKey") || getOptionalString(config, "api_key");
-  const authHeader =
-    getOptionalString(config, "authHeader") || getOptionalString(config, "auth_header");
-  const modelMap = getRecord(config, "modelMap") || getRecord(config, "model_map");
-  const vlModelMap = getRecord(config, "vlModelMap") || getRecord(config, "vl_model_map");
-  // Get providerType, default to "anthropic"
-  const providerType =
-    (config.providerType as ProviderType) || (config.provider_type as ProviderType) || "anthropic";
+  const baseUrl = config.baseUrl || config.base_url || "";
+  const apiKey = config.apiKey || config.api_key;
+  const authHeader = config.authHeader || config.auth_header;
+  const modelMap = config.modelMap || config.model_map || {};
+  const vlModelMap = config.vlModelMap || config.vl_model_map;
+  const providerType = (config.providerType || config.provider_type || "anthropic") as ProviderType;
 
   return {
     id,
-    name: getString(config, "name", id),
+    name: config.name || id,
     baseUrl,
     mode: config.mode as ProviderMode,
     providerType,
     apiKey,
     authHeader: authHeader || "authorization",
     modelMap,
-
-    vlModelMap: Object.keys(vlModelMap).length > 0 ? vlModelMap : undefined,
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- Zod inferred type needs assertion
-    headers: (config.headers as Record<string, string> | undefined) ?? {},
+    vlModelMap: Object.keys(vlModelMap || {}).length > 0 ? vlModelMap : undefined,
+    headers: config.headers ?? {},
     enabled: config.enabled !== false,
   };
-}
-
-/**
- * Parse provider from unknown config object (for VSCode settings)
- */
-function parseProviderFromUnknown(id: string, rawProvider: unknown): Provider | null {
-  if (!rawProvider || typeof rawProvider !== "object" || Array.isArray(rawProvider)) {
-    return null;
-  }
-
-  const result = ProviderConfigSchema.safeParse(rawProvider);
-  if (!result.success) {
-    console.warn(`Provider ${id} validation failed:`, result.error.format());
-    return null;
-  }
-
-  return parseProvider(id, result.data);
-}
-
-/**
- * Extract server config from validated file config
- */
-function getServerConfig(
-  fileConfig: FileConfigInput,
-  vscodeConfig: vscode.WorkspaceConfiguration
-): { port: number; host: string } {
-  const serverConfig = fileConfig.server;
-  const fallbackPort = serverConfig?.port ?? DEFAULT_PORT;
-  const fallbackHost = serverConfig?.host ?? DEFAULT_HOST;
-
-  return {
-    port: vscodeConfig.get<number>("server.port", fallbackPort),
-    host: vscodeConfig.get<string>("server.host", fallbackHost) ?? DEFAULT_HOST,
-  };
-}
-
-/**
- * Extract string array config with fallback
- */
-function getStringArray(
-  vscodeConfig: vscode.WorkspaceConfiguration,
-  key: string,
-  fallback: string[] = []
-): string[] {
-  const value = vscodeConfig.get<string[]>(key);
-  return Array.isArray(value) ? value : fallback;
-}
-
-/**
- * Extract block pattern array config with fallback
- */
-function getBlockPatternArray(
-  vscodeConfig: vscode.WorkspaceConfiguration,
-  key: string,
-  fallback: { path: string; response: string; responseCode?: number }[] = []
-): { path: string; response: string; responseCode?: number }[] {
-  const value = vscodeConfig.get<{ path: string; response: string; responseCode?: number }[]>(key);
-  return Array.isArray(value) ? value : fallback;
-}
-
-/**
- * Extract concurrency config from file and VSCode settings
- */
-function getConcurrencyConfig(
-  fileConfig: FileConfigInput,
-  vscodeConfig: vscode.WorkspaceConfiguration
-): ConcurrencyConfig | undefined {
-  // Get from file config
-  const fileConcurrency = fileConfig.concurrency;
-
-  // Get from VSCode settings (takes precedence)
-  const enabled = vscodeConfig.get<boolean>(
-    "concurrency.enabled",
-    fileConcurrency?.enabled ?? false
-  );
-  const maxConcurrency = vscodeConfig.get<number>(
-    "concurrency.maxConcurrency",
-    fileConcurrency?.maxConcurrency ?? 5
-  );
-  const maxQueueSize = vscodeConfig.get<number | undefined>(
-    "concurrency.maxQueueSize",
-    fileConcurrency?.maxQueueSize
-  );
-  const timeout = vscodeConfig.get<number | undefined>(
-    "concurrency.timeout",
-    fileConcurrency?.timeout
-  );
-
-  // Only return config if enabled
-  if (!enabled) {
-    return undefined;
-  }
-
-  return {
-    enabled,
-    maxConcurrency,
-    maxQueueSize,
-    timeout,
-  };
-}
-
-/**
- * Extract route-based queue configs from file and VSCode settings
- */
-function getRouteQueuesConfig(
-  fileConfig: FileConfigInput,
-  vscodeConfig: vscode.WorkspaceConfiguration
-): RouteQueueConfig[] | undefined {
-  // Get from file config
-  const fileRouteQueues = fileConfig.routeQueues;
-
-  // Also check VSCode settings for routeQueues
-  const vscodeRouteQueues = vscodeConfig.get<RouteQueueConfigInput[]>("concurrency.routeQueues");
-
-  const routeQueuesConfig = vscodeRouteQueues ?? fileRouteQueues;
-
-  if (!routeQueuesConfig || routeQueuesConfig.length === 0) {
-    return undefined;
-  }
-
-  // Compile regex patterns and validate
-  return routeQueuesConfig.map((config, index) => {
-    let compiledPattern: RegExp;
-    try {
-      compiledPattern = new RegExp(config.pathPattern);
-    } catch {
-      console.warn(
-        `[ConfigManager] Invalid regex pattern "${config.pathPattern}" at index ${index}, skipping`
-      );
-      compiledPattern = /^$/; // Match nothing on error
-    }
-
-    return {
-      pathPattern: config.pathPattern,
-      maxConcurrency: config.maxConcurrency ?? 10,
-      maxQueueSize: config.maxQueueSize,
-      timeout: config.timeout,
-      name: config.name,
-      compiledPattern,
-    };
-  });
-}
-
-/**
- * Extract database config from file and VSCode settings
- */
-function getDatabaseConfig(
-  fileConfig: FileConfigInput,
-  vscodeConfig: vscode.WorkspaceConfiguration
-): DatabaseConfig | undefined {
-  // Get database type from VSCode settings (takes precedence) or file config
-  const dbType = vscodeConfig.get<string>("database.type", fileConfig.database?.type ?? "sqlite");
-
-  if (dbType === "postgres") {
-    // PostgreSQL configuration
-    const fileDb = fileConfig.database?.type === "postgres" ? fileConfig.database : undefined;
-
-    const host = vscodeConfig.get<string>("database.postgresHost", fileDb?.host ?? "localhost");
-    const port = vscodeConfig.get<number>("database.postgresPort", fileDb?.port ?? 5432);
-    const database = vscodeConfig.get<string>(
-      "database.postgresDatabase",
-      fileDb?.database ?? "ccrelay"
-    );
-    const user = vscodeConfig.get<string>("database.postgresUser", fileDb?.user ?? "");
-    const rawPassword = vscodeConfig.get<string>(
-      "database.postgresPassword",
-      fileDb?.password ?? ""
-    );
-    const password = expandEnvVars(rawPassword);
-    const ssl = vscodeConfig.get<boolean>("database.postgresSsl", fileDb?.ssl ?? false);
-
-    if (!user) {
-      console.warn("[ConfigManager] PostgreSQL user is required but not configured");
-      return undefined;
-    }
-
-    return {
-      type: "postgres",
-      host,
-      port,
-      database,
-      user,
-      password,
-      ssl,
-    };
-  } else {
-    // SQLite configuration (default)
-    const fileDb = fileConfig.database?.type === "sqlite" ? fileConfig.database : undefined;
-    const dbPath = vscodeConfig.get<string>("database.sqlitePath", fileDb?.path ?? "");
-
-    return {
-      type: "sqlite",
-      path: dbPath || undefined,
-    };
-  }
 }
 
 export class ConfigManager {
   private config: RouterConfig;
   private context: vscode.ExtensionContext;
   private disposables: vscode.Disposable[] = [];
+  private configPath: string;
 
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
+
+    // Get config path from vscode settings
+    const vscodeConfig = vscode.workspace.getConfiguration("ccrelay");
+    const configPathSetting = vscodeConfig.get<string>("configPath", "~/.ccrelay/config.yaml");
+    this.configPath = expandPath(configPathSetting);
+
+    // Ensure config file exists with defaults
+    this.ensureConfigFile();
+
+    // Load configuration
     this.config = this.loadConfig();
 
     // Watch for configuration changes
     const configWatcher = vscode.workspace.onDidChangeConfiguration(e => {
-      if (e.affectsConfiguration("ccrelay")) {
+      if (e.affectsConfiguration("ccrelay.configPath")) {
+        // Config path changed, reload everything
+        const newPath = vscodeConfig.get<string>("configPath", "~/.ccrelay/config.yaml");
+        this.configPath = expandPath(newPath);
+        this.ensureConfigFile();
         this.config = this.loadConfig();
       }
     });
     this.disposables.push(configWatcher);
   }
 
-  private loadConfig(): RouterConfig {
-    const vscodeConfig = vscode.workspace.getConfiguration("ccrelay");
-    const useConfigFile = vscodeConfig.get<boolean>("config.useFile", false);
+  /**
+   * Ensure config file exists, create with defaults if not
+   */
+  private ensureConfigFile(): void {
+    const configDir = path.dirname(this.configPath);
 
-    console.log(`[ConfigManager] Loading config... useConfigFile=${useConfigFile}`);
-
-    // Load from ~/.ccrelay/config.yaml only if enabled
-    const fileConfig = useConfigFile ? loadFileConfig() : {};
-    if (useConfigFile) {
-      console.log(
-        `[ConfigManager] File config loaded: ${JSON.stringify(fileConfig.concurrency || "none")}`
-      );
+    // Create directory if not exists
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true });
     }
 
-    // Get server config
-    const { port, host } = getServerConfig(fileConfig, vscodeConfig);
+    // Create config file if not exists
+    if (!fs.existsSync(this.configPath)) {
+      console.log(`[ConfigManager] Creating default config at ${this.configPath}`);
+      fs.writeFileSync(this.configPath, DEFAULT_CONFIG_YAML, "utf-8");
+      return;
+    }
+
+    // File exists, merge with defaults for missing fields
+    try {
+      const content = fs.readFileSync(this.configPath, "utf-8");
+      const existingConfig = yaml.load(content);
+
+      if (existingConfig && typeof existingConfig === "object") {
+        const defaults = getDefaultConfig();
+        const merged = deepMerge(defaults, existingConfig as Partial<FileConfigInput>);
+
+        // Only rewrite if there are new fields added
+        if (JSON.stringify(merged) !== JSON.stringify(existingConfig)) {
+          console.log(`[ConfigManager] Merging new default fields into ${this.configPath}`);
+          // Preserve comments by not overwriting if user has a customized file
+          // For now, we just use the merged config without rewriting the file
+          // This allows users to keep their comments
+        }
+      }
+    } catch (err) {
+      console.error(`[ConfigManager] Error reading config file:`, err);
+    }
+  }
+
+  /**
+   * Load and parse configuration from yaml file
+   */
+  private loadConfig(): RouterConfig {
+    console.log(`[ConfigManager] Loading config from ${this.configPath}`);
+
+    // Load from file
+    let fileConfig: FileConfigInput = {};
+    try {
+      if (fs.existsSync(this.configPath)) {
+        const content = fs.readFileSync(this.configPath, "utf-8");
+        const rawConfig = yaml.load(content);
+        if (rawConfig && typeof rawConfig === "object") {
+          const expanded = expandEnvVarsInObject(rawConfig);
+          const result = FileConfigSchema.safeParse(expanded);
+          if (result.success) {
+            fileConfig = result.data;
+          } else {
+            console.warn("[ConfigManager] Config validation failed:", result.error.format());
+          }
+        }
+      }
+    } catch (err) {
+      console.error(`[ConfigManager] Failed to load config:`, err);
+    }
+
+    // Merge with defaults
+    const defaults = getDefaultConfig();
+    const merged = deepMerge(defaults, fileConfig);
 
     // Build providers map
     const providers: Record<string, Provider> = {};
-
-    // Add providers from file config (only if enabled)
-    if (useConfigFile && fileConfig.providers) {
-      for (const [id, config] of Object.entries(fileConfig.providers)) {
-        providers[id] = parseProvider(id, config);
-      }
-    }
-
-    // Add/override with VSCode providers
-    const vscodeProviders = vscodeConfig.get<Record<string, unknown>>("provider.list", {});
-    for (const [id, rawProvider] of Object.entries(vscodeProviders)) {
-      const provider = parseProviderFromUnknown(id, rawProvider);
-      if (provider) {
-        providers[id] = provider;
+    if (merged.providers) {
+      for (const [id, config] of Object.entries(merged.providers)) {
+        const result = ProviderConfigSchema.safeParse(config);
+        if (result.success) {
+          providers[id] = parseProvider(id, result.data);
+        } else {
+          console.warn(`[ConfigManager] Provider ${id} validation failed:`, result.error.format());
+        }
       }
     }
 
@@ -432,73 +366,106 @@ export class ConfigManager {
       };
     }
 
-    // Get default provider
-    const defaultProvider =
-      vscodeConfig.get<string>("provider.default") ?? fileConfig.defaultProvider ?? "official";
+    // Build concurrency config
+    let concurrency: ConcurrencyConfig | undefined;
+    if (merged.concurrency?.enabled) {
+      concurrency = {
+        enabled: true,
+        maxWorkers: merged.concurrency.maxWorkers || 3,
+        maxQueueSize: merged.concurrency.maxQueueSize,
+        requestTimeout: merged.concurrency.requestTimeout,
+      };
+    }
 
-    // Get patterns
-    const routePatterns = getStringArray(
-      vscodeConfig,
-      "route.patterns",
-      fileConfig.routePatterns ?? ["/v1/messages", "/messages"]
-    );
-    const passthroughPatterns = getStringArray(
-      vscodeConfig,
-      "route.passthroughPatterns",
-      fileConfig.passthroughPatterns ?? ["/v1/users/*", "/v1/organizations/*"]
-    );
-    const blockPatterns = getBlockPatternArray(
-      vscodeConfig,
-      "route.blockPatterns",
-      fileConfig.blockPatterns ?? [{ path: "/api/event_logging/*", response: "Blocked" }]
-    );
-    const openaiBlockPatterns = getBlockPatternArray(
-      vscodeConfig,
-      "route.openaiBlockPatterns",
-      fileConfig.openaiBlockPatterns ?? []
-    );
+    // Build route queues config
+    let routeQueues: RouteQueueConfig[] | undefined;
+    const routes = merged.concurrency?.routes;
+    if (routes && routes.length > 0) {
+      routeQueues = routes.map((route, index) => {
+        let compiledPattern: RegExp;
+        try {
+          compiledPattern = new RegExp(route.pattern);
+        } catch {
+          console.warn(
+            `[ConfigManager] Invalid regex pattern "${route.pattern}" at index ${index}`
+          );
+          compiledPattern = /^$/; // Match nothing on error
+        }
+        return {
+          pattern: route.pattern,
+          maxWorkers: route.maxWorkers ?? 10,
+          maxQueueSize: route.maxQueueSize,
+          requestTimeout: route.requestTimeout,
+          name: route.name,
+          compiledPattern,
+        };
+      });
+    }
 
-    // Get concurrency config
-    const concurrency = getConcurrencyConfig(fileConfig, vscodeConfig);
-    console.log(`[ConfigManager] Concurrency config resolved: ${JSON.stringify(concurrency)}`);
+    // Build database config
+    let database: DatabaseConfig | undefined;
+    if (merged.logging?.enabled && merged.logging?.database) {
+      const db = merged.logging.database;
+      if (db.type === "postgres") {
+        database = {
+          type: "postgres",
+          host: db.host || "localhost",
+          port: db.port || 5432,
+          name: db.name || "ccrelay",
+          user: db.user || "",
+          password: db.password,
+          ssl: db.ssl ?? false,
+        };
+      } else {
+        database = {
+          type: "sqlite",
+          path: db.path || undefined,
+        };
+      }
+    }
 
-    // Get route-based queue configs
-    const routeQueues = getRouteQueuesConfig(fileConfig, vscodeConfig);
-    console.log(`[ConfigManager] Route queues config resolved: ${JSON.stringify(routeQueues)}`);
-
-    // Get log storage enabled setting
-    const enableLogStorage = vscodeConfig.get<boolean>(
-      "log.enableStorage",
-      fileConfig.enableLogStorage ?? false
-    );
-
-    // Get database config (only if log storage is enabled)
-    const database = enableLogStorage ? getDatabaseConfig(fileConfig, vscodeConfig) : undefined;
-    console.log(
-      `[ConfigManager] Log storage: ${enableLogStorage}, database type: ${database?.type ?? "none"}`
-    );
+    // Build routing config
+    const routing = {
+      proxy: merged.routing?.proxy || ["/v1/messages", "/messages"],
+      passthrough: merged.routing?.passthrough || ["/v1/users/*", "/v1/organizations/*"],
+      block: (merged.routing?.block || []).map(
+        (b): BlockPattern => ({
+          path: b.path,
+          response: b.response || "",
+          code: b.code ?? 200,
+        })
+      ),
+      openaiBlock: (merged.routing?.openaiBlock || []).map(
+        (b): BlockPattern => ({
+          path: b.path,
+          response: b.response || "",
+          code: b.code ?? 200,
+        })
+      ),
+    };
 
     return {
-      port,
-      host,
-      defaultProvider,
+      port: merged.server?.port || 7575,
+      host: merged.server?.host || "127.0.0.1",
+      autoStart: merged.server?.autoStart ?? true,
+      defaultProvider: merged.defaultProvider || "official",
       providers,
-      routePatterns,
-      passthroughPatterns,
-      blockPatterns,
-      openaiBlockPatterns,
+      routing,
       concurrency,
       routeQueues,
-      database,
-      enableLogStorage,
+      logging: {
+        enabled: merged.logging?.enabled ?? false,
+        database,
+      },
     };
   }
 
   /**
-   * Reload configuration from files
+   * Reload configuration from file
    */
   reload(): void {
     console.log("[ConfigManager] Reloading configuration...");
+    this.ensureConfigFile();
     this.config = this.loadConfig();
   }
 
@@ -539,20 +506,32 @@ export class ConfigManager {
     return this.config.host;
   }
 
+  get autoStart(): boolean {
+    return this.config.autoStart;
+  }
+
+  get routing() {
+    return this.config.routing;
+  }
+
   get routePatterns(): string[] {
-    return this.config.routePatterns;
+    return this.config.routing.proxy;
   }
 
   get passthroughPatterns(): string[] {
-    return this.config.passthroughPatterns;
+    return this.config.routing.passthrough;
   }
 
-  get blockPatterns(): { path: string; response: string; responseCode?: number }[] {
-    return this.config.blockPatterns;
+  get blockPatterns(): BlockPattern[] {
+    return this.config.routing.block;
   }
 
-  get openaiBlockPatterns(): { path: string; response: string; responseCode?: number }[] {
-    return this.config.openaiBlockPatterns;
+  get openaiBlockPatterns(): BlockPattern[] {
+    return this.config.routing.openaiBlock;
+  }
+
+  get concurrencyConfig(): ConcurrencyConfig | undefined {
+    return this.config.concurrency;
   }
 
   get routeQueues(): RouteQueueConfig[] | undefined {
@@ -560,18 +539,11 @@ export class ConfigManager {
   }
 
   get database(): DatabaseConfig | undefined {
-    return this.config.database;
+    return this.config.logging.database;
   }
 
   get enableLogStorage(): boolean {
-    return this.config.enableLogStorage;
-  }
-
-  /**
-   * Get a specific VSCode configuration value
-   */
-  getSetting<T>(key: string, defaultValue?: T): T {
-    return vscode.workspace.getConfiguration("ccrelay").get<T>(key, defaultValue as T);
+    return this.config.logging.enabled;
   }
 
   /**
@@ -591,22 +563,22 @@ export class ConfigManager {
   /**
    * Get the config file path
    */
-  static getConfigFilePath(): string {
-    return CONFIG_FILE;
+  getConfigPath(): string {
+    return this.configPath;
   }
 
   /**
    * Get the config directory path
    */
-  static getConfigDirPath(): string {
-    return CONFIG_DIR;
+  getConfigDir(): string {
+    return path.dirname(this.configPath);
   }
 
   /**
    * Check if config file exists
    */
-  static configExists(): boolean {
-    return fs.existsSync(CONFIG_FILE);
+  configExists(): boolean {
+    return fs.existsSync(this.configPath);
   }
 
   dispose(): void {

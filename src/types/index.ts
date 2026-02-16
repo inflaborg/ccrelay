@@ -48,6 +48,7 @@ export type ProviderConfigInput = z.infer<typeof ProviderConfigSchema>;
 export const ServerConfigSchema = z.object({
   port: z.number().int().positive().default(7575),
   host: z.string().default("127.0.0.1"),
+  autoStart: z.boolean().default(true),
 });
 
 export type ServerConfigInput = z.infer<typeof ServerConfigSchema>;
@@ -56,31 +57,42 @@ export type ServerConfigInput = z.infer<typeof ServerConfigSchema>;
 export const BlockPatternSchema = z.object({
   path: z.string(),
   response: z.string(),
-  responseCode: z.number().optional(),
+  code: z.number().optional(), // responseCode -> code
 });
 
 export type BlockPattern = z.infer<typeof BlockPatternSchema>;
 
-// Concurrency configuration schema
-export const ConcurrencyConfigSchema = z.object({
-  enabled: z.boolean().default(false),
-  maxConcurrency: z.number().int().positive().default(5),
-  maxQueueSize: z.number().int().positive().optional(),
-  timeout: z.number().int().positive().optional(),
+// Routing configuration schema
+export const RoutingConfigSchema = z.object({
+  proxy: z.array(z.string()).optional(),
+  passthrough: z.array(z.string()).optional(),
+  block: z.array(BlockPatternSchema).optional(),
+  openaiBlock: z.array(BlockPatternSchema).optional(),
 });
 
-export type ConcurrencyConfigInput = z.infer<typeof ConcurrencyConfigSchema>;
+export type RoutingConfigInput = z.infer<typeof RoutingConfigSchema>;
 
-// Route-based queue configuration schema
+// Route-based queue configuration schema (defined before ConcurrencyConfigSchema)
 export const RouteQueueConfigSchema = z.object({
-  pathPattern: z.string().min(1), // Regex pattern to match request path
-  maxConcurrency: z.number().int().positive().default(10),
-  maxQueueSize: z.number().int().positive().optional(),
-  timeout: z.number().int().positive().optional(),
+  pattern: z.string().min(1), // Regex pattern to match request path
+  maxWorkers: z.number().int().positive().default(10),
+  maxQueueSize: z.number().int().nonnegative().optional(),
+  requestTimeout: z.number().nonnegative().optional(), // Queue wait timeout in seconds (supports fractions)
   name: z.string().optional(), // Optional name for logging
 });
 
 export type RouteQueueConfigInput = z.infer<typeof RouteQueueConfigSchema>;
+
+// Concurrency configuration schema
+export const ConcurrencyConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  maxWorkers: z.number().int().positive().default(3),
+  maxQueueSize: z.number().int().nonnegative().optional(),
+  requestTimeout: z.number().nonnegative().optional(), // Queue wait timeout in seconds (supports fractions)
+  routes: z.array(RouteQueueConfigSchema).optional(),
+});
+
+export type ConcurrencyConfigInput = z.infer<typeof ConcurrencyConfigSchema>;
 
 // SQLite configuration schema
 export const SqliteConfigSchema = z.object({
@@ -95,7 +107,7 @@ export const PostgresConfigSchema = z.object({
   type: z.literal("postgres"),
   host: z.string().default("localhost"),
   port: z.number().int().positive().default(5432),
-  database: z.string().min(1),
+  name: z.string().min(1), // database -> name
   user: z.string().min(1),
   password: z.string().optional(),
   ssl: z.boolean().default(false),
@@ -111,19 +123,22 @@ export const DatabaseConfigSchema = z.discriminatedUnion("type", [
 
 export type DatabaseConfigInput = z.infer<typeof DatabaseConfigSchema>;
 
+// Logging configuration schema
+export const LoggingConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  database: DatabaseConfigSchema.optional(),
+});
+
+export type LoggingConfigInput = z.infer<typeof LoggingConfigSchema>;
+
 // Full file configuration schema
 export const FileConfigSchema = z.object({
   server: ServerConfigSchema.optional(),
   providers: z.record(z.string(), ProviderConfigSchema).optional(),
   defaultProvider: z.string().optional(),
-  routePatterns: z.array(z.string()).optional(),
-  passthroughPatterns: z.array(z.string()).optional(),
-  blockPatterns: z.array(BlockPatternSchema).optional(),
-  openaiBlockPatterns: z.array(BlockPatternSchema).optional(),
+  routing: RoutingConfigSchema.optional(),
   concurrency: ConcurrencyConfigSchema.optional(),
-  routeQueues: z.array(RouteQueueConfigSchema).optional(), // Route-based queue configs
-  database: DatabaseConfigSchema.optional(),
-  enableLogStorage: z.boolean().optional(),
+  logging: LoggingConfigSchema.optional(),
 });
 
 export type FileConfigInput = z.infer<typeof FileConfigSchema>;
@@ -143,7 +158,7 @@ export interface PostgresDatabaseConfig {
   type: "postgres";
   host: string;
   port: number;
-  database: string;
+  name: string; // database -> name
   user: string;
   password?: string;
   ssl: boolean;
@@ -171,16 +186,21 @@ export interface Provider {
 export interface RouterConfig {
   port: number;
   host: string;
+  autoStart: boolean;
   defaultProvider: string;
   providers: Record<string, Provider>;
-  routePatterns: string[];
-  passthroughPatterns: string[];
-  blockPatterns: BlockPattern[];
-  openaiBlockPatterns: BlockPattern[];
+  routing: {
+    proxy: string[];
+    passthrough: string[];
+    block: BlockPattern[];
+    openaiBlock: BlockPattern[];
+  };
   concurrency?: ConcurrencyConfig;
   routeQueues?: RouteQueueConfig[]; // Route-based queue configurations
-  database?: DatabaseConfig;
-  enableLogStorage: boolean;
+  logging: {
+    enabled: boolean;
+    database?: DatabaseConfig;
+  };
 }
 
 export interface RouterStatus {
@@ -374,19 +394,19 @@ export interface RoleChangeInfo {
  */
 export interface ConcurrencyConfig {
   enabled: boolean;
-  maxConcurrency: number;
+  maxWorkers: number;
   maxQueueSize?: number;
-  timeout?: number;
+  requestTimeout?: number; // Queue wait timeout in seconds
 }
 
 /**
  * Route-based queue configuration for handling specific paths with different concurrency
  */
 export interface RouteQueueConfig {
-  pathPattern: string; // Regex pattern to match request path
-  maxConcurrency: number;
+  pattern: string; // Regex pattern to match request path
+  maxWorkers: number;
   maxQueueSize?: number;
-  timeout?: number;
+  requestTimeout?: number; // Queue wait timeout in seconds
   name?: string;
   compiledPattern?: RegExp; // Compiled regex for matching
 }
@@ -395,7 +415,7 @@ export interface RouteQueueConfig {
  * Provider-level concurrency configuration
  */
 export interface ProviderConcurrencyConfig {
-  maxConcurrency?: number;
+  maxWorkers?: number;
 }
 
 /**
@@ -456,7 +476,7 @@ export type TaskStatus = "pending" | "running" | "completed" | "failed" | "timeo
 export interface QueueStats {
   queueLength: number;
   activeWorkers: number;
-  maxConcurrency: number;
+  maxWorkers: number;
   totalProcessed: number;
   totalFailed: number;
   avgWaitTime: number;
