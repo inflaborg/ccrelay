@@ -298,7 +298,7 @@ export interface ElectionResult {
 /**
  * Instance role in the multi-instance setup
  */
-export type InstanceRole = "leader" | "follower" | "standalone";
+export type InstanceRole = "leader" | "follower";
 
 /**
  * Message parameter for Anthropic API

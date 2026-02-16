@@ -39,14 +39,11 @@ export class ProxyServer {
 
   // Leader election
   private leaderElection: LeaderElection | null = null;
-  private role: InstanceRole = "standalone";
+  private role: InstanceRole = "follower"; // Default to follower, will be set during election
   private leaderUrl: string | null = null;
 
   // Lock to prevent duplicate server startups
   private serverStartInProgress: boolean = false;
-
-  // Client for follower mode
-  private httpClient: http.Agent | null = null;
 
   // Queue manager for concurrency control
   private queueManager: QueueManager;
@@ -434,13 +431,8 @@ export class ProxyServer {
       return { role: this.role, leaderUrl: this.leaderUrl ?? undefined };
     }
 
-    // No leader election, start as standalone
-    this.role = "standalone";
-    await this.startServerOnly();
-    this.log.info(
-      `[Server:${this.instanceId}] ===== SERVER START COMPLETE in ${Date.now() - startStart}ms ===== as standalone`
-    );
-    return { role: "standalone" };
+    // Should never reach here - leaderElection is always configured
+    throw new Error("Server started without leader election configured");
   }
 
   /**

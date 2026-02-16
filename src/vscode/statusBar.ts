@@ -91,18 +91,10 @@ export class StatusBarManager implements vscode.Disposable {
         statusIcon = "$(radio-tower)"; // Follower icon
         statusSuffix = " [Follower]";
       }
-    } else if (role === "standalone") {
-      if (!isRunning) {
-        statusIcon = "$(debug-stop)";
-        statusSuffix = " [Stopped]";
-      } else {
-        statusIcon = "$(server)";
-        statusSuffix = ""; // Standalone running
-      }
     }
 
-    // Handle stopped state explicitly
-    if (!isRunning && role !== "follower") {
+    // Handle stopped state for leader
+    if (!isRunning && role === "leader") {
       this.statusBarItem.text = `$(debug-stop) CCRelay [Stopped]`;
       this.statusBarItem.tooltip = "CCRelay: Server stopped - Click to start";
       this.statusBarItem.backgroundColor = undefined;
@@ -162,8 +154,6 @@ export class StatusBarManager implements vscode.Disposable {
         return "Leader";
       case "follower":
         return "Follower";
-      case "standalone":
-        return "Standalone";
       default:
         return role;
     }
