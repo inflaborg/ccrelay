@@ -4,15 +4,9 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
   pull_request:
     branches:
       - main
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
 
 jobs:
   lint:
@@ -21,19 +15,44 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Check if docs-only changes
+        id: check
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            files=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files --jq '.[].filename')
+          else
+            files=$(git diff --name-only HEAD^ HEAD)
+          fi
+          echo "files=$files" >> $GITHUB_OUTPUT
+          if echo "$files" | grep -qvE '(\.md$|^docs/)'; then
+            echo "has_code_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_code_changes=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Setup Node.js
+        if: steps.check.outputs.has_code_changes == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
+        if: steps.check.outputs.has_code_changes == 'true'
         run: |
           npm ci
           cd web && npm ci
 
       - name: Lint root
+        if: steps.check.outputs.has_code_changes == 'true'
         run: npm run lint
 
       - name: Lint web
+        if: steps.check.outputs.has_code_changes == 'true'
         run: cd web && npm run lint
+
+      - name: Skip lint (docs-only)
+        if: steps.check.outputs.has_code_changes != 'true'
+        run: echo "Skipping lint - documentation only changes"
