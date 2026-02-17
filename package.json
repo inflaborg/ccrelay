@@ -121,7 +121,7 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "js-yaml": "^4.1.0",
+    "js-yaml": "^4.1.1",
     "pg": "^8.18.0",
     "ws": "^8.18.0",
     "zod": "^4.3.6"

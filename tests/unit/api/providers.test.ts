@@ -251,11 +251,11 @@ describe("api/providers: handleListProviders", () => {
       const body = JSON.parse(res.body) as ProvidersResponse;
       expect(body.providers).toBeDefined();
       expect(Array.isArray(body.providers)).toBe(true);
-      expect(body.providers).toHaveLength(2);
+      expect(body.providers).toHaveLength(3); // Now returns all providers including disabled
       expect(body.current).toBe("testProvider");
     });
 
-    it("should only include enabled providers", () => {
+    it("should include all providers with enabled status", () => {
       const req = new MockIncomingMessage("/ccrelay/api/providers", "GET");
       const res = new MockServerResponse();
 
@@ -265,11 +265,17 @@ describe("api/providers: handleListProviders", () => {
 
       const body = JSON.parse(res.body) as ProvidersResponse;
 
-      expect(body.providers).toHaveLength(2);
+      // Returns all providers including disabled ones
+      expect(body.providers).toHaveLength(3);
       expect(body.providers.map(p => p.id)).toEqual(
-        expect.arrayContaining(["testProvider", "anotherProvider"])
+        expect.arrayContaining(["testProvider", "anotherProvider", "disabledProvider"])
       );
-      expect(body.providers.map(p => p.id)).not.toContain("disabledProvider");
+
+      // Check enabled status is correctly set
+      const testProvider = body.providers.find(p => p.id === "testProvider");
+      const disabledProvider = body.providers.find(p => p.id === "disabledProvider");
+      expect(testProvider?.enabled).toBe(true);
+      expect(disabledProvider?.enabled).toBe(false);
     });
 
     it("should mark current provider as active", () => {
@@ -359,7 +365,10 @@ describe("api/providers: handleListProviders", () => {
       expect(res.ended).toBe(true);
 
       const body = JSON.parse(res.body) as ProvidersResponse;
-      expect(body.providers).toEqual([]);
+      // Now returns all providers including disabled ones
+      expect(body.providers).toHaveLength(1);
+      expect(body.providers[0]?.id).toBe("disabledProvider");
+      expect(body.providers[0]?.enabled).toBe(false);
       expect(body.current).toBeNull();
     });
 

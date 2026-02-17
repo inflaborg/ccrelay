@@ -7,7 +7,7 @@
 
 import * as http from "http";
 import type { ProxyServer } from "../server/handler";
-import type { ProvidersResponse, ProviderConfigInput } from "../types";
+import type { ProvidersResponse, ProviderConfigInput, ModelMapEntry } from "../types";
 import { sendJson, parseJsonBody } from "./index";
 
 let serverInstance: ProxyServer | null = null;
@@ -17,6 +17,19 @@ let serverInstance: ProxyServer | null = null;
  */
 export function setServer(server: ProxyServer): void {
   serverInstance = server;
+}
+
+/**
+ * Mask API key for display (show first 4 and last 4 chars)
+ */
+function maskApiKey(apiKey: string | undefined): string | undefined {
+  if (!apiKey) {
+    return undefined;
+  }
+  if (apiKey.length <= 8) {
+    return "************";
+  }
+  return `${apiKey.slice(0, 4)}************${apiKey.slice(-4)}`;
 }
 
 /**
@@ -36,13 +49,17 @@ export function handleListProviders(
   const config = serverInstance.getConfig();
   const currentId = router.getCurrentProviderId();
 
-  const providers = config.enabledProviders.map(p => ({
+  // Return all providers (including disabled ones)
+  const providers = Object.values(config.providers).map(p => ({
     id: p.id,
     name: p.name,
     mode: p.mode,
     providerType: p.providerType,
     baseUrl: p.baseUrl,
     active: p.id === currentId,
+    enabled: p.enabled !== false,
+    apiKey: maskApiKey(p.apiKey),
+    modelMap: p.modelMap,
   }));
 
   const response: ProvidersResponse = {
@@ -76,19 +93,24 @@ export async function handleAddProvider(
 
     // Validate ID format (alphanumeric, underscore, hyphen)
     if (!/^[a-zA-Z0-9_-]+$/.test(body.id)) {
-      sendJson(res, 400, { status: "error", message: "Invalid provider ID format" });
+      sendJson(res, 400, {
+        status: "error",
+        message:
+          "Invalid provider ID format. Only alphanumeric, underscore, and hyphen are allowed. Please delete and recreate with a valid ID.",
+      });
       return;
     }
 
     const configManager = serverInstance.getConfig();
+    const existingProvider = configManager.getProvider(body.id);
 
-    // Build provider config
+    // Build provider config - preserve existing apiKey when editing
     const providerConfig: ProviderConfigInput = {
       name: body.name,
       baseUrl: body.baseUrl,
       mode: body.mode,
       providerType: body.providerType,
-      apiKey: body.apiKey,
+      apiKey: body.apiKey || existingProvider?.apiKey,
       authHeader: body.authHeader,
       enabled: body.enabled ?? true,
       modelMap: body.modelMap,
@@ -187,7 +209,7 @@ interface AddProviderRequest {
   apiKey?: string;
   authHeader?: string;
   enabled?: boolean;
-  modelMap?: Record<string, string>;
-  vlModelMap?: Record<string, string>;
+  modelMap?: ModelMapEntry[];
+  vlModelMap?: ModelMapEntry[];
   headers?: Record<string, string>;
 }

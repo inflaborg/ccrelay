@@ -218,18 +218,34 @@ export class Router {
 
   /**
    * Prepare request body (handle model mapping)
+   * Note: This method is deprecated, use BodyProcessor.applyModelMapping instead
    */
   prepareBody(body: Buffer, provider: Provider): Buffer {
-    if (!body || body.length === 0 || !provider.modelMap) {
+    if (!body || body.length === 0 || !provider.modelMap || provider.modelMap.length === 0) {
       return body;
     }
 
     try {
       const data = JSON.parse(body.toString("utf8")) as Record<string, unknown>;
-      if (typeof data.model === "string" && provider.modelMap[data.model]) {
+      if (typeof data.model === "string") {
         const originalModel = data.model;
-        data.model = provider.modelMap[originalModel];
-        return Buffer.from(JSON.stringify(data), "utf8");
+        // Find matching pattern in model map array
+        for (const entry of provider.modelMap) {
+          if (entry.pattern === originalModel) {
+            data.model = entry.model;
+            return Buffer.from(JSON.stringify(data), "utf8");
+          }
+          // Check wildcard patterns
+          if (entry.pattern.includes("*")) {
+            const patternRegex = new RegExp(
+              "^" + entry.pattern.replace(/\*/g, ".*").replace(/\?/g, ".") + "$"
+            );
+            if (patternRegex.test(originalModel)) {
+              data.model = entry.model;
+              return Buffer.from(JSON.stringify(data), "utf8");
+            }
+          }
+        }
       }
     } catch {
       // Invalid JSON, return as-is

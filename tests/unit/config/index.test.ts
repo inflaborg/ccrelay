@@ -46,8 +46,8 @@ describe("config: schema validation", () => {
         providerType: "openai",
         apiKey: "sk-test",
         authHeader: "x-api-key",
-        modelMap: { "claude-*": "gpt-4" },
-        vlModelMap: { "claude-*": "gpt-4-vision" },
+        modelMap: [{ pattern: "claude-*", model: "gpt-4" }],
+        vlModelMap: [{ pattern: "claude-*", model: "gpt-4-vision" }],
         headers: { "X-Custom": "value" },
         enabled: true,
       };
@@ -59,7 +59,7 @@ describe("config: schema validation", () => {
         expect(result.data.mode).toBe("inject");
         expect(result.data.providerType).toBe("openai");
         expect(result.data.apiKey).toBe("sk-test");
-        expect(result.data.modelMap).toEqual({ "claude-*": "gpt-4" });
+        expect(result.data.modelMap).toEqual([{ pattern: "claude-*", model: "gpt-4" }]);
       }
     });
 
@@ -108,13 +108,13 @@ describe("config: schema validation", () => {
         name: "Test",
         baseUrl: "https://api.test.com",
         mode: "passthrough",
-        modelMap: { "claude-*": "gpt-4" },
+        modelMap: [{ pattern: "claude-*", model: "gpt-4" }],
       };
       const snakeCase = {
         name: "Test",
         baseUrl: "https://api.test.com",
         mode: "passthrough",
-        model_map: { "claude-*": "gpt-4" },
+        model_map: [{ pattern: "claude-*", model: "gpt-4" }],
       };
 
       const result1 = ProviderConfigSchema.safeParse(camelCase);
@@ -498,14 +498,14 @@ describe("config: provider parsing edge cases", () => {
       name: "Test",
       baseUrl: "https://api.test.com",
       mode: "passthrough",
-      modelMap: {},
+      modelMap: [],
     };
 
     const result = ProviderConfigSchema.safeParse(input);
 
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.modelMap).toEqual({});
+      expect(result.data.modelMap).toEqual([]);
     }
   });
 
@@ -514,18 +514,18 @@ describe("config: provider parsing edge cases", () => {
       name: "Test",
       baseUrl: "https://api.test.com",
       mode: "passthrough",
-      modelMap: {
-        "claude-*": "gpt-4",
-        "claude-3-*": "gpt-3.5-turbo",
-        "gemini-*": "gemini-pro",
-      },
+      modelMap: [
+        { pattern: "claude-*", model: "gpt-4" },
+        { pattern: "claude-3-*", model: "gpt-3.5-turbo" },
+        { pattern: "gemini-*", model: "gemini-pro" },
+      ],
     };
 
     const result = ProviderConfigSchema.safeParse(input);
 
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(Object.keys(result.data.modelMap || {})).toHaveLength(3);
+      expect(result.data.modelMap).toHaveLength(3);
     }
   });
 
