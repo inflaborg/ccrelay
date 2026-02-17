@@ -23,7 +23,6 @@ jobs:
           else
             files=$(git diff --name-only HEAD^ HEAD)
           fi
-          echo "files=$files" >> $GITHUB_OUTPUT
           if echo "$files" | grep -qvE '(\.md$|^docs/)'; then
             echo "has_code_changes=true" >> $GITHUB_OUTPUT
           else
