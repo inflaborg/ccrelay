@@ -59,7 +59,7 @@ export class LeaderElection {
 
   // State machine
   private state: ElectionState = "idle";
-  private role: InstanceRole = "standalone";
+  private role: InstanceRole = "follower"; // Default, will be set during election
   private leaderUrl: string | null = null;
   private isRunning: boolean = false;
   private failedLeadershipAttempts: number = 0;
@@ -114,13 +114,13 @@ export class LeaderElection {
         {
           hostname: this.host,
           port: this.port,
-          path: "/ccrelay/status",
+          path: "/ccrelay/api/status",
           method: "GET",
           timeout: PROBE_TIMEOUT_MS,
         },
         res => {
           const duration = Date.now() - probeStart;
-          // Any response from /ccrelay/status means CCRelay is running
+          // Any response from /ccrelay/api/status means CCRelay is running
           if (res.statusCode === 200) {
             this.log.info(
               `[LeaderElection] Found existing CCRelay server at ${this.host}:${this.port} in ${duration}ms`
@@ -363,13 +363,13 @@ export class LeaderElection {
         };
       }
 
-      // Shouldn't reach here, but handle gracefully
-      this.log.warn(`[LeaderElection] Election resulted in unclear state, running as standalone`);
-      this.role = "standalone";
-      this.setState("idle");
+      // Shouldn't reach here, but handle gracefully - assume follower
+      this.log.warn(`[LeaderElection] Election resulted in unclear state, defaulting to follower`);
+      this.role = "follower";
+      this.setState("waiting");
       return {
-        isLeader: true, // Assume leader for functionality
-        leaderUrl: `http://${this.host}:${this.port}`,
+        isLeader: false,
+        leaderUrl: undefined,
       };
     } finally {
       const electionDuration = Date.now() - electionStart;
@@ -422,7 +422,7 @@ export class LeaderElection {
       this.log.info(`[LeaderElection] Released leadership lock`);
     }
 
-    this.role = "standalone";
+    this.role = "follower"; // Reset to follower on stop
     this.setState("idle");
     this.leaderUrl = null;
   }
@@ -499,6 +499,7 @@ export class LeaderElection {
 
   /**
    * Check if leader is still alive, trigger re-election if needed
+   * Also checks for provider changes from leader
    */
   private async checkLeaderAndReelectIfNeeded(): Promise<void> {
     // Skip if we're not a follower anymore

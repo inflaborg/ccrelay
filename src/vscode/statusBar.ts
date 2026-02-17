@@ -22,12 +22,24 @@ export class StatusBarManager implements vscode.Disposable {
 
     // Subscribe to role changes from server
     this.server.onRoleChanged(this.handleRoleChange);
+
+    // Subscribe to provider changes from Router (single source of truth)
+    // Router is updated by WebSocket client for all instances (Leader + Followers)
+    const router = this.server.getRouter();
+    router.onProviderChanged(this.handleProviderChange);
   }
 
   /**
    * Handle role change events from server
    */
   private handleRoleChange = (_info: RoleChangeInfo): void => {
+    this.update();
+  };
+
+  /**
+   * Handle provider change events from Router
+   */
+  private handleProviderChange = (_providerId: string): void => {
     this.update();
   };
 
@@ -79,18 +91,10 @@ export class StatusBarManager implements vscode.Disposable {
         statusIcon = "$(radio-tower)"; // Follower icon
         statusSuffix = " [Follower]";
       }
-    } else if (role === "standalone") {
-      if (!isRunning) {
-        statusIcon = "$(debug-stop)";
-        statusSuffix = " [Stopped]";
-      } else {
-        statusIcon = "$(server)";
-        statusSuffix = ""; // Standalone running
-      }
     }
 
-    // Handle stopped state explicitly
-    if (!isRunning && role !== "follower") {
+    // Handle stopped state for leader
+    if (!isRunning && role === "leader") {
       this.statusBarItem.text = `$(debug-stop) CCRelay [Stopped]`;
       this.statusBarItem.tooltip = "CCRelay: Server stopped - Click to start";
       this.statusBarItem.backgroundColor = undefined;
@@ -150,8 +154,6 @@ export class StatusBarManager implements vscode.Disposable {
         return "Leader";
       case "follower":
         return "Follower";
-      case "standalone":
-        return "Standalone";
       default:
         return role;
     }
@@ -305,20 +307,23 @@ export class StatusBarManager implements vscode.Disposable {
     if (selected) {
       const provider = providers.find(p => p.id === selected.description);
       if (provider) {
-        const success = await router.switchProvider(provider.id);
-        if (success) {
+        const result = await this.server.switchProvider(provider.id);
+        if (result.success) {
           vscode.window.showInformationMessage(`Switched to ${provider.name}`);
-          this.update();
         } else {
-          vscode.window.showErrorMessage(`Failed to switch to ${provider.name}`);
+          vscode.window.showErrorMessage(
+            `Failed to switch to ${provider.name}: ${result.error || "Unknown error"}`
+          );
         }
       }
     }
   }
 
   dispose(): void {
-    // Unsubscribe from role changes
+    // Unsubscribe from events
     this.server.offRoleChanged(this.handleRoleChange);
+    const router = this.server.getRouter();
+    router.offProviderChanged(this.handleProviderChange);
     this.statusBarItem.dispose();
   }
 }

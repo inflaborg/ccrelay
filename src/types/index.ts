@@ -22,6 +22,14 @@ export const ProviderModeSchema = z.enum(["passthrough", "inject"]);
 // Provider type enum schema
 export const ProviderTypeSchema = z.enum(["anthropic", "openai"]);
 
+// Model map entry schema (pattern -> model mapping)
+export const ModelMapEntrySchema = z.object({
+  pattern: z.string(),
+  model: z.string(),
+});
+
+export type ModelMapEntry = z.infer<typeof ModelMapEntrySchema>;
+
 // Provider configuration schema (from YAML/VSCode settings)
 export const ProviderConfigSchema = z.object({
   name: z.string().min(1),
@@ -34,10 +42,10 @@ export const ProviderConfigSchema = z.object({
   api_key: z.string().optional(),
   authHeader: z.string().optional(),
   auth_header: z.string().optional(),
-  modelMap: z.record(z.string(), z.string()).optional(),
-  model_map: z.record(z.string(), z.string()).optional(),
-  vlModelMap: z.record(z.string(), z.string()).optional(),
-  vl_model_map: z.record(z.string(), z.string()).optional(),
+  modelMap: z.array(ModelMapEntrySchema).optional(),
+  model_map: z.array(ModelMapEntrySchema).optional(),
+  vlModelMap: z.array(ModelMapEntrySchema).optional(),
+  vl_model_map: z.array(ModelMapEntrySchema).optional(),
   headers: z.record(z.string(), z.string()).optional(),
   enabled: z.boolean().optional(),
 });
@@ -177,8 +185,8 @@ export interface Provider {
   providerType: ProviderType;
   apiKey?: string;
   authHeader?: string;
-  modelMap?: Record<string, string>;
-  vlModelMap?: Record<string, string>;
+  modelMap?: ModelMapEntry[];
+  vlModelMap?: ModelMapEntry[];
   headers?: Record<string, string>;
   enabled?: boolean;
 }
@@ -222,6 +230,10 @@ export interface ProviderInfo {
   mode: ProviderMode;
   providerType: ProviderType;
   active: boolean;
+  enabled: boolean;
+  baseUrl?: string;
+  apiKey?: string;
+  modelMap?: ModelMapEntry[];
 }
 
 export interface ProxyRequest {
@@ -298,7 +310,7 @@ export interface ElectionResult {
 /**
  * Instance role in the multi-instance setup
  */
-export type InstanceRole = "leader" | "follower" | "standalone";
+export type InstanceRole = "leader" | "follower";
 
 /**
  * Message parameter for Anthropic API

@@ -1,5 +1,11 @@
 // API Response Types
 
+// Model map entry type (pattern -> model mapping)
+export interface ModelMapEntry {
+  pattern: string;
+  model: string;
+}
+
 export interface Provider {
   id: string;
   name: string;
@@ -7,6 +13,9 @@ export interface Provider {
   providerType: "anthropic" | "openai";
   baseUrl?: string;
   active: boolean;
+  enabled: boolean;
+  apiKey?: string;
+  modelMap?: ModelMapEntry[];
 }
 
 export interface ProvidersResponse {
@@ -46,8 +55,8 @@ export interface AddProviderRequest {
   enabled?: boolean;
   // Advanced options
   authHeader?: string;
-  modelMap?: Record<string, string>;
-  vlModelMap?: Record<string, string>;
+  modelMap?: ModelMapEntry[];
+  vlModelMap?: ModelMapEntry[];
   headers?: Record<string, string>;
 }
 
@@ -141,7 +150,7 @@ export interface ProviderConfig {
   mode: "inject" | "passthrough";
   authHeader?: string;
   apiKey?: string;
-  modelMap?: Record<string, string>;
+  modelMap?: ModelMapEntry[];
   headers?: Record<string, string>;
 }
 

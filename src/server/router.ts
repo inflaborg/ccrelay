@@ -6,9 +6,13 @@ import { Provider } from "../types";
 import { ConfigManager } from "../config";
 import { minimatch } from "../utils/helpers";
 
+// Callback type for provider changes
+type ProviderChangeCallback = (providerId: string) => void;
+
 export class Router {
   private config: ConfigManager;
   private currentProviderId: string;
+  private providerChangeCallbacks: Set<ProviderChangeCallback> = new Set();
 
   constructor(config: ConfigManager) {
     this.config = config;
@@ -17,6 +21,16 @@ export class Router {
 
   getCurrentProviderId(): string {
     return this.currentProviderId;
+  }
+
+  /**
+   * Set current provider ID without persisting (for follower sync from leader)
+   */
+  setCurrentProviderId(id: string): void {
+    if (this.config.getProvider(id) && this.currentProviderId !== id) {
+      this.currentProviderId = id;
+      this.notifyProviderChange(id);
+    }
   }
 
   getCurrentProvider(): Provider | undefined {
@@ -32,8 +46,38 @@ export class Router {
       return false;
     }
     await this.config.setCurrentProviderId(id);
-    this.currentProviderId = id;
+    if (this.currentProviderId !== id) {
+      this.currentProviderId = id;
+      this.notifyProviderChange(id);
+    }
     return true;
+  }
+
+  /**
+   * Register a callback for provider changes
+   */
+  onProviderChanged(callback: ProviderChangeCallback): void {
+    this.providerChangeCallbacks.add(callback);
+  }
+
+  /**
+   * Unregister a provider change callback
+   */
+  offProviderChanged(callback: ProviderChangeCallback): void {
+    this.providerChangeCallbacks.delete(callback);
+  }
+
+  /**
+   * Notify all registered callbacks of provider change
+   */
+  private notifyProviderChange(providerId: string): void {
+    for (const callback of this.providerChangeCallbacks) {
+      try {
+        callback(providerId);
+      } catch {
+        // Ignore callback errors
+      }
+    }
   }
 
   /**
@@ -174,18 +218,34 @@ export class Router {
 
   /**
    * Prepare request body (handle model mapping)
+   * Note: This method is deprecated, use BodyProcessor.applyModelMapping instead
    */
   prepareBody(body: Buffer, provider: Provider): Buffer {
-    if (!body || body.length === 0 || !provider.modelMap) {
+    if (!body || body.length === 0 || !provider.modelMap || provider.modelMap.length === 0) {
       return body;
     }
 
     try {
       const data = JSON.parse(body.toString("utf8")) as Record<string, unknown>;
-      if (typeof data.model === "string" && provider.modelMap[data.model]) {
+      if (typeof data.model === "string") {
         const originalModel = data.model;
-        data.model = provider.modelMap[originalModel];
-        return Buffer.from(JSON.stringify(data), "utf8");
+        // Find matching pattern in model map array
+        for (const entry of provider.modelMap) {
+          if (entry.pattern === originalModel) {
+            data.model = entry.model;
+            return Buffer.from(JSON.stringify(data), "utf8");
+          }
+          // Check wildcard patterns
+          if (entry.pattern.includes("*")) {
+            const patternRegex = new RegExp(
+              "^" + entry.pattern.replace(/\*/g, ".*").replace(/\?/g, ".") + "$"
+            );
+            if (patternRegex.test(originalModel)) {
+              data.model = entry.model;
+              return Buffer.from(JSON.stringify(data), "utf8");
+            }
+          }
+        }
       }
     } catch {
       // Invalid JSON, return as-is

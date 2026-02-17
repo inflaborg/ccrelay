@@ -218,7 +218,7 @@ function parseProvider(id: string, config: ProviderConfigInput): Provider {
   const baseUrl = config.baseUrl || config.base_url || "";
   const apiKey = config.apiKey || config.api_key;
   const authHeader = config.authHeader || config.auth_header;
-  const modelMap = config.modelMap || config.model_map || {};
+  const modelMap = config.modelMap || config.model_map;
   const vlModelMap = config.vlModelMap || config.vl_model_map;
   const providerType = (config.providerType || config.provider_type || "anthropic") as ProviderType;
 
@@ -230,8 +230,8 @@ function parseProvider(id: string, config: ProviderConfigInput): Provider {
     providerType,
     apiKey,
     authHeader: authHeader || "authorization",
-    modelMap,
-    vlModelMap: Object.keys(vlModelMap || {}).length > 0 ? vlModelMap : undefined,
+    modelMap: modelMap && modelMap.length > 0 ? modelMap : undefined,
+    vlModelMap: vlModelMap && vlModelMap.length > 0 ? vlModelMap : undefined,
     headers: config.headers ?? {},
     enabled: config.enabled !== false,
   };

@@ -3,7 +3,7 @@
  * Supports wildcard patterns and VL (vision-language) model maps
  */
 
-import type { Provider } from "../../types";
+import type { Provider, ModelMapEntry } from "../../types";
 import { ScopedLogger } from "../../utils/logger";
 
 const log = new ScopedLogger("ModelMapping");
@@ -60,18 +60,21 @@ export function containsImageContent(data: unknown): boolean {
 
 /**
  * Match a model against a model map (supports exact match and wildcards)
+ * Model map is now an array of { pattern, model } entries
  */
 export function matchModel(
   model: string,
-  modelMap: Record<string, string>
+  modelMap: ModelMapEntry[]
 ): ModelMatchResult | null {
-  // Check for exact match first
-  if (modelMap[model]) {
-    return { targetModel: modelMap[model], pattern: model };
-  }
+  for (const entry of modelMap) {
+    const { pattern, model: targetModel } = entry;
 
-  // Check for wildcard patterns
-  for (const [pattern, targetModel] of Object.entries(modelMap)) {
+    // Check for exact match first
+    if (pattern === model) {
+      return { targetModel, pattern };
+    }
+
+    // Check for wildcard patterns
     if (pattern.includes("*")) {
       // Convert wildcard pattern to regex
       const patternRegex = new RegExp(
@@ -100,8 +103,8 @@ export function applyModelMapping(body: Buffer, provider: Provider): Buffer {
     return body;
   }
 
-  const hasVlMap = provider.vlModelMap && Object.keys(provider.vlModelMap).length > 0;
-  const hasRegularMap = provider.modelMap && Object.keys(provider.modelMap).length > 0;
+  const hasVlMap = provider.vlModelMap && provider.vlModelMap.length > 0;
+  const hasRegularMap = provider.modelMap && provider.modelMap.length > 0;
 
   if (!hasVlMap && !hasRegularMap) {
     return body;

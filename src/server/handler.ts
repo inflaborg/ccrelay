@@ -26,6 +26,7 @@ import { ProxyExecutor } from "./proxy/executor";
 import { QueueManager } from "./queueManager";
 import { ResponseLogger } from "./responseLogger";
 import { RequestHandler } from "./request";
+import { WsBroadcaster, WsFollowerClient } from "./websocket";
 
 export class ProxyServer {
   private server: http.Server | null = null;
@@ -38,14 +39,11 @@ export class ProxyServer {
 
   // Leader election
   private leaderElection: LeaderElection | null = null;
-  private role: InstanceRole = "standalone";
+  private role: InstanceRole = "follower"; // Default to follower, will be set during election
   private leaderUrl: string | null = null;
 
   // Lock to prevent duplicate server startups
   private serverStartInProgress: boolean = false;
-
-  // Client for follower mode
-  private httpClient: http.Agent | null = null;
 
   // Queue manager for concurrency control
   private queueManager: QueueManager;
@@ -58,6 +56,10 @@ export class ProxyServer {
 
   // Role change callbacks for external listeners (e.g., StatusBarManager)
   private roleChangeCallbacks: Set<(info: RoleChangeInfo) => void> = new Set();
+
+  // WebSocket for real-time communication
+  private wsBroadcaster: WsBroadcaster | null = null;
+  private wsClient: WsFollowerClient | null = null;
 
   constructor(config: ConfigManager, leaderElection: LeaderElection | null = null) {
     this.config = config;
@@ -74,6 +76,13 @@ export class ProxyServer {
 
     // Initialize queue manager (executor set after construction to avoid circular dependency)
     this.queueManager = new QueueManager(config);
+
+    // Listen to Router's provider changes - this is the single source of truth
+    // - For Leader: broadcasts to Followers via WebSocket
+    // - For Follower: no action (received broadcast already updated Router)
+    this.router.onProviderChanged((providerId: string) => {
+      this.handleProviderChangeFromRouter(providerId);
+    });
 
     // Listen for role changes if election is enabled
     if (leaderElection) {
@@ -95,6 +104,19 @@ export class ProxyServer {
       `[Server] Role changed: ${oldRole} -> ${info.role} (state: ${info.state})${info.leaderUrl ? ` (leader: ${info.leaderUrl})` : ""}${info.error ? ` (error: ${info.error.message})` : ""}`
     );
 
+    // Handle WebSocket based on role change
+    if (info.role === "leader" && oldRole !== "leader") {
+      // Became leader: disconnect client if we were a follower
+      this.disconnectFromLeader();
+    } else if (info.role === "follower" && oldRole !== "follower" && info.leaderUrl) {
+      // Became follower: connect to leader's WebSocket
+      this.connectToLeader(info.leaderUrl);
+    } else if (info.role !== "leader" && info.role !== "follower") {
+      // Standalone or other: cleanup WebSocket
+      this.stopWsServer();
+      this.disconnectFromLeader();
+    }
+
     // If we became the leader and server is not running, start it
     if (info.role === "leader" && !this.isRunning && !this.serverStartInProgress) {
       this.log.info("[Server] Became leader, starting HTTP server");
@@ -102,6 +124,8 @@ export class ProxyServer {
       this.startServerOnly()
         .then(() => {
           this.serverStartInProgress = false;
+          // Start WebSocket server after HTTP server is running
+          this.startWsServer();
           // Notify election that server started successfully
           if (this.leaderElection) {
             this.leaderElection.notifyServerStarted();
@@ -131,6 +155,8 @@ export class ProxyServer {
       this.log.info("[Server] Became follower, stopping HTTP server");
       this.stopServerOnly()
         .then(() => {
+          // Stop WebSocket server
+          this.stopWsServer();
           // Notify election that server stopped
           if (this.leaderElection) {
             this.leaderElection.notifyServerStopped();
@@ -143,6 +169,126 @@ export class ProxyServer {
 
     // Notify status bar to update
     this.notifyRoleChangeListeners(info);
+  }
+
+  /**
+   * Start WebSocket server (Leader only)
+   * Also creates a local WebSocket client that connects to itself for unified notification flow
+   */
+  private startWsServer(): void {
+    if (this.wsBroadcaster) {
+      return; // Already running
+    }
+
+    if (this.server) {
+      this.wsBroadcaster = new WsBroadcaster(this.instanceId);
+      this.wsBroadcaster.attach(this.server);
+
+      // Set callback for handling switch provider requests from ALL instances (including Leader)
+      this.wsBroadcaster.setSwitchProviderCallback(async (providerId: string) => {
+        const success = await this.router.switchProvider(providerId);
+        const provider = this.config.getProvider(providerId);
+        return {
+          success,
+          providerId: success ? providerId : undefined,
+          providerName: success ? provider?.name : undefined,
+          error: success ? undefined : `Provider "${providerId}" not found`,
+        };
+      });
+
+      this.log.info("[Server] WebSocket server started");
+
+      // Create local WebSocket client that connects to itself
+      // This ensures Leader receives notifications through the same channel as Followers
+      const localWsUrl = `http://${this.config.host}:${this.config.port}`;
+      this.connectToLocalServer(localWsUrl);
+    }
+  }
+
+  /**
+   * Connect to local WebSocket server (Leader only)
+   * This ensures Leader receives provider_changed messages like Followers
+   */
+  private connectToLocalServer(leaderUrl: string): void {
+    this.disconnectFromLeader(); // Clear any existing connection
+
+    this.wsClient = new WsFollowerClient(leaderUrl);
+    this.wsClient.setCallbacks({
+      onProviderChange: (providerId: string, _providerName: string) => {
+        // Update local Router - UI will be updated via Router's callback
+        this.router.setCurrentProviderId(providerId);
+      },
+      onServerStopping: () => {
+        this.log.info("[Server] Local WebSocket connection closing");
+        this.disconnectFromLeader();
+      },
+      onConnectionStateChange: state => {
+        this.log.info(`[Server] Local WebSocket state: ${state}`);
+      },
+    });
+    this.wsClient.connect();
+    this.log.info(`[Server] Connected to local WebSocket at ${leaderUrl}`);
+  }
+
+  /**
+   * Stop WebSocket server
+   */
+  private stopWsServer(): void {
+    if (this.wsBroadcaster) {
+      this.wsBroadcaster.close();
+      this.wsBroadcaster = null;
+      this.log.info("[Server] WebSocket server stopped");
+    }
+  }
+
+  /**
+   * Connect to Leader's WebSocket (Follower only)
+   */
+  private connectToLeader(leaderUrl: string): void {
+    // Disconnect existing client first
+    this.disconnectFromLeader();
+
+    this.wsClient = new WsFollowerClient(leaderUrl);
+    this.wsClient.setCallbacks({
+      onProviderChange: (providerId: string, _providerName: string) => {
+        // Update local Router - this will trigger UI update via Router's callback
+        this.router.setCurrentProviderId(providerId);
+      },
+      onServerStopping: () => {
+        this.log.info("[Server] Leader is stopping, waiting for re-election");
+        this.disconnectFromLeader();
+      },
+      onConnectionStateChange: state => {
+        this.log.info(`[Server] WebSocket connection state: ${state}`);
+      },
+    });
+    this.wsClient.connect();
+    this.log.info(`[Server] Connecting to Leader's WebSocket at ${leaderUrl}`);
+  }
+
+  /**
+   * Disconnect from Leader's WebSocket
+   */
+  private disconnectFromLeader(): void {
+    if (this.wsClient) {
+      this.wsClient.disconnect();
+      this.wsClient = null;
+      this.log.info("[Server] Disconnected from Leader's WebSocket");
+    }
+  }
+
+  /**
+   * Handle provider change from Router
+   * - Leader: Broadcast to ALL instances (including self via local WS client)
+   * - Follower: No action (this shouldn't happen for followers)
+   */
+  private handleProviderChangeFromRouter(providerId: string): void {
+    const provider = this.config.getProvider(providerId);
+
+    // Broadcast to all connected clients (including Leader's local client)
+    if (this.wsBroadcaster) {
+      this.wsBroadcaster.broadcastProviderChange(providerId, provider?.name || "");
+    }
   }
 
   /**
@@ -170,6 +316,22 @@ export class ProxyServer {
         this.log.error("[Server] Error in role change callback", err);
       }
     }
+  }
+
+  /**
+   * Switch provider - unified method for all instances
+   * All requests go through WebSocket for consistent notification flow
+   */
+  async switchProvider(providerId: string): Promise<{ success: boolean; error?: string }> {
+    // All instances (Leader and Follower) send request via WebSocket
+    // Leader's local WS client connects to its own server
+    // Follower's WS client connects to Leader's server
+    if (this.wsClient) {
+      const result = await this.wsClient.switchProvider(providerId);
+      return result;
+    }
+
+    return { success: false, error: "No WebSocket connection available" };
   }
 
   /**
@@ -228,6 +390,8 @@ export class ProxyServer {
             `[Server:${this.instanceId}] HTTP server started in ${Date.now() - httpStart}ms`
           );
           this.serverStartInProgress = false;
+          // Start WebSocket server for real-time communication with Followers
+          this.startWsServer();
           // Notify election that server started successfully
           this.leaderElection.notifyServerStarted();
         } catch (err) {
@@ -255,6 +419,10 @@ export class ProxyServer {
         this.log.info(
           `[Server:${this.instanceId}] Running as follower, using leader at ${this.leaderUrl}`
         );
+        // Connect to Leader's WebSocket for real-time updates
+        if (this.leaderUrl) {
+          this.connectToLeader(this.leaderUrl);
+        }
       }
 
       this.log.info(
@@ -263,13 +431,8 @@ export class ProxyServer {
       return { role: this.role, leaderUrl: this.leaderUrl ?? undefined };
     }
 
-    // No leader election, start as standalone
-    this.role = "standalone";
-    await this.startServerOnly();
-    this.log.info(
-      `[Server:${this.instanceId}] ===== SERVER START COMPLETE in ${Date.now() - startStart}ms ===== as standalone`
-    );
-    return { role: "standalone" };
+    // Should never reach here - leaderElection is always configured
+    throw new Error("Server started without leader election configured");
   }
 
   /**
@@ -307,6 +470,12 @@ export class ProxyServer {
       await this.leaderElection.stop();
       this.log.info("[Server] Leader election stopped");
     }
+
+    // Stop WebSocket server (if Leader)
+    this.stopWsServer();
+
+    // Disconnect from Leader's WebSocket (if Follower)
+    this.disconnectFromLeader();
 
     // Stop HTTP server
     await this.stopServerOnly();
