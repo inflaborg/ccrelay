@@ -4,15 +4,9 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
   pull_request:
     branches:
       - main
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
 
 jobs:
   test:
@@ -21,14 +15,39 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Check if docs-only changes
+        id: check
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            files=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files --jq '.[].filename')
+          else
+            # For push events, compare with the previous state using github's before/after SHA
+            git fetch origin ${{ github.event.before }} --depth=1 2>/dev/null || true
+            files=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} 2>/dev/null || git diff --name-only HEAD^ HEAD)
+          fi
+          if echo "$files" | grep -qvE '(\.md$|^docs/)'; then
+            echo "has_code_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_code_changes=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Setup Node.js
+        if: steps.check.outputs.has_code_changes == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
+        if: steps.check.outputs.has_code_changes == 'true'
         run: npm ci
 
       - name: Run tests
+        if: steps.check.outputs.has_code_changes == 'true'
         run: npm run test
+
+      - name: Skip tests (docs-only)
+        if: steps.check.outputs.has_code_changes != 'true'
+        run: echo "Skipping tests - documentation only changes"

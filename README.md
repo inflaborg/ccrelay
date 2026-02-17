@@ -39,7 +39,8 @@
 
 - **Built-in API Proxy Server**: Runs a local HTTP server (default: `http://127.0.0.1:7575`) that proxies requests to different AI providers
 - **Multi-Instance Coordination**: Leader/Follower mode for multiple VSCode windows - only one instance runs the server
-- **Status Bar Indicator**: Shows current provider, role (Leader/Follower/Standalone), and server status
+- **WebSocket Sync**: Real-time provider synchronization between Leader and Followers via WebSocket
+- **Status Bar Indicator**: Shows current provider, role (Leader/Follower), and server status
 - **Quick Provider Switching**: Click the status bar or use commands to switch providers
 - **Provider Modes**:
   - `passthrough` - Preserves original authentication headers for official API
@@ -123,9 +124,12 @@ providers:
     mode: "inject"
     apiKey: "${GLM_API_KEY}"  # Supports environment variables
     modelMap:
-      "claude-opus-*": "glm-5"
-      "claude-sonnet-*": "glm-5"
-      "claude-haiku-*": "glm-4.7"
+      - pattern: "claude-opus-*"
+        model: "glm-5"
+      - pattern: "claude-sonnet-*"
+        model: "glm-5"
+      - pattern: "claude-haiku-*"
+        model: "glm-4.7"
     enabled: true
 
 defaultProvider: "glm"
@@ -153,7 +157,9 @@ defaultProvider: "glm"
 When multiple VSCode windows are open:
 
 - One instance becomes the **Leader** and runs the HTTP server
-- Other instances become **Followers** and connect to the Leader
+- Other instances become **Followers** and connect to the Leader via WebSocket
+- Leader broadcasts provider changes to all Followers in real-time
+- Followers can request provider switches through the Leader
 - If the Leader closes, a Follower automatically becomes the new Leader
 - Status bar shows your role: `$(broadcast)` for Leader, `$(radio-tower)` for Follower
 
@@ -173,29 +179,27 @@ When multiple VSCode windows are open:
 
 ### Model Mapping
 
-Supports wildcard pattern matching for model names:
+Supports wildcard pattern matching for model names using array format:
 
-```json
-{
-  "modelMap": {
-    "claude-opus-*": "glm-5",
-    "claude-sonnet-*": "glm-4.7",
-    "claude-haiku-*": "glm-4.5"
-  }
-}
+```yaml
+modelMap:
+  - pattern: "claude-opus-*"
+    model: "glm-5"
+  - pattern: "claude-sonnet-*"
+    model: "glm-4.7"
+  - pattern: "claude-haiku-*"
+    model: "glm-4.5"
 ```
 
 **Vision Model Mapping**: For requests containing images, you can configure `vlModelMap` separately:
 
-```json
-{
-  "modelMap": {
-    "claude-*": "text-model"
-  },
-  "vlModelMap": {
-    "claude-*": "vision-model"
-  }
-}
+```yaml
+modelMap:
+  - pattern: "claude-*"
+    model: "text-model"
+vlModelMap:
+  - pattern: "claude-*"
+    model: "vision-model"
 ```
 
 ### OpenAI Format Conversion
@@ -204,19 +208,16 @@ Supports wildcard pattern matching for model names:
 
 CCRelay supports OpenAI-compatible providers (like Gemini):
 
-```json
-{
-  "gemini": {
-    "name": "Gemini",
-    "baseUrl": "https://generativelanguage.googleapis.com/v1beta/openai",
-    "providerType": "openai",
-    "mode": "inject",
-    "apiKey": "<YOUR-API-KEY>",
-    "modelMap": {
-      "claude-*": "gemini-3-pro-preview"
-    }
-  }
-}
+```yaml
+gemini:
+  name: "Gemini"
+  baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai"
+  providerType: "openai"
+  mode: "inject"
+  apiKey: "${GEMINI_API_KEY}"
+  modelMap:
+    - pattern: "claude-*"
+      model: "gemini-2.5-pro"
 ```
 
 Conversion process:
@@ -275,7 +276,7 @@ Each provider supports:
 - `providerType` - `anthropic` (default) or `openai`
 - `apiKey` - API key (inject mode, supports `${ENV_VAR}` environment variables)
 - `authHeader` - Authorization header name (default: `authorization`)
-- `modelMap` - Model name mappings (supports wildcards)
+- `modelMap` - Model name mappings (array of `{pattern, model}`, supports wildcards)
 - `vlModelMap` - Vision model mappings (for multimodal requests)
 - `headers` - Custom request headers
 - `enabled` - Whether enabled (default: `true`)
@@ -349,9 +350,12 @@ providers:
     apiKey: "${GLM_API_KEY}"    # Supports environment variables
     authHeader: "authorization"
     modelMap:
-      "claude-opus-*": "glm-5"
-      "claude-sonnet-*": "glm-5"
-      "claude-haiku-*": "glm-4.7"
+      - pattern: "claude-opus-*"
+        model: "glm-5"
+      - pattern: "claude-sonnet-*"
+        model: "glm-5"
+      - pattern: "claude-haiku-*"
+        model: "glm-4.7"
     enabled: true
 
   gemini:
@@ -361,7 +365,8 @@ providers:
     mode: "inject"
     apiKey: "${GEMINI_API_KEY}"
     modelMap:
-      "claude-*": "gemini-2.5-pro"
+      - pattern: "claude-*"
+        model: "gemini-2.5-pro"
     enabled: true
 
 # Default provider ID
@@ -433,10 +438,13 @@ The proxy server exposes management endpoints at `/ccrelay/`:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/ccrelay/status` | GET | Get current proxy status |
-| `/ccrelay/providers` | GET | List all available providers |
-| `/ccrelay/switch/{id}` | GET | Switch to a provider by ID |
-| `/ccrelay/switch` | POST | Switch provider (JSON body) |
+| `/ccrelay/api/status` | GET | Get current proxy status |
+| `/ccrelay/api/providers` | GET | List all available providers |
+| `/ccrelay/api/switch/{id}` | GET | Switch to a provider by ID |
+| `/ccrelay/api/switch` | POST | Switch provider (JSON body) |
+| `/ccrelay/api/queue` | GET | Get queue statistics |
+| `/ccrelay/api/logs` | GET | Get request logs (when logging enabled) |
+| `/ccrelay/ws` | WebSocket | Real-time sync for Followers |
 | `/ccrelay/` | GET | Web UI dashboard |
 
 All other requests are proxied to the current provider.
@@ -477,7 +485,13 @@ npm run lint:fix
 npm run format
 
 # Run unit tests
-npm run test:unit
+npm run test
+
+# Run integration tests
+npm run test:integration
+
+# Run all tests
+npm run test:all
 
 # Run tests with coverage
 npm run test:coverage

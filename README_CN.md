@@ -39,7 +39,8 @@
 
 - **内置 API 代理服务器**: 运行本地 HTTP 服务器（默认：`http://127.0.0.1:7575`），将请求代理到不同的 AI 提供商
 - **多实例协调**: Leader/Follower 模式支持多个 VSCode 窗口 - 只有一个实例运行服务器
-- **状态栏指示器**: 显示当前提供商、角色（Leader/Follower/Standalone）和服务器状态
+- **WebSocket 同步**: Leader 与 Follower 之间通过 WebSocket 实时同步提供商状态
+- **状态栏指示器**: 显示当前提供商、角色（Leader/Follower）和服务器状态
 - **快速切换提供商**: 点击状态栏或使用命令切换提供商
 - **Provider 模式**:
   - `passthrough` - 保留原始认证头，用于官方 API
@@ -123,9 +124,12 @@ providers:
     mode: "inject"
     apiKey: "${GLM_API_KEY}"  # 支持环境变量
     modelMap:
-      "claude-opus-*": "glm-5"
-      "claude-sonnet-*": "glm-5"
-      "claude-haiku-*": "glm-4.7"
+      - pattern: "claude-opus-*"
+        model: "glm-5"
+      - pattern: "claude-sonnet-*"
+        model: "glm-5"
+      - pattern: "claude-haiku-*"
+        model: "glm-4.7"
     enabled: true
 
 defaultProvider: "glm"
@@ -153,7 +157,9 @@ defaultProvider: "glm"
 当打开多个 VSCode 窗口时：
 
 - 一个实例成为 **Leader** 并运行 HTTP 服务器
-- 其他实例成为 **Follower** 并连接到 Leader
+- 其他实例成为 **Follower** 并通过 WebSocket 连接到 Leader
+- Leader 向所有 Follower 实时广播提供商变更
+- Follower 可以通过 Leader 请求切换提供商
 - 如果 Leader 关闭，Follower 会自动成为新的 Leader
 - 状态栏显示角色：`$(broadcast)` 表示 Leader，`$(radio-tower)` 表示 Follower
 
@@ -173,29 +179,27 @@ defaultProvider: "glm"
 
 ### 模型映射
 
-支持通配符模式映射模型名称：
+支持通配符模式映射模型名称，使用数组格式：
 
-```json
-{
-  "modelMap": {
-    "claude-opus-*": "glm-5",
-    "claude-sonnet-*": "glm-4.7",
-    "claude-haiku-*": "glm-4.5"
-  }
-}
+```yaml
+modelMap:
+  - pattern: "claude-opus-*"
+    model: "glm-5"
+  - pattern: "claude-sonnet-*"
+    model: "glm-4.7"
+  - pattern: "claude-haiku-*"
+    model: "glm-4.5"
 ```
 
 **视觉模型映射**：对于包含图像的请求，可以单独配置 `vlModelMap`：
 
-```json
-{
-  "modelMap": {
-    "claude-*": "text-model"
-  },
-  "vlModelMap": {
-    "claude-*": "vision-model"
-  }
-}
+```yaml
+modelMap:
+  - pattern: "claude-*"
+    model: "text-model"
+vlModelMap:
+  - pattern: "claude-*"
+    model: "vision-model"
 ```
 
 ### OpenAI 格式转换
@@ -204,19 +208,16 @@ defaultProvider: "glm"
 
 CCRelay 支持 OpenAI 兼容的提供商（如 Gemini）：
 
-```json
-{
-  "gemini": {
-    "name": "Gemini",
-    "baseUrl": "https://generativelanguage.googleapis.com/v1beta/openai",
-    "providerType": "openai",
-    "mode": "inject",
-    "apiKey": "<YOUR-API-KEY>",
-    "modelMap": {
-      "claude-*": "gemini-3-pro-preview"
-    }
-  }
-}
+```yaml
+gemini:
+  name: "Gemini"
+  baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai"
+  providerType: "openai"
+  mode: "inject"
+  apiKey: "${GEMINI_API_KEY}"
+  modelMap:
+    - pattern: "claude-*"
+      model: "gemini-2.5-pro"
 ```
 
 转换过程：
@@ -275,7 +276,7 @@ CCRelay 使用 YAML 配置文件（默认为 `~/.ccrelay/config.yaml`）。首�
 - `providerType` - `anthropic`（默认）或 `openai`
 - `apiKey` - API Key（inject 模式，支持 `${ENV_VAR}` 环境变量）
 - `authHeader` - 认证头名称（默认：`authorization`）
-- `modelMap` - 模型名称映射（支持通配符）
+- `modelMap` - 模型名称映射（数组格式 `{pattern, model}`，支持通配符）
 - `vlModelMap` - 视觉模型映射（用于多模态请求）
 - `headers` - 自定义请求头
 - `enabled` - 是否启用（默认：`true`）
@@ -349,9 +350,12 @@ providers:
     apiKey: "${GLM_API_KEY}"    # 支持环境变量
     authHeader: "authorization"
     modelMap:
-      "claude-opus-*": "glm-5"
-      "claude-sonnet-*": "glm-5"
-      "claude-haiku-*": "glm-4.7"
+      - pattern: "claude-opus-*"
+        model: "glm-5"
+      - pattern: "claude-sonnet-*"
+        model: "glm-5"
+      - pattern: "claude-haiku-*"
+        model: "glm-4.7"
     enabled: true
 
   gemini:
@@ -361,7 +365,8 @@ providers:
     mode: "inject"
     apiKey: "${GEMINI_API_KEY}"
     modelMap:
-      "claude-*": "gemini-2.5-pro"
+      - pattern: "claude-*"
+        model: "gemini-2.5-pro"
     enabled: true
 
 # 默认提供商 ID
@@ -433,10 +438,13 @@ logging:
 
 | 端点 | 方法 | 描述 |
 |------|------|------|
-| `/ccrelay/status` | GET | 获取当前代理状态 |
-| `/ccrelay/providers` | GET | 列出所有可用提供商 |
-| `/ccrelay/switch/{id}` | GET | 切换到指定提供商 |
-| `/ccrelay/switch` | POST | 切换提供商（JSON body） |
+| `/ccrelay/api/status` | GET | 获取当前代理状态 |
+| `/ccrelay/api/providers` | GET | 列出所有可用提供商 |
+| `/ccrelay/api/switch/{id}` | GET | 切换到指定提供商 |
+| `/ccrelay/api/switch` | POST | 切换提供商（JSON body） |
+| `/ccrelay/api/queue` | GET | 获取队列统计 |
+| `/ccrelay/api/logs` | GET | 获取请求日志（启用日志时） |
+| `/ccrelay/ws` | WebSocket | Follower 实时同步 |
 | `/ccrelay/` | GET | Web UI 管理界面 |
 
 所有其他请求都将被代理到当前提供商。
@@ -477,7 +485,13 @@ npm run lint:fix
 npm run format
 
 # 运行单元测试
-npm run test:unit
+npm run test
+
+# 运行集成测试
+npm run test:integration
+
+# 运行所有测试
+npm run test:all
 
 # 运行测试并生成覆盖率报告
 npm run test:coverage
