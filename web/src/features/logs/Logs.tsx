@@ -239,7 +239,9 @@ export default function Logs() {
   const [requestBodyCollapsed, setRequestBodyCollapsed] = useState(false);
   const [responseBodyCollapsed, setResponseBodyCollapsed] = useState(false);
   const [copiedSection, setCopiedSection] = useState<"request" | "response" | null>(null);
-  const [requestTab, setRequestTab] = useState<"analysis" | "converted" | "original">("analysis");
+  const [requestTab, setRequestTab] = useState<"analysis" | "tools" | "converted" | "original">(
+    "analysis"
+  );
   const [responseTab, setResponseTab] = useState<"analysis" | "converted" | "original">("analysis");
 
   // Use ref for stable data access in callbacks
@@ -466,6 +468,31 @@ export default function Logs() {
       !parsedResponseAnalysis.includes("*Failed to parse content into markdown.*")
     );
   }, [parsedResponseAnalysis]);
+
+  const parsedToolsMarkdown = useMemo(() => {
+    if (!selectedLog?.requestBody) return null;
+    try {
+      const parsed = JSON.parse(selectedLog.requestBody);
+      if (parsed.tools && Array.isArray(parsed.tools) && parsed.tools.length > 0) {
+        let markdown = "";
+        parsed.tools.forEach((tool: Record<string, unknown>) => {
+          if (tool.name) {
+            markdown += `### \`${String(tool.name)}\`\n\n`;
+          }
+          if (tool.description) {
+            markdown += `${String(tool.description)}\n\n`;
+          }
+          if (tool.input_schema) {
+            markdown += `**Input Schema:**\n\`\`\`json\n${JSON.stringify(tool.input_schema, null, 2)}\n\`\`\`\n\n`;
+          }
+        });
+        return markdown.trim();
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  }, [selectedLog?.requestBody]);
 
   const providers = stats?.byProvider ? Object.keys(stats.byProvider) : [];
 
@@ -811,6 +838,14 @@ export default function Logs() {
                               >
                                 Analysis
                               </TabButton>
+                              {parsedToolsMarkdown && (
+                                <TabButton
+                                  active={requestTab === "tools"}
+                                  onClick={() => setRequestTab("tools")}
+                                >
+                                  Tools
+                                </TabButton>
+                              )}
                               <TabButton
                                 active={requestTab === "converted"}
                                 onClick={() => setRequestTab("converted")}
@@ -833,6 +868,14 @@ export default function Logs() {
                               >
                                 Analysis
                               </TabButton>
+                              {parsedToolsMarkdown && (
+                                <TabButton
+                                  active={requestTab === "tools"}
+                                  onClick={() => setRequestTab("tools")}
+                                >
+                                  Tools
+                                </TabButton>
+                              )}
                               <TabButton
                                 active={requestTab === "converted"}
                                 onClick={() => setRequestTab("converted")}
@@ -859,6 +902,8 @@ export default function Logs() {
                             onClick={() => {
                               if (requestTab === "analysis") {
                                 handleCopy(parsedRequestAnalysis, "request");
+                              } else if (requestTab === "tools" && parsedToolsMarkdown) {
+                                handleCopy(parsedToolsMarkdown, "request");
                               } else {
                                 handleCopy(
                                   formatJson(
@@ -889,6 +934,8 @@ export default function Logs() {
                         <div className="bg-card border p-3 rounded overflow-auto max-h-[500px]">
                           {requestTab === "analysis" ? (
                             <MarkdownViewer content={parsedRequestAnalysis} />
+                          ) : requestTab === "tools" && parsedToolsMarkdown ? (
+                            <MarkdownViewer content={parsedToolsMarkdown} />
                           ) : (
                             <pre className="text-[11px] font-mono m-0 whitespace-pre text-muted-foreground">
                               {formatJson(
