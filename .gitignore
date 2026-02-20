@@ -11,3 +11,4 @@ src/api/version.generated.ts
 .DS_Store
 /dist
 /internal-docs
+package-lock.json
