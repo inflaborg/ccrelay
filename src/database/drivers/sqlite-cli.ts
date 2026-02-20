@@ -503,7 +503,7 @@ export class SqliteCliDriver implements DatabaseDriver {
   }
 
   private checkForSentinel(): void {
-    if (!this.currentQuery) {return;}
+    if (!this.currentQuery) { return; }
 
     const sentinel = this.currentQuery.sentinelId;
     const stderrContent = this.stderrBuffer.trim();
@@ -514,16 +514,16 @@ export class SqliteCliDriver implements DatabaseDriver {
     }
 
     const sentinelIdIndex = this.stdoutBuffer.indexOf(sentinel);
-    if (sentinelIdIndex === -1) {return;}
+    if (sentinelIdIndex === -1) { return; }
 
     const sentinelPrefix = `[{"_s":"`;
     const sentinelSuffix = `"}]`;
 
     const prefixIndex = this.stdoutBuffer.lastIndexOf(sentinelPrefix, sentinelIdIndex);
-    if (prefixIndex === -1) {return;}
+    if (prefixIndex === -1) { return; }
 
     const suffixIndex = this.stdoutBuffer.indexOf(sentinelSuffix, sentinelIdIndex);
-    if (suffixIndex === -1) {return;}
+    if (suffixIndex === -1) { return; }
 
     const sentinelEndIndex = suffixIndex + sentinelSuffix.length;
     const resultText = this.stdoutBuffer.substring(0, prefixIndex).trim();
@@ -575,7 +575,7 @@ export class SqliteCliDriver implements DatabaseDriver {
 
   private parseJsonOutput(text: string): Record<string, unknown>[] {
     const trimmed = text.trim();
-    if (!trimmed) {return [];}
+    if (!trimmed) { return []; }
 
     const results: Record<string, unknown>[] = [];
     let currentArray = "";
@@ -604,7 +604,8 @@ export class SqliteCliDriver implements DatabaseDriver {
             );
             results.push(...objects);
           } catch {
-            // Skip malformed arrays
+            // Warn about malformed array to avoid silent failures
+            this.log.warn(`[SqliteCli] Skipped malformed JSON array chunk: ${currentArray.trim()}`);
           }
           inArray = false;
           currentArray = "";
@@ -629,10 +630,10 @@ export class SqliteCliDriver implements DatabaseDriver {
 
   private async queryScalar<T = number>(sql: string, params?: (string | number | boolean | null | undefined)[]): Promise<T | null> {
     const rows = await this.query(sql, params);
-    if (rows.length === 0) {return null;}
+    if (rows.length === 0) { return null; }
     const firstRow = rows[0];
     const keys = Object.keys(firstRow);
-    if (keys.length === 0) {return null;}
+    if (keys.length === 0) { return null; }
     return firstRow[keys[0]] as T;
   }
 
@@ -752,7 +753,7 @@ export class SqliteCliDriver implements DatabaseDriver {
     this.writeQueue.setEnabled(false);
     this.writeQueue.forceFlush();
 
-    if (!this.process) {return;}
+    if (!this.process) { return; }
 
     const proc = this.process;
     return new Promise<void>(resolve => {
@@ -846,7 +847,7 @@ export class SqliteCliDriver implements DatabaseDriver {
    * Insert a log entry (async via write queue)
    */
   insertLog(log: RequestLog): void {
-    if (!this.isEnabled) {return;}
+    if (!this.isEnabled) { return; }
     this.writeQueue.add(log);
   }
 
@@ -854,7 +855,7 @@ export class SqliteCliDriver implements DatabaseDriver {
    * Insert a log entry with "pending" status immediately
    */
   insertLogPending(log: RequestLog): void {
-    if (!this.isEnabled) {return;}
+    if (!this.isEnabled) { return; }
 
     const { sql, params } = buildInsertSql(log, "pending");
     this.exec(sql, params).catch(err => {
@@ -874,7 +875,7 @@ export class SqliteCliDriver implements DatabaseDriver {
     errorMessage: string | undefined,
     originalResponseBody?: string
   ): void {
-    if (!this.isEnabled) {return;}
+    if (!this.isEnabled) { return; }
 
     this.exec(
       `UPDATE request_logs
@@ -910,7 +911,7 @@ export class SqliteCliDriver implements DatabaseDriver {
     duration: number,
     errorMessage: string | undefined
   ): void {
-    if (!this.isEnabled) {return;}
+    if (!this.isEnabled) { return; }
 
     this.exec(
       `UPDATE request_logs
@@ -937,7 +938,7 @@ export class SqliteCliDriver implements DatabaseDriver {
    * Batch insert logs
    */
   async writeBatch(logs: RequestLog[]): Promise<void> {
-    if (logs.length === 0) {return;}
+    if (logs.length === 0) { return; }
 
     const stmts: string[] = [];
     for (const log of logs) {
@@ -1023,11 +1024,11 @@ export class SqliteCliDriver implements DatabaseDriver {
    * Get a single log by ID
    */
   async getLogById(id: number): Promise<RequestLog | null> {
-    if (!this.isStarted) {return null;}
+    if (!this.isStarted) { return null; }
 
     const rows = await this.query("SELECT * FROM request_logs WHERE id = ?", [id]);
 
-    if (rows.length === 0) {return null;}
+    if (rows.length === 0) { return null; }
 
     return dbRowToLog(rows[0]);
   }
@@ -1036,7 +1037,7 @@ export class SqliteCliDriver implements DatabaseDriver {
    * Delete logs by IDs
    */
   async deleteLogs(ids: number[]): Promise<void> {
-    if (!this.isStarted || ids.length === 0) {return;}
+    if (!this.isStarted || ids.length === 0) { return; }
 
     const placeholders = ids.map(() => "?").join(",");
     await this.exec(`DELETE FROM request_logs WHERE id IN (${placeholders})`, ids);
@@ -1046,7 +1047,7 @@ export class SqliteCliDriver implements DatabaseDriver {
    * Clear all logs
    */
   async clearAllLogs(): Promise<void> {
-    if (!this.isStarted) {return;}
+    if (!this.isStarted) { return; }
     await this.exec("DELETE FROM request_logs");
   }
 
@@ -1054,7 +1055,7 @@ export class SqliteCliDriver implements DatabaseDriver {
    * Clean old logs
    */
   async cleanOldLogs(): Promise<void> {
-    if (!this.isStarted) {return;}
+    if (!this.isStarted) { return; }
 
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
     await this.exec("DELETE FROM request_logs WHERE timestamp < ?", [thirtyDaysAgo]);
@@ -1098,11 +1099,11 @@ export class SqliteCliDriver implements DatabaseDriver {
     const error = (await this.queryScalar<number>("SELECT COUNT(*) as count FROM request_logs WHERE success = 0")) ?? 0;
     const avgDuration = (await this.queryScalar<number>("SELECT AVG(duration) as avg FROM request_logs")) ?? 0;
 
-     
+
     const byProviderRows = await this.query(
       "SELECT provider_id, COUNT(*) as count FROM request_logs GROUP BY provider_id"
     );
-     
+
 
     const byProvider: Record<string, number> = {};
     for (const row of byProviderRows) {

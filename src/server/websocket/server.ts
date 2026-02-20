@@ -30,6 +30,9 @@ export class WsBroadcaster {
   private log = new ScopedLogger("WsServer");
   private instanceId: string;
   private onSwitchProvider: SwitchProviderCallback | null = null;
+  private heartbeatInterval: NodeJS.Timeout | null = null;
+  // A map to track alive status per client
+  private clientAliveStatus: WeakMap<WebSocket, boolean> = new WeakMap();
 
   constructor(instanceId: string) {
     this.instanceId = instanceId;
@@ -56,6 +59,7 @@ export class WsBroadcaster {
       this.log.info(`[WsServer] Client connected from ${clientIp}`);
 
       this.clients.add(ws);
+      this.clientAliveStatus.set(ws, true);
 
       // Send welcome message
       this.sendToClient(ws, {
@@ -64,18 +68,27 @@ export class WsBroadcaster {
         timestamp: Date.now(),
       } as WsConnectedMessage);
 
+      // Built-in pong event from ws client
+      ws.on("pong", () => {
+        this.clientAliveStatus.set(ws, true);
+      });
+
       ws.on("close", (code, reason) => {
         const reasonStr = reason.toString("utf-8");
         this.log.info(`[WsServer] Client disconnected: code=${code}, reason=${reasonStr}`);
         this.clients.delete(ws);
+        this.clientAliveStatus.delete(ws);
       });
 
       ws.on("error", error => {
         this.log.error(`[WsServer] Client error:`, error);
         this.clients.delete(ws);
+        this.clientAliveStatus.delete(ws);
       });
 
       ws.on("message", (data: Buffer | string) => {
+        // Also consider any application message as a sign of life
+        this.clientAliveStatus.set(ws, true);
         this.handleMessage(ws, data);
       });
     });
@@ -84,7 +97,23 @@ export class WsBroadcaster {
       this.log.error(`[WsServer] Server error:`, error);
     });
 
-    this.log.info(`[WsServer] WebSocket server attached to HTTP server`);
+    // Start heartbeat interval to reap dead connections
+    this.heartbeatInterval = setInterval(() => {
+      for (const client of this.clients) {
+        if (this.clientAliveStatus.get(client) === false) {
+          this.log.warn(`[WsServer] Terminating unresponsive client`);
+          // Calling terminate() here will natively trigger the 'close' event handler,
+          // which safely cleans up this.clients and this.clientAliveStatus.
+          client.terminate();
+          continue;
+        }
+
+        this.clientAliveStatus.set(client, false);
+        client.ping();
+      }
+    }, 30000);
+
+    this.log.info(`[WsServer] WebSocket server attached to HTTP server with heartbeat enabled`);
   }
 
   /**
@@ -127,6 +156,11 @@ export class WsBroadcaster {
    * Close WebSocket server
    */
   close(): void {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+
     if (this.wss) {
       // Notify all clients before closing
       this.broadcastServerStopping();
