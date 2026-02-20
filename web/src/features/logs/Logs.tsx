@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { formatDistanceToNow } from "date-fns";
 import {
   ChevronRight,
@@ -27,6 +27,7 @@ import {
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
 import { InfiniteTable, type InfiniteTableColumn } from "@/components/ui/infinite-table";
+import { MarkdownViewer } from "@/components/ui/markdown-viewer";
 import { api, type LogEntry } from "@/api/client";
 
 const PAGE_SIZE = 50;
@@ -48,6 +49,163 @@ const formatJson = (str: string): string => {
   } catch {
     // Return original if parse fails
     return str;
+  }
+};
+
+const parseMarkdownAnalysis = (str: string, type: "request" | "response"): string => {
+  if (!str) return "";
+
+  const trimmed = str.trim();
+  let markdown = "";
+
+  try {
+    if (type === "request") {
+      const parsed = JSON.parse(trimmed);
+
+      if (parsed.system) {
+        markdown += `### System\n\n`;
+        if (typeof parsed.system === "string") {
+          markdown += `> ${parsed.system.replace(/\n/g, "\n> ")}\n\n`;
+        } else if (Array.isArray(parsed.system)) {
+          parsed.system.forEach((sys: Record<string, unknown>) => {
+            if (sys.type === "text" && typeof sys.text === "string") {
+              markdown += `> ${sys.text.replace(/\n/g, "\n> ")}\n\n`;
+            }
+          });
+        }
+      }
+
+      if (Array.isArray(parsed.messages)) {
+        parsed.messages.forEach((msg: Record<string, unknown>) => {
+          markdown += `### ${msg.role === "user" ? "User" : "Assistant"}\n\n`;
+          if (typeof msg.content === "string") {
+            markdown += `${msg.content}\n\n`;
+          } else if (Array.isArray(msg.content)) {
+            msg.content.forEach((contentPart: Record<string, unknown>) => {
+              if (contentPart.type === "text" && typeof contentPart.text === "string") {
+                markdown += `${contentPart.text}\n\n`;
+              } else if (contentPart.type === "image_url" || contentPart.type === "image") {
+                markdown += `*[Image Attached]*\n\n`;
+              } else if (contentPart.type === "tool_use") {
+                markdown += `### Tool Use: \`${contentPart.name}\`\n\n`;
+                markdown += `\`\`\`json\n`;
+                const inputStr = JSON.stringify(contentPart.input, null, 2) || "{}";
+                markdown += `${inputStr}\n`;
+                markdown += `\`\`\`\n\n`;
+              } else if (contentPart.type === "tool_result") {
+                markdown += `### Tool Result\n\n`;
+                let resultContent = "";
+                if (typeof contentPart.content === "string") {
+                  resultContent = contentPart.content;
+                } else if (Array.isArray(contentPart.content)) {
+                  // Some models return tool_result content as an array of text/image
+                  resultContent = contentPart.content
+                    .map((c: Record<string, unknown>) =>
+                      typeof c.text === "string" ? c.text : JSON.stringify(c)
+                    )
+                    .join("\n");
+                }
+                if (resultContent) {
+                  markdown += `\`\`\`text\n`;
+                  markdown += `${resultContent}\n`;
+                  markdown += `\`\`\`\n\n`;
+                }
+              }
+            });
+          }
+        });
+      }
+    } else if (type === "response") {
+      if (trimmed.startsWith("event:") || trimmed.startsWith("data:")) {
+        // SSE parsing
+        const lines = trimmed.split("\n");
+        // State for aggregating tool uses across SSE chunks
+        let currentToolName = "";
+        let currentToolInput = "";
+
+        lines.forEach(line => {
+          if (line.startsWith("data: ")) {
+            const dataStr = line.substring(6).trim();
+            if (dataStr && dataStr !== "[DONE]") {
+              try {
+                const data = JSON.parse(dataStr);
+                if (data.type === "content_block_start") {
+                  if (data.content_block?.type === "text" && data.content_block?.text) {
+                    markdown += data.content_block.text;
+                  } else if (data.content_block?.type === "tool_use") {
+                    currentToolName = data.content_block.name || "unknown_tool";
+                    currentToolInput = "";
+                  }
+                } else if (data.type === "content_block_delta") {
+                  if (data.delta?.type === "text_delta" && data.delta?.text) {
+                    markdown += data.delta.text;
+                  } else if (data.delta?.type === "input_json_delta" && data.delta?.partial_json) {
+                    currentToolInput += data.delta.partial_json;
+                  }
+                } else if (data.type === "content_block_stop") {
+                  if (currentToolName) {
+                    markdown += `\n\n### Tool Use: \`${currentToolName}\`\n\n`;
+                    markdown += `\`\`\`json\n`;
+                    try {
+                      // Attempt to pretty print the aggregated JSON
+                      const parsedJson = JSON.parse(currentToolInput);
+                      markdown += JSON.stringify(parsedJson, null, 2) + "\n";
+                    } catch {
+                      // Fallback to raw string if incomplete or malformed
+                      markdown += currentToolInput + "\n";
+                    }
+                    markdown += `\`\`\`\n\n`;
+                    currentToolName = "";
+                    currentToolInput = "";
+                  }
+                }
+              } catch {
+                // Ignore parsing errors for individual SSE lines
+              }
+            }
+          }
+        });
+      } else {
+        // JSON parsing
+        const parsed = JSON.parse(trimmed);
+        if (parsed.content && Array.isArray(parsed.content)) {
+          parsed.content.forEach((c: Record<string, unknown>) => {
+            if (c.type === "text" && typeof c.text === "string") {
+              markdown += c.text;
+            } else if (c.type === "tool_use") {
+              markdown += `\n\n### Tool Use: \`${c.name}\`\n\n`;
+              markdown += `\`\`\`json\n`;
+              const inputStr = JSON.stringify(c.input, null, 2) || "{}";
+              markdown += `${inputStr}\n`;
+              markdown += `\`\`\`\n\n`;
+            } else if (c.type === "tool_result") {
+              markdown += `\n\n### Tool Result\n\n`;
+              let resultContent = "";
+              if (typeof c.content === "string") {
+                resultContent = c.content;
+              } else if (Array.isArray(c.content)) {
+                resultContent = c.content
+                  .map((item: Record<string, unknown>) =>
+                    typeof item.text === "string" ? item.text : JSON.stringify(item)
+                  )
+                  .join("\n");
+              }
+              if (resultContent) {
+                markdown += `\`\`\`text\n`;
+                markdown += `${resultContent}\n`;
+                markdown += `\`\`\`\n\n`;
+              }
+            }
+          });
+        } else if (typeof parsed.content === "string") {
+          markdown += parsed.content;
+        }
+      }
+    }
+
+    return markdown.trim() || "*No parseable content found.*";
+  } catch {
+    return "*Failed to parse content into markdown.*";
   }
 };
 
@@ -81,8 +239,8 @@ export default function Logs() {
   const [requestBodyCollapsed, setRequestBodyCollapsed] = useState(false);
   const [responseBodyCollapsed, setResponseBodyCollapsed] = useState(false);
   const [copiedSection, setCopiedSection] = useState<"request" | "response" | null>(null);
-  const [requestTab, setRequestTab] = useState<"converted" | "original">("converted");
-  const [responseTab, setResponseTab] = useState<"converted" | "original">("converted");
+  const [requestTab, setRequestTab] = useState<"analysis" | "converted" | "original">("analysis");
+  const [responseTab, setResponseTab] = useState<"analysis" | "converted" | "original">("analysis");
 
   // Use ref for stable data access in callbacks
   const stateRef = useRef({
@@ -93,6 +251,16 @@ export default function Logs() {
   });
 
   const [, forceUpdate] = useState({});
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && selectedLogId !== null) {
+        setSelectedLogId(null);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [selectedLogId]);
 
   // Expose state for render
   const allLogs = stateRef.current.allLogs;
@@ -273,11 +441,31 @@ export default function Logs() {
 
   // Reset tab states when log selection changes
   useEffect(() => {
-    setRequestTab("converted");
-    setResponseTab("converted");
+    setRequestTab("analysis");
+    setResponseTab("analysis");
   }, [selectedLogId]);
 
   const selectedLog = detailData?.log || null;
+
+  const parsedRequestAnalysis = useMemo(() => {
+    return selectedLog?.requestBody
+      ? parseMarkdownAnalysis(selectedLog.requestBody, "request")
+      : "";
+  }, [selectedLog?.requestBody]);
+
+  const parsedResponseAnalysis = useMemo(() => {
+    return selectedLog?.responseBody
+      ? parseMarkdownAnalysis(selectedLog.responseBody, "response")
+      : "";
+  }, [selectedLog?.responseBody]);
+
+  const hasValidResponseAnalysis = useMemo(() => {
+    return (
+      parsedResponseAnalysis &&
+      !parsedResponseAnalysis.includes("*No parseable content found.*") &&
+      !parsedResponseAnalysis.includes("*Failed to parse content into markdown.*")
+    );
+  }, [parsedResponseAnalysis]);
 
   const providers = stats?.byProvider ? Object.keys(stats.byProvider) : [];
 
@@ -618,6 +806,12 @@ export default function Logs() {
                           {selectedLog.originalRequestBody && !requestBodyCollapsed && (
                             <div className="flex items-center -mb-2 ml-2">
                               <TabButton
+                                active={requestTab === "analysis"}
+                                onClick={() => setRequestTab("analysis")}
+                              >
+                                Analysis
+                              </TabButton>
+                              <TabButton
                                 active={requestTab === "converted"}
                                 onClick={() => setRequestTab("converted")}
                               >
@@ -628,6 +822,22 @@ export default function Logs() {
                                 onClick={() => setRequestTab("original")}
                               >
                                 Original
+                              </TabButton>
+                            </div>
+                          )}
+                          {!selectedLog.originalRequestBody && !requestBodyCollapsed && (
+                            <div className="flex items-center -mb-2 ml-2">
+                              <TabButton
+                                active={requestTab === "analysis"}
+                                onClick={() => setRequestTab("analysis")}
+                              >
+                                Analysis
+                              </TabButton>
+                              <TabButton
+                                active={requestTab === "converted"}
+                                onClick={() => setRequestTab("converted")}
+                              >
+                                Raw
                               </TabButton>
                             </div>
                           )}
@@ -646,16 +856,20 @@ export default function Logs() {
                             variant="ghost"
                             size="sm"
                             className="h-6 px-2 text-[10px]"
-                            onClick={() =>
-                              handleCopy(
-                                formatJson(
-                                  requestTab === "original" && selectedLog.originalRequestBody
-                                    ? selectedLog.originalRequestBody
-                                    : selectedLog.requestBody || ""
-                                ),
-                                "request"
-                              )
-                            }
+                            onClick={() => {
+                              if (requestTab === "analysis") {
+                                handleCopy(parsedRequestAnalysis, "request");
+                              } else {
+                                handleCopy(
+                                  formatJson(
+                                    requestTab === "original" && selectedLog.originalRequestBody
+                                      ? selectedLog.originalRequestBody
+                                      : selectedLog.requestBody || ""
+                                  ),
+                                  "request"
+                                );
+                              }
+                            }}
                           >
                             {copiedSection === "request" ? (
                               <>
@@ -672,14 +886,18 @@ export default function Logs() {
                         </div>
                       </div>
                       {!requestBodyCollapsed && (
-                        <div className="bg-muted p-3 rounded overflow-auto max-h-[500px]">
-                          <pre className="text-[11px] font-mono m-0 whitespace-pre">
-                            {formatJson(
-                              requestTab === "original" && selectedLog.originalRequestBody
-                                ? selectedLog.originalRequestBody
-                                : selectedLog.requestBody
-                            )}
-                          </pre>
+                        <div className="bg-card border p-3 rounded overflow-auto max-h-[500px]">
+                          {requestTab === "analysis" ? (
+                            <MarkdownViewer content={parsedRequestAnalysis} />
+                          ) : (
+                            <pre className="text-[11px] font-mono m-0 whitespace-pre text-muted-foreground">
+                              {formatJson(
+                                requestTab === "original" && selectedLog.originalRequestBody
+                                  ? selectedLog.originalRequestBody
+                                  : selectedLog.requestBody || ""
+                              )}
+                            </pre>
+                          )}
                         </div>
                       )}
                     </div>
@@ -700,22 +918,48 @@ export default function Logs() {
                             )}
                             Response Body
                           </h4>
-                          {selectedLog.originalResponseBody && !responseBodyCollapsed && (
-                            <div className="flex items-center -mb-2 ml-2">
-                              <TabButton
-                                active={responseTab === "converted"}
-                                onClick={() => setResponseTab("converted")}
-                              >
-                                Converted
-                              </TabButton>
-                              <TabButton
-                                active={responseTab === "original"}
-                                onClick={() => setResponseTab("original")}
-                              >
-                                Original
-                              </TabButton>
-                            </div>
-                          )}
+                          {selectedLog.originalResponseBody &&
+                            !responseBodyCollapsed &&
+                            hasValidResponseAnalysis && (
+                              <div className="flex items-center -mb-2 ml-2">
+                                <TabButton
+                                  active={responseTab === "analysis"}
+                                  onClick={() => setResponseTab("analysis")}
+                                >
+                                  Analysis
+                                </TabButton>
+                                <TabButton
+                                  active={responseTab === "converted"}
+                                  onClick={() => setResponseTab("converted")}
+                                >
+                                  Converted
+                                </TabButton>
+                                <TabButton
+                                  active={responseTab === "original"}
+                                  onClick={() => setResponseTab("original")}
+                                >
+                                  Original
+                                </TabButton>
+                              </div>
+                            )}
+                          {!selectedLog.originalResponseBody &&
+                            !responseBodyCollapsed &&
+                            hasValidResponseAnalysis && (
+                              <div className="flex items-center -mb-2 ml-2">
+                                <TabButton
+                                  active={responseTab === "analysis"}
+                                  onClick={() => setResponseTab("analysis")}
+                                >
+                                  Analysis
+                                </TabButton>
+                                <TabButton
+                                  active={responseTab === "converted"}
+                                  onClick={() => setResponseTab("converted")}
+                                >
+                                  Raw
+                                </TabButton>
+                              </div>
+                            )}
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] text-muted-foreground font-normal">
@@ -731,16 +975,20 @@ export default function Logs() {
                             variant="ghost"
                             size="sm"
                             className="h-6 px-2 text-[10px]"
-                            onClick={() =>
-                              handleCopy(
-                                formatJson(
-                                  responseTab === "original" && selectedLog.originalResponseBody
-                                    ? selectedLog.originalResponseBody
-                                    : selectedLog.responseBody || ""
-                                ),
-                                "response"
-                              )
-                            }
+                            onClick={() => {
+                              if (hasValidResponseAnalysis && responseTab === "analysis") {
+                                handleCopy(parsedResponseAnalysis, "response");
+                              } else {
+                                handleCopy(
+                                  formatJson(
+                                    responseTab === "original" && selectedLog.originalResponseBody
+                                      ? selectedLog.originalResponseBody
+                                      : selectedLog.responseBody || ""
+                                  ),
+                                  "response"
+                                );
+                              }
+                            }}
                           >
                             {copiedSection === "response" ? (
                               <>
@@ -757,14 +1005,18 @@ export default function Logs() {
                         </div>
                       </div>
                       {!responseBodyCollapsed && (
-                        <div className="bg-muted p-3 rounded overflow-auto max-h-[500px]">
-                          <pre className="text-[11px] font-mono m-0 whitespace-pre">
-                            {formatJson(
-                              responseTab === "original" && selectedLog.originalResponseBody
-                                ? selectedLog.originalResponseBody
-                                : selectedLog.responseBody
-                            )}
-                          </pre>
+                        <div className="bg-card border p-3 rounded overflow-auto max-h-[500px]">
+                          {hasValidResponseAnalysis && responseTab === "analysis" ? (
+                            <MarkdownViewer content={parsedResponseAnalysis} />
+                          ) : (
+                            <pre className="text-[11px] font-mono m-0 whitespace-pre text-muted-foreground">
+                              {formatJson(
+                                responseTab === "original" && selectedLog.originalResponseBody
+                                  ? selectedLog.originalResponseBody
+                                  : selectedLog.responseBody || ""
+                              )}
+                            </pre>
+                          )}
                         </div>
                       )}
                     </div>
