@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Activity, Server, Database } from "lucide-react";
 import { api } from "./api/client";
 import Dashboard from "./features/dashboard/Dashboard";
@@ -10,8 +10,39 @@ import Logs from "./features/logs/Logs";
 
 type Tab = "dashboard" | "providers" | "logs";
 
+const VALID_TABS: Tab[] = ["dashboard", "providers", "logs"];
+
+function useHashTab(defaultTab: Tab): [Tab, (tab: Tab) => void] {
+  const getHashTab = useCallback((): Tab => {
+    const hash = window.location.hash.replace("#", "") as Tab;
+    return VALID_TABS.includes(hash) ? hash : defaultTab;
+  }, [defaultTab]);
+
+  const [activeTab, setActiveTabState] = useState<Tab>(getHashTab());
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      setActiveTabState(getHashTab());
+    };
+
+    window.addEventListener("hashchange", handleHashChange);
+    // Set initial hash if empty
+    if (!window.location.hash) {
+      window.history.replaceState(null, "", `#${defaultTab}`);
+    }
+
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, [defaultTab, getHashTab]);
+
+  const setActiveTab = (tab: Tab) => {
+    window.location.hash = tab;
+  };
+
+  return [activeTab, setActiveTab];
+}
+
 function App() {
-  const [activeTab, setActiveTab] = useState<Tab>("dashboard");
+  const [activeTab, setActiveTab] = useHashTab("dashboard");
   const [version, setVersion] = useState<string | null>(null);
 
   useEffect(() => {
