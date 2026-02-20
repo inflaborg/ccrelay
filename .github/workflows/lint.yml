@@ -43,8 +43,8 @@ jobs:
       - name: Install dependencies
         if: steps.check.outputs.has_code_changes == 'true'
         run: |
-          npm ci
-          cd web && npm ci
+          npm install
+          cd web && npm install
 
       - name: Lint root
         if: steps.check.outputs.has_code_changes == 'true'
