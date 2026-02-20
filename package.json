@@ -159,5 +159,8 @@
     "supertest": "^7.2.2",
     "typescript": "^5.0.4",
     "vitest": "^4.0.18"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "^4.58.0"
   }
 }
