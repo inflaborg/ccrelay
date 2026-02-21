@@ -87,7 +87,7 @@
       }
     },
     "viewsContainers": {
-      "auxiliarybar": [
+      "activitybar": [
         {
           "id": "ccrelay-dashboard-container",
           "title": "CCRelay",
