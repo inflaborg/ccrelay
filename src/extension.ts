@@ -5,6 +5,7 @@ import { StatusBarManager } from "./vscode/statusBar";
 import { LogViewerPanel } from "./vscode/logViewer";
 import { Logger } from "./utils/logger";
 import { LeaderElection } from "./server/leaderElection";
+import { DashboardWebviewProvider } from "./vscode/dashboardView";
 import * as Api from "./api";
 
 let server: ProxyServer | null = null;
@@ -12,6 +13,7 @@ let statusBar: StatusBarManager | null = null;
 let configManager: ConfigManager | null = null;
 let logger: Logger | null = null;
 let leaderElection: LeaderElection | null = null;
+let dashboardProvider: DashboardWebviewProvider | null = null;
 
 export function activate(context: vscode.ExtensionContext) {
   const activationStart = Date.now();
@@ -60,6 +62,28 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Create status bar manager
   statusBar = new StatusBarManager(context, configManager, server);
+
+  // Initialize Dashboard Provider
+  const getDashboardConfig = () => {
+    if (!server || !configManager) {
+      const vsConfig = vscode.workspace.getConfiguration("ccrelay");
+      return {
+        role: "standalone",
+        leaderUrl: "",
+        host: vsConfig.get<string>("host", "127.0.0.1"),
+        port: vsConfig.get<number>("port", 7575)
+      };
+    }
+    const vsConfig = vscode.workspace.getConfiguration("ccrelay");
+    return {
+      role: server.getRole(),
+      leaderUrl: server.getLeaderUrl() ?? "",
+      host: vsConfig.get<string>("host", configManager.host),
+      port: vsConfig.get<number>("port", configManager.port)
+    };
+  };
+
+  dashboardProvider = new DashboardWebviewProvider(context.extensionUri, getDashboardConfig);
 
   // Register commands
   const showMenuCommand = vscode.commands.registerCommand("ccrelay.showMenu", async () => {
@@ -119,6 +143,7 @@ export function activate(context: vscode.ExtensionContext) {
     showLogsCommand,
     clearLogsCommand,
     openWebUICommand,
+    vscode.window.registerWebviewViewProvider(DashboardWebviewProvider.viewType, dashboardProvider),
     statusBar,
     logger
   );
@@ -166,6 +191,7 @@ async function startServer(): Promise<void> {
     }
 
     statusBar?.update();
+    dashboardProvider?.updateWebview();
   } catch (err: unknown) {
     logger.error("Failed to start server", err);
     const message = err instanceof Error ? err.message : String(err);
@@ -199,6 +225,7 @@ async function stopServer(): Promise<void> {
     }
 
     statusBar?.update();
+    dashboardProvider?.updateWebview();
   } catch (err: unknown) {
     logger.error("Failed to stop server", err);
     const message = err instanceof Error ? err.message : String(err);

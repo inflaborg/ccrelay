@@ -85,6 +85,24 @@
           "description": "Priority of the status bar item"
         }
       }
+    },
+    "viewsContainers": {
+      "auxiliarybar": [
+        {
+          "id": "ccrelay-dashboard-container",
+          "title": "CCRelay",
+          "icon": "assets/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "ccrelay-dashboard-container": [
+        {
+          "type": "webview",
+          "id": "ccrelay.dashboardView",
+          "name": "Dashboard"
+        }
+      ]
     }
   },
   "scripts": {
