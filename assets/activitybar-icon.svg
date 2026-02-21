@@ -1,0 +1,16 @@
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Outer Padded Circle -->
+  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5" fill="none"/>
+  
+  <!-- "C" (First Letter) -->
+  <path d="M 9.5 9 A 2 2 0 1 0 9.5 13" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+  
+  <!-- "C" (Second Letter) -->
+  <path d="M 13.5 9 A 2 2 0 1 0 13.5 13" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+  
+  <!-- "R" (Third Letter) -->
+  <path d="M 15.5 9 V 13 M 15.5 9 C 18 9 18 11 15.5 11 M 15.5 11 L 18 13" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  
+  <!-- Straight Underline -->
+  <path d="M 6.5 16 L 17.5 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+</svg>

@@ -91,7 +91,7 @@
         {
           "id": "ccrelay-dashboard-container",
           "title": "CCRelay",
-          "icon": "assets/icon.svg"
+          "icon": "assets/activitybar-icon.svg"
         }
       ]
     },
