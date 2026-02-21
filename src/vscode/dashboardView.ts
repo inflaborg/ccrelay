@@ -3,61 +3,78 @@ import * as path from "path";
 import * as fs from "fs";
 
 export class DashboardWebviewProvider implements vscode.WebviewViewProvider {
-    public static readonly viewType = "ccrelay.dashboardView";
+  public static readonly viewType = "ccrelay.dashboardView";
 
-    private _view?: vscode.WebviewView;
+  private _view?: vscode.WebviewView;
 
-    constructor(
-        private readonly _extensionUri: vscode.Uri,
-        private readonly _getConfig: () => { leaderUrl: string; role: string; host?: string; port?: number }
-    ) { }
+  constructor(
+    private readonly _extensionUri: vscode.Uri,
+    private readonly _getConfig: () => {
+      leaderUrl: string;
+      role: string;
+      host?: string;
+      port?: number;
+    }
+  ) {}
 
-    public resolveWebviewView(
-        webviewView: vscode.WebviewView,
-        _context: vscode.WebviewViewResolveContext,
-        _token: vscode.CancellationToken
-    ) {
-        this._view = webviewView;
+  public resolveWebviewView(
+    webviewView: vscode.WebviewView,
+    _context: vscode.WebviewViewResolveContext,
+    _token: vscode.CancellationToken
+  ) {
+    this._view = webviewView;
 
-        webviewView.webview.options = {
-            enableScripts: true,
-            localResourceRoots: [vscode.Uri.joinPath(this._extensionUri, "out", "web")],
-        };
+    webviewView.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [vscode.Uri.joinPath(this._extensionUri, "out", "web")],
+    };
 
-        this.updateWebview();
+    this.updateWebview();
+  }
+
+  public updateWebview() {
+    if (this._view) {
+      const { leaderUrl, role, host, port } = this._getConfig();
+      this._view.webview.html = this.getWebviewContent(
+        this._view.webview,
+        leaderUrl,
+        role,
+        host,
+        port
+      );
+    }
+  }
+
+  private getWebviewContent(
+    webview: vscode.Webview,
+    leaderUrl: string,
+    role: string,
+    host?: string,
+    port?: number
+  ): string {
+    const webDistPath = path.join(this._extensionUri.fsPath, "out", "web");
+
+    const apiUrl =
+      role === "follower" && leaderUrl
+        ? new URL("/ccrelay/api", leaderUrl).origin
+        : `http://${host || "127.0.0.1"}:${port || 7575}`;
+
+    const assetsPath = path.join(webDistPath, "assets");
+    let jsFile = "";
+    let cssFile = "";
+
+    try {
+      if (fs.existsSync(assetsPath)) {
+        const files = fs.readdirSync(assetsPath);
+        jsFile = files.find(f => f.startsWith("index-") && f.endsWith(".js")) || "";
+        cssFile = files.find(f => f.startsWith("index-") && f.endsWith(".css")) || "";
+      }
+    } catch (err) {
+      console.error("Failed to read assets directory:", err);
     }
 
-    public updateWebview() {
-        if (this._view) {
-            const { leaderUrl, role, host, port } = this._getConfig();
-            this._view.webview.html = this.getWebviewContent(this._view.webview, leaderUrl, role, host, port);
-        }
-    }
-
-    private getWebviewContent(webview: vscode.Webview, leaderUrl: string, role: string, host?: string, port?: number): string {
-        const webDistPath = path.join(this._extensionUri.fsPath, "out", "web");
-
-        const apiUrl =
-            role === "follower" && leaderUrl
-                ? new URL("/ccrelay/api", leaderUrl).origin
-                : `http://${host || "127.0.0.1"}:${port || 7575}`;
-
-        const assetsPath = path.join(webDistPath, "assets");
-        let jsFile = "";
-        let cssFile = "";
-
-        try {
-            if (fs.existsSync(assetsPath)) {
-                const files = fs.readdirSync(assetsPath);
-                jsFile = files.find(f => f.startsWith("index-") && f.endsWith(".js")) || "";
-                cssFile = files.find(f => f.startsWith("index-") && f.endsWith(".css")) || "";
-            }
-        } catch (err) {
-            console.error("Failed to read assets directory:", err);
-        }
-
-        if (!jsFile || !cssFile) {
-            return `<!DOCTYPE html>
+    if (!jsFile || !cssFile) {
+      return `<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"></head>
 <body style="color: var(--vscode-foreground); background: var(--vscode-editor-background); padding: 20px; font-family: var(--vscode-font-family);">
@@ -66,12 +83,16 @@ export class DashboardWebviewProvider implements vscode.WebviewViewProvider {
   <pre style="background: var(--vscode-textCodeBlock-background); padding: 10px; border-radius: 4px;">npm run build:web</pre>
 </body>
 </html>`;
-        }
+    }
 
-        const jsUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "out", "web", "assets", jsFile));
-        const cssUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "out", "web", "assets", cssFile));
+    const jsUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, "out", "web", "assets", jsFile)
+    );
+    const cssUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, "out", "web", "assets", cssFile)
+    );
 
-        return `<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -99,5 +120,5 @@ export class DashboardWebviewProvider implements vscode.WebviewViewProvider {
   <script type="module" src="${jsUri.toString()}"></script>
 </body>
 </html>`;
-    }
+  }
 }
