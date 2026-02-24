@@ -61,7 +61,7 @@ export class ConcurrencyManager {
         config.maxQueueSize && config.maxQueueSize > 0
           ? config.maxQueueSize
           : "unlimited (capped at 10000)"
-      }`
+      }, retry429=${config.retry429?.enabled ? `enabled(maxRetries=${config.retry429.maxRetries}, delayMs=${config.retry429.delayMs})` : "disabled"}`
     );
   }
 
@@ -239,7 +239,7 @@ export class ConcurrencyManager {
   }
 
   /**
-   * Execute a single task
+   * Execute a single task with optional 429 retry support
    *
    * IMPORTANT: Once execution starts, we do NOT apply any timeout.
    * The task relies entirely on:
@@ -268,8 +268,64 @@ export class ConcurrencyManager {
     );
 
     try {
-      // Execute the task - no timeout, relies on upstream response or client disconnect
-      const result = await this.taskExecutor(task);
+      // Get retry configuration
+      const retry429Config = this.config.retry429;
+      const maxRetries = retry429Config?.enabled ? (retry429Config.maxRetries ?? 3) : 0;
+      const delayMs = retry429Config?.delayMs ?? 1000;
+
+      let result: ProxyResult;
+      let attempt = 0;
+
+      // Execute with optional retry on 429
+      while (true) {
+        // Check if task was cancelled (client disconnected)
+        if (task.cancelled) {
+          this.log.info(
+            `[Task ${task.id}] Cancelled during execution: ${task.cancelledReason ?? "unknown"}`
+          );
+          resolve({
+            statusCode: 499,
+            headers: {},
+            duration: Date.now() - startedAt,
+            errorMessage: task.cancelledReason ?? "Task cancelled",
+          });
+          return;
+        }
+
+        // Execute the task
+        result = await this.taskExecutor(task);
+        attempt++;
+
+        // Check if we got a 429 and should retry
+        if (result.statusCode === 429 && attempt <= maxRetries) {
+          // Try to get Retry-After header (can be seconds or HTTP date)
+          const retryAfter = result.headers["retry-after"];
+          let actualDelay = delayMs;
+          let retryAfterInfo = "";
+
+          if (retryAfter) {
+            const retryAfterValue = Array.isArray(retryAfter) ? retryAfter[0] : retryAfter;
+            // Check if it's a number (seconds)
+            const seconds = parseInt(retryAfterValue, 10);
+            if (!isNaN(seconds)) {
+              actualDelay = seconds * 1000;
+              retryAfterInfo = ` (from Retry-After: ${seconds}s)`;
+            }
+            // Otherwise it could be an HTTP date, which we skip for simplicity
+          }
+
+          this.log.info(
+            `[Task ${task.id}] Got 429 (attempt ${attempt}/${maxRetries + 1}), retrying in ${actualDelay}ms${retryAfterInfo}...`
+          );
+
+          // Wait before retry
+          await new Promise<void>(resolveTimeout => setTimeout(resolveTimeout, actualDelay));
+          continue;
+        }
+
+        // Not a 429 or max retries exceeded, return the result
+        break;
+      }
 
       // Update statistics
       const completedAt = Date.now();
@@ -278,9 +334,20 @@ export class ConcurrencyManager {
       this.totalWaitTime += waitTime;
       this.totalProcessTime += processTime;
 
-      this.log.info(
-        `[Task ${task.id}] Completed (${result.statusCode} in ${processTime}ms, wait: ${waitTime}ms)`
-      );
+      // Log completion with retry info if applicable
+      if (attempt > 1 && result.statusCode !== 429) {
+        this.log.info(
+          `[Task ${task.id}] Completed (${result.statusCode} in ${processTime}ms, wait: ${waitTime}ms, retries: ${attempt - 1})`
+        );
+      } else if (result.statusCode === 429) {
+        this.log.info(
+          `[Task ${task.id}] Completed with 429 after ${attempt} attempts (${processTime}ms, wait: ${waitTime}ms)`
+        );
+      } else {
+        this.log.info(
+          `[Task ${task.id}] Completed (${result.statusCode} in ${processTime}ms, wait: ${waitTime}ms)`
+        );
+      }
 
       resolve(result);
     } catch (error) {
