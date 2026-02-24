@@ -91,12 +91,22 @@ export const RouteQueueConfigSchema = z.object({
 
 export type RouteQueueConfigInput = z.infer<typeof RouteQueueConfigSchema>;
 
+// Retry 429 configuration schema
+export const Retry429ConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  maxRetries: z.number().int().nonnegative().default(3),
+  delayMs: z.number().int().nonnegative().default(1000), // Delay in milliseconds
+});
+
+export type Retry429ConfigInput = z.infer<typeof Retry429ConfigSchema>;
+
 // Concurrency configuration schema
 export const ConcurrencyConfigSchema = z.object({
   enabled: z.boolean().default(false),
   maxWorkers: z.number().int().positive().default(3),
   maxQueueSize: z.number().int().nonnegative().optional(),
   requestTimeout: z.number().nonnegative().optional(), // Queue wait timeout in seconds (supports fractions)
+  retry429: Retry429ConfigSchema.optional(),
   routes: z.array(RouteQueueConfigSchema).optional(),
 });
 
@@ -402,6 +412,15 @@ export interface RoleChangeInfo {
 }
 
 /**
+ * Retry 429 configuration
+ */
+export interface Retry429Config {
+  enabled: boolean;
+  maxRetries: number;
+  delayMs: number;
+}
+
+/**
  * Concurrency control configuration
  */
 export interface ConcurrencyConfig {
@@ -409,6 +428,7 @@ export interface ConcurrencyConfig {
   maxWorkers: number;
   maxQueueSize?: number;
   requestTimeout?: number; // Queue wait timeout in seconds
+  retry429?: Retry429Config;
 }
 
 /**

@@ -42,7 +42,7 @@ function useHashTab(defaultTab: Tab): [Tab, (tab: Tab) => void] {
 }
 
 function App() {
-  const [activeTab, setActiveTab] = useHashTab("dashboard");
+  const [activeTab, setActiveTab] = useHashTab("providers");
   const [version, setVersion] = useState<string | null>(null);
 
   useEffect(() => {
@@ -55,47 +55,47 @@ function App() {
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
       {/* Header - Tab Style */}
-      <header className="bg-card flex-shrink-0 border-b">
+      <header className="bg-card flex-shrink-0 border-b border-border">
         <div className="max-w-full px-2 sm:px-4">
-          <div className="flex h-10 items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <img src={iconSvg} alt="CCRelay" className="h-8 w-8" />
-              <h1 className="text-sm font-semibold">CCRelay</h1>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center sm:h-10 justify-between gap-3 sm:gap-0 pt-3 pb-3 sm:py-0">
+            <div className="flex items-center gap-1.5 px-1 sm:px-0">
+              <img src={iconSvg} alt="CCRelay" className="h-6 w-6 sm:h-8 sm:w-8" />
+              <h1 className="text-[13px] sm:text-sm font-semibold">CCRelay</h1>
             </div>
-            <nav className="flex items-center justify-center">
-              <div className="flex">
+            <nav className="flex items-center w-full sm:w-auto">
+              <div className="flex w-full sm:w-auto bg-muted/50 sm:bg-transparent rounded-lg sm:rounded-none p-1 sm:p-0 gap-1 sm:gap-0">
                 <button
-                  className={`h-10 px-4 text-xs min-w-[80px] flex items-center justify-center gap-1 rounded-none transition-colors duration-200 ${
+                  className={`flex-1 sm:flex-none h-8 sm:h-10 px-2 sm:px-4 text-[11px] sm:text-xs sm:min-w-[80px] flex items-center justify-center gap-1.5 rounded-md sm:rounded-none transition-all duration-200 ${
                     activeTab === "dashboard"
-                      ? "bg-primary text-primary-foreground"
-                      : "hover:bg-primary/15"
+                      ? "bg-background sm:bg-primary text-foreground sm:text-primary-foreground shadow-sm sm:shadow-none"
+                      : "text-muted-foreground sm:text-foreground hover:text-foreground sm:hover:bg-primary/15"
                   }`}
                   onClick={() => setActiveTab("dashboard")}
                 >
                   <Server className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline ml-1">Dashboard</span>
+                  <span className="hidden sm:inline">Dashboard</span>
                 </button>
                 <button
-                  className={`h-10 px-4 text-xs min-w-[80px] flex items-center justify-center gap-1 rounded-none transition-colors duration-200 ${
+                  className={`flex-1 sm:flex-none h-8 sm:h-10 px-2 sm:px-4 text-[11px] sm:text-xs sm:min-w-[80px] flex items-center justify-center gap-1.5 rounded-md sm:rounded-none transition-all duration-200 ${
                     activeTab === "providers"
-                      ? "bg-primary text-primary-foreground"
-                      : "hover:bg-primary/15"
+                      ? "bg-background sm:bg-primary text-foreground sm:text-primary-foreground shadow-sm sm:shadow-none"
+                      : "text-muted-foreground sm:text-foreground hover:text-foreground sm:hover:bg-primary/15"
                   }`}
                   onClick={() => setActiveTab("providers")}
                 >
                   <Activity className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline ml-1">Providers</span>
+                  <span className="hidden sm:inline">Providers</span>
                 </button>
                 <button
-                  className={`h-10 px-4 text-xs min-w-[80px] flex items-center justify-center gap-1 rounded-none transition-colors duration-200 ${
+                  className={`flex-1 sm:flex-none h-8 sm:h-10 px-2 sm:px-4 text-[11px] sm:text-xs sm:min-w-[80px] flex items-center justify-center gap-1.5 rounded-md sm:rounded-none transition-all duration-200 ${
                     activeTab === "logs"
-                      ? "bg-primary text-primary-foreground"
-                      : "hover:bg-primary/15"
+                      ? "bg-background sm:bg-primary text-foreground sm:text-primary-foreground shadow-sm sm:shadow-none"
+                      : "text-muted-foreground sm:text-foreground hover:text-foreground sm:hover:bg-primary/15"
                   }`}
                   onClick={() => setActiveTab("logs")}
                 >
                   <Database className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline ml-1">Logs</span>
+                  <span className="hidden sm:inline">Logs</span>
                 </button>
               </div>
             </nav>

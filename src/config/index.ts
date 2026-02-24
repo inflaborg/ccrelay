@@ -19,6 +19,7 @@ import {
   type FileConfigInput,
   type ProviderConfigInput,
   type ConcurrencyConfig,
+  type Retry429Config,
   type DatabaseConfig,
   type RouteQueueConfig,
   type BlockPattern,
@@ -97,6 +98,12 @@ concurrency:
   # Requests exceeding this will return 503
   # 0 or not set = unlimited
   requestTimeout: 60
+
+  # 429 Retry configuration
+  retry429:
+    enabled: false              # Enable automatic retry on 429 responses
+    maxRetries: 3               # Maximum retry attempts
+    delayMs: 1000               # Delay between retries (milliseconds)
 
   # Per-route queue configuration
   routes:
@@ -369,11 +376,29 @@ export class ConfigManager {
     // Build concurrency config
     let concurrency: ConcurrencyConfig | undefined;
     if (merged.concurrency?.enabled) {
+      // Build retry429 config with defaults
+      let retry429: Retry429Config | undefined;
+      if (merged.concurrency.retry429) {
+        retry429 = {
+          enabled: merged.concurrency.retry429.enabled ?? false,
+          maxRetries: merged.concurrency.retry429.maxRetries ?? 3,
+          delayMs: merged.concurrency.retry429.delayMs ?? 1000,
+        };
+      } else {
+        // Default retry429 config
+        retry429 = {
+          enabled: false,
+          maxRetries: 3,
+          delayMs: 1000,
+        };
+      }
+
       concurrency = {
         enabled: true,
         maxWorkers: merged.concurrency.maxWorkers || 3,
         maxQueueSize: merged.concurrency.maxQueueSize,
         requestTimeout: merged.concurrency.requestTimeout,
+        retry429,
       };
     }
 
