@@ -11,10 +11,9 @@ if (!fs.existsSync(outDir)) {
   fs.mkdirSync(outDir, { recursive: true });
 }
 
-const result = await esbuild.build({
-  entryPoints: [path.join(rootDir, "src/extension.ts")],
+// Common build options
+const commonOptions = {
   bundle: true,
-  outfile: path.join(outDir, "extension.cjs"),
   platform: "node",
   target: "node18",
   format: "cjs",
@@ -30,6 +29,20 @@ const result = await esbuild.build({
   ],
   sourcemap: false,
   minify: false,
+};
+
+// Build main extension
+await esbuild.build({
+  ...commonOptions,
+  entryPoints: [path.join(rootDir, "src/extension.ts")],
+  outfile: path.join(outDir, "extension.cjs"),
+});
+
+// Build database worker as separate bundle
+await esbuild.build({
+  ...commonOptions,
+  entryPoints: [path.join(rootDir, "src/database/database-worker.ts")],
+  outfile: path.join(outDir, "database-worker.cjs"),
 });
 
 console.log("Bundle created successfully");

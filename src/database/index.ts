@@ -79,7 +79,6 @@ export class LogDatabase {
   private async doInitialize(): Promise<void> {
     try {
       this.log.info(`[LogDatabase] Creating ${this.driverConfig.type} driver...`);
-
       this.driver = createDriver(this.driverConfig);
       await this.driver.initialize();
 
@@ -206,6 +205,7 @@ export function getDatabase(): LogDatabase {
 /**
  * Initialize database with custom configuration
  * Must be called before getDatabase() for custom config to take effect
+ * @param config Database configuration
  */
 export function initializeDatabase(config: DatabaseDriverConfig): LogDatabase {
   if (dbInstance) {

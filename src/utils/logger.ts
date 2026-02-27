@@ -1,8 +1,16 @@
 /**
  * Logger for CCRelay with output channel support
+ * Supports both VSCode environment and Worker threads
  */
 
-import * as vscode from "vscode";
+// Check if vscode is available (not available in worker threads)
+let vscode: typeof import("vscode") | null = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  vscode = require("vscode") as typeof import("vscode");
+} catch {
+  // vscode not available (worker thread)
+}
 
 export enum LogLevel {
   // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -52,9 +60,17 @@ function getDefaultLogLevel(): LogLevel {
   }
 }
 
+// Type for VSCode OutputChannel (minimal interface we need)
+interface OutputChannel {
+  appendLine(value: string): void;
+  clear(): void;
+  show(): void;
+  dispose(): void;
+}
+
 export class Logger {
   private static instance: Logger | null = null;
-  private outputChannel: vscode.OutputChannel | null = null;
+  private outputChannel: OutputChannel | null = null;
   private logBuffer: string[] = [];
   private maxBufferSize = 1000;
   private minLevel: LogLevel = getDefaultLogLevel();
@@ -62,11 +78,14 @@ export class Logger {
   private isDisposed: boolean = false;
 
   private constructor() {
-    try {
-      this.outputChannel = vscode.window.createOutputChannel("CCRelay");
-    } catch (err) {
-      console.error("[CCRelay] Failed to create output channel", err);
+    if (vscode) {
+      try {
+        this.outputChannel = vscode.window.createOutputChannel("CCRelay");
+      } catch (err) {
+        console.error("[CCRelay] Failed to create output channel", err);
+      }
     }
+    // If vscode not available, we'll just use console (worker thread)
   }
 
   static getInstance(): Logger {
@@ -99,7 +118,8 @@ export class Logger {
       this.logBuffer.shift();
     }
 
-    if (!this.isDisposed && this.outputChannel) {
+    // Output to VSCode channel or console (for worker threads)
+    if (this.outputChannel && !this.isDisposed) {
       try {
         this.outputChannel.appendLine(formatted);
       } catch (error) {
@@ -112,6 +132,18 @@ export class Logger {
           );
           this.isDisposed = true; // Mark as disposed on first error to stop trying
         }
+      }
+    } else if (!this.outputChannel) {
+      // Worker thread: use console output
+      switch (level) {
+        case LogLevel.ERROR:
+          console.error(formatted);
+          break;
+        case LogLevel.WARN:
+          console.warn(formatted);
+          break;
+        default:
+          console.log(formatted);
       }
     }
   }

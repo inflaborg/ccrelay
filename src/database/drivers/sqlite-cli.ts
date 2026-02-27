@@ -490,7 +490,7 @@ export class SqliteCliDriver implements DatabaseDriver {
       };
 
       this.commandTimer = setTimeout(() => {
-        this.handleError(new Error("sqlite3 initialization timed out"));
+        void this.handleError(new Error("sqlite3 initialization timed out"));
         reject(new Error("sqlite3 initialization timed out"));
       }, this.commandTimeoutMs);
 
@@ -509,7 +509,7 @@ export class SqliteCliDriver implements DatabaseDriver {
     const stderrContent = this.stderrBuffer.trim();
 
     if (stderrContent) {
-      this.handleError(new Error(`sqlite3 error: ${stderrContent}`));
+      void this.handleError(new Error(`sqlite3 error: ${stderrContent}`));
       return;
     }
 
@@ -545,7 +545,7 @@ export class SqliteCliDriver implements DatabaseDriver {
       const rows = this.parseJsonOutput(resultText);
       this.currentQuery.resolve(rows);
     } catch (err) {
-      this.handleError(
+      void this.handleError(
         new Error(`Failed to parse JSON: ${err instanceof Error ? err.message : String(err)}`)
       );
       return;
@@ -555,7 +555,7 @@ export class SqliteCliDriver implements DatabaseDriver {
     void this.processNextCommand();
   }
 
-  private handleError(error: Error): void {
+  private async handleError(error: Error): Promise<void> {
     this.needsRestart = true;
     this.stderrBuffer = "";
     this.stdoutBuffer = "";
@@ -570,7 +570,7 @@ export class SqliteCliDriver implements DatabaseDriver {
       this.currentQuery = null;
     }
 
-    void this.processNextCommand();
+    await this.processNextCommand();
   }
 
   private parseJsonOutput(text: string): Record<string, unknown>[] {
@@ -696,7 +696,7 @@ export class SqliteCliDriver implements DatabaseDriver {
       clearTimeout(this.commandTimer);
     }
     this.commandTimer = setTimeout(() => {
-      this.handleError(new Error(`Command timed out after ${this.commandTimeoutMs}ms`));
+      void this.handleError(new Error(`Command timed out after ${this.commandTimeoutMs}ms`));
     }, this.commandTimeoutMs);
 
     const next = this.commandQueue.shift()!;
