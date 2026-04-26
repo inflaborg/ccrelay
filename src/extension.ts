@@ -118,7 +118,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.window.showInformationMessage("CCRelay logs cleared");
   });
 
-  const openWebUICommand = vscode.commands.registerCommand("ccrelay.openWebUI", () => {
+  const openWebUICommand = vscode.commands.registerCommand("ccrelay.openWebUI", async () => {
     if (!server || !configManager) {
       vscode.window.showErrorMessage("CCRelay server not initialized");
       return;
@@ -131,7 +131,7 @@ export function activate(context: vscode.ExtensionContext) {
     const port = config.get<number>("port", 7575);
     const host = config.get<string>("host", "127.0.0.1");
 
-    LogViewerPanel.createOrShow(leaderUrl, role, host, port, context.extensionUri);
+    await LogViewerPanel.createOrShow(leaderUrl, role, host, port, context.extensionUri);
   });
 
   context.subscriptions.push(
@@ -191,7 +191,7 @@ async function startServer(): Promise<void> {
     }
 
     statusBar?.update();
-    dashboardProvider?.updateWebview();
+    void dashboardProvider?.updateWebview();
   } catch (err: unknown) {
     logger.error("Failed to start server", err);
     const message = err instanceof Error ? err.message : String(err);
@@ -225,7 +225,7 @@ async function stopServer(): Promise<void> {
     }
 
     statusBar?.update();
-    dashboardProvider?.updateWebview();
+    void dashboardProvider?.updateWebview();
   } catch (err: unknown) {
     logger.error("Failed to stop server", err);
     const message = err instanceof Error ? err.message : String(err);
