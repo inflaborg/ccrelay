@@ -354,15 +354,15 @@ CCRelay has a built-in Web UI dashboard that provides:
 
 **Client configuration** in the Web UI (same flows as the dashboard’s **Client configuration** / **Configure default models** actions):
 
-![Client configuration — `ANTHROPIC_BASE_URL` and related env in `~/.claude/settings.json`](docs/screenshot-ccrelay-setup-1.png)
+![Client configuration — `ANTHROPIC_BASE_URL` and related env in `~/.claude/settings.json`](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-setup-1.png)
 
-![Configure default models — `ANTHROPIC_DEFAULT_OPUS_MODEL` / `SONNET` / `HAIKU` (optional)](docs/screenshot-ccrelay-setup-2.png)
+![Configure default models — `ANTHROPIC_DEFAULT_OPUS_MODEL` / `SONNET` / `HAIKU` (optional)](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-setup-2.png)
 
 **Logs** in the Web UI:
 
-![Request Logs](docs/screenshot-ccrelay-1.png)
+![Request Logs](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-1.png)
 
-![Log Details](docs/screenshot-ccrelay-3.png)
+![Log Details](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-3.png)
 
 Access methods:
 - Command Palette: `CCRelay: Open Dashboard`

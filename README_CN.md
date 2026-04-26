@@ -351,15 +351,15 @@ CCRelay 内置 Web UI 管理界面，提供：
 
 面板上 **Client configuration** 与 **Configure default models**（与下图一致）：
 
-![Client configuration — 在 UI 中写入 ~/.claude/settings.json 的 env](docs/screenshot-ccrelay-setup-1.png)
+![Client configuration — 在 UI 中写入 ~/.claude/settings.json 的 env](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-setup-1.png)
 
-![Configure default models — 可选的 ANTHROPIC_DEFAULT_OPUS/SONNET/HAIKU 模型名](docs/screenshot-ccrelay-setup-2.png)
+![Configure default models — 可选的 ANTHROPIC_DEFAULT_OPUS/SONNET/HAIKU 模型名](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-setup-2.png)
 
 **Logs** 界面示例：
 
-![请求日志](docs/screenshot-ccrelay-1.png)
+![请求日志](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-1.png)
 
-![日志详情](docs/screenshot-ccrelay-3.png)
+![日志详情](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-3.png)
 
 访问方式：
 - 命令面板：`CCRelay: Open Dashboard`
