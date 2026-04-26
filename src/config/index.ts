@@ -271,7 +271,8 @@ function parseProvider(id: string, config: ProviderConfigInput): Provider {
     modelMap: modelMap && modelMap.length > 0 ? modelMap : undefined,
     vlModelMap: vlModelMap && vlModelMap.length > 0 ? vlModelMap : undefined,
     headers: config.headers ?? {},
-    enabled: config.enabled !== false,
+    // `official` is always on; YAML may be hand-edited to false
+    enabled: id === "official" ? true : config.enabled !== false,
   };
 }
 
@@ -791,7 +792,7 @@ export class ConfigManager {
         // eslint-disable-next-line @typescript-eslint/naming-convention
         vl_model_map: config.vl_model_map,
         headers: config.headers,
-        enabled: config.enabled,
+        enabled: id === "official" ? true : (config.enabled ?? true),
         openaiChatCompletionsPath: config.openaiChatCompletionsPath,
         // eslint-disable-next-line @typescript-eslint/naming-convention
         openai_chat_completions_path: config.openai_chat_completions_path,

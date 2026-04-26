@@ -152,7 +152,7 @@ export default function Providers() {
       providerType: provider.providerType,
       mode: provider.mode,
       apiKey: provider.apiKey || "",
-      enabled: provider.enabled,
+      enabled: provider.id === "official" ? true : provider.enabled,
       modelMap,
       vlModelMap: undefined,
       headers: undefined,
@@ -206,14 +206,20 @@ export default function Providers() {
     }
     const trimmedPath = formData.openaiChatCompletionsPath?.trim();
     // When editing, use the provider we opened (ids stay in sync) and never send apiKey.
+    const isOfficial = editingProvider?.id === "official" || formData.id === "official";
     const dataToSubmit = editingProvider
       ? {
           ...formData,
           id: editingProvider.id,
           apiKey: undefined,
           openaiChatCompletionsPath: trimmedPath || undefined,
+          enabled: isOfficial ? true : formData.enabled,
         }
-      : { ...formData, openaiChatCompletionsPath: trimmedPath || undefined };
+      : {
+          ...formData,
+          openaiChatCompletionsPath: trimmedPath || undefined,
+          enabled: isOfficial ? true : formData.enabled,
+        };
     addMutation.mutate(dataToSubmit);
   };
 
@@ -233,11 +239,22 @@ export default function Providers() {
   };
 
   const providers = (providersData?.providers || []).sort((a, b) => {
-    // Disabled providers go to the end
-    if (a.enabled !== b.enabled) {
-      return a.enabled ? -1 : 1;
+    const sortGroup = (p: Provider) => {
+      if (p.id === "official") {
+        return 0;
+      }
+      return p.enabled ? 1 : 2;
+    };
+    const ga = sortGroup(a);
+    const gb = sortGroup(b);
+    if (ga !== gb) {
+      return ga - gb;
     }
-    return 0;
+    const byName = a.name.localeCompare(b.name, "en", { sensitivity: "base", numeric: true });
+    if (byName !== 0) {
+      return byName;
+    }
+    return a.id.localeCompare(b.id, "en", { sensitivity: "base", numeric: true });
   });
 
   return (
@@ -444,12 +461,22 @@ export default function Providers() {
                       type="checkbox"
                       id="enabled"
                       className="h-4 w-4"
-                      checked={formData.enabled ?? true}
+                      disabled={editingProvider?.id === "official" || formData.id === "official"}
+                      checked={
+                        editingProvider?.id === "official" || formData.id === "official"
+                          ? true
+                          : (formData.enabled ?? true)
+                      }
                       onChange={e => updateForm("enabled", e.target.checked)}
                     />
                     <label htmlFor="enabled" className="text-xs whitespace-nowrap">
                       Enabled
                     </label>
+                    {(editingProvider?.id === "official" || formData.id === "official") && (
+                      <span className="text-[10px] text-muted-foreground" title="The official provider must stay enabled.">
+                        (always on)
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

@@ -108,6 +108,7 @@ export async function handleAddProvider(
     const existingProvider = configManager.getProvider(body.id);
 
     // Build provider config - preserve existing apiKey when editing
+    const effectiveEnabled = body.id === "official" ? true : (body.enabled ?? true);
     const providerConfig: ProviderConfigInput = {
       name: body.name,
       baseUrl: body.baseUrl,
@@ -115,7 +116,7 @@ export async function handleAddProvider(
       providerType: body.providerType,
       apiKey: body.apiKey || existingProvider?.apiKey,
       authHeader: body.authHeader,
-      enabled: body.enabled ?? true,
+      enabled: effectiveEnabled,
       modelMap: body.modelMap,
       vlModelMap: body.vlModelMap,
       headers: body.headers,
