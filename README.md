@@ -348,12 +348,21 @@ If you previously relied on OpenAI-shaped `/v1/models` against an Anthropic prov
 CCRelay has a built-in Web UI dashboard that provides:
 
 - **Dashboard**: Server status, current provider, request statistics
+- **Client configuration** (optional): Set Claude Code’s `~/.claude/settings.json` `env` from the UI (e.g. `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN` placeholder) and, if needed, per-tier `ANTHROPIC_DEFAULT_*_MODEL` — see [Claude Code](#claude-code).
 - **Providers**: View and switch providers
 - **Logs**: Request/response log viewer (requires enabling log storage)
 
-![Request Logs](docs/screenshot-ccrelay-1.png)
+**Client configuration** in the Web UI (same flows as the dashboard’s **Client configuration** / **Configure default models** actions):
 
-![Log Details](docs/screenshot-ccrelay-3.png)
+![Client configuration — `ANTHROPIC_BASE_URL` and related env in `~/.claude/settings.json`](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-setup-1.png)
+
+![Configure default models — `ANTHROPIC_DEFAULT_OPUS_MODEL` / `SONNET` / `HAIKU` (optional)](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-setup-2.png)
+
+**Logs** in the Web UI:
+
+![Request Logs](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-1.png)
+
+![Log Details](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-3.png)
 
 Access methods:
 - Command Palette: `CCRelay: Open Dashboard`

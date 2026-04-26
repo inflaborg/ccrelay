@@ -345,12 +345,21 @@ gemini:
 CCRelay 内置 Web UI 管理界面，提供：
 
 - **Dashboard**: 服务器状态、当前提供商、请求统计
+- **Client configuration**（可选）：在面板中设置 Claude Code 的 `~/.claude/settings.json` 内 `env`（如 `ANTHROPIC_BASE_URL`、`ANTHROPIC_AUTH_TOKEN` 占位）以及可选的分档 `ANTHROPIC_DEFAULT_*_MODEL`；详见上文 [Claude Code](#claude-code)。
 - **Providers**: 查看和切换提供商
 - **Logs**: 请求/响应日志查看器（需启用日志存储）
 
-![请求日志](docs/screenshot-ccrelay-1.png)
+面板上 **Client configuration** 与 **Configure default models**（与下图一致）：
 
-![日志详情](docs/screenshot-ccrelay-3.png)
+![Client configuration — 在 UI 中写入 ~/.claude/settings.json 的 env](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-setup-1.png)
+
+![Configure default models — 可选的 ANTHROPIC_DEFAULT_OPUS/SONNET/HAIKU 模型名](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-setup-2.png)
+
+**Logs** 界面示例：
+
+![请求日志](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-1.png)
+
+![日志详情](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-3.png)
 
 访问方式：
 - 命令面板：`CCRelay: Open Dashboard`
