@@ -33,7 +33,14 @@ export {
   isAnthropicMessageResponse,
 } from "./anthropic-to-openai-response";
 
-export { buildModelsListFromProvider, type OpenAIModelsListResponse } from "./modelsFallback";
+export {
+  buildModelsListFromProvider,
+  buildOpenAIModelsListFromProvider,
+  buildAnthropicModelsListFromProvider,
+  buildModelsListFallback,
+  type OpenAIModelsListResponse,
+  type AnthropicModelsListResponse,
+} from "./modelsFallback";
 
 export {
   convertResponsesRequestToChatCompletions,

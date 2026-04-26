@@ -10,7 +10,7 @@ import * as https from "https";
 import * as url from "url";
 import { ScopedLogger } from "../../utils/logger";
 import {
-  buildModelsListFromProvider,
+  buildModelsListFallback,
   convertAnthropicResponseToOpenAI,
   convertChatCompletionToResponses,
   formatOpenAIResponsesSse,
@@ -943,7 +943,7 @@ export class ProxyExecutor {
         (task.requestPath === "/v1/models" || task.requestPath.split("?")[0] === "/v1/models") &&
         status >= 400
       ) {
-        const fallback = buildModelsListFromProvider(task.provider);
+        const fallback = buildModelsListFallback(task.provider);
         const j = JSON.stringify(fallback);
         const buf = Buffer.from(j, "utf-8");
         ctx.responseChunks = [buf];

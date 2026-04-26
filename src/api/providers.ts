@@ -60,6 +60,7 @@ export function handleListProviders(
     enabled: p.enabled !== false,
     apiKey: maskApiKey(p.apiKey),
     openaiChatCompletionsPath: p.openaiChatCompletionsPath,
+    modelsListFormat: p.modelsListFormat,
     modelMap: p.modelMap,
   }));
 
@@ -118,6 +119,7 @@ export async function handleAddProvider(
       vlModelMap: body.vlModelMap,
       headers: body.headers,
       openaiChatCompletionsPath: body.openaiChatCompletionsPath,
+      modelsListFormat: body.modelsListFormat,
     };
 
     const success = configManager.addProvider(body.id, providerConfig);
@@ -215,4 +217,5 @@ interface AddProviderRequest {
   vlModelMap?: ModelMapEntry[];
   headers?: Record<string, string>;
   openaiChatCompletionsPath?: string;
+  modelsListFormat?: "auto" | "openai" | "anthropic";
 }

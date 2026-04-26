@@ -23,6 +23,7 @@ const DEFAULT_FORM: AddProviderRequest = {
   vlModelMap: undefined,
   headers: undefined,
   openaiChatCompletionsPath: undefined,
+  modelsListFormat: "auto",
 };
 
 export default function Providers() {
@@ -143,6 +144,7 @@ export default function Providers() {
       vlModelMap: undefined,
       headers: undefined,
       openaiChatCompletionsPath: provider.openaiChatCompletionsPath,
+      modelsListFormat: provider.modelsListFormat ?? "auto",
     });
     setModelMapText(modelMap ? yaml.dump(modelMap, { indent: 2, lineWidth: -1 }) : "");
     setModelMapError(null);
@@ -433,6 +435,26 @@ export default function Providers() {
                   Appended to base URL for A→O and Responses→Chat. Use when the upstream has no
                   &quot;v1&quot; segment in the path (e.g. some Z.AI base URLs). Leave empty for the
                   default.
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-medium">GET /v1/models wire</label>
+                <Select
+                  value={formData.modelsListFormat ?? "auto"}
+                  options={[
+                    { value: "auto", label: "Auto (match provider type)" },
+                    { value: "openai", label: "OpenAI list" },
+                    { value: "anthropic", label: "Anthropic list" },
+                  ]}
+                  onChange={v =>
+                    updateForm("modelsListFormat", v as "auto" | "openai" | "anthropic")
+                  }
+                  className="h-8 text-xs"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  No request body on this call; ccrelay cannot detect client protocol. OpenAI
+                  clients using an Anthropic upstream should choose OpenAI list.
                 </p>
               </div>
 

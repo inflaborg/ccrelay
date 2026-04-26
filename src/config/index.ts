@@ -231,6 +231,8 @@ function parseProvider(id: string, config: ProviderConfigInput): Provider {
   const providerType = (config.providerType || config.provider_type || "anthropic");
   const openaiChatCompletionsPath =
     config.openaiChatCompletionsPath || config.openai_chat_completions_path;
+  const modelsListFormat =
+    config.modelsListFormat || config.models_list_format || "auto";
 
   return {
     id,
@@ -241,6 +243,7 @@ function parseProvider(id: string, config: ProviderConfigInput): Provider {
     apiKey,
     authHeader: authHeader || "authorization",
     openaiChatCompletionsPath: openaiChatCompletionsPath || undefined,
+    modelsListFormat,
     modelMap: modelMap && modelMap.length > 0 ? modelMap : undefined,
     vlModelMap: vlModelMap && vlModelMap.length > 0 ? vlModelMap : undefined,
     headers: config.headers ?? {},
@@ -372,6 +375,7 @@ export class ConfigManager {
         baseUrl: "https://api.anthropic.com",
         mode: "passthrough",
         providerType: "anthropic",
+        modelsListFormat: "auto",
         headers: {},
         enabled: true,
       };
@@ -663,6 +667,11 @@ export class ConfigManager {
         headers: config.headers,
         enabled: config.enabled,
         openaiChatCompletionsPath: config.openaiChatCompletionsPath,
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        openai_chat_completions_path: config.openai_chat_completions_path,
+        modelsListFormat: config.modelsListFormat,
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        models_list_format: config.models_list_format,
       };
 
       // Write back to file

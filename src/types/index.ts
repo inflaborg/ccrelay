@@ -12,6 +12,12 @@ export type ProviderMode = "passthrough" | "inject";
 
 export type ProviderType = "anthropic" | "openai";
 
+/**
+ * Wire format to assume for GET /v1/models (no request body; cannot detect client protocol).
+ * `auto` follows `providerType`.
+ */
+export type ModelsListFormat = "auto" | "openai" | "anthropic";
+
 /** Inbound client wire format (Anthropic Messages vs OpenAI Chat Completions vs OpenAI Responses API, etc.) */
 export type ApiSurface = "anthropic" | "openai" | "openai_responses";
 
@@ -24,6 +30,8 @@ export const ProviderModeSchema = z.enum(["passthrough", "inject"]);
 
 // Provider type enum schema
 export const ProviderTypeSchema = z.enum(["anthropic", "openai"]);
+
+export const ModelsListFormatSchema = z.enum(["auto", "openai", "anthropic"]);
 
 // Model map entry schema (pattern -> model mapping)
 export const ModelMapEntrySchema = z.object({
@@ -56,6 +64,8 @@ export const ProviderConfigSchema = z.object({
   auth_header: z.string().optional(),
   openaiChatCompletionsPath: OpenaiChatCompletionsPathSchema.optional(),
   openai_chat_completions_path: OpenaiChatCompletionsPathSchema.optional(),
+  modelsListFormat: ModelsListFormatSchema.optional(),
+  models_list_format: ModelsListFormatSchema.optional(),
   modelMap: z.array(ModelMapEntrySchema).optional(),
   model_map: z.array(ModelMapEntrySchema).optional(),
   vlModelMap: z.array(ModelMapEntrySchema).optional(),
@@ -211,6 +221,8 @@ export interface Provider {
   authHeader?: string;
   /** When set, used as the path for OpenAI Chat Completions after A→O / Responses→Chat (default: /chat/completions). */
   openaiChatCompletionsPath?: string;
+  /** GET /v1/models only: effective client wire; default `auto` matches providerType. */
+  modelsListFormat?: ModelsListFormat;
   modelMap?: ModelMapEntry[];
   vlModelMap?: ModelMapEntry[];
   headers?: Record<string, string>;
@@ -260,6 +272,7 @@ export interface ProviderInfo {
   baseUrl?: string;
   apiKey?: string;
   openaiChatCompletionsPath?: string;
+  modelsListFormat?: ModelsListFormat;
   modelMap?: ModelMapEntry[];
 }
 

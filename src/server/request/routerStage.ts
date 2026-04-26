@@ -6,7 +6,7 @@ import type * as http from "http";
 import type * as url from "url";
 import type { Router } from "../router";
 import type { ApiSurface, RoutingContext } from "./context";
-import { detectApiSurface } from "./apiSurfaceDetector";
+import { detectApiSurface, resolveInboundClientSurface } from "./apiSurfaceDetector";
 
 /**
  * RouterStage processes request routing and blocking
@@ -78,7 +78,7 @@ export class RouterStage {
       targetQuery,
       isRouted,
       isOpenAIProvider,
-      clientSurface: defaultSurface,
+      clientSurface: resolveInboundClientSurface(method, path, provider),
     };
   }
 }

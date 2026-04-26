@@ -16,6 +16,8 @@ export interface Provider {
   enabled: boolean;
   apiKey?: string;
   openaiChatCompletionsPath?: string;
+  /** GET /v1/models wire when protocol cannot be detected (default: auto) */
+  modelsListFormat?: "auto" | "openai" | "anthropic";
   modelMap?: ModelMapEntry[];
 }
 
@@ -60,6 +62,7 @@ export interface AddProviderRequest {
   vlModelMap?: ModelMapEntry[];
   headers?: Record<string, string>;
   openaiChatCompletionsPath?: string;
+  modelsListFormat?: "auto" | "openai" | "anthropic";
 }
 
 export interface AddProviderResponse {

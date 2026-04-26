@@ -249,7 +249,17 @@ gemini:
       model: "gemini-2.5-pro"
 ```
 
-`GET /v1/models` is proxied to the current provider. If the upstream returns an error (e.g. path not found), a minimal model list is built from the provider’s `modelMap` when possible.
+**GET /v1/models** (`modelsListFormat`, optional, default `auto`)
+
+There is no request body, so CCRelay cannot infer whether the client expects an OpenAI- or Anthropic-shaped list. Per provider, `modelsListFormat` controls the **inbound client surface** for this route and the **synthetic list** when the upstream returns an error:
+
+- **`auto`** (default): match `providerType`—same wire as the upstream for successful responses (no unnecessary conversion), and the corresponding list shape for fallback.
+- **`openai`**: treat the client as OpenAI (e.g. force OpenAI-shaped list when using an OpenAI HTTP client against an Anthropic upstream).
+- **`anthropic`**: treat the client as Anthropic.
+
+If you previously relied on OpenAI-shaped `/v1/models` against an Anthropic provider, set `modelsListFormat: openai` (or use the Web dashboard **GET /v1/models wire** field).
+
+`GET /v1/models` is proxied to the current provider; on upstream error, a minimal list is built from `modelMap` in the chosen format.
 
 ### Web UI Dashboard
 
@@ -300,6 +310,7 @@ Each provider supports:
 - `name` - Display name
 - `baseUrl` - API base URL
 - `openaiChatCompletionsPath` (optional) - Path for OpenAI Chat Completions when converting to that API (default: `/chat/completions`; use `/v1/chat/completions` if your base URL does not include a version prefix)
+- `modelsListFormat` (optional) - `auto` | `openai` | `anthropic` — wire for `GET /v1/models` (default `auto` matches `providerType`)
 - `mode` - `passthrough` or `inject`
 - `providerType` - `anthropic` (default) or `openai`
 - `apiKey` - API key (inject mode, supports `${ENV_VAR}` environment variables)
