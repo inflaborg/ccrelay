@@ -64,12 +64,13 @@ defaultProvider: "official"
 
 # ==================== Routing Configuration ====================
 routing:
-  # Proxy routes: Forward to current provider (Anthropic + OpenAI surfaces)
+  # Proxy routes: Forward to current provider (Anthropic + OpenAI surfaces + Responses API)
   proxy:
     - "/v1/messages"
     - "/messages"
     - "/v1/chat/completions"
     - "/v1/models"
+    - "/v1/responses"
 
   # Passthrough routes: Always go to official API
   passthrough:
@@ -456,6 +457,7 @@ export class ConfigManager {
         "/messages",
         "/v1/chat/completions",
         "/v1/models",
+        "/v1/responses",
       ],
       passthrough: merged.routing?.passthrough || ["/v1/users/*", "/v1/organizations/*"],
       block: (merged.routing?.block || []).map(

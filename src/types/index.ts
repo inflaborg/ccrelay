@@ -12,8 +12,8 @@ export type ProviderMode = "passthrough" | "inject";
 
 export type ProviderType = "anthropic" | "openai";
 
-/** Inbound client wire format (Anthropic Messages vs OpenAI Chat Completions, etc.) */
-export type ApiSurface = "anthropic" | "openai";
+/** Inbound client wire format (Anthropic Messages vs OpenAI Chat Completions vs OpenAI Responses API, etc.) */
+export type ApiSurface = "anthropic" | "openai" | "openai_responses";
 
 /**
  * Zod schemas for runtime type validation

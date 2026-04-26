@@ -12,6 +12,7 @@ import { ScopedLogger } from "../../utils/logger";
 import {
   buildModelsListFromProvider,
   convertAnthropicResponseToOpenAI,
+  convertChatCompletionToResponses,
   convertResponseToAnthropic,
 } from "../../converter";
 import { isAnthropicMessageResponse } from "../../converter/anthropic-to-openai-response";
@@ -240,6 +241,42 @@ export class ProxyExecutor {
     }
 
     const isJsonResponse = proxyRes.headers["content-type"]?.includes("application/json");
+
+    if (
+      clientSurface === "openai_responses" &&
+      upstreamWire === "openai" &&
+      status === 200 &&
+      isJsonResponse
+    ) {
+      this.handleOpenAIChatJsonToResponsesForClient(
+        proxyRes,
+        task,
+        ctx,
+        status,
+        responseHeaders,
+        originalModel,
+        resolve
+      );
+      return;
+    }
+
+    if (
+      clientSurface === "openai_responses" &&
+      upstreamWire === "anthropic" &&
+      status === 200 &&
+      isJsonResponse
+    ) {
+      this.handleAnthropicJsonToOpenAIResponsesForClient(
+        proxyRes,
+        task,
+        ctx,
+        status,
+        responseHeaders,
+        originalModel,
+        resolve
+      );
+      return;
+    }
 
     if (
       needsResponseConversion &&
@@ -509,6 +546,150 @@ export class ProxyExecutor {
           duration,
           responseBodyChunks: ctx.responseChunks,
           errorMessage: `Anthropic to OpenAI conversion failed: ${errMsg}`,
+        });
+      }
+    });
+  }
+
+  /**
+   * Upstream Chat Completions JSON -> client OpenAI Responses API JSON
+   */
+  private handleOpenAIChatJsonToResponsesForClient(
+    proxyRes: http.IncomingMessage,
+    task: RequestTask,
+    ctx: ExecutionContext,
+    status: number,
+    responseHeaders: Record<string, string | string[]>,
+    originalModel: string | undefined,
+    resolve: (value: ProxyResult) => void
+  ): void {
+    const { clientId, provider } = task;
+    let responseBody = "";
+    proxyRes.on("data", (chunk: Buffer) => {
+      responseBody += chunk.toString();
+    });
+    proxyRes.on("end", () => {
+      ctx.originalResponseBody = responseBody;
+      const duration = Date.now() - ctx.startTime;
+      try {
+        const openaiResponse = JSON.parse(responseBody) as OpenAIChatCompletionResponse;
+        const out = convertChatCompletionToResponses(openaiResponse, originalModel || "none");
+        const outJson = JSON.stringify(out);
+        ctx.responseChunks.push(Buffer.from(outJson, "utf-8"));
+        this.responseLogger.logResponse(
+          clientId,
+          duration,
+          status,
+          ctx.responseChunks,
+          undefined,
+          ctx.originalResponseBody
+        );
+        resolve({
+          statusCode: status,
+          headers: responseHeaders,
+          body: outJson,
+          duration,
+          responseBodyChunks: ctx.responseChunks,
+          originalResponseBody: ctx.originalResponseBody,
+        });
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        log.warn(`[Chat->Responses] Conversion failed for ${provider.id}: ${errMsg}`);
+        const errorBody = JSON.stringify({
+          error: { type: "api_error", message: `Response format conversion failed: ${errMsg}` },
+        });
+        ctx.responseChunks.push(Buffer.from(errorBody, "utf-8"));
+        this.responseLogger.logResponse(
+          clientId,
+          duration,
+          502,
+          ctx.responseChunks,
+          `Chat to Responses failed: ${errMsg}`,
+          ctx.originalResponseBody
+        );
+        resolve({
+          statusCode: 502,
+          headers: { "Content-Type": "application/json" },
+          body: errorBody,
+          duration,
+          responseBodyChunks: ctx.responseChunks,
+          errorMessage: `Chat to Responses failed: ${errMsg}`,
+        });
+      }
+    });
+  }
+
+  /**
+   * Upstream Anthropic JSON -> Chat (intermediate) -> client Responses API JSON
+   */
+  private handleAnthropicJsonToOpenAIResponsesForClient(
+    proxyRes: http.IncomingMessage,
+    task: RequestTask,
+    ctx: ExecutionContext,
+    status: number,
+    responseHeaders: Record<string, string | string[]>,
+    originalModel: string | undefined,
+    resolve: (value: ProxyResult) => void
+  ): void {
+    const { clientId, provider } = task;
+    let responseBody = "";
+    proxyRes.on("data", (chunk: Buffer) => {
+      responseBody += chunk.toString();
+    });
+    proxyRes.on("end", () => {
+      ctx.originalResponseBody = responseBody;
+      const duration = Date.now() - ctx.startTime;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- JSON.parse
+        const parsed = JSON.parse(responseBody);
+        if (!isAnthropicMessageResponse(parsed)) {
+          throw new Error("Response is not a valid Anthropic non-streaming message");
+        }
+        const chat = convertAnthropicResponseToOpenAI(
+          parsed,
+          originalModel || (parsed as { model?: string }).model || "none"
+        );
+        const out = convertChatCompletionToResponses(chat, originalModel || chat.model);
+        const outJson = JSON.stringify(out);
+        ctx.responseChunks.push(Buffer.from(outJson, "utf-8"));
+        this.responseLogger.logResponse(
+          clientId,
+          duration,
+          status,
+          ctx.responseChunks,
+          undefined,
+          ctx.originalResponseBody
+        );
+        resolve({
+          statusCode: status,
+          headers: responseHeaders,
+          body: outJson,
+          duration,
+          responseBodyChunks: ctx.responseChunks,
+          originalResponseBody: ctx.originalResponseBody,
+        });
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        log.warn(`[A->Responses] Conversion failed for ${provider.id}: ${errMsg}`);
+        const errorBody = JSON.stringify({
+          error: { type: "api_error", message: `Response format conversion failed: ${errMsg}` },
+        });
+        ctx.responseChunks.push(Buffer.from(errorBody, "utf-8"));
+        this.responseLogger.logResponse(
+          clientId,
+          duration,
+          502,
+          ctx.responseChunks,
+          `A to Responses failed: ${errMsg}`,
+          ctx.originalResponseBody
+        );
+        resolve({
+          statusCode: 502,
+          headers: { "Content-Type": "application/json" },
+          body: errorBody,
+          duration,
+          responseBodyChunks: ctx.responseChunks,
+          errorMessage: `A to Responses failed: ${errMsg}`,
         });
       }
     });

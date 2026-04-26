@@ -19,6 +19,9 @@ export function detectApiSurface(method: string, path: string): ApiSurface | nul
   if (p === "/v1/models" && m === "GET") {
     return "openai";
   }
+  if (p === "/v1/responses" && m === "POST") {
+    return "openai_responses";
+  }
   if ((p === "/v1/messages" || p === "/messages") && m === "POST") {
     return "anthropic";
   }

@@ -27,3 +27,14 @@ export {
 } from "./anthropic-to-openai-response";
 
 export { buildModelsListFromProvider, type OpenAIModelsListResponse } from "./modelsFallback";
+
+export {
+  convertResponsesRequestToChatCompletions,
+  isOpenAIResponsesRequest,
+  type ResponsesToChatResult,
+} from "./responses-to-chat-completions";
+
+export {
+  convertChatCompletionToResponses,
+  type OpenAIResponsesApiObject,
+} from "./chat-completions-to-responses";

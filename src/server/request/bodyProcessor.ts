@@ -7,7 +7,9 @@ import { applyModelMapping } from "./modelMapping";
 import {
   convertRequestToOpenAI,
   convertOpenAIRequestToAnthropic,
+  convertResponsesRequestToChatCompletions,
   isOpenAIChatCompletionsRequest,
+  isOpenAIResponsesRequest,
 } from "../../converter";
 import { ScopedLogger } from "../../utils/logger";
 import type { ApiSurface } from "../../types";
@@ -98,6 +100,36 @@ export class BodyProcessor {
 
     if (!needsConversion) {
       // Same protocol: pass through (only modelMap changes were applied)
+    } else if (clientSurface === "openai_responses" && upstreamWire === "openai") {
+      const result = this.convertResponsesToChatCompletionsOnly(body, routing);
+      if (result) {
+        body = result.body;
+        originalModel = result.originalModel;
+        routing.targetPath = result.newPath;
+        routing.targetUrl = buildTargetUrl(
+          routing.provider.baseUrl,
+          result.newPath,
+          routing.targetQuery
+        );
+        log.info(
+          `[Router] Resp->Chat: path ${routing.path} -> ${result.newPath}, target="${routing.targetUrl}"`
+        );
+      }
+    } else if (clientSurface === "openai_responses" && upstreamWire === "anthropic") {
+      const result = this.convertResponsesToAnthropicChain(body, routing);
+      if (result) {
+        body = result.body;
+        originalModel = result.originalModel;
+        routing.targetPath = result.newPath;
+        routing.targetUrl = buildTargetUrl(
+          routing.provider.baseUrl,
+          result.newPath,
+          routing.targetQuery
+        );
+        log.info(
+          `[Router] Resp->Chat->A: path ${routing.path} -> ${result.newPath}, target="${routing.targetUrl}"`
+        );
+      }
     } else if (clientSurface === "anthropic" && upstreamWire === "openai") {
       const result = this.convertAnthropicToOpenAIRequest(body, routing.targetPath);
       if (result) {
@@ -174,6 +206,53 @@ export class BodyProcessor {
       };
     } catch (err) {
       log.error("[A->O Conversion] Failed to convert request", err);
+      return null;
+    }
+  }
+
+  private convertResponsesToChatCompletionsOnly(
+    body: Buffer,
+    routing: RoutingContext
+  ): { body: Buffer; newPath: string; originalModel: string | undefined } | null {
+    try {
+      const bodyStr = body.toString("utf-8");
+      const raw = JSON.parse(bodyStr) as Record<string, unknown>;
+      if (!isOpenAIResponsesRequest(raw)) {
+        return null;
+      }
+      const c = convertResponsesRequestToChatCompletions(raw, routing.targetPath);
+      const originalModel = typeof raw.model === "string" ? raw.model : undefined;
+      return {
+        body: Buffer.from(JSON.stringify(c.request), "utf-8"),
+        newPath: c.newPath,
+        originalModel,
+      };
+    } catch (err) {
+      log.error("[Resp->Chat] Failed to convert request", err);
+      return null;
+    }
+  }
+
+  private convertResponsesToAnthropicChain(
+    body: Buffer,
+    routing: RoutingContext
+  ): { body: Buffer; newPath: string; originalModel: string | undefined } | null {
+    try {
+      const bodyStr = body.toString("utf-8");
+      const raw = JSON.parse(bodyStr) as Record<string, unknown>;
+      if (!isOpenAIResponsesRequest(raw)) {
+        return null;
+      }
+      const chat = convertResponsesRequestToChatCompletions(raw, routing.path);
+      const c = convertOpenAIRequestToAnthropic(chat.request, chat.newPath);
+      const originalModel = typeof raw.model === "string" ? raw.model : undefined;
+      return {
+        body: Buffer.from(JSON.stringify(c.request), "utf-8"),
+        newPath: c.newPath,
+        originalModel,
+      };
+    } catch (err) {
+      log.error("[Resp->Chat->A] Failed to convert request", err);
       return null;
     }
   }

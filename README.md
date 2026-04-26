@@ -47,7 +47,7 @@
   - `inject` - Injects provider-specific API Key
 - **Model Mapping**: Automatically translates Claude model names to provider-specific models with wildcard support (e.g., `claude-*` → `glm-4.7`)
 - **Vision Model Mapping**: Separate model mapping for visual/multimodal requests (`vlModelMap`)
-- **OpenAI Format Conversion (LLM router)**: Accepts both Anthropic and OpenAI HTTP surfaces; converts only when client wire format and provider `providerType` differ (otherwise passthrough)
+- **OpenAI Format Conversion (LLM router)**: Accepts Anthropic, OpenAI Chat Completions, and OpenAI Responses (`/v1/responses`); converts when the inbound wire does not match the provider (Chat/Responses are hubbed through Chat Completions for cross-provider routing)
 - **Request Logging**: Optional SQLite/PostgreSQL request/response logging with Web UI viewer
 - **Concurrency Control**: Built-in request queue and concurrency limits to prevent API overload
 - **Auto-start**: Automatically starts the proxy server when VSCode launches
@@ -204,7 +204,7 @@ vlModelMap:
 
 ### OpenAI Format Conversion (LLM router)
 
-> 📋 **Feature Note**: CCRelay can accept **both** Anthropic and OpenAI HTTP surfaces. Conversion between wire formats is applied **only** when the inbound API family and the selected provider’s `providerType` differ. When they match, requests and responses are passed through (aside from `modelMap` and auth).
+> 📋 **Feature Note**: CCRelay can accept **Anthropic**, **OpenAI Chat Completions**, and **OpenAI Responses** (`/v1/responses`) entry points. Conversion is applied when the inbound wire format does not match the provider’s `providerType` (Chat/Responses are both mapped via a Chat Completions hub when talking to OpenAI-compatible or Anthropic upstreams). When client and upstream are the same family, traffic is passed through (aside from `modelMap` and auth).
 
 **Inbound API surfaces (paths)**
 
@@ -213,6 +213,7 @@ vlModelMap:
 | `/v1/messages`, `/messages` | POST | Anthropic Messages |
 | `/v1/messages/count_tokens` | POST | Anthropic |
 | `/v1/chat/completions` | POST | OpenAI Chat Completions |
+| `/v1/responses` | POST | OpenAI Responses API (create) |
 | `/v1/models` | GET | OpenAI models list |
 
 `routing.proxy` in `config.yaml` should include the paths you use (defaults include the rows above).
@@ -220,12 +221,14 @@ vlModelMap:
 **Conversion rules**
 
 - Client **Anthropic** + provider `providerType: openai`: request A→O, response O→A (same as before).
-- Client **OpenAI** + provider `providerType: anthropic`: request O→A, response A→O.
-- Same **family** on both sides: no format conversion (only model name mapping, etc.).
+- Client **OpenAI** (chat) + provider `providerType: anthropic`: request O→A, response A→O.
+- Client **OpenAI Responses** + any provider: request is converted to Chat Completions, then to Anthropic if needed; response is converted back to the Responses JSON shape. Hosted-only tools (e.g. web search, MCP) are stripped in v1.
+- Same **family** on both sides (e.g. chat + `openai` provider): no format conversion (only model name mapping, etc.).
 
 **Limitations (first iteration)**
 
 - Cross-protocol **streaming** is not supported: use `stream: false` when the client and provider types differ, or CCRelay will return an error if the upstream still returns an SSE response.
+- **Responses API (v1)**: `previous_response_id`, `conversation`, and OpenAI-hosted tools are not fully supported; use chat-style function tools when possible.
 
 **Example: OpenAI-compatible provider (Gemini)**
 
@@ -304,7 +307,7 @@ Each provider supports:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `routing.proxy` | `["/v1/messages", "/messages", "/v1/chat/completions", "/v1/models"]` | Paths routed to current provider |
+| `routing.proxy` | `["/v1/messages", "/messages", "/v1/chat/completions", "/v1/models", "/v1/responses"]` | Paths routed to current provider |
 | `routing.passthrough` | `["/v1/users/*", "/v1/organizations/*"]` | Paths always going to official API |
 | `routing.block` | `[{path: "/api/event_logging/*", ...}]` | Paths returning custom response in inject mode |
 | `routing.openaiBlock` | `[{path: "/v1/messages/count_tokens", ...}]` | Block patterns for OpenAI providers |

@@ -19,6 +19,10 @@ describe("detectApiSurface", () => {
     expect(detectApiSurface("POST", "/v1/messages/count_tokens")).toBe("anthropic");
   });
 
+  it("detects OpenAI Responses create", () => {
+    expect(detectApiSurface("POST", "/v1/responses")).toBe("openai_responses");
+  });
+
   it("returns null for unknown paths", () => {
     expect(detectApiSurface("GET", "/v1/unknown")).toBeNull();
   });

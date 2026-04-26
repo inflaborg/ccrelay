@@ -11,11 +11,8 @@ import * as https from "https";
 import type { AddressInfo } from "net";
 import * as url from "url";
 import { ConcurrencyManager } from "../../../src/queue";
-import type {
-  RequestTask,
-  ProxyResult,
-  ConcurrencyConfig,
-} from "../../../src/types";
+import { detectApiSurface } from "../../../src/server/request/apiSurfaceDetector";
+import type { ApiSurface, RequestTask, ProxyResult, ConcurrencyConfig } from "../../../src/types";
 import { ScopedLogger } from "../../../src/utils/logger";
 import type { MockConfig } from "./mock-config";
 
@@ -234,10 +231,7 @@ export class TestServer {
       res.on("close", onClientDisconnect);
 
       // Create task
-      const clientSurface: "anthropic" | "openai" =
-        (path === "/v1/chat/completions" && method === "POST") || (path === "/v1/models" && method === "GET")
-          ? "openai"
-          : "anthropic";
+      const clientSurface: ApiSurface = detectApiSurface(method, path) ?? "anthropic";
       const task: RequestTask = {
         id: clientId,
         method,
@@ -304,10 +298,7 @@ export class TestServer {
       }
     } else {
       // Direct execution (no queue)
-      const clientSurface: "anthropic" | "openai" =
-        (path === "/v1/chat/completions" && method === "POST") || (path === "/v1/models" && method === "GET")
-          ? "openai"
-          : "anthropic";
+      const clientSurface: ApiSurface = detectApiSurface(method, path) ?? "anthropic";
       const task: RequestTask = {
         id: clientId,
         method,
