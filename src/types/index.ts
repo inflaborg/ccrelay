@@ -13,6 +13,15 @@ export type ProviderMode = "passthrough" | "inject";
 export type ProviderType = "anthropic" | "openai";
 
 /**
+ * Wire format to assume for GET /v1/models (no request body; cannot detect client protocol).
+ * `auto` follows `providerType`.
+ */
+export type ModelsListFormat = "auto" | "openai" | "anthropic";
+
+/** Inbound client wire format (Anthropic Messages vs OpenAI Chat Completions vs OpenAI Responses API, etc.) */
+export type ApiSurface = "anthropic" | "openai" | "openai_responses";
+
+/**
  * Zod schemas for runtime type validation
  */
 
@@ -22,6 +31,8 @@ export const ProviderModeSchema = z.enum(["passthrough", "inject"]);
 // Provider type enum schema
 export const ProviderTypeSchema = z.enum(["anthropic", "openai"]);
 
+export const ModelsListFormatSchema = z.enum(["auto", "openai", "anthropic"]);
+
 // Model map entry schema (pattern -> model mapping)
 export const ModelMapEntrySchema = z.object({
   pattern: z.string(),
@@ -29,6 +40,15 @@ export const ModelMapEntrySchema = z.object({
 });
 
 export type ModelMapEntry = z.infer<typeof ModelMapEntrySchema>;
+
+/** Per-provider path appended to baseUrl for OpenAI Chat Completions (A→O, Responses→Chat, etc.) */
+const OpenaiChatCompletionsPathSchema = z
+  .string()
+  .min(1)
+  .refine(
+    s => s === s.trim() && s.startsWith("/") && !s.includes("//"),
+    "openaiChatCompletionsPath must start with /, have no leading/trailing spaces, and must not contain //"
+  );
 
 // Provider configuration schema (from YAML/VSCode settings)
 export const ProviderConfigSchema = z.object({
@@ -42,6 +62,10 @@ export const ProviderConfigSchema = z.object({
   api_key: z.string().optional(),
   authHeader: z.string().optional(),
   auth_header: z.string().optional(),
+  openaiChatCompletionsPath: OpenaiChatCompletionsPathSchema.optional(),
+  openai_chat_completions_path: OpenaiChatCompletionsPathSchema.optional(),
+  modelsListFormat: ModelsListFormatSchema.optional(),
+  models_list_format: ModelsListFormatSchema.optional(),
   modelMap: z.array(ModelMapEntrySchema).optional(),
   model_map: z.array(ModelMapEntrySchema).optional(),
   vlModelMap: z.array(ModelMapEntrySchema).optional(),
@@ -195,6 +219,10 @@ export interface Provider {
   providerType: ProviderType;
   apiKey?: string;
   authHeader?: string;
+  /** When set, used as the path for OpenAI Chat Completions after A→O / Responses→Chat (default: /chat/completions). */
+  openaiChatCompletionsPath?: string;
+  /** GET /v1/models only: effective client wire; default `auto` matches providerType. */
+  modelsListFormat?: ModelsListFormat;
   modelMap?: ModelMapEntry[];
   vlModelMap?: ModelMapEntry[];
   headers?: Record<string, string>;
@@ -243,6 +271,8 @@ export interface ProviderInfo {
   enabled: boolean;
   baseUrl?: string;
   apiKey?: string;
+  openaiChatCompletionsPath?: string;
+  modelsListFormat?: ModelsListFormat;
   modelMap?: ModelMapEntry[];
 }
 
@@ -464,6 +494,8 @@ export interface RequestTask {
   requestBodyLog?: string;
   originalRequestBody?: string;
   isOpenAIProvider: boolean;
+  /** Inbound client API surface; drives response conversion */
+  clientSurface: ApiSurface;
   originalModel?: string;
   clientId: string;
   attempt?: number;
@@ -471,6 +503,8 @@ export interface RequestTask {
   timeout?: number;
   createdAt: number;
   startedAt?: number;
+  /** Client had `stream: true` on POST /v1/responses; response may be synthesized as SSE */
+  responsesStreamRequested?: boolean;
   /** Optional response object for streaming support in queue mode */
   res?: http.ServerResponse;
   /** Whether the task has been cancelled */

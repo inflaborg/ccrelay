@@ -15,3 +15,41 @@ export {
   type OpenAIChatCompletionResponse,
   type AnthropicMessageResponse,
 } from "./openai-to-anthropic";
+
+export {
+  convertOpenAIRequestToAnthropic,
+  isOpenAIChatCompletionsRequest,
+} from "./openai-to-anthropic-request";
+
+export {
+  getOpenAIChatCompletionsPath,
+  isOpenAIChatCompletionsWirePath,
+  DEFAULT_OPENAI_CHAT_COMPLETIONS_PATH,
+  type OpenAIPathProvider,
+} from "./openaiPath";
+
+export {
+  convertAnthropicResponseToOpenAI,
+  isAnthropicMessageResponse,
+} from "./anthropic-to-openai-response";
+
+export {
+  buildModelsListFromProvider,
+  buildOpenAIModelsListFromProvider,
+  buildAnthropicModelsListFromProvider,
+  buildModelsListFallback,
+  type OpenAIModelsListResponse,
+  type AnthropicModelsListResponse,
+} from "./modelsFallback";
+
+export {
+  convertResponsesRequestToChatCompletions,
+  isOpenAIResponsesRequest,
+  type ResponsesToChatResult,
+} from "./responses-to-chat-completions";
+
+export {
+  convertChatCompletionToResponses,
+  formatOpenAIResponsesSse,
+  type OpenAIResponsesApiObject,
+} from "./chat-completions-to-responses";

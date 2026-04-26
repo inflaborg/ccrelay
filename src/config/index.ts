@@ -12,8 +12,6 @@ import * as yaml from "js-yaml";
 import {
   RouterConfig,
   Provider,
-  ProviderMode,
-  ProviderType,
   ProviderConfigSchema,
   FileConfigSchema,
   type FileConfigInput,
@@ -66,10 +64,13 @@ defaultProvider: "official"
 
 # ==================== Routing Configuration ====================
 routing:
-  # Proxy routes: Forward to current provider
+  # Proxy routes: Forward to current provider (Anthropic + OpenAI surfaces + Responses API)
   proxy:
     - "/v1/messages"
     - "/messages"
+    - "/v1/chat/completions"
+    - "/v1/models"
+    - "/v1/responses"
 
   # Passthrough routes: Always go to official API
   passthrough:
@@ -227,16 +228,22 @@ function parseProvider(id: string, config: ProviderConfigInput): Provider {
   const authHeader = config.authHeader || config.auth_header;
   const modelMap = config.modelMap || config.model_map;
   const vlModelMap = config.vlModelMap || config.vl_model_map;
-  const providerType = (config.providerType || config.provider_type || "anthropic") as ProviderType;
+  const providerType = (config.providerType || config.provider_type || "anthropic");
+  const openaiChatCompletionsPath =
+    config.openaiChatCompletionsPath || config.openai_chat_completions_path;
+  const modelsListFormat =
+    config.modelsListFormat || config.models_list_format || "auto";
 
   return {
     id,
     name: config.name || id,
     baseUrl,
-    mode: config.mode as ProviderMode,
+    mode: config.mode,
     providerType,
     apiKey,
     authHeader: authHeader || "authorization",
+    openaiChatCompletionsPath: openaiChatCompletionsPath || undefined,
+    modelsListFormat,
     modelMap: modelMap && modelMap.length > 0 ? modelMap : undefined,
     vlModelMap: vlModelMap && vlModelMap.length > 0 ? vlModelMap : undefined,
     headers: config.headers ?? {},
@@ -368,6 +375,7 @@ export class ConfigManager {
         baseUrl: "https://api.anthropic.com",
         mode: "passthrough",
         providerType: "anthropic",
+        modelsListFormat: "auto",
         headers: {},
         enabled: true,
       };
@@ -451,7 +459,13 @@ export class ConfigManager {
 
     // Build routing config
     const routing = {
-      proxy: merged.routing?.proxy || ["/v1/messages", "/messages"],
+      proxy: merged.routing?.proxy || [
+        "/v1/messages",
+        "/messages",
+        "/v1/chat/completions",
+        "/v1/models",
+        "/v1/responses",
+      ],
       passthrough: merged.routing?.passthrough || ["/v1/users/*", "/v1/organizations/*"],
       block: (merged.routing?.block || []).map(
         (b): BlockPattern => ({
@@ -652,6 +666,12 @@ export class ConfigManager {
         vl_model_map: config.vl_model_map,
         headers: config.headers,
         enabled: config.enabled,
+        openaiChatCompletionsPath: config.openaiChatCompletionsPath,
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        openai_chat_completions_path: config.openai_chat_completions_path,
+        modelsListFormat: config.modelsListFormat,
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        models_list_format: config.models_list_format,
       };
 
       // Write back to file

@@ -516,7 +516,7 @@ export class MockProvider extends EventEmitter {
         }
       };
 
-      this.addListener("response:sent", onSent as () => void);
+      this.addListener("response:sent", onSent);
     });
   }
 
@@ -542,7 +542,7 @@ export class MockProvider extends EventEmitter {
         }
       };
 
-      this.addListener("response:sent", onSent as () => void);
+      this.addListener("response:sent", onSent);
     });
   }
 

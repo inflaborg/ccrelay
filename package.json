@@ -114,7 +114,7 @@
     "build": "npm run clean && npm run build:web && npm run compile",
     "build:dev": "node scripts/build-config.mjs dev && npm run build",
     "build:prod": "node scripts/build-config.mjs prod && npm run build",
-    "build:web": "npx shx rm -rf out/web && cd web && npm run build && npx shx mkdir -p ../out/web && npx shx cp -r dist/* ../out/web/",
+    "build:web": "npx shx rm -rf out/web && cd web && npm install && npm run build && npx shx mkdir -p ../out/web && npx shx cp -r dist/* ../out/web/",
     "precompile": "node scripts/generate-version.mjs",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
@@ -136,6 +136,7 @@
     "package:prod": "./scripts/package.sh prod",
     "package:beta": "node scripts/version-beta.mjs && npm run package",
     "package:release": "node scripts/version-release.mjs && npm run package",
+    "postinstall": "cd web && npm install",
     "prepare": "husky"
   },
   "dependencies": {
@@ -145,6 +146,7 @@
     "zod": "^4.3.6"
   },
   "overrides": {
+    "uuid": "^14.0.0",
     "@typescript-eslint/typescript-estree": {
       "minimatch": "^10.2.1"
     },
@@ -166,7 +168,7 @@
     "@typescript-eslint/eslint-plugin": "^8.54.0",
     "@typescript-eslint/parser": "^8.54.0",
     "@vitest/coverage-v8": "^4.0.18",
-    "@vscode/vsce": "^3.7.1",
+    "@vscode/vsce": "^3.9.1",
     "esbuild": "^0.27.3",
     "eslint": "^10.0.0",
     "get-port": "^7.1.0",

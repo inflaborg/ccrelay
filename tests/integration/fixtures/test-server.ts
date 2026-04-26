@@ -11,11 +11,8 @@ import * as https from "https";
 import type { AddressInfo } from "net";
 import * as url from "url";
 import { ConcurrencyManager } from "../../../src/queue";
-import type {
-  RequestTask,
-  ProxyResult,
-  ConcurrencyConfig,
-} from "../../../src/types";
+import { resolveInboundClientSurface } from "../../../src/server/request/apiSurfaceDetector";
+import type { ApiSurface, RequestTask, ProxyResult, ConcurrencyConfig } from "../../../src/types";
 import { ScopedLogger } from "../../../src/utils/logger";
 import type { MockConfig } from "./mock-config";
 
@@ -234,6 +231,7 @@ export class TestServer {
       res.on("close", onClientDisconnect);
 
       // Create task
+      const clientSurface: ApiSurface = resolveInboundClientSurface(method, path, provider);
       const task: RequestTask = {
         id: clientId,
         method,
@@ -243,6 +241,7 @@ export class TestServer {
         provider,
         requestPath: path,
         isOpenAIProvider: provider.providerType === "openai",
+        clientSurface,
         clientId,
         createdAt: Date.now(),
         res,
@@ -299,6 +298,7 @@ export class TestServer {
       }
     } else {
       // Direct execution (no queue)
+      const clientSurface: ApiSurface = resolveInboundClientSurface(method, path, provider);
       const task: RequestTask = {
         id: clientId,
         method,
@@ -308,6 +308,7 @@ export class TestServer {
         provider,
         requestPath: path,
         isOpenAIProvider: provider.providerType === "openai",
+        clientSurface,
         clientId,
         createdAt: Date.now(),
       };

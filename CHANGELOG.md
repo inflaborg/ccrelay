@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Per-provider **`modelsListFormat`** (`auto` | `openai` | `anthropic`, default `auto`): for `GET /v1/models` there is no body, so the inbound client surface and error fallback list shape are driven by this setting. `auto` matches `providerType`. Web dashboard (“GET /v1/models wire”) and YAML/API accept the field.
+- Per-provider optional **`openaiChatCompletionsPath`**: path appended to `baseUrl` for OpenAI Chat Completions when converting (Anthropic→OpenAI, Responses→Chat hub); default `/chat/completions` so providers whose `baseUrl` already ends in a version segment (e.g. some Z.AI URLs) are not given an extra `/v1` in the path. Web dashboard and `POST /ccrelay/api/providers` accept the field.
+- **LLM router**: detect inbound API surface from path/method (`ApiSurface`: Anthropic Messages, OpenAI Chat Completions, OpenAI Responses) and convert only when it does not match the provider’s `providerType`; same-family traffic passes through aside from model mapping and auth.
+- OpenAI **`POST /v1/responses`** support: requests are converted via a Chat Completions hub to OpenAI-compatible or Anthropic upstreams; responses are converted back to the Responses JSON shape. Hosted-only tools (e.g. web search, MCP) are stripped in v1 with a warning.
+- Default `routing.proxy` entries for `/v1/chat/completions`, `/v1/models`, and `/v1/responses`; `GET /v1/models` error fallback builds a minimal model list from `modelMap` in OpenAI or Anthropic shape per `modelsListFormat`.
+- Converters: Responses ↔ Chat Completions (`responses-to-chat-completions`, `chat-completions-to-responses`), plus existing Anthropic ↔ Chat bidirectional conversion for cross-protocol paths.
+- Unit tests for surface detection and new converters.
+
+### Fixed
+
+- **Chat → Anthropic (`tool_choice`)**: OpenAI-style string values (`"auto"`, `"none"`, `"required"`) are now mapped to Anthropic Messages object form (`{"type":"auto"}`, etc.); `tool_choice` is omitted when there are no tools. This matches strict Anthropic-compatible gateways (Pydantic) and the real API. Responses `tool_choice: "required"` is passed through as OpenAI `"required"` then mapped to Anthropic `{"type":"any"}`.
+- **OpenAI Responses + `stream: true` (e.g. Codex)**: Clients that send `stream: true` on `POST /v1/responses` expect an **SSE** body (`text/event-stream`) with `response.completed` (and similar) events, not a single `application/json`. Cross-protocol mode still uses a non-streaming upstream, but when the client had requested streaming, the proxy **synthesizes** a stream: `response.created` → per-`output` item events. For `message` items: `response.output_item.added` → `response.output_text.delta` / `response.output_text.done` → `response.output_item.done`. For `function_call` items: `response.output_item.added` (in progress) → `response.function_call_arguments.delta` / `response.function_call_arguments.done` → `response.output_item.done` — so tool runners (e.g. Codex) see tool calls in the event stream, not only inside the final `response.completed`. Unknown item types get `output_item.added` / `output_item.done` only. `response.created`+`response.completed`+`[DONE]` (minimal) is used only when `output` is empty. Chat Completions `message.content` as an array of `{ type, text }` parts is merged for `output_text` so the UI is not empty when the upstream returns multipart content. Set `CCRELAY_LOG_RESPONSES_SSE=1` to log the first part of the synthetic SSE (debugging empty-Codex issues).
+- **Proxy / Responses API**: After a successful cross-protocol JSON response (e.g. Chat Completions → Responses for Codex), the listener on the client `ServerResponse` was not removed. Node emits `close` on that object when the response finishes normally, which was mis-handled as a client disconnect and could abort the upstream request and log `499` / `Client disconnected during streaming` even when the client received `200`. JSON conversion paths now call `res.off("close", ...)` when the upstream body is fully read, matching buffered passthrough behavior.
+
+### Changed
+
+- **`GET /v1/models`**: Default inbound surface is no longer always OpenAI: with `modelsListFormat: auto` (default), it follows the provider’s `providerType`, so same-family clients get passthrough and Anthropic-shaped fallback when the upstream errors. Set `modelsListFormat: openai` to preserve the previous “always OpenAI list” behavior for OpenAI clients against Anthropic upstreams.
+- **Build**: `build:web` runs `npm install` in `web/` before build; root `postinstall` installs `web/` dependencies so packaging works on a clean clone.
+- Cross-protocol **streaming** remains unsupported: `stream` is forced off for conversion paths; SSE from upstream in those cases returns a clear error unless client and upstream share the same API family.
+
+### Dependencies
+
+- **npm overrides**: `uuid` pinned to `^14.0.0` to satisfy transitive `@vscode/vsce` → `@azure/*` audit ([GHSA-w5hq-g745-h8pq](https://github.com/advisories/GHSA-w5hq-g745-h8pq)); do not use `npm audit fix --force` if it suggests downgrading `@vscode/vsce`.
+
 ## [0.1.5] - 2025-02-27
 
 ### Added

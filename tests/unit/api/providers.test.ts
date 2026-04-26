@@ -137,7 +137,7 @@ class MockConfigManager {
   }
 
   get providers(): Record<string, Provider> {
-    return this.router.getProviders() as unknown as Record<string, Provider>;
+    return this.router.getProviders();
   }
 }
 

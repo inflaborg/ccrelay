@@ -47,7 +47,7 @@
   - `inject` - Injects provider-specific API Key
 - **Model Mapping**: Automatically translates Claude model names to provider-specific models with wildcard support (e.g., `claude-*` → `glm-4.7`)
 - **Vision Model Mapping**: Separate model mapping for visual/multimodal requests (`vlModelMap`)
-- **OpenAI Format Conversion**: Automatically converts Anthropic API format to OpenAI format, supporting Gemini, OpenRouter, and other OpenAI-compatible APIs
+- **OpenAI Format Conversion (LLM router)**: Accepts Anthropic, OpenAI Chat Completions, and OpenAI Responses (`/v1/responses`); converts when the inbound wire does not match the provider (Chat/Responses are hubbed through Chat Completions for cross-provider routing)
 - **Request Logging**: Optional SQLite/PostgreSQL request/response logging with Web UI viewer
 - **Concurrency Control**: Built-in request queue and concurrency limits to prevent API overload
 - **Auto-start**: Automatically starts the proxy server when VSCode launches
@@ -202,11 +202,40 @@ vlModelMap:
     model: "vision-model"
 ```
 
-### OpenAI Format Conversion
+### OpenAI Format Conversion (LLM router)
 
-> 📋 **Feature Note**: OpenAI format conversion enables CCRelay to work with OpenAI-compatible providers (Gemini, OpenRouter, etc.). This feature handles bidirectional conversion between Anthropic and OpenAI API formats. If you encounter any compatibility issues, please report them on GitHub.
+> 📋 **Feature Note**: CCRelay can accept **Anthropic**, **OpenAI Chat Completions**, and **OpenAI Responses** (`/v1/responses`) entry points. Conversion is applied when the inbound wire format does not match the provider’s `providerType` (Chat/Responses are both mapped via a Chat Completions hub when talking to OpenAI-compatible or Anthropic upstreams). When client and upstream are the same family, traffic is passed through (aside from `modelMap` and auth).
 
-CCRelay supports OpenAI-compatible providers (like Gemini):
+**Inbound API surfaces (paths)**
+
+| Path | Method | Client format |
+|------|--------|----------------|
+| `/v1/messages`, `/messages` | POST | Anthropic Messages |
+| `/v1/messages/count_tokens` | POST | Anthropic |
+| `/v1/chat/completions` | POST | OpenAI Chat Completions |
+| `/v1/responses` | POST | OpenAI Responses API (create) |
+| `/v1/models` | GET | OpenAI models list |
+
+`routing.proxy` in `config.yaml` should include the paths you use (defaults include the rows above).
+
+**Conversion rules**
+
+- Client **Anthropic** + provider `providerType: openai`: request A→O, response O→A (same as before).
+- Client **OpenAI** (chat) + provider `providerType: anthropic`: request O→A, response A→O.
+- Client **OpenAI Responses** + any provider: request is converted to Chat Completions, then to Anthropic if needed; response is converted back to the Responses JSON shape. Hosted-only tools (e.g. web search, MCP) are stripped in v1.
+- Same **family** on both sides (e.g. chat + `openai` provider): no format conversion (only model name mapping, etc.).
+
+**OpenAI Chat Completions path** (`openaiChatCompletionsPath`, optional)
+
+When converting to OpenAI Chat Completions (Anthropic → OpenAI, or Responses → Chat as a hub), CCRelay appends a path to `baseUrl`. The default is `/chat/completions` (no extra `/v1` segment in the path). If your `baseUrl` already ends with a version segment (e.g. `https://api.z.ai/api/coding/paas/v4`) and the upstream expects `.../v4/chat/completions` rather than `.../v4/v1/chat/completions`, leave the default or set `openaiChatCompletionsPath: "/chat/completions"` explicitly. If your gateway expects the full OpenAI-style segment (e.g. `baseUrl` is only the host root), set `openaiChatCompletionsPath: "/v1/chat/completions"`.
+
+**Limitations (first iteration)**
+
+- Cross-protocol **streaming** to the upstream is not supported (requests are forced to `stream: false` for conversion). If the **client** still sends `stream: true` on `POST /v1/responses` (e.g. OpenAI Codex), CCRelay **synthesizes** a small SSE with `response.created` / `response.completed` / `[DONE]` so the client SDK can finish; the model output is not token-streamed, only delivered in the final `response.completed` payload.
+- If the upstream still returns an SSE response where conversion is required, CCRelay returns a clear error.
+- **Responses API (v1)**: `previous_response_id`, `conversation`, and OpenAI-hosted tools are not fully supported; use chat-style function tools when possible.
+
+**Example: OpenAI-compatible provider (Gemini)**
 
 ```yaml
 gemini:
@@ -220,9 +249,17 @@ gemini:
       model: "gemini-2.5-pro"
 ```
 
-Conversion process:
-- **Request**: Anthropic Messages API format → OpenAI Chat Completions format
-- **Response**: OpenAI format → Anthropic format
+**GET /v1/models** (`modelsListFormat`, optional, default `auto`)
+
+There is no request body, so CCRelay cannot infer whether the client expects an OpenAI- or Anthropic-shaped list. Per provider, `modelsListFormat` controls the **inbound client surface** for this route and the **synthetic list** when the upstream returns an error:
+
+- **`auto`** (default): match `providerType`—same wire as the upstream for successful responses (no unnecessary conversion), and the corresponding list shape for fallback.
+- **`openai`**: treat the client as OpenAI (e.g. force OpenAI-shaped list when using an OpenAI HTTP client against an Anthropic upstream).
+- **`anthropic`**: treat the client as Anthropic.
+
+If you previously relied on OpenAI-shaped `/v1/models` against an Anthropic provider, set `modelsListFormat: openai` (or use the Web dashboard **GET /v1/models wire** field).
+
+`GET /v1/models` is proxied to the current provider; on upstream error, a minimal list is built from `modelMap` in the chosen format.
 
 ### Web UI Dashboard
 
@@ -272,6 +309,8 @@ CCRelay uses a YAML configuration file (`~/.ccrelay/config.yaml` by default). Th
 Each provider supports:
 - `name` - Display name
 - `baseUrl` - API base URL
+- `openaiChatCompletionsPath` (optional) - Path for OpenAI Chat Completions when converting to that API (default: `/chat/completions`; use `/v1/chat/completions` if your base URL does not include a version prefix)
+- `modelsListFormat` (optional) - `auto` | `openai` | `anthropic` — wire for `GET /v1/models` (default `auto` matches `providerType`)
 - `mode` - `passthrough` or `inject`
 - `providerType` - `anthropic` (default) or `openai`
 - `apiKey` - API key (inject mode, supports `${ENV_VAR}` environment variables)
@@ -285,7 +324,7 @@ Each provider supports:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `routing.proxy` | `["/v1/messages", "/messages"]` | Paths routed to current provider |
+| `routing.proxy` | `["/v1/messages", "/messages", "/v1/chat/completions", "/v1/models", "/v1/responses"]` | Paths routed to current provider |
 | `routing.passthrough` | `["/v1/users/*", "/v1/organizations/*"]` | Paths always going to official API |
 | `routing.block` | `[{path: "/api/event_logging/*", ...}]` | Paths returning custom response in inject mode |
 | `routing.openaiBlock` | `[{path: "/v1/messages/count_tokens", ...}]` | Block patterns for OpenAI providers |

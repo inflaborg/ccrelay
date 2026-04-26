@@ -4,7 +4,12 @@
 
 import type * as http from "http";
 import type * as url from "url";
-import type { Provider } from "../../types";
+import type { ApiSurface, Provider } from "../../types";
+
+/**
+ * Re-export for convenience
+ */
+export type { ApiSurface };
 
 /**
  * Routing context from RouterStage
@@ -19,8 +24,12 @@ export interface RoutingContext {
   headers: Record<string, string>;
   targetUrl: string;
   targetPath: string;
+  /** Query string from client request, e.g. `?a=1` (empty if none) */
+  targetQuery: string;
   isRouted: boolean;
   isOpenAIProvider: boolean;
+  /** Wire format the client is using; default anthropic for legacy paths */
+  clientSurface: ApiSurface;
 }
 
 /**
@@ -31,6 +40,8 @@ export interface BodyProcessResult {
   originalModel: string | undefined;
   originalRequestBody: string | undefined;
   requestBodyLog: string | undefined;
+  /** True if client POST /v1/responses had `stream: true` before we forced `stream: false` for conversion */
+  responsesStreamRequested?: boolean;
 }
 
 /**
