@@ -22,21 +22,20 @@ export interface OpenAIResponsesApiObject {
   };
 }
 
-/** Chars per synthetic `response.output_text.delta` when upstream is non-streaming. */
+/** Chars per synthetic delta chunk when upstream is non-streaming. */
 const SSE_TEXT_CHUNK = 64;
 
 /**
  * Synthesize OpenAI Responses API SSE for clients that sent `stream: true` (e.g. Codex).
- * Cross-protocol path uses non-streaming upstream. Event consumers often require
- * `response.output_text.delta` / `response.output_text.done` (not only `response.completed`),
- * or the UI shows an empty reply despite HTTP 200.
+ * Cross-protocol path uses non-streaming upstream. Emits per-item events for every
+ * `response.output` entry (message, function_call, etc.) so tool runners see tool calls
+ * in the stream, not only inside the final `response.completed`.
  */
 export function formatOpenAIResponsesSse(response: OpenAIResponsesApiObject): string {
-  const textPayload = extractSseTextPayload(response);
-  if (textPayload) {
-    return formatOpenAIResponsesSseWithTextDeltas(response, textPayload);
+  if (!response.output || response.output.length === 0) {
+    return formatOpenAIResponsesSseMinimal(response);
   }
-  return formatOpenAIResponsesSseMinimal(response);
+  return formatOpenAIResponsesSseFullStream(response);
 }
 
 function formatOpenAIResponsesSseMinimal(response: OpenAIResponsesApiObject): string {
@@ -52,42 +51,7 @@ function formatOpenAIResponsesSseMinimal(response: OpenAIResponsesApiObject): st
   return lines.join("");
 }
 
-function extractSseTextPayload(
-  response: OpenAIResponsesApiObject
-):
-  | { itemId: string; text: string; outputIndex: number; completedItem: unknown }
-  | null {
-  for (let outputIndex = 0; outputIndex < response.output.length; outputIndex++) {
-    const item = response.output[outputIndex];
-    if (!item || typeof item !== "object") {
-      continue;
-    }
-    if ((item as { type?: string }).type !== "message") {
-      continue;
-    }
-    const m = item as { id?: string; content?: Array<{ type?: string; text?: string }> };
-    const itemId =
-      typeof m.id === "string" && m.id.length > 0
-        ? m.id
-        : `msg_${randomUUID().replace(/-/g, "")}`;
-    let text = "";
-    for (const c of m.content ?? []) {
-      if (c.type === "output_text" && typeof c.text === "string") {
-        text += c.text;
-      }
-    }
-    if (text.length > 0) {
-      return { itemId, text, outputIndex, completedItem: item };
-    }
-  }
-  return null;
-}
-
-function formatOpenAIResponsesSseWithTextDeltas(
-  response: OpenAIResponsesApiObject,
-  p: { itemId: string; text: string; outputIndex: number; completedItem: unknown }
-): string {
-  const { itemId, text, outputIndex, completedItem } = p;
+function formatOpenAIResponsesSseFullStream(response: OpenAIResponsesApiObject): string {
   let sequence_number = 0;
   const lines: string[] = [];
   const push = (obj: Record<string, unknown>) => {
@@ -97,6 +61,49 @@ function formatOpenAIResponsesSseWithTextDeltas(
   const createdResponse = { ...response, status: "in_progress" as const, output: [] as unknown[] };
   push({ type: "response.created", response: createdResponse });
 
+  for (let outputIndex = 0; outputIndex < response.output.length; outputIndex++) {
+    const item = response.output[outputIndex];
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+    const itemType = (item as { type?: string }).type;
+    if (itemType === "message") {
+      pushMessageOutputItemSse(push, item, outputIndex);
+    } else if (itemType === "function_call") {
+      pushFunctionCallOutputItemSse(push, item, outputIndex);
+    } else {
+      push({
+        type: "response.output_item.added",
+        item,
+        output_index: outputIndex,
+      });
+      push({
+        type: "response.output_item.done",
+        item,
+        output_index: outputIndex,
+      });
+    }
+  }
+
+  push({ type: "response.completed", response });
+  lines.push("data: [DONE]\n\n");
+  return lines.join("");
+}
+
+function pushMessageOutputItemSse(
+  push: (obj: Record<string, unknown>) => void,
+  item: object,
+  outputIndex: number
+): void {
+  const m = item as { id?: string; content?: Array<{ type?: string; text?: string }> };
+  const itemId =
+    typeof m.id === "string" && m.id.length > 0 ? m.id : `msg_${randomUUID().replace(/-/g, "")}`;
+  let text = "";
+  for (const c of m.content ?? []) {
+    if (c.type === "output_text" && typeof c.text === "string") {
+      text += c.text;
+    }
+  }
   const inProgressMessage = {
     type: "message",
     id: itemId,
@@ -109,34 +116,82 @@ function formatOpenAIResponsesSseWithTextDeltas(
     item: inProgressMessage,
     output_index: outputIndex,
   });
-
-  for (let i = 0; i < text.length; i += SSE_TEXT_CHUNK) {
-    const delta = text.slice(i, i + SSE_TEXT_CHUNK);
+  if (text.length > 0) {
+    for (let i = 0; i < text.length; i += SSE_TEXT_CHUNK) {
+      const delta = text.slice(i, i + SSE_TEXT_CHUNK);
+      push({
+        type: "response.output_text.delta",
+        item_id: itemId,
+        content_index: 0,
+        output_index: outputIndex,
+        delta,
+        logprobs: [] as unknown[],
+      });
+    }
     push({
-      type: "response.output_text.delta",
+      type: "response.output_text.done",
       item_id: itemId,
       content_index: 0,
       output_index: outputIndex,
-      delta,
+      text,
       logprobs: [] as unknown[],
     });
   }
   push({
-    type: "response.output_text.done",
-    item_id: itemId,
-    content_index: 0,
+    type: "response.output_item.done",
+    item,
     output_index: outputIndex,
-    text,
-    logprobs: [] as unknown[],
+  });
+}
+
+function pushFunctionCallOutputItemSse(
+  push: (obj: Record<string, unknown>) => void,
+  item: object,
+  outputIndex: number
+): void {
+  const fc = item as {
+    type: string;
+    id: string;
+    name: string;
+    arguments: string;
+    call_id?: string;
+    status?: string;
+  };
+  const itemId = typeof fc.id === "string" && fc.id.length > 0 ? fc.id : `fc_${randomUUID().replace(/-/g, "")}`;
+  const fullArgs = typeof fc.arguments === "string" ? fc.arguments : "";
+  const inProgress = {
+    type: "function_call" as const,
+    id: itemId,
+    name: fc.name,
+    call_id: fc.call_id ?? itemId,
+    status: "in_progress" as const,
+    arguments: "",
+  };
+  push({
+    type: "response.output_item.added",
+    item: inProgress,
+    output_index: outputIndex,
+  });
+  for (let i = 0; i < fullArgs.length; i += SSE_TEXT_CHUNK) {
+    const delta = fullArgs.slice(i, i + SSE_TEXT_CHUNK);
+    push({
+      type: "response.function_call_arguments.delta",
+      item_id: itemId,
+      output_index: outputIndex,
+      delta,
+    });
+  }
+  push({
+    type: "response.function_call_arguments.done",
+    item_id: itemId,
+    output_index: outputIndex,
+    arguments: fullArgs,
   });
   push({
     type: "response.output_item.done",
-    item: completedItem,
+    item,
     output_index: outputIndex,
   });
-  push({ type: "response.completed", response });
-  lines.push("data: [DONE]\n\n");
-  return lines.join("");
 }
 
 export function convertChatCompletionToResponses(
