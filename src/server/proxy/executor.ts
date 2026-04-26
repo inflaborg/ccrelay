@@ -13,6 +13,7 @@ import {
   buildModelsListFromProvider,
   convertAnthropicResponseToOpenAI,
   convertChatCompletionToResponses,
+  formatOpenAIResponsesSse,
   convertResponseToAnthropic,
 } from "../../converter";
 import { isAnthropicMessageResponse } from "../../converter/anthropic-to-openai-response";
@@ -22,6 +23,30 @@ import type { RequestTask, ProxyResult } from "../../types";
 import type { ResponseLogger } from "../responseLogger";
 
 const log = new ScopedLogger("ProxyExecutor");
+
+/** Replace Content-Type and drop hop-by-hop / body-size headers for synthesized Responses API SSE. */
+function headersForResponsesSse(
+  base: Record<string, string | string[]>
+): Record<string, string | string[]> {
+  const out: Record<string, string | string[]> = {
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-cache, no-transform",
+  };
+  for (const [k, v] of Object.entries(base)) {
+    const kl = k.toLowerCase();
+    if (
+      kl === "content-type" ||
+      kl === "content-length" ||
+      kl === "content-encoding" ||
+      kl === "transfer-encoding" ||
+      kl === "cache-control"
+    ) {
+      continue;
+    }
+    out[k] = v;
+  }
+  return out;
+}
 
 // Headers to exclude when forwarding response
 const EXCLUDED_HEADERS = new Set([
@@ -574,7 +599,7 @@ export class ProxyExecutor {
     originalModel: string | undefined,
     resolve: (value: ProxyResult) => void
   ): void {
-    const { clientId, provider, res: clientRes } = task;
+    const { clientId, provider, res: clientRes, responsesStreamRequested } = task;
     let responseBody = "";
     proxyRes.on("data", (chunk: Buffer) => {
       responseBody += chunk.toString();
@@ -588,24 +613,56 @@ export class ProxyExecutor {
       try {
         const openaiResponse = JSON.parse(responseBody) as OpenAIChatCompletionResponse;
         const out = convertChatCompletionToResponses(openaiResponse, originalModel || "none");
-        const outJson = JSON.stringify(out);
-        ctx.responseChunks.push(Buffer.from(outJson, "utf-8"));
-        this.responseLogger.logResponse(
-          clientId,
-          duration,
-          status,
-          ctx.responseChunks,
-          undefined,
-          ctx.originalResponseBody
-        );
-        resolve({
-          statusCode: status,
-          headers: responseHeaders,
-          body: outJson,
-          duration,
-          responseBodyChunks: ctx.responseChunks,
-          originalResponseBody: ctx.originalResponseBody,
-        });
+        if (responsesStreamRequested) {
+          const sse = formatOpenAIResponsesSse(out);
+          // if (process.env.CCRELAY_LOG_RESPONSES_SSE === "1") {
+            const head = sse
+              .split("\n\n")
+              .filter(Boolean)
+              .slice(0, 6)
+              .join(" | ");
+            log.info(
+              `[Chat->Responses] synthetic SSE: bytes=${sse.length} ` +
+                `data_lines~=${sse.split("\n\n").length} head=${head.slice(0, 2000)}`
+            );
+          // }
+          ctx.responseChunks.push(Buffer.from(sse, "utf-8"));
+          this.responseLogger.logResponse(
+            clientId,
+            duration,
+            status,
+            ctx.responseChunks,
+            undefined,
+            ctx.originalResponseBody
+          );
+          resolve({
+            statusCode: status,
+            headers: headersForResponsesSse(responseHeaders),
+            body: sse,
+            duration,
+            responseBodyChunks: ctx.responseChunks,
+            originalResponseBody: ctx.originalResponseBody,
+          });
+        } else {
+          const outJson = JSON.stringify(out);
+          ctx.responseChunks.push(Buffer.from(outJson, "utf-8"));
+          this.responseLogger.logResponse(
+            clientId,
+            duration,
+            status,
+            ctx.responseChunks,
+            undefined,
+            ctx.originalResponseBody
+          );
+          resolve({
+            statusCode: status,
+            headers: responseHeaders,
+            body: outJson,
+            duration,
+            responseBodyChunks: ctx.responseChunks,
+            originalResponseBody: ctx.originalResponseBody,
+          });
+        }
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         log.warn(`[Chat->Responses] Conversion failed for ${provider.id}: ${errMsg}`);
@@ -646,7 +703,7 @@ export class ProxyExecutor {
     originalModel: string | undefined,
     resolve: (value: ProxyResult) => void
   ): void {
-    const { clientId, provider, res: clientRes } = task;
+    const { clientId, provider, res: clientRes, responsesStreamRequested } = task;
     let responseBody = "";
     proxyRes.on("data", (chunk: Buffer) => {
       responseBody += chunk.toString();
@@ -668,24 +725,56 @@ export class ProxyExecutor {
           originalModel || (parsed as { model?: string }).model || "none"
         );
         const out = convertChatCompletionToResponses(chat, originalModel || chat.model);
-        const outJson = JSON.stringify(out);
-        ctx.responseChunks.push(Buffer.from(outJson, "utf-8"));
-        this.responseLogger.logResponse(
-          clientId,
-          duration,
-          status,
-          ctx.responseChunks,
-          undefined,
-          ctx.originalResponseBody
-        );
-        resolve({
-          statusCode: status,
-          headers: responseHeaders,
-          body: outJson,
-          duration,
-          responseBodyChunks: ctx.responseChunks,
-          originalResponseBody: ctx.originalResponseBody,
-        });
+        if (responsesStreamRequested) {
+          const sse = formatOpenAIResponsesSse(out);
+          // if (process.env.CCRELAY_LOG_RESPONSES_SSE === "1") {
+            const head = sse
+              .split("\n\n")
+              .filter(Boolean)
+              .slice(0, 6)
+              .join(" | ");
+            log.info(
+              `[A->Responses] synthetic SSE: bytes=${sse.length} ` +
+                `data_lines~=${sse.split("\n\n").length} head=${head.slice(0, 2000)}`
+            );
+          // }
+          ctx.responseChunks.push(Buffer.from(sse, "utf-8"));
+          this.responseLogger.logResponse(
+            clientId,
+            duration,
+            status,
+            ctx.responseChunks,
+            undefined,
+            ctx.originalResponseBody
+          );
+          resolve({
+            statusCode: status,
+            headers: headersForResponsesSse(responseHeaders),
+            body: sse,
+            duration,
+            responseBodyChunks: ctx.responseChunks,
+            originalResponseBody: ctx.originalResponseBody,
+          });
+        } else {
+          const outJson = JSON.stringify(out);
+          ctx.responseChunks.push(Buffer.from(outJson, "utf-8"));
+          this.responseLogger.logResponse(
+            clientId,
+            duration,
+            status,
+            ctx.responseChunks,
+            undefined,
+            ctx.originalResponseBody
+          );
+          resolve({
+            statusCode: status,
+            headers: responseHeaders,
+            body: outJson,
+            duration,
+            responseBodyChunks: ctx.responseChunks,
+            originalResponseBody: ctx.originalResponseBody,
+          });
+        }
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         log.warn(`[A->Responses] Conversion failed for ${provider.id}: ${errMsg}`);

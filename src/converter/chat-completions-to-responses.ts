@@ -22,9 +22,123 @@ export interface OpenAIResponsesApiObject {
   };
 }
 
+/** Chars per synthetic `response.output_text.delta` when upstream is non-streaming. */
+const SSE_TEXT_CHUNK = 64;
+
 /**
- * Map chat.completion JSON to Responses API-style JSON for the client.
+ * Synthesize OpenAI Responses API SSE for clients that sent `stream: true` (e.g. Codex).
+ * Cross-protocol path uses non-streaming upstream. Event consumers often require
+ * `response.output_text.delta` / `response.output_text.done` (not only `response.completed`),
+ * or the UI shows an empty reply despite HTTP 200.
  */
+export function formatOpenAIResponsesSse(response: OpenAIResponsesApiObject): string {
+  const textPayload = extractSseTextPayload(response);
+  if (textPayload) {
+    return formatOpenAIResponsesSseWithTextDeltas(response, textPayload);
+  }
+  return formatOpenAIResponsesSseMinimal(response);
+}
+
+function formatOpenAIResponsesSseMinimal(response: OpenAIResponsesApiObject): string {
+  let sequence_number = 0;
+  const lines: string[] = [];
+  const push = (obj: Record<string, unknown>) => {
+    lines.push(`data: ${JSON.stringify({ ...obj, sequence_number: sequence_number++ })}\n\n`);
+  };
+  const createdResponse = { ...response, status: "in_progress" as const, output: [] as unknown[] };
+  push({ type: "response.created", response: createdResponse });
+  push({ type: "response.completed", response });
+  lines.push("data: [DONE]\n\n");
+  return lines.join("");
+}
+
+function extractSseTextPayload(
+  response: OpenAIResponsesApiObject
+):
+  | { itemId: string; text: string; outputIndex: number; completedItem: unknown }
+  | null {
+  for (let outputIndex = 0; outputIndex < response.output.length; outputIndex++) {
+    const item = response.output[outputIndex];
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+    if ((item as { type?: string }).type !== "message") {
+      continue;
+    }
+    const m = item as { id?: string; content?: Array<{ type?: string; text?: string }> };
+    const itemId =
+      typeof m.id === "string" && m.id.length > 0
+        ? m.id
+        : `msg_${randomUUID().replace(/-/g, "")}`;
+    let text = "";
+    for (const c of m.content ?? []) {
+      if (c.type === "output_text" && typeof c.text === "string") {
+        text += c.text;
+      }
+    }
+    if (text.length > 0) {
+      return { itemId, text, outputIndex, completedItem: item };
+    }
+  }
+  return null;
+}
+
+function formatOpenAIResponsesSseWithTextDeltas(
+  response: OpenAIResponsesApiObject,
+  p: { itemId: string; text: string; outputIndex: number; completedItem: unknown }
+): string {
+  const { itemId, text, outputIndex, completedItem } = p;
+  let sequence_number = 0;
+  const lines: string[] = [];
+  const push = (obj: Record<string, unknown>) => {
+    lines.push(`data: ${JSON.stringify({ ...obj, sequence_number: sequence_number++ })}\n\n`);
+  };
+
+  const createdResponse = { ...response, status: "in_progress" as const, output: [] as unknown[] };
+  push({ type: "response.created", response: createdResponse });
+
+  const inProgressMessage = {
+    type: "message",
+    id: itemId,
+    role: "assistant",
+    status: "in_progress",
+    content: [] as unknown[],
+  };
+  push({
+    type: "response.output_item.added",
+    item: inProgressMessage,
+    output_index: outputIndex,
+  });
+
+  for (let i = 0; i < text.length; i += SSE_TEXT_CHUNK) {
+    const delta = text.slice(i, i + SSE_TEXT_CHUNK);
+    push({
+      type: "response.output_text.delta",
+      item_id: itemId,
+      content_index: 0,
+      output_index: outputIndex,
+      delta,
+      logprobs: [] as unknown[],
+    });
+  }
+  push({
+    type: "response.output_text.done",
+    item_id: itemId,
+    content_index: 0,
+    output_index: outputIndex,
+    text,
+    logprobs: [] as unknown[],
+  });
+  push({
+    type: "response.output_item.done",
+    item: completedItem,
+    output_index: outputIndex,
+  });
+  push({ type: "response.completed", response });
+  lines.push("data: [DONE]\n\n");
+  return lines.join("");
+}
+
 export function convertChatCompletionToResponses(
   chat: OpenAIChatCompletionResponse,
   _originalModel: string
@@ -61,8 +175,21 @@ export function convertChatCompletionToResponses(
   };
 }
 
+function messageContentToString(message: OpenAIResponseMessage): string {
+  const c = message.content as string | Array<{ type?: string; text?: string }> | undefined;
+  if (typeof c === "string") {
+    return c;
+  }
+  if (Array.isArray(c)) {
+    return c
+      .map(p => (p && typeof p === "object" && typeof p.text === "string" ? p.text : ""))
+      .join("");
+  }
+  return "";
+}
+
 function buildMessageOutputItems(message: OpenAIResponseMessage): unknown[] {
-  const text = typeof message.content === "string" ? message.content : "";
+  const text = messageContentToString(message);
   if (!text && !message.thinking) {
     return [];
   }

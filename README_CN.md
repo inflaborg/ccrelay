@@ -231,7 +231,7 @@ vlModelMap:
 
 **当前限制**
 
-- 跨协议时**不支持流式**（`stream: true` 会在转发前被强制为 `stream: false`；若上游仍返回 SSE 将报错）。与上游类型一致时可正常流式透传。
+- 到上游的跨协议路径**不做真正的流式**（为转换会把请求里 `stream` 强制为 `false`）。若客户端仍对 `POST /v1/responses` 发送 `stream: true`（如 OpenAI Codex），CCRelay 会**合成**一小段 SSE（含 `response.created` / `response.completed` / `[DONE]`），让客户端 SDK 能正常结束；模型内容仍在最终 `response.completed` 里一次性给出，无 token 级流式。若需要转换时上游却返回 SSE，将报错。与上游类型一致时可原样流式透传。
 - **Responses（v1）**：`previous_response_id`、`conversation` 及仅托管侧工具不保证；尽量使用常规 function 工具。
 
 **示例：OpenAI 兼容厂商（如 Gemini）**

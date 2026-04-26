@@ -40,6 +40,8 @@ export interface BodyProcessResult {
   originalModel: string | undefined;
   originalRequestBody: string | undefined;
   requestBodyLog: string | undefined;
+  /** True if client POST /v1/responses had `stream: true` before we forced `stream: false` for conversion */
+  responsesStreamRequested?: boolean;
 }
 
 /**

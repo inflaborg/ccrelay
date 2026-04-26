@@ -43,5 +43,6 @@ export {
 
 export {
   convertChatCompletionToResponses,
+  formatOpenAIResponsesSse,
   type OpenAIResponsesApiObject,
 } from "./chat-completions-to-responses";

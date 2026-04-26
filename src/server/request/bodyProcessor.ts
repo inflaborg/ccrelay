@@ -91,6 +91,16 @@ export class BodyProcessor {
 
     let body = applyModelMapping(rawBody, routing.provider);
 
+    let responsesStreamRequested = false;
+    if (needsConversion && clientSurface === "openai_responses" && body.length > 0) {
+      try {
+        const d = JSON.parse(body.toString("utf-8")) as Record<string, unknown>;
+        responsesStreamRequested = d.stream === true;
+      } catch {
+        // ignore
+      }
+    }
+
     if (needsConversion) {
       body = forceDisableStreamInBody(
         body,
@@ -179,6 +189,7 @@ export class BodyProcessor {
       originalModel,
       originalRequestBody,
       requestBodyLog,
+      ...(responsesStreamRequested ? { responsesStreamRequested: true } : {}),
     };
   }
 

@@ -490,6 +490,8 @@ export interface RequestTask {
   timeout?: number;
   createdAt: number;
   startedAt?: number;
+  /** Client had `stream: true` on POST /v1/responses; response may be synthesized as SSE */
+  responsesStreamRequested?: boolean;
   /** Optional response object for streaming support in queue mode */
   res?: http.ServerResponse;
   /** Whether the task has been cancelled */

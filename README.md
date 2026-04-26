@@ -231,7 +231,8 @@ When converting to OpenAI Chat Completions (Anthropic â†’ OpenAI, or Responses â
 
 **Limitations (first iteration)**
 
-- Cross-protocol **streaming** is not supported: use `stream: false` when the client and provider types differ, or CCRelay will return an error if the upstream still returns an SSE response.
+- Cross-protocol **streaming** to the upstream is not supported (requests are forced to `stream: false` for conversion). If the **client** still sends `stream: true` on `POST /v1/responses` (e.g. OpenAI Codex), CCRelay **synthesizes** a small SSE with `response.created` / `response.completed` / `[DONE]` so the client SDK can finish; the model output is not token-streamed, only delivered in the final `response.completed` payload.
+- If the upstream still returns an SSE response where conversion is required, CCRelay returns a clear error.
 - **Responses API (v1)**: `previous_response_id`, `conversation`, and OpenAI-hosted tools are not fully supported; use chat-style function tools when possible.
 
 **Example: OpenAI-compatible provider (Gemini)**

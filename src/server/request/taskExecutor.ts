@@ -73,6 +73,7 @@ export class TaskExecutor {
       createdAt: Date.now(),
       priority: 0,
       res,
+      ...(bodyResult.responsesStreamRequested ? { responsesStreamRequested: true } : {}),
     };
   }
 
