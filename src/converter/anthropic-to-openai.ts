@@ -54,13 +54,13 @@ export interface AnthropicTool {
 }
 
 /**
- * Anthropic tool choice
+ * Anthropic tool choice (Messages API: object form only)
  */
 export type AnthropicToolChoice =
-  | "auto"
-  | "any"
-  | "none"
-  | { type: string; name?: string; disable_parallel_tool_use?: boolean };
+  | { type: "auto"; disable_parallel_tool_use?: boolean }
+  | { type: "any"; disable_parallel_tool_use?: boolean }
+  | { type: "none" }
+  | { type: "tool"; name: string; disable_parallel_tool_use?: boolean };
 
 /**
  * OpenAI Chat Completions API request format
@@ -134,7 +134,11 @@ export interface OpenAITool {
 /**
  * OpenAI tool choice
  */
-export type OpenAIToolChoice = "auto" | "none" | { type: "function"; function: { name: string } };
+export type OpenAIToolChoice =
+  | "auto"
+  | "none"
+  | "required"
+  | { type: "function"; function: { name: string } };
 
 /**
  * OpenAI tool call in assistant message
@@ -539,27 +543,22 @@ function convertTools(tools: AnthropicTool[]): OpenAITool[] {
  * Convert tool_choice from Anthropic to OpenAI format
  */
 function convertToolChoice(choice: AnthropicToolChoice): OpenAIToolChoice {
-  // Handle string forms
-  if (choice === "auto" || choice === "none") {
-    return choice;
+  if (choice.type === "tool" && choice.name) {
+    return {
+      type: "function",
+      function: {
+        name: choice.name,
+      },
+    };
   }
-  if (choice === "any") {
+  if (choice.type === "any") {
     return "auto";
   }
-  // Handle object form: {type: "tool", name: "X"} or {type: "auto"}, etc.
-  // Reference: if type === "tool" → {type:"function", function:{name}}, else → choice.type as string
-  if (typeof choice === "object") {
-    if (choice.type === "tool" && choice.name) {
-      return {
-        type: "function",
-        function: {
-          name: choice.name,
-        },
-      };
-    }
-    // {type: "auto"}, {type: "none"}, {type: "any"}, etc.
-    return (choice.type === "any" ? "auto" : choice.type) as OpenAIToolChoice;
+  if (choice.type === "auto") {
+    return "auto";
   }
-
+  if (choice.type === "none") {
+    return "none";
+  }
   return "auto";
 }

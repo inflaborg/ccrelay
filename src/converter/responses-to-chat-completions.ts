@@ -143,7 +143,7 @@ function mapResponsesToolChoice(tc: unknown): OpenAIToolChoice | undefined {
     return tc;
   }
   if (tc === "required") {
-    return "auto";
+    return "required";
   }
   if (typeof tc === "object" && tc !== null && "type" in tc) {
     const t = (tc as { type?: string; name?: string; function?: { name?: string } }).type;

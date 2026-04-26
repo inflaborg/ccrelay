@@ -53,4 +53,76 @@ describe("convertOpenAIRequestToAnthropic", () => {
     );
     expect(newPath).toBe("/v1/messages");
   });
+
+  const sampleFunctionTool = {
+    type: "function" as const,
+    function: {
+      name: "exec_command",
+      description: "x",
+      parameters: { type: "object" as const, properties: {} },
+    },
+  };
+
+  it("maps OpenAI string tool_choice to Anthropic object form when tools are present", () => {
+    const { request: r1 } = convertOpenAIRequestToAnthropic(
+      {
+        model: "m",
+        max_tokens: 1,
+        messages: [{ role: "user", content: "x" }],
+        tools: [sampleFunctionTool],
+        tool_choice: "auto",
+      },
+      "/v1/chat/completions"
+    );
+    expect(r1.tool_choice).toEqual({ type: "auto" });
+
+    const { request: r2 } = convertOpenAIRequestToAnthropic(
+      {
+        model: "m",
+        max_tokens: 1,
+        messages: [{ role: "user", content: "x" }],
+        tools: [sampleFunctionTool],
+        tool_choice: "none",
+      },
+      "/v1/chat/completions"
+    );
+    expect(r2.tool_choice).toEqual({ type: "none" });
+
+    const { request: r3 } = convertOpenAIRequestToAnthropic(
+      {
+        model: "m",
+        max_tokens: 1,
+        messages: [{ role: "user", content: "x" }],
+        tools: [sampleFunctionTool],
+        tool_choice: "required",
+      },
+      "/v1/chat/completions"
+    );
+    expect(r3.tool_choice).toEqual({ type: "any" });
+
+    const { request: r4 } = convertOpenAIRequestToAnthropic(
+      {
+        model: "m",
+        max_tokens: 1,
+        messages: [{ role: "user", content: "x" }],
+        tools: [sampleFunctionTool],
+        tool_choice: { type: "function", function: { name: "exec_command" } },
+      },
+      "/v1/chat/completions"
+    );
+    expect(r4.tool_choice).toEqual({ type: "tool", name: "exec_command" });
+  });
+
+  it("omits tool_choice when there are no tools (even if tool_choice was set)", () => {
+    const { request } = convertOpenAIRequestToAnthropic(
+      {
+        model: "m",
+        max_tokens: 1,
+        messages: [{ role: "user", content: "x" }],
+        tool_choice: "auto",
+      },
+      "/v1/chat/completions"
+    );
+    expect(request.tool_choice).toBeUndefined();
+  });
 });

@@ -546,11 +546,11 @@ describe("converter: anthropic-to-openai", () => {
   });
 
   describe("tool_choice conversion", () => {
-    it("should convert 'auto' to 'auto'", () => {
+    it("should convert { type: 'auto' } to 'auto'", () => {
       const request: AnthropicMessageRequest = {
         model: "claude-3-5-sonnet-20241022",
         max_tokens: 4096,
-        tool_choice: "auto",
+        tool_choice: { type: "auto" },
         messages: [],
       };
 
@@ -559,11 +559,11 @@ describe("converter: anthropic-to-openai", () => {
       expect(result.request.tool_choice).toBe("auto");
     });
 
-    it("should convert 'any' to 'auto'", () => {
+    it("should convert { type: 'any' } to 'auto'", () => {
       const request: AnthropicMessageRequest = {
         model: "claude-3-5-sonnet-20241022",
         max_tokens: 4096,
-        tool_choice: "any",
+        tool_choice: { type: "any" },
         messages: [],
       };
 
@@ -572,11 +572,11 @@ describe("converter: anthropic-to-openai", () => {
       expect(result.request.tool_choice).toBe("auto");
     });
 
-    it("should convert 'none' to 'none'", () => {
+    it("should convert { type: 'none' } to 'none'", () => {
       const request: AnthropicMessageRequest = {
         model: "claude-3-5-sonnet-20241022",
         max_tokens: 4096,
-        tool_choice: "none",
+        tool_choice: { type: "none" },
         messages: [],
       };
 

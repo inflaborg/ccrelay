@@ -57,10 +57,11 @@ export function convertOpenAIRequestToAnthropic(
   if (openai.stream !== undefined) {
     out.stream = openai.stream;
   }
-  if (openai.tools && openai.tools.length > 0) {
+  const hasTools = Boolean(openai.tools && openai.tools.length > 0);
+  if (hasTools && openai.tools) {
     out.tools = convertToolsFromOpenAI(openai.tools);
   }
-  if (openai.tool_choice !== undefined) {
+  if (openai.tool_choice !== undefined && hasTools) {
     out.tool_choice = convertToolChoiceFromOpenAI(openai.tool_choice);
   }
   if (openai.stop !== undefined) {
@@ -321,8 +322,14 @@ function convertToolsFromOpenAI(tools: OpenAITool[]): AnthropicTool[] {
 function convertToolChoiceFromOpenAI(
   choice: OpenAIMessageRequest["tool_choice"]
 ): AnthropicToolChoice {
-  if (choice === "auto" || choice === "none") {
-    return choice;
+  if (choice === "auto") {
+    return { type: "auto" };
+  }
+  if (choice === "none") {
+    return { type: "none" };
+  }
+  if (choice === "required") {
+    return { type: "any" };
   }
   if (typeof choice === "object" && choice !== null) {
     const o = choice as { type: string; function?: { name: string } };
@@ -330,7 +337,7 @@ function convertToolChoiceFromOpenAI(
       return { type: "tool", name: o.function.name };
     }
   }
-  return "auto";
+  return { type: "auto" };
 }
 
 /**

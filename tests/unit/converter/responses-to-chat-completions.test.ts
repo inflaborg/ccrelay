@@ -56,4 +56,14 @@ describe("convertResponsesRequestToChatCompletions", () => {
     );
     expect(newPath).toBe("/v1/chat/completions");
   });
+
+  it("maps tool_choice 'required' to OpenAI 'required' for downstream O-to-A", () => {
+    const { request } = convertResponsesRequestToChatCompletions(
+      // OpenAI Responses API uses snake_case fields
+      // eslint-disable-next-line @typescript-eslint/naming-convention -- wire body
+      { model: "m", input: "x", tool_choice: "required" },
+      "/v1/responses"
+    );
+    expect(request.tool_choice).toBe("required");
+  });
 });
