@@ -6,6 +6,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
+import { resolveCcrelayApiBaseUrl } from "./resolveCcrelayApiBaseUrl";
 
 let currentPanel: LogViewerPanel | null = null;
 
@@ -14,13 +15,13 @@ export class LogViewerPanel {
   private readonly extensionUri: vscode.Uri;
   private disposables: vscode.Disposable[] = [];
 
-  public static createOrShow(
+  public static async createOrShow(
     leaderUrl: string,
     role: string,
     host?: string,
     port?: number,
     extensionUri?: vscode.Uri
-  ): void {
+  ): Promise<void> {
     const column = vscode.window.activeTextEditor
       ? vscode.window.activeTextEditor.viewColumn
       : undefined;
@@ -36,7 +37,7 @@ export class LogViewerPanel {
     if (currentPanel) {
       currentPanel.panel.reveal(column);
       // Update webview content with new state
-      currentPanel.panel.webview.html = currentPanel.getWebviewContent(leaderUrl, role, host, port);
+      await currentPanel.updateState(leaderUrl, role, host, port);
       return;
     }
 
@@ -55,38 +56,45 @@ export class LogViewerPanel {
       }
     );
 
-    currentPanel = new LogViewerPanel(panel, extUri, leaderUrl, role, host, port);
+    const instance = new LogViewerPanel(panel, extUri);
+    await instance.loadWebview(leaderUrl, role, host, port);
+    currentPanel = instance;
   }
 
-  private constructor(
-    panel: vscode.WebviewPanel,
-    extensionUri: vscode.Uri,
+  private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
+    this.panel = panel;
+    this.extensionUri = extensionUri;
+    this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
+  }
+
+  private async loadWebview(
     leaderUrl: string,
     role: string,
     host?: string,
     port?: number
-  ) {
-    this.panel = panel;
-    this.extensionUri = extensionUri;
-    this.panel.webview.html = this.getWebviewContent(leaderUrl, role, host, port);
-
-    // Handle state restore
-    this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
+  ): Promise<void> {
+    this.panel.webview.html = await this.getWebviewContent(leaderUrl, role, host, port);
   }
 
-  private updateState(leaderUrl: string, role: string, host?: string, port?: number): void {
-    this.panel.webview.html = this.getWebviewContent(leaderUrl, role, host, port);
+  private async updateState(leaderUrl: string, role: string, host?: string, port?: number): Promise<void> {
+    this.panel.webview.html = await this.getWebviewContent(leaderUrl, role, host, port);
   }
 
-  private getWebviewContent(leaderUrl: string, role: string, host?: string, port?: number): string {
+  private async getWebviewContent(
+    leaderUrl: string,
+    role: string,
+    host?: string,
+    port?: number
+  ): Promise<string> {
     const webview = this.panel.webview;
     const webDistPath = path.join(this.extensionUri.fsPath, "out", "web");
 
-    // Determine the API base URL
-    const apiUrl =
-      role === "follower" && leaderUrl
-        ? new URL("/ccrelay/api", leaderUrl).origin
-        : `http://${host || "127.0.0.1"}:${port || 7575}`;
+    const apiUrl = await resolveCcrelayApiBaseUrl({
+      role,
+      leaderUrl,
+      host,
+      port,
+    });
 
     // Find the actual asset filenames (they have hashes)
     const assetsPath = path.join(webDistPath, "assets");

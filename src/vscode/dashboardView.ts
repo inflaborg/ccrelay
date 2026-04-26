@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
+import { resolveCcrelayApiBaseUrl } from "./resolveCcrelayApiBaseUrl";
 
 export class DashboardWebviewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = "ccrelay.dashboardView";
@@ -29,13 +30,13 @@ export class DashboardWebviewProvider implements vscode.WebviewViewProvider {
       localResourceRoots: [vscode.Uri.joinPath(this._extensionUri, "out", "web")],
     };
 
-    this.updateWebview();
+    void this.updateWebview();
   }
 
-  public updateWebview() {
+  public async updateWebview(): Promise<void> {
     if (this._view) {
       const { leaderUrl, role, host, port } = this._getConfig();
-      this._view.webview.html = this.getWebviewContent(
+      this._view.webview.html = await this.getWebviewContent(
         this._view.webview,
         leaderUrl,
         role,
@@ -45,19 +46,21 @@ export class DashboardWebviewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private getWebviewContent(
+  private async getWebviewContent(
     webview: vscode.Webview,
     leaderUrl: string,
     role: string,
     host?: string,
     port?: number
-  ): string {
+  ): Promise<string> {
     const webDistPath = path.join(this._extensionUri.fsPath, "out", "web");
 
-    const apiUrl =
-      role === "follower" && leaderUrl
-        ? new URL("/ccrelay/api", leaderUrl).origin
-        : `http://${host || "127.0.0.1"}:${port || 7575}`;
+    const apiUrl = await resolveCcrelayApiBaseUrl({
+      role,
+      leaderUrl,
+      host,
+      port,
+    });
 
     const assetsPath = path.join(webDistPath, "assets");
     let jsFile = "";
