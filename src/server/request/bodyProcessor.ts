@@ -4,17 +4,48 @@
 
 import type { RoutingContext, BodyProcessResult } from "./context";
 import { applyModelMapping } from "./modelMapping";
-import { convertRequestToOpenAI } from "../../converter";
+import {
+  convertRequestToOpenAI,
+  convertOpenAIRequestToAnthropic,
+  isOpenAIChatCompletionsRequest,
+} from "../../converter";
 import { ScopedLogger } from "../../utils/logger";
+import type { ApiSurface } from "../../types";
 
 const log = new ScopedLogger("BodyProcessor");
 
+function buildTargetUrl(baseUrl: string, path: string, query: string): string {
+  const b = baseUrl.replace(/\/$/, "");
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return `${b}${p}${query}`;
+}
+
 /**
- * BodyProcessor handles model mapping and OpenAI format conversion
+ * Cross-protocol: streaming is not supported in the first version — force non-streaming upstream.
+ */
+function forceDisableStreamInBody(body: Buffer, label: string): Buffer {
+  if (!body || body.length === 0) {
+    return body;
+  }
+  try {
+    const data = JSON.parse(body.toString("utf-8")) as Record<string, unknown>;
+    if (data.stream === true) {
+      data.stream = false;
+      log.info(`[${label}] stream=true is not supported for cross-protocol conversion; forcing stream=false`);
+      return Buffer.from(JSON.stringify(data), "utf-8");
+    }
+  } catch {
+    // ignore
+  }
+  return body;
+}
+
+/**
+ * BodyProcessor maps models and applies Anthropic<->OpenAI conversion when client and upstream protocols differ
  */
 export class BodyProcessor {
   /**
-   * Process request body - applies model mapping and OpenAI conversion
+   * Process request body
    */
   process(
     rawBody: Buffer,
@@ -25,7 +56,6 @@ export class BodyProcessor {
     let originalRequestBody: string | undefined;
     let requestBodyLog: string | undefined;
 
-    // Save original body for logging
     if (databaseEnabled && rawBody.length > 0) {
       try {
         originalRequestBody = rawBody.toString("utf-8");
@@ -34,28 +64,72 @@ export class BodyProcessor {
       }
     }
 
-    // Apply model mapping (e.g., claude-* -> glm-4.7)
+    const clientSurface: ApiSurface = routing.clientSurface;
+    const upstreamWire: ApiSurface =
+      routing.provider.providerType === "openai" ? "openai" : "anthropic";
+    const needsConversion = clientSurface !== upstreamWire;
+
+    // GET (e.g. /v1/models): no body conversion
+    if (routing.method === "GET" || !rawBody || rawBody.length === 0) {
+      const body = rawBody && rawBody.length > 0 ? rawBody : Buffer.alloc(0);
+      if (databaseEnabled && body.length > 0) {
+        try {
+          requestBodyLog = body.toString("utf-8");
+        } catch {
+          requestBodyLog = undefined;
+        }
+      }
+      return {
+        body,
+        originalModel,
+        originalRequestBody,
+        requestBodyLog,
+      };
+    }
+
     let body = applyModelMapping(rawBody, routing.provider);
 
-    // Convert for OpenAI provider
-    if (routing.isOpenAIProvider && body && body.length > 0) {
-      const conversionResult = this.convertForOpenAI(body, routing.targetPath);
-      if (conversionResult) {
-        body = conversionResult.body;
-        originalModel = conversionResult.originalModel;
-        routing.targetPath = conversionResult.newPath;
+    if (needsConversion) {
+      body = forceDisableStreamInBody(
+        body,
+        `${clientSurface}->${upstreamWire}`
+      );
+    }
 
-        // Update target URL with new path
-        const baseUrl = routing.provider.baseUrl.replace(/\/$/, "");
-        routing.targetUrl = `${baseUrl}${conversionResult.newPath}`;
-
+    if (!needsConversion) {
+      // Same protocol: pass through (only modelMap changes were applied)
+    } else if (clientSurface === "anthropic" && upstreamWire === "openai") {
+      const result = this.convertAnthropicToOpenAIRequest(body, routing.targetPath);
+      if (result) {
+        body = result.body;
+        originalModel = result.originalModel;
+        routing.targetPath = result.newPath;
+        routing.targetUrl = buildTargetUrl(
+          routing.provider.baseUrl,
+          result.newPath,
+          routing.targetQuery
+        );
         log.info(
-          `[OpenAI] URL conversion: ${routing.targetPath} -> ${conversionResult.newPath}, final="${routing.targetUrl}"`
+          `[Router] A->O request: path ${routing.path} -> ${result.newPath}, target="${routing.targetUrl}"`
+        );
+      }
+    } else if (clientSurface === "openai" && upstreamWire === "anthropic") {
+      const result = this.convertOpenAIToAnthropicRequest(body, routing);
+      if (result) {
+        body = result.body;
+        originalModel = result.originalModel;
+        routing.targetPath = result.newPath;
+        routing.targetUrl = buildTargetUrl(
+          routing.provider.baseUrl,
+          result.newPath,
+          routing.targetQuery
+        );
+        log.info(
+          `[Router] O->A request: path ${routing.path} -> ${result.newPath}, target="${routing.targetUrl}"`
         );
       }
     }
 
-    // Capture request body for logging
     if (databaseEnabled && body && body.length > 0) {
       try {
         requestBodyLog = body.toString("utf-8");
@@ -72,28 +146,20 @@ export class BodyProcessor {
     };
   }
 
-  /**
-   * Convert request for OpenAI provider
-   */
-  private convertForOpenAI(
+  private convertAnthropicToOpenAIRequest(
     body: Buffer,
     path: string
   ): { body: Buffer; newPath: string; originalModel: string | undefined } | null {
     try {
       const bodyStr = body.toString("utf-8");
       const anthropicRequest = JSON.parse(bodyStr) as Record<string, unknown>;
-
-      // Check if this looks like an Anthropic Messages API request
       if (!anthropicRequest.messages || !Array.isArray(anthropicRequest.messages)) {
         return null;
       }
-
       const conversionResult = convertRequestToOpenAI(
         anthropicRequest as unknown as Parameters<typeof convertRequestToOpenAI>[0],
         path
       );
-
-      // Extract original model from the original body
       let originalModel: string | undefined;
       try {
         const originalData = JSON.parse(bodyStr) as Record<string, unknown>;
@@ -101,14 +167,39 @@ export class BodyProcessor {
       } catch {
         // ignore
       }
-
       return {
         body: Buffer.from(JSON.stringify(conversionResult.request), "utf-8"),
         newPath: conversionResult.newPath,
         originalModel,
       };
     } catch (err) {
-      log.error("[OpenAI Conversion] Failed to convert request", err);
+      log.error("[A->O Conversion] Failed to convert request", err);
+      return null;
+    }
+  }
+
+  private convertOpenAIToAnthropicRequest(
+    body: Buffer,
+    routing: RoutingContext
+  ): { body: Buffer; newPath: string; originalModel: string | undefined } | null {
+    try {
+      const bodyStr = body.toString("utf-8");
+      const oai = JSON.parse(bodyStr) as Record<string, unknown>;
+      if (!isOpenAIChatCompletionsRequest(oai)) {
+        return null;
+      }
+      const originalModel = typeof oai.model === "string" ? oai.model : undefined;
+      const c = convertOpenAIRequestToAnthropic(
+        oai as unknown as Parameters<typeof convertOpenAIRequestToAnthropic>[0],
+        routing.targetPath
+      );
+      return {
+        body: Buffer.from(JSON.stringify(c.request), "utf-8"),
+        newPath: c.newPath,
+        originalModel,
+      };
+    } catch (err) {
+      log.error("[O->A Conversion] Failed to convert request", err);
       return null;
     }
   }

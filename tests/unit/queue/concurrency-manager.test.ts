@@ -33,6 +33,7 @@ const createMockTask = (id: string, priority: number = 0): RequestTask => ({
   requestBodyLog: "",
   originalRequestBody: "",
   isOpenAIProvider: true,
+  clientSurface: "openai",
   originalModel: "gpt-4",
   clientId: "client-1",
   createdAt: Date.now(),
@@ -73,7 +74,7 @@ describe("ConcurrencyManager", () => {
   });
 
   it("should process task immediately if workers available", async () => {
-    const executor = vi.fn().mockResolvedValue({ statusCode: 200 } as ProxyResult);
+    const executor = vi.fn().mockResolvedValue({ statusCode: 200 });
     manager = new ConcurrencyManager(config, executor);
 
     const task = createMockTask("task1");
@@ -238,7 +239,7 @@ describe("ConcurrencyManager", () => {
       expect(manager.getStats().activeWorkers).toBe(0);
 
       // Should be able to submit and process another task
-      const successExecutor = vi.fn().mockResolvedValue({ statusCode: 200 } as ProxyResult);
+      const successExecutor = vi.fn().mockResolvedValue({ statusCode: 200 });
       manager = new ConcurrencyManager(config, successExecutor);
       const result = await manager.submit(createMockTask("task2"));
       expect(result.statusCode).toBe(200);
@@ -515,7 +516,7 @@ describe("ConcurrencyManager", () => {
     it("CM011: should allow new tasks after shutdown if queue is empty", () => {
       // Note: Current implementation doesn't prevent new submissions after shutdown
       // This test documents current behavior
-      const executor = vi.fn().mockResolvedValue({ statusCode: 200 } as ProxyResult);
+      const executor = vi.fn().mockResolvedValue({ statusCode: 200 });
       manager = new ConcurrencyManager(config, executor);
 
       // Shutdown with no pending tasks
@@ -606,7 +607,7 @@ describe("ConcurrencyManager", () => {
     });
 
     it("CM012: should return false when cancelling non-existent task", () => {
-      const executor = vi.fn().mockResolvedValue({ statusCode: 200 } as ProxyResult);
+      const executor = vi.fn().mockResolvedValue({ statusCode: 200 });
       manager = new ConcurrencyManager(config, executor);
 
       const cancelled = manager.cancelTask("non-existent", "Test");
@@ -664,7 +665,7 @@ describe("ConcurrencyManager", () => {
 
   describe("CM013: Statistics tracking", () => {
     it("CM013: should track totalProcessed count", async () => {
-      const executor = vi.fn().mockResolvedValue({ statusCode: 200 } as ProxyResult);
+      const executor = vi.fn().mockResolvedValue({ statusCode: 200 });
       manager = new ConcurrencyManager(config, executor);
 
       await manager.submit(createMockTask("task1"));
@@ -740,7 +741,7 @@ describe("ConcurrencyManager", () => {
 
   describe("CM014: getProcessingTasks", () => {
     it("CM014: should return empty array when no tasks processing", () => {
-      const executor = vi.fn().mockResolvedValue({ statusCode: 200 } as ProxyResult);
+      const executor = vi.fn().mockResolvedValue({ statusCode: 200 });
       manager = new ConcurrencyManager(config, executor);
 
       const processing = manager.getProcessingTasks();
@@ -1050,7 +1051,7 @@ describe("ConcurrencyManager", () => {
       expect(manager.getStats().activeWorkers).toBe(0);
 
       // Second task should be able to run now
-      const quickExecutor = vi.fn().mockResolvedValue({ statusCode: 200 } as ProxyResult);
+      const quickExecutor = vi.fn().mockResolvedValue({ statusCode: 200 });
       manager = new ConcurrencyManager(config, quickExecutor);
       const result = await manager.submit(createMockTask("task3"));
       expect(result.statusCode).toBe(200);
@@ -1060,7 +1061,7 @@ describe("ConcurrencyManager", () => {
       // When maxConcurrency is 0, it should default to 1 in the constructor
       config.maxWorkers = 0;
 
-      const executor = vi.fn().mockResolvedValue({ statusCode: 200 } as ProxyResult);
+      const executor = vi.fn().mockResolvedValue({ statusCode: 200 });
       manager = new ConcurrencyManager(config, executor);
 
       // The config stores 0, but internally the semaphore uses 1
@@ -1075,7 +1076,7 @@ describe("ConcurrencyManager", () => {
       config.maxWorkers = 2;
       config.maxQueueSize = 100; // Increase queue size
 
-      const executor = vi.fn().mockResolvedValue({ statusCode: 200 } as ProxyResult);
+      const executor = vi.fn().mockResolvedValue({ statusCode: 200 });
       manager = new ConcurrencyManager(config, executor);
 
       // Submit 20 tasks rapidly

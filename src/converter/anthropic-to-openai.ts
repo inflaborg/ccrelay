@@ -83,7 +83,7 @@ export interface OpenAIMessageRequest {
  * OpenAI message format
  */
 export interface OpenAIMessage {
-  role: "system" | "user" | "assistant" | "tool";
+  role: "system" | "user" | "assistant" | "tool" | "developer";
   content: string | OpenAIContent[];
   tool_calls?: OpenAIToolCall[];
   tool_call_id?: string;

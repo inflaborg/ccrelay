@@ -64,6 +64,7 @@ export class RequestHandler {
 
     log.info(
       `${routing.method} ${path} -> [${routing.isRouted ? "ROUTE" : "PASSTHROUGH"}] ${routing.provider.id} (${routing.provider.name})` +
+        ` [client:${routing.clientSurface} upstream:${routing.provider.providerType}]` +
         (routing.isOpenAIProvider ? " [OpenAI]" : "")
     );
 

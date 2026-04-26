@@ -12,6 +12,9 @@ export type ProviderMode = "passthrough" | "inject";
 
 export type ProviderType = "anthropic" | "openai";
 
+/** Inbound client wire format (Anthropic Messages vs OpenAI Chat Completions, etc.) */
+export type ApiSurface = "anthropic" | "openai";
+
 /**
  * Zod schemas for runtime type validation
  */
@@ -464,6 +467,8 @@ export interface RequestTask {
   requestBodyLog?: string;
   originalRequestBody?: string;
   isOpenAIProvider: boolean;
+  /** Inbound client API surface; drives response conversion */
+  clientSurface: ApiSurface;
   originalModel?: string;
   clientId: string;
   attempt?: number;

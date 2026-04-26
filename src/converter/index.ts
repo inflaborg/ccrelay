@@ -15,3 +15,15 @@ export {
   type OpenAIChatCompletionResponse,
   type AnthropicMessageResponse,
 } from "./openai-to-anthropic";
+
+export {
+  convertOpenAIRequestToAnthropic,
+  isOpenAIChatCompletionsRequest,
+} from "./openai-to-anthropic-request";
+
+export {
+  convertAnthropicResponseToOpenAI,
+  isAnthropicMessageResponse,
+} from "./anthropic-to-openai-response";
+
+export { buildModelsListFromProvider, type OpenAIModelsListResponse } from "./modelsFallback";

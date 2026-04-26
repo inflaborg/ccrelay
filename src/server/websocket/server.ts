@@ -10,10 +10,7 @@ import {
   WsMessage,
   WsProviderChangedMessage,
   WsServerStoppingMessage,
-  WsConnectedMessage,
-  WsPongMessage,
   WsSwitchProviderMessage,
-  WsSwitchResultMessage,
 } from "./types";
 
 // Callback type for handling switch provider requests
@@ -66,7 +63,7 @@ export class WsBroadcaster {
         type: "connected",
         payload: { instanceId: this.instanceId },
         timestamp: Date.now(),
-      } as WsConnectedMessage);
+      });
 
       // Built-in pong event from ws client
       ws.on("pong", () => {
@@ -197,7 +194,7 @@ export class WsBroadcaster {
           this.sendToClient(ws, {
             type: "pong",
             timestamp: Date.now(),
-          } as WsPongMessage);
+          });
           break;
 
         case "switch_provider":
@@ -228,7 +225,7 @@ export class WsBroadcaster {
         type: "switch_result",
         payload: { success: false, error: "Missing providerId" },
         timestamp: Date.now(),
-      } as WsSwitchResultMessage);
+      });
       return;
     }
 
@@ -237,7 +234,7 @@ export class WsBroadcaster {
         type: "switch_result",
         payload: { success: false, error: "No switch handler configured" },
         timestamp: Date.now(),
-      } as WsSwitchResultMessage);
+      });
       return;
     }
 
@@ -247,13 +244,13 @@ export class WsBroadcaster {
         type: "switch_result",
         payload: result,
         timestamp: Date.now(),
-      } as WsSwitchResultMessage);
+      });
     } catch (error) {
       this.sendToClient(ws, {
         type: "switch_result",
         payload: { success: false, error: String(error) },
         timestamp: Date.now(),
-      } as WsSwitchResultMessage);
+      });
     }
   }
 

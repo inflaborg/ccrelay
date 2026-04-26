@@ -234,6 +234,10 @@ export class TestServer {
       res.on("close", onClientDisconnect);
 
       // Create task
+      const clientSurface: "anthropic" | "openai" =
+        (path === "/v1/chat/completions" && method === "POST") || (path === "/v1/models" && method === "GET")
+          ? "openai"
+          : "anthropic";
       const task: RequestTask = {
         id: clientId,
         method,
@@ -243,6 +247,7 @@ export class TestServer {
         provider,
         requestPath: path,
         isOpenAIProvider: provider.providerType === "openai",
+        clientSurface,
         clientId,
         createdAt: Date.now(),
         res,
@@ -299,6 +304,10 @@ export class TestServer {
       }
     } else {
       // Direct execution (no queue)
+      const clientSurface: "anthropic" | "openai" =
+        (path === "/v1/chat/completions" && method === "POST") || (path === "/v1/models" && method === "GET")
+          ? "openai"
+          : "anthropic";
       const task: RequestTask = {
         id: clientId,
         method,
@@ -308,6 +317,7 @@ export class TestServer {
         provider,
         requestPath: path,
         isOpenAIProvider: provider.providerType === "openai",
+        clientSurface,
         clientId,
         createdAt: Date.now(),
       };

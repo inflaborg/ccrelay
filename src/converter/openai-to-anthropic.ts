@@ -324,7 +324,7 @@ function parseFunctionArguments(args: string): Record<string, unknown> {
   try {
     const argumentsStr = args || "{}";
     if (typeof argumentsStr === "object") {
-      return argumentsStr as Record<string, unknown>;
+      return argumentsStr;
     }
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- JSON.parse returns any
     const parsed = JSON.parse(argumentsStr);

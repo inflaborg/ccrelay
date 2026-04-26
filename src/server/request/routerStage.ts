@@ -5,7 +5,8 @@
 import type * as http from "http";
 import type * as url from "url";
 import type { Router } from "../router";
-import type { RoutingContext } from "./context";
+import type { ApiSurface, RoutingContext } from "./context";
+import { detectApiSurface } from "./apiSurfaceDetector";
 
 /**
  * RouterStage processes request routing and blocking
@@ -22,6 +23,7 @@ export class RouterStage {
     parsedUrl: url.UrlWithParsedQuery
   ): RoutingContext {
     const method = req.method || "GET";
+    const defaultSurface: ApiSurface = detectApiSurface(method, path) ?? "anthropic";
 
     // 1. Check if path should be blocked
     const blockResult = this.router.shouldBlock(path);
@@ -36,8 +38,10 @@ export class RouterStage {
         headers: {},
         targetUrl: "",
         targetPath: "",
+        targetQuery: "",
         isRouted: false,
         isOpenAIProvider: false,
+        clientSurface: defaultSurface,
       };
     }
 
@@ -56,10 +60,11 @@ export class RouterStage {
     const headers = this.router.prepareHeaders(originalHeaders, provider);
 
     // 4. Build target URL
+    const targetQuery = typeof parsedUrl.search === "string" ? parsedUrl.search : "";
     let targetPath = path;
     let targetUrl = this.router.getTargetUrl(path, provider);
-    if (parsedUrl.search) {
-      targetUrl += parsedUrl.search;
+    if (targetQuery) {
+      targetUrl += targetQuery;
     }
 
     return {
@@ -70,8 +75,10 @@ export class RouterStage {
       headers,
       targetUrl,
       targetPath,
+      targetQuery,
       isRouted,
       isOpenAIProvider,
+      clientSurface: defaultSurface,
     };
   }
 }

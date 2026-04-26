@@ -12,8 +12,6 @@ import * as yaml from "js-yaml";
 import {
   RouterConfig,
   Provider,
-  ProviderMode,
-  ProviderType,
   ProviderConfigSchema,
   FileConfigSchema,
   type FileConfigInput,
@@ -66,10 +64,12 @@ defaultProvider: "official"
 
 # ==================== Routing Configuration ====================
 routing:
-  # Proxy routes: Forward to current provider
+  # Proxy routes: Forward to current provider (Anthropic + OpenAI surfaces)
   proxy:
     - "/v1/messages"
     - "/messages"
+    - "/v1/chat/completions"
+    - "/v1/models"
 
   # Passthrough routes: Always go to official API
   passthrough:
@@ -227,13 +227,13 @@ function parseProvider(id: string, config: ProviderConfigInput): Provider {
   const authHeader = config.authHeader || config.auth_header;
   const modelMap = config.modelMap || config.model_map;
   const vlModelMap = config.vlModelMap || config.vl_model_map;
-  const providerType = (config.providerType || config.provider_type || "anthropic") as ProviderType;
+  const providerType = (config.providerType || config.provider_type || "anthropic");
 
   return {
     id,
     name: config.name || id,
     baseUrl,
-    mode: config.mode as ProviderMode,
+    mode: config.mode,
     providerType,
     apiKey,
     authHeader: authHeader || "authorization",
@@ -451,7 +451,12 @@ export class ConfigManager {
 
     // Build routing config
     const routing = {
-      proxy: merged.routing?.proxy || ["/v1/messages", "/messages"],
+      proxy: merged.routing?.proxy || [
+        "/v1/messages",
+        "/messages",
+        "/v1/chat/completions",
+        "/v1/models",
+      ],
       passthrough: merged.routing?.passthrough || ["/v1/users/*", "/v1/organizations/*"],
       block: (merged.routing?.block || []).map(
         (b): BlockPattern => ({

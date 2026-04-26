@@ -3,7 +3,7 @@
  */
 
 import type * as http from "http";
-import type { RequestTask, ProxyResult, RouteType } from "../../types";
+import type { RequestTask, ProxyResult } from "../../types";
 import type { RoutingContext, BodyProcessResult } from "./context";
 import type { ResponseWriter } from "../response";
 import type { LogDatabase, RequestStatus } from "../../database";
@@ -67,6 +67,7 @@ export class TaskExecutor {
       requestBodyLog: bodyResult.requestBodyLog,
       originalRequestBody: bodyResult.originalRequestBody,
       isOpenAIProvider: routing.isOpenAIProvider,
+      clientSurface: routing.clientSurface,
       originalModel: bodyResult.originalModel,
       clientId,
       createdAt: Date.now(),
@@ -101,7 +102,7 @@ export class TaskExecutor {
       success: false,
       clientId,
       status: "pending",
-      routeType: (routing.isRouted ? "router" : "passthrough") as RouteType,
+      routeType: (routing.isRouted ? "router" : "passthrough"),
     });
   }
 
