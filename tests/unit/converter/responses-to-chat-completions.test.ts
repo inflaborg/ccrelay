@@ -34,7 +34,7 @@ describe("convertResponsesRequestToChatCompletions", () => {
       { model: "gpt-4o", input: "Hello" },
       "/v1/responses"
     );
-    expect(newPath).toBe("/v1/chat/completions");
+    expect(newPath).toBe("/chat/completions");
     expect(request.model).toBe("gpt-4o");
     expect(request.messages).toEqual([{ role: "user", content: "Hello" }]);
   });
@@ -46,5 +46,14 @@ describe("convertResponsesRequestToChatCompletions", () => {
     );
     expect(request.messages[0]).toEqual({ role: "system", content: "You are helpful." });
     expect(request.messages[1]).toEqual({ role: "user", content: "q" });
+  });
+
+  it("uses openaiChatCompletionsPath from provider when set", () => {
+    const { newPath } = convertResponsesRequestToChatCompletions(
+      { model: "gpt-4o", input: "x" },
+      "/v1/responses",
+      { openaiChatCompletionsPath: "/v1/chat/completions" }
+    );
+    expect(newPath).toBe("/v1/chat/completions");
   });
 });

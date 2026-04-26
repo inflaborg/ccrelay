@@ -131,7 +131,11 @@ export class BodyProcessor {
         );
       }
     } else if (clientSurface === "anthropic" && upstreamWire === "openai") {
-      const result = this.convertAnthropicToOpenAIRequest(body, routing.targetPath);
+      const result = this.convertAnthropicToOpenAIRequest(
+        body,
+        routing.targetPath,
+        routing.provider
+      );
       if (result) {
         body = result.body;
         originalModel = result.originalModel;
@@ -180,7 +184,8 @@ export class BodyProcessor {
 
   private convertAnthropicToOpenAIRequest(
     body: Buffer,
-    path: string
+    path: string,
+    provider: RoutingContext["provider"]
   ): { body: Buffer; newPath: string; originalModel: string | undefined } | null {
     try {
       const bodyStr = body.toString("utf-8");
@@ -190,7 +195,8 @@ export class BodyProcessor {
       }
       const conversionResult = convertRequestToOpenAI(
         anthropicRequest as unknown as Parameters<typeof convertRequestToOpenAI>[0],
-        path
+        path,
+        provider
       );
       let originalModel: string | undefined;
       try {
@@ -220,7 +226,11 @@ export class BodyProcessor {
       if (!isOpenAIResponsesRequest(raw)) {
         return null;
       }
-      const c = convertResponsesRequestToChatCompletions(raw, routing.targetPath);
+      const c = convertResponsesRequestToChatCompletions(
+        raw,
+        routing.targetPath,
+        routing.provider
+      );
       const originalModel = typeof raw.model === "string" ? raw.model : undefined;
       return {
         body: Buffer.from(JSON.stringify(c.request), "utf-8"),
@@ -243,8 +253,16 @@ export class BodyProcessor {
       if (!isOpenAIResponsesRequest(raw)) {
         return null;
       }
-      const chat = convertResponsesRequestToChatCompletions(raw, routing.path);
-      const c = convertOpenAIRequestToAnthropic(chat.request, chat.newPath);
+      const chat = convertResponsesRequestToChatCompletions(
+        raw,
+        routing.path,
+        routing.provider
+      );
+      const c = convertOpenAIRequestToAnthropic(
+        chat.request,
+        chat.newPath,
+        routing.provider
+      );
       const originalModel = typeof raw.model === "string" ? raw.model : undefined;
       return {
         body: Buffer.from(JSON.stringify(c.request), "utf-8"),
@@ -270,7 +288,8 @@ export class BodyProcessor {
       const originalModel = typeof oai.model === "string" ? oai.model : undefined;
       const c = convertOpenAIRequestToAnthropic(
         oai as unknown as Parameters<typeof convertOpenAIRequestToAnthropic>[0],
-        routing.targetPath
+        routing.targetPath,
+        routing.provider
       );
       return {
         body: Buffer.from(JSON.stringify(c.request), "utf-8"),

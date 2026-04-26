@@ -15,6 +15,7 @@ export interface Provider {
   active: boolean;
   enabled: boolean;
   apiKey?: string;
+  openaiChatCompletionsPath?: string;
   modelMap?: ModelMapEntry[];
 }
 
@@ -58,6 +59,7 @@ export interface AddProviderRequest {
   modelMap?: ModelMapEntry[];
   vlModelMap?: ModelMapEntry[];
   headers?: Record<string, string>;
+  openaiChatCompletionsPath?: string;
 }
 
 export interface AddProviderResponse {

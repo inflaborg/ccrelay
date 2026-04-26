@@ -33,6 +33,15 @@ export const ModelMapEntrySchema = z.object({
 
 export type ModelMapEntry = z.infer<typeof ModelMapEntrySchema>;
 
+/** Per-provider path appended to baseUrl for OpenAI Chat Completions (A→O, Responses→Chat, etc.) */
+const OpenaiChatCompletionsPathSchema = z
+  .string()
+  .min(1)
+  .refine(
+    s => s === s.trim() && s.startsWith("/") && !s.includes("//"),
+    "openaiChatCompletionsPath must start with /, have no leading/trailing spaces, and must not contain //"
+  );
+
 // Provider configuration schema (from YAML/VSCode settings)
 export const ProviderConfigSchema = z.object({
   name: z.string().min(1),
@@ -45,6 +54,8 @@ export const ProviderConfigSchema = z.object({
   api_key: z.string().optional(),
   authHeader: z.string().optional(),
   auth_header: z.string().optional(),
+  openaiChatCompletionsPath: OpenaiChatCompletionsPathSchema.optional(),
+  openai_chat_completions_path: OpenaiChatCompletionsPathSchema.optional(),
   modelMap: z.array(ModelMapEntrySchema).optional(),
   model_map: z.array(ModelMapEntrySchema).optional(),
   vlModelMap: z.array(ModelMapEntrySchema).optional(),
@@ -198,6 +209,8 @@ export interface Provider {
   providerType: ProviderType;
   apiKey?: string;
   authHeader?: string;
+  /** When set, used as the path for OpenAI Chat Completions after A→O / Responses→Chat (default: /chat/completions). */
+  openaiChatCompletionsPath?: string;
   modelMap?: ModelMapEntry[];
   vlModelMap?: ModelMapEntry[];
   headers?: Record<string, string>;
@@ -246,6 +259,7 @@ export interface ProviderInfo {
   enabled: boolean;
   baseUrl?: string;
   apiKey?: string;
+  openaiChatCompletionsPath?: string;
   modelMap?: ModelMapEntry[];
 }
 

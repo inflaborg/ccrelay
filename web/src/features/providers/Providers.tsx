@@ -22,6 +22,7 @@ const DEFAULT_FORM: AddProviderRequest = {
   modelMap: undefined,
   vlModelMap: undefined,
   headers: undefined,
+  openaiChatCompletionsPath: undefined,
 };
 
 export default function Providers() {
@@ -141,6 +142,7 @@ export default function Providers() {
       modelMap,
       vlModelMap: undefined,
       headers: undefined,
+      openaiChatCompletionsPath: provider.openaiChatCompletionsPath,
     });
     setModelMapText(modelMap ? yaml.dump(modelMap, { indent: 2, lineWidth: -1 }) : "");
     setModelMapError(null);
@@ -159,8 +161,11 @@ export default function Providers() {
     if (!formData.id || !formData.name || !formData.baseUrl) {
       return;
     }
+    const trimmedPath = formData.openaiChatCompletionsPath?.trim();
     // When editing, exclude apiKey from the request (it cannot be modified)
-    const dataToSubmit = editingProvider ? { ...formData, apiKey: undefined } : formData;
+    const dataToSubmit = editingProvider
+      ? { ...formData, apiKey: undefined, openaiChatCompletionsPath: trimmedPath || undefined }
+      : { ...formData, openaiChatCompletionsPath: trimmedPath || undefined };
     addMutation.mutate(dataToSubmit);
   };
 
@@ -174,7 +179,7 @@ export default function Providers() {
 
   const updateForm = (
     key: keyof AddProviderRequest,
-    value: string | boolean | Record<string, string> | ModelMapEntry[]
+    value: string | boolean | Record<string, string> | ModelMapEntry[] | undefined
   ) => {
     setFormData(prev => ({ ...prev, [key]: value }));
   };
@@ -295,6 +300,14 @@ export default function Providers() {
                       </span>
                     </div>
                   )}
+                  {provider.openaiChatCompletionsPath && (
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Chat path</span>
+                      <span className="font-mono text-[10px] truncate max-w-[140px]">
+                        {provider.openaiChatCompletionsPath}
+                      </span>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </ContextMenuWrapper>
@@ -405,6 +418,22 @@ export default function Providers() {
                   value={formData.baseUrl}
                   onChange={e => updateForm("baseUrl", e.target.value)}
                 />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-medium">OpenAI Chat Completions path</label>
+                <input
+                  type="text"
+                  className="w-full h-8 px-2 text-xs border rounded-md bg-background font-mono"
+                  placeholder="e.g. /chat/completions (default) or /v1/chat/completions"
+                  value={formData.openaiChatCompletionsPath ?? ""}
+                  onChange={e => updateForm("openaiChatCompletionsPath", e.target.value || undefined)}
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Appended to base URL for A→O and Responses→Chat. Use when the upstream has no
+                  &quot;v1&quot; segment in the path (e.g. some Z.AI base URLs). Leave empty for the
+                  default.
+                </p>
               </div>
 
               {/* Type and Mode row */}

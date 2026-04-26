@@ -225,6 +225,10 @@ vlModelMap:
 - Client **OpenAI Responses** + any provider: request is converted to Chat Completions, then to Anthropic if needed; response is converted back to the Responses JSON shape. Hosted-only tools (e.g. web search, MCP) are stripped in v1.
 - Same **family** on both sides (e.g. chat + `openai` provider): no format conversion (only model name mapping, etc.).
 
+**OpenAI Chat Completions path** (`openaiChatCompletionsPath`, optional)
+
+When converting to OpenAI Chat Completions (Anthropic → OpenAI, or Responses → Chat as a hub), CCRelay appends a path to `baseUrl`. The default is `/chat/completions` (no extra `/v1` segment in the path). If your `baseUrl` already ends with a version segment (e.g. `https://api.z.ai/api/coding/paas/v4`) and the upstream expects `.../v4/chat/completions` rather than `.../v4/v1/chat/completions`, leave the default or set `openaiChatCompletionsPath: "/chat/completions"` explicitly. If your gateway expects the full OpenAI-style segment (e.g. `baseUrl` is only the host root), set `openaiChatCompletionsPath: "/v1/chat/completions"`.
+
 **Limitations (first iteration)**
 
 - Cross-protocol **streaming** is not supported: use `stream: false` when the client and provider types differ, or CCRelay will return an error if the upstream still returns an SSE response.
@@ -294,6 +298,7 @@ CCRelay uses a YAML configuration file (`~/.ccrelay/config.yaml` by default). Th
 Each provider supports:
 - `name` - Display name
 - `baseUrl` - API base URL
+- `openaiChatCompletionsPath` (optional) - Path for OpenAI Chat Completions when converting to that API (default: `/chat/completions`; use `/v1/chat/completions` if your base URL does not include a version prefix)
 - `mode` - `passthrough` or `inject`
 - `providerType` - `anthropic` (default) or `openai`
 - `apiKey` - API key (inject mode, supports `${ENV_VAR}` environment variables)

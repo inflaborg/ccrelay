@@ -229,6 +229,8 @@ function parseProvider(id: string, config: ProviderConfigInput): Provider {
   const modelMap = config.modelMap || config.model_map;
   const vlModelMap = config.vlModelMap || config.vl_model_map;
   const providerType = (config.providerType || config.provider_type || "anthropic");
+  const openaiChatCompletionsPath =
+    config.openaiChatCompletionsPath || config.openai_chat_completions_path;
 
   return {
     id,
@@ -238,6 +240,7 @@ function parseProvider(id: string, config: ProviderConfigInput): Provider {
     providerType,
     apiKey,
     authHeader: authHeader || "authorization",
+    openaiChatCompletionsPath: openaiChatCompletionsPath || undefined,
     modelMap: modelMap && modelMap.length > 0 ? modelMap : undefined,
     vlModelMap: vlModelMap && vlModelMap.length > 0 ? vlModelMap : undefined,
     headers: config.headers ?? {},
@@ -659,6 +662,7 @@ export class ConfigManager {
         vl_model_map: config.vl_model_map,
         headers: config.headers,
         enabled: config.enabled,
+        openaiChatCompletionsPath: config.openaiChatCompletionsPath,
       };
 
       // Write back to file

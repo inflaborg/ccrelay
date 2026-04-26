@@ -9,11 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Per-provider optional **`openaiChatCompletionsPath`**: path appended to `baseUrl` for OpenAI Chat Completions when converting (Anthropic→OpenAI, Responses→Chat hub); default `/chat/completions` so providers whose `baseUrl` already ends in a version segment (e.g. some Z.AI URLs) are not given an extra `/v1` in the path. Web dashboard and `POST /ccrelay/api/providers` accept the field.
 - **LLM router**: detect inbound API surface from path/method (`ApiSurface`: Anthropic Messages, OpenAI Chat Completions, OpenAI Responses) and convert only when it does not match the provider’s `providerType`; same-family traffic passes through aside from model mapping and auth.
 - OpenAI **`POST /v1/responses`** support: requests are converted via a Chat Completions hub to OpenAI-compatible or Anthropic upstreams; responses are converted back to the Responses JSON shape. Hosted-only tools (e.g. web search, MCP) are stripped in v1 with a warning.
 - Default `routing.proxy` entries for `/v1/chat/completions`, `/v1/models`, and `/v1/responses`; `GET /v1/models` fallback builds a minimal model list from provider `modelMap` when the upstream errors.
 - Converters: Responses ↔ Chat Completions (`responses-to-chat-completions`, `chat-completions-to-responses`), plus existing Anthropic ↔ Chat bidirectional conversion for cross-protocol paths.
 - Unit tests for surface detection and new converters.
+
+### Fixed
+
+- **Proxy / Responses API**: After a successful cross-protocol JSON response (e.g. Chat Completions → Responses for Codex), the listener on the client `ServerResponse` was not removed. Node emits `close` on that object when the response finishes normally, which was mis-handled as a client disconnect and could abort the upstream request and log `499` / `Client disconnected during streaming` even when the client received `200`. JSON conversion paths now call `res.off("close", ...)` when the upstream body is fully read, matching buffered passthrough behavior.
 
 ### Changed
 

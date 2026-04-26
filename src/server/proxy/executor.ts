@@ -252,6 +252,7 @@ export class ProxyExecutor {
         proxyRes,
         task,
         ctx,
+        onClientDisconnect,
         status,
         responseHeaders,
         originalModel,
@@ -270,6 +271,7 @@ export class ProxyExecutor {
         proxyRes,
         task,
         ctx,
+        onClientDisconnect,
         status,
         responseHeaders,
         originalModel,
@@ -288,9 +290,9 @@ export class ProxyExecutor {
         proxyRes,
         task,
         ctx,
+        onClientDisconnect,
         status,
         responseHeaders,
-        duration,
         originalModel,
         resolve
       );
@@ -307,6 +309,7 @@ export class ProxyExecutor {
         proxyRes,
         task,
         ctx,
+        onClientDisconnect,
         status,
         responseHeaders,
         originalModel,
@@ -396,13 +399,13 @@ export class ProxyExecutor {
     proxyRes: http.IncomingMessage,
     task: RequestTask,
     ctx: ExecutionContext,
+    onClientDisconnect: () => void,
     status: number,
     responseHeaders: Record<string, string | string[]>,
-    _duration: number,
     originalModel: string | undefined,
     resolve: (value: ProxyResult) => void
   ): void {
-    const { clientId, provider } = task;
+    const { clientId, provider, res: clientRes } = task;
 
     let responseBody = "";
     proxyRes.on("data", (chunk: Buffer) => {
@@ -410,6 +413,9 @@ export class ProxyExecutor {
     });
 
     proxyRes.on("end", () => {
+      if (clientRes) {
+        clientRes.off("close", onClientDisconnect);
+      }
       ctx.originalResponseBody = responseBody;
       const duration = Date.now() - ctx.startTime;
 
@@ -479,17 +485,21 @@ export class ProxyExecutor {
     proxyRes: http.IncomingMessage,
     task: RequestTask,
     ctx: ExecutionContext,
+    onClientDisconnect: () => void,
     status: number,
     responseHeaders: Record<string, string | string[]>,
     originalModel: string | undefined,
     resolve: (value: ProxyResult) => void
   ): void {
-    const { clientId, provider } = task;
+    const { clientId, provider, res: clientRes } = task;
     let responseBody = "";
     proxyRes.on("data", (chunk: Buffer) => {
       responseBody += chunk.toString();
     });
     proxyRes.on("end", () => {
+      if (clientRes) {
+        clientRes.off("close", onClientDisconnect);
+      }
       ctx.originalResponseBody = responseBody;
       const duration = Date.now() - ctx.startTime;
       try {
@@ -558,17 +568,21 @@ export class ProxyExecutor {
     proxyRes: http.IncomingMessage,
     task: RequestTask,
     ctx: ExecutionContext,
+    onClientDisconnect: () => void,
     status: number,
     responseHeaders: Record<string, string | string[]>,
     originalModel: string | undefined,
     resolve: (value: ProxyResult) => void
   ): void {
-    const { clientId, provider } = task;
+    const { clientId, provider, res: clientRes } = task;
     let responseBody = "";
     proxyRes.on("data", (chunk: Buffer) => {
       responseBody += chunk.toString();
     });
     proxyRes.on("end", () => {
+      if (clientRes) {
+        clientRes.off("close", onClientDisconnect);
+      }
       ctx.originalResponseBody = responseBody;
       const duration = Date.now() - ctx.startTime;
       try {
@@ -626,17 +640,21 @@ export class ProxyExecutor {
     proxyRes: http.IncomingMessage,
     task: RequestTask,
     ctx: ExecutionContext,
+    onClientDisconnect: () => void,
     status: number,
     responseHeaders: Record<string, string | string[]>,
     originalModel: string | undefined,
     resolve: (value: ProxyResult) => void
   ): void {
-    const { clientId, provider } = task;
+    const { clientId, provider, res: clientRes } = task;
     let responseBody = "";
     proxyRes.on("data", (chunk: Buffer) => {
       responseBody += chunk.toString();
     });
     proxyRes.on("end", () => {
+      if (clientRes) {
+        clientRes.off("close", onClientDisconnect);
+      }
       ctx.originalResponseBody = responseBody;
       const duration = Date.now() - ctx.startTime;
       try {
