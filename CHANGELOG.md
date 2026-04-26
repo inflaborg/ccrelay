@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-04-26 (pre-release)
+
+Pre-release line for 0.2.0. To build a beta VSIX with a timestamped pre-release version, use `npm run package:beta` (extension version `0.2.0-beta.<build>`). For the stable 0.2.0 extension package, use `npm run package:release` when ready.
+
 ## [0.1.6] - 2026-04-26
 
 ### Added
