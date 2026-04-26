@@ -71,6 +71,19 @@ export interface AddProviderResponse {
   message?: string;
 }
 
+/** POST /providers/duplicate — client supplies `newId` (e.g. `sourceId + "_copy"`) */
+export interface DuplicateProviderRequest {
+  sourceId: string;
+  newId: string;
+  name: string;
+}
+
+export interface DuplicateProviderResponse {
+  status: "ok" | "error";
+  provider?: Pick<Provider, "id" | "name" | "mode" | "providerType" | "baseUrl" | "active">;
+  message?: string;
+}
+
 export interface DeleteProviderResponse {
   status: "ok" | "error";
   message?: string;

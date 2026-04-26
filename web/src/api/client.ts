@@ -9,6 +9,8 @@ import type {
   VersionResponse,
   AddProviderRequest,
   AddProviderResponse,
+  DuplicateProviderRequest,
+  DuplicateProviderResponse,
   DeleteProviderResponse,
   ReloadConfigResponse,
 } from "../types/api";
@@ -62,8 +64,14 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  duplicateProvider: (data: DuplicateProviderRequest): Promise<DuplicateProviderResponse> =>
+    fetchAPI<DuplicateProviderResponse>("/providers/duplicate", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
   deleteProvider: (id: string): Promise<DeleteProviderResponse> =>
-    fetchAPI<DeleteProviderResponse>(`/providers/${id}`, {
+    fetchAPI<DeleteProviderResponse>(`/providers/${encodeURIComponent(id)}`, {
       method: "DELETE",
     }),
 

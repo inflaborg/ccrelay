@@ -12,6 +12,7 @@ import { handleStatus, setServer as setStatusServer } from "./status";
 import {
   handleListProviders,
   handleAddProvider,
+  handleDuplicateProvider,
   handleDeleteProvider,
   handleReloadConfig,
   setServer as setProvidersServer,
@@ -117,6 +118,17 @@ export function handleApiRequest(req: http.IncomingMessage, res: http.ServerResp
     return true;
   }
 
+  // Check for POST /ccrelay/api/providers/duplicate
+  if (reqPath === "/ccrelay/api/providers/duplicate" && method === "POST") {
+    handleDuplicateProvider(req, res, {}).catch(err => {
+      log.error("Error handling POST /providers/duplicate", err);
+      if (!res.headersSent) {
+        sendJson(res, 500, { error: "Internal server error" });
+      }
+    });
+    return true;
+  }
+
   // Check for POST /ccrelay/api/providers (add provider)
   if (reqPath === "/ccrelay/api/providers" && method === "POST") {
     handleAddProvider(req, res, {}).catch(err => {
@@ -126,8 +138,8 @@ export function handleApiRequest(req: http.IncomingMessage, res: http.ServerResp
     return true;
   }
 
-  // Check for DELETE /ccrelay/api/providers/:id
-  const providersIdMatch = reqPath.match(/^\/ccrelay\/api\/providers\/([a-zA-Z0-9_-]+)$/);
+  // Check for DELETE /ccrelay/api/providers/:id (any single path segment; validate in handler)
+  const providersIdMatch = reqPath.match(/^\/ccrelay\/api\/providers\/([^/]+)$/);
   if (providersIdMatch && method === "DELETE") {
     handleDeleteProvider(req, res, { id: providersIdMatch[1] });
     return true;
@@ -202,6 +214,7 @@ export {
   handleStatus,
   handleListProviders,
   handleAddProvider,
+  handleDuplicateProvider,
   handleDeleteProvider,
   handleReloadConfig,
   handleSwitchProvider,

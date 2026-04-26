@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useRef, useCallback } from "react";
-import { Check, Loader2, Plus, RotateCw, X } from "lucide-react";
+import { Check, Copy, Loader2, Plus, RotateCw, X } from "lucide-react";
 import * as yaml from "js-yaml";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,6 +31,9 @@ export default function Providers() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [formData, setFormData] = useState<AddProviderRequest>(DEFAULT_FORM);
   const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [duplicateSource, setDuplicateSource] = useState<Provider | null>(null);
+  const [dupName, setDupName] = useState("");
   // Raw text states for YAML fields (allow editing invalid YAML temporarily)
   const [modelMapText, setModelMapText] = useState("");
   const [modelMapError, setModelMapError] = useState<string | null>(null);
@@ -109,6 +112,16 @@ export default function Providers() {
     },
   });
 
+  const duplicateMutation = useMutation({
+    mutationFn: (data: { sourceId: string; newId: string; name: string }) =>
+      api.duplicateProvider(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["providers"] });
+      queryClient.invalidateQueries({ queryKey: ["status"] });
+      closeDuplicateModal();
+    },
+  });
+
   const reloadMutation = useMutation({
     mutationFn: () => api.reloadConfig(),
     onSuccess: () => {
@@ -159,14 +172,47 @@ export default function Providers() {
     setModelMapError(null);
   };
 
+  const openDuplicateModal = (provider: Provider) => {
+    setDuplicateSource(provider);
+    setDupName(`${provider.name} (copy)`);
+    setShowDuplicateModal(true);
+  };
+
+  const closeDuplicateModal = () => {
+    setShowDuplicateModal(false);
+    setDuplicateSource(null);
+    setDupName("");
+  };
+
+  const handleDuplicateSubmit = () => {
+    if (!duplicateSource) {
+      return;
+    }
+    const name = dupName.trim();
+    const newId = `${duplicateSource.id}_copy`;
+    if (!name || !/^[a-zA-Z0-9_-]+$/.test(newId)) {
+      return;
+    }
+    duplicateMutation.mutate({
+      sourceId: duplicateSource.id,
+      newId,
+      name,
+    });
+  };
+
   const handleAddSubmit = () => {
     if (!formData.id || !formData.name || !formData.baseUrl) {
       return;
     }
     const trimmedPath = formData.openaiChatCompletionsPath?.trim();
-    // When editing, exclude apiKey from the request (it cannot be modified)
+    // When editing, use the provider we opened (ids stay in sync) and never send apiKey.
     const dataToSubmit = editingProvider
-      ? { ...formData, apiKey: undefined, openaiChatCompletionsPath: trimmedPath || undefined }
+      ? {
+          ...formData,
+          id: editingProvider.id,
+          apiKey: undefined,
+          openaiChatCompletionsPath: trimmedPath || undefined,
+        }
       : { ...formData, openaiChatCompletionsPath: trimmedPath || undefined };
     addMutation.mutate(dataToSubmit);
   };
@@ -252,6 +298,10 @@ export default function Providers() {
                   onClick: () => openEditModal(provider),
                 },
                 {
+                  label: "Duplicate",
+                  onClick: () => openDuplicateModal(provider),
+                },
+                {
                   label: "Delete",
                   onClick: () => handleDelete(provider.id),
                   destructive: true,
@@ -333,6 +383,11 @@ export default function Providers() {
           {(deleteMutation.error as Error).message}
         </p>
       )}
+      {duplicateMutation.error && (
+        <p className="text-xs text-destructive text-center">
+          {(duplicateMutation.error as Error).message}
+        </p>
+      )}
 
       {providers.length === 0 && !isLoading && (
         <Card className="p-0">
@@ -345,7 +400,10 @@ export default function Providers() {
       {/* Add/Edit Provider Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-[500px] max-h-[90vh] flex flex-col">
+          <Card
+            className="w-full max-w-[500px] max-h-[90vh] flex flex-col"
+            key={editingProvider ? `edit-${editingProvider.id}` : "add-provider"}
+          >
             {/* Modal Header */}
             <CardHeader className="border-b p-3 flex-shrink-0">
               <div className="flex items-center justify-between">
@@ -370,9 +428,11 @@ export default function Providers() {
                     type="text"
                     className="w-full h-8 px-2 text-xs border rounded-md bg-background disabled:opacity-50"
                     placeholder="e.g., my_provider"
-                    value={formData.id}
-                    onChange={e => updateForm("id", e.target.value.replace(/[^a-zA-Z0-9_-]/g, ""))}
-                    disabled={!!editingProvider}
+                    value={editingProvider != null ? editingProvider.id : formData.id}
+                    onChange={e =>
+                      updateForm("id", e.target.value.replace(/[^A-Za-z0-9_-]/g, ""))
+                    }
+                    disabled={editingProvider != null}
                   />
                   <p className="text-[10px] text-muted-foreground">
                     Unique identifier (alphanumeric, underscore, hyphen)
@@ -570,6 +630,83 @@ export default function Providers() {
                   "Save"
                 ) : (
                   "Add Provider"
+                )}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Duplicate provider — name + new id (server copies full config including API key) */}
+      {showDuplicateModal && duplicateSource && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <Card className="w-full max-w-[400px] flex flex-col">
+            <CardHeader className="border-b p-3 flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Copy className="h-4 w-4 text-muted-foreground" />
+                  <CardTitle className="text-sm">Duplicate provider</CardTitle>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0"
+                  onClick={closeDuplicateModal}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-[10px] text-muted-foreground font-normal pt-1">
+                From <span className="font-mono">{duplicateSource.id}</span> — all settings and the
+                stored API key are copied.
+              </p>
+            </CardHeader>
+            <CardContent className="p-4 space-y-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium">
+                  Name <span className="text-destructive">*</span>
+                </label>
+                <input
+                  type="text"
+                  className="w-full h-8 px-2 text-xs border rounded-md bg-background"
+                  value={dupName}
+                  onChange={e => setDupName(e.target.value)}
+                  placeholder="Display name for the new provider"
+                  autoFocus
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium">New provider ID</label>
+                <div className="w-full h-8 px-2 text-xs border rounded-md bg-muted font-mono flex items-center">
+                  {duplicateSource
+                    ? `${duplicateSource.id}_copy`
+                    : "—"}
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  The source id is suffixed with <span className="font-mono">_copy</span> (no other spelling). If
+                  that key already exists, the request will fail; remove or rename the other entry first.
+                </p>
+              </div>
+            </CardContent>
+            <div className="border-t p-3 flex-shrink-0 flex justify-end gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                onClick={closeDuplicateModal}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className="h-7 text-xs"
+                onClick={handleDuplicateSubmit}
+                disabled={duplicateMutation.isPending || !dupName.trim() || !duplicateSource}
+              >
+                {duplicateMutation.isPending ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  "Duplicate"
                 )}
               </Button>
             </div>
