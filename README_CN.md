@@ -105,14 +105,7 @@ npm run compile
 
 ## 快速开始
 
-### 1. 配置 Claude Code 使用代理
-
-```bash
-export ANTHROPIC_BASE_URL=http://127.0.0.1:7575
-claude
-```
-
-### 2. 配置提供商
+### 1. 配置提供商
 
 CCRelay 使用 YAML 配置文件（默认为 `~/.ccrelay/config.yaml`）。首次启动时会自动创建默认配置文件。
 
@@ -137,6 +130,10 @@ providers:
 defaultProvider: "glm"
 ```
 
+### 2. 将 Claude Code 指向 CCRelay
+
+在 **`~/.claude/settings.json`** 中通过 `env` 配置环境变量（如 `ANTHROPIC_BASE_URL`）。推荐始终使用该文件，而非依赖 VS Code 工作区设置或在扩展里做临时操作。完整 `env` 示例见下节 [Claude Code](#claude-code)；也可用 Web 面板 **Client configuration** 写入相同键值。
+
 ### 3. 切换提供商
 
 - 点击 VSCode 底部状态栏的 CCRelay 图标
@@ -150,22 +147,13 @@ defaultProvider: "glm"
 
 | 客户端 | 协议 | 对接方式 |
 |--------|------|----------|
-| **Claude Code** | Anthropic | 设置 `ANTHROPIC_BASE_URL` 为 CCRelay 根地址（见[快速开始](#快速开始)） |
+| **Claude Code** | Anthropic | 在 `~/.claude/settings.json` 的 `env` 中设置 `ANTHROPIC_BASE_URL` 及可选的 `ANTHROPIC_DEFAULT_*_MODEL` — 见 [Claude Code](#claude-code) |
 | **Claude Cowork** | Anthropic | 在应用中将 **API / Anthropic Base URL** 设为同一 CCRelay 源站（如 `http://127.0.0.1:7575`），不要指向上游厂商地址 |
 | **Codex**（OpenAI Codex CLI） | OpenAI | 在 `~/.codex/config.toml` 中将 CCRelay 注册为自定义 **model provider**（见下例） |
 
 ### Claude Code
 
-**临时（终端）：**
-
-```bash
-export ANTHROPIC_BASE_URL=http://127.0.0.1:7575
-claude
-```
-
-本地可将 `127.0.0.1` 与 `localhost` 互换使用。
-
-**持久化配置（`~/.claude/settings.json`）：**
+**持久化配置（`~/.claude/settings.json`）— 推荐**
 
 在 `env` 中配置，使每次启动 Claude Code 都走 CCRelay。当 CCRelay 当前 provider 为 **inject** 模式时，由代理注入真实 API Key，`ANTHROPIC_AUTH_TOKEN` 可使用下方占位；若你的环境需要真实 token，再自行填写。若只依赖 CCRelay 的 **`modelMap`** 做模型名映射，**不必**配置 `ANTHROPIC_DEFAULT_*_MODEL`；需要时可打开 Web 面板 **Client configuration → Configure default models** 单独写入这三项。
 
@@ -197,6 +185,17 @@ claude
   }
 }
 ```
+
+本地绑定时 `http://127.0.0.1:7575` 与 `http://localhost:7575` 可互换。
+
+**可选（仅当前终端、非持久化）** — 不想先改 `~/.claude/settings.json` 时，可快速试跑：
+
+```bash
+export ANTHROPIC_BASE_URL=http://127.0.0.1:7575
+claude
+```
+
+日常使用仍建议用上文 `~/.claude/settings.json` 的 `env` 配置。
 
 ### Claude Cowork
 

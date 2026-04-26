@@ -105,14 +105,7 @@ npm run compile
 
 ## Quick Start
 
-### 1. Configure Claude Code to use the proxy
-
-```bash
-export ANTHROPIC_BASE_URL=http://127.0.0.1:7575
-claude
-```
-
-### 2. Configure providers
+### 1. Configure providers
 
 CCRelay uses a YAML configuration file (`~/.ccrelay/config.yaml` by default). The file is auto-created with defaults on first launch.
 
@@ -137,6 +130,10 @@ providers:
 defaultProvider: "glm"
 ```
 
+### 2. Point Claude Code at CCRelay
+
+Set environment variables for Claude Code in **`~/.claude/settings.json`** (an `env` object). The recommended path is a persistent file config—not VS Code workspace settings or ad‑hoc steps in the CCRelay extension. See [Claude Code](#claude-code) for a full `env` example, or use the Web dashboard **Client configuration** to write the same keys.
+
 ### 3. Switch providers
 
 - Click the CCRelay icon in the VSCode status bar at the bottom
@@ -150,22 +147,13 @@ defaultProvider: "glm"
 
 | Client | Wire | How to use CCRelay |
 |--------|------|--------------------|
-| **Claude Code** | Anthropic | Set `ANTHROPIC_BASE_URL` to your CCRelay base (no path suffix; see [Quick Start](#quick-start)) |
+| **Claude Code** | Anthropic | Set `ANTHROPIC_BASE_URL` (and optional `ANTHROPIC_DEFAULT_*_MODEL` keys) in `~/.claude/settings.json` → `env` — see [Claude Code](#claude-code) |
 | **Claude Cowork** | Anthropic | Configure the app’s **API / Anthropic base URL** to the same CCRelay origin (e.g. `http://127.0.0.1:7575`) so traffic goes through the proxy |
 | **Codex** (OpenAI Codex CLI) | OpenAI | Register CCRelay as a **model provider** in `~/.codex/config.toml` (see example below) |
 
 ### Claude Code
 
-**One-off (shell):**
-
-```bash
-export ANTHROPIC_BASE_URL=http://127.0.0.1:7575
-claude
-```
-
-Use `http://127.0.0.1:7575` or `http://localhost:7575` interchangeably for local binding.
-
-**Persistent settings (`~/.claude/settings.json`):**
+**Persistent settings (`~/.claude/settings.json`) — recommended**
 
 Add an `env` object so every Claude Code session points at CCRelay. `ANTHROPIC_AUTH_TOKEN` can be a placeholder when CCRelay’s current provider is **inject** mode (CCRelay adds the real upstream key); adjust if your setup requires a real token. **You do not need** `ANTHROPIC_DEFAULT_*_MODEL` here if you are happy with CCRelay’s `modelMap` only—the Web dashboard can append those keys optionally (see below).
 
@@ -199,6 +187,17 @@ Example `env` with optional default model names (same suggestions as the web UI)
   }
 }
 ```
+
+`http://127.0.0.1:7575` and `http://localhost:7575` are interchangeable for a local CCRelay bind.
+
+**Optional (shell only, not persistent)** — quick test without editing `~/.claude/settings.json`:
+
+```bash
+export ANTHROPIC_BASE_URL=http://127.0.0.1:7575
+claude
+```
+
+For day-to-day use, prefer the `~/.claude/settings.json` `env` block above.
 
 ### Claude Cowork
 
