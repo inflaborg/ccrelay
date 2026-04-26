@@ -1,10 +1,16 @@
-import { useQuery } from "@tanstack/react-query";
-import { Activity, Server, Zap } from "lucide-react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Activity, Loader2, RotateCw, Server, Zap } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { api } from "@/api/client";
+import ClientConfigStatus from "./ClientConfigStatus";
 
 export default function Dashboard() {
+  const queryClient = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
+
   const { data: status, isLoading: statusLoading } = useQuery({
     queryKey: ["status"],
     queryFn: () => api.getStatus(),
@@ -17,13 +23,44 @@ export default function Dashboard() {
     refetchInterval: 10000,
   });
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ["status"] }),
+        queryClient.refetchQueries({ queryKey: ["stats"] }),
+        queryClient.refetchQueries({ queryKey: ["clientConfig"] }),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
     <div className="space-y-3">
-      <div>
-        <h2 className="text-base font-semibold tracking-tight">Dashboard</h2>
-        <p className="text-xs text-muted-foreground">
-          Monitor your CCRelay server status and performance
-        </p>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <h2 className="text-base font-semibold tracking-tight">Dashboard</h2>
+          <p className="text-xs text-muted-foreground">
+            Monitor your CCRelay server status and performance
+          </p>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-7 text-xs gap-1 shrink-0"
+          onClick={handleRefresh}
+          disabled={refreshing}
+          title="Refresh"
+        >
+          {refreshing ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <RotateCw className="h-3 w-3" />
+          )}
+          <span className="hidden sm:inline">Refresh</span>
+        </Button>
       </div>
 
       {/* Status Cards - Compact grid */}
@@ -134,6 +171,8 @@ export default function Dashboard() {
           )}
         </CardContent>
       </Card>
+
+      <ClientConfigStatus />
     </div>
   );
 }

@@ -2,12 +2,13 @@
  * Providers API endpoint
  * GET /ccrelay/api/providers
  * POST /ccrelay/api/providers
+ * POST /ccrelay/api/providers/duplicate
  * DELETE /ccrelay/api/providers/:id
  */
 
 import * as http from "http";
 import type { ProxyServer } from "../server/handler";
-import type { ProvidersResponse, ProviderConfigInput, ModelMapEntry } from "../types";
+import type { Provider, ProvidersResponse, ProviderConfigInput, ModelMapEntry } from "../types";
 import { sendJson, parseJsonBody } from "./index";
 
 let serverInstance: ProxyServer | null = null;
@@ -107,6 +108,7 @@ export async function handleAddProvider(
     const existingProvider = configManager.getProvider(body.id);
 
     // Build provider config - preserve existing apiKey when editing
+    const effectiveEnabled = body.id === "official" ? true : (body.enabled ?? true);
     const providerConfig: ProviderConfigInput = {
       name: body.name,
       baseUrl: body.baseUrl,
@@ -114,7 +116,7 @@ export async function handleAddProvider(
       providerType: body.providerType,
       apiKey: body.apiKey || existingProvider?.apiKey,
       authHeader: body.authHeader,
-      enabled: body.enabled ?? true,
+      enabled: effectiveEnabled,
       modelMap: body.modelMap,
       vlModelMap: body.vlModelMap,
       headers: body.headers,
@@ -171,6 +173,104 @@ export function handleDeleteProvider(
     sendJson(res, 200, { status: "ok", message: `Provider "${id}" deleted` });
   } else {
     sendJson(res, 400, { status: "error", message: `Failed to delete provider "${id}"` });
+  }
+}
+
+function buildDuplicateConfigFromProvider(source: Provider, name: string): ProviderConfigInput {
+  return {
+    name,
+    baseUrl: source.baseUrl,
+    mode: source.mode,
+    providerType: source.providerType,
+    apiKey: source.apiKey,
+    authHeader: source.authHeader,
+    openaiChatCompletionsPath: source.openaiChatCompletionsPath,
+    modelsListFormat: source.modelsListFormat,
+    modelMap: source.modelMap,
+    vlModelMap: source.vlModelMap,
+    headers:
+      source.headers && Object.keys(source.headers).length > 0 ? source.headers : undefined,
+    enabled: source.enabled,
+  };
+}
+
+/**
+ * Handle POST /ccrelay/api/providers/duplicate
+ * Copies a provider in memory + YAML (including apiKey). `newId` comes from the client body.
+ */
+export async function handleDuplicateProvider(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  _params: Record<string, string>
+): Promise<void> {
+  if (!serverInstance) {
+    sendJson(res, 503, { error: "Server not initialized" });
+    return;
+  }
+
+  try {
+    const body = await parseJsonBody<{
+      sourceId?: string;
+      newId?: string;
+      name?: string;
+    }>(req);
+
+    if (!body.sourceId || !body.newId || !body.name?.trim()) {
+      sendJson(res, 400, { status: "error", message: "sourceId, newId, and name are required" });
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9_-]+$/.test(body.newId)) {
+      sendJson(res, 400, {
+        status: "error",
+        message:
+          "Invalid newId format. Only alphanumeric, underscore, and hyphen are allowed.",
+      });
+      return;
+    }
+
+    if (body.newId === body.sourceId) {
+      sendJson(res, 400, { status: "error", message: "newId must differ from sourceId" });
+      return;
+    }
+
+    const configManager = serverInstance.getConfig();
+
+    if (configManager.getProvider(body.newId)) {
+      sendJson(res, 400, {
+        status: "error",
+        message: `Provider "${body.newId}" already exists`,
+      });
+      return;
+    }
+
+    const source = configManager.getProvider(body.sourceId);
+    if (!source) {
+      sendJson(res, 404, { status: "error", message: `Source provider "${body.sourceId}" not found` });
+      return;
+    }
+
+    const providerConfig = buildDuplicateConfigFromProvider(source, body.name.trim());
+    const success = configManager.addProvider(body.newId, providerConfig);
+
+    if (success) {
+      sendJson(res, 200, {
+        status: "ok",
+        provider: {
+          id: body.newId,
+          name: body.name.trim(),
+          mode: providerConfig.mode,
+          providerType: providerConfig.providerType,
+          baseUrl: providerConfig.baseUrl,
+          active: false,
+        },
+      });
+    } else {
+      sendJson(res, 500, { status: "error", message: "Failed to duplicate provider" });
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    sendJson(res, 500, { status: "error", message });
   }
 }
 

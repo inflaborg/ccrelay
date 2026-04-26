@@ -3,7 +3,7 @@
 [![VSCode Extension](https://img.shields.io/badge/VSCode-Extension-blue)](https://code.visualstudio.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**CCRelay** is a VSCode extension with a built-in API proxy server that allows you to seamlessly switch between different AI providers without losing conversation context. Fully compatible with Claude Code and other Anthropic API clients.
+**CCRelay** is a VSCode extension with a built-in API proxy server that allows you to seamlessly switch between different AI providers without losing conversation context. It is designed to work with **Claude Code**, **Claude Cowork**, and **OpenAI Codex** (among other Anthropic- and OpenAI-compatible clients)—see [Client integrations](#client-integrations).
 
 **Website**: [https://ccrelay.inflab.org](https://ccrelay.inflab.org)
 
@@ -17,6 +17,7 @@
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+- [Client integrations](#client-integrations)
 - [Usage Guide](#usage-guide)
   - [Basic Setup](#basic-setup)
   - [Multi-Instance Mode](#multi-instance-mode)
@@ -51,6 +52,7 @@
 - **Request Logging**: Optional SQLite/PostgreSQL request/response logging with Web UI viewer
 - **Concurrency Control**: Built-in request queue and concurrency limits to prevent API overload
 - **Auto-start**: Automatically starts the proxy server when VSCode launches
+- **Client integrations**: Use the same proxy with **Claude Code**, **Claude Cowork** (Anthropic wire), and **Codex** (OpenAI wire + `~/.codex/config.toml`); see [Client integrations](#client-integrations)
 
 ---
 
@@ -103,14 +105,7 @@ npm run compile
 
 ## Quick Start
 
-### 1. Configure Claude Code to use the proxy
-
-```bash
-export ANTHROPIC_BASE_URL=http://127.0.0.1:7575
-claude
-```
-
-### 2. Configure providers
+### 1. Configure providers
 
 CCRelay uses a YAML configuration file (`~/.ccrelay/config.yaml` by default). The file is auto-created with defaults on first launch.
 
@@ -135,10 +130,97 @@ providers:
 defaultProvider: "glm"
 ```
 
+### 2. Point Claude Code at CCRelay
+
+Set environment variables for Claude Code in **`~/.claude/settings.json`** (an `env` object). The recommended path is a persistent file config—not VS Code workspace settings or ad‑hoc steps in the CCRelay extension. See [Claude Code](#claude-code) for a full `env` example, or use the Web dashboard **Client configuration** to write the same keys.
+
 ### 3. Switch providers
 
 - Click the CCRelay icon in the VSCode status bar at the bottom
 - Or use Command Palette: `CCRelay: Switch Provider`
+
+---
+
+## Client integrations
+
+**Claude Code**, **Claude Cowork**, and **OpenAI Codex** are first-class target clients. CCRelay exposes an **Anthropic-compatible** API (`/v1/messages`, …) and an **OpenAI-compatible** API (`/v1/chat/completions`, `GET /v1/models`, `POST /v1/responses`, …) on the same port (default **7575**). Point them at the same host and port as in `~/.ccrelay/config.yaml` (default: `http://127.0.0.1:7575`).
+
+| Client | Wire | How to use CCRelay |
+|--------|------|--------------------|
+| **Claude Code** | Anthropic | Set `ANTHROPIC_BASE_URL` (and optional `ANTHROPIC_DEFAULT_*_MODEL` keys) in `~/.claude/settings.json` → `env` — see [Claude Code](#claude-code) |
+| **Claude Cowork** | Anthropic | Configure the app’s **API / Anthropic base URL** to the same CCRelay origin (e.g. `http://127.0.0.1:7575`) so traffic goes through the proxy |
+| **Codex** (OpenAI Codex CLI) | OpenAI | Register CCRelay as a **model provider** in `~/.codex/config.toml` (see example below) |
+
+### Claude Code
+
+**Persistent settings (`~/.claude/settings.json`) — recommended**
+
+Add an `env` object so every Claude Code session points at CCRelay. `ANTHROPIC_AUTH_TOKEN` can be a placeholder when CCRelay’s current provider is **inject** mode (CCRelay adds the real upstream key); adjust if your setup requires a real token. **You do not need** `ANTHROPIC_DEFAULT_*_MODEL` here if you are happy with CCRelay’s `modelMap` only—the Web dashboard can append those keys optionally (see below).
+
+```json
+{
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "ccrelay_apikey_placehold_do_not_need_to_setup_here",
+    "ANTHROPIC_BASE_URL": "http://localhost:7575",
+    "API_TIMEOUT_MS": "3000000",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": 1
+  }
+}
+```
+
+**Optional** — per-tier default model *names* Claude Code will request (`ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL`, `ANTHROPIC_DEFAULT_HAIKU_MODEL`). CCRelay usually maps `claude-*` via `modelMap` without these. The dashboard’s **Client configuration** → **Configure default models** uses the suggested values below; you can change them in the UI.
+
+If your `settings.json` already has other top-level keys, merge the `"env"` block in (or extend `env` with these keys) instead of replacing the whole file.
+
+Example `env` with optional default model names (same suggestions as the web UI):
+
+```json
+{
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "ccrelay_apikey_placehold_do_not_need_to_setup_here",
+    "ANTHROPIC_BASE_URL": "http://localhost:7575",
+    "API_TIMEOUT_MS": "3000000",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": 1,
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-4-7",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-4-6",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5"
+  }
+}
+```
+
+`http://127.0.0.1:7575` and `http://localhost:7575` are interchangeable for a local CCRelay bind.
+
+**Optional (shell only, not persistent)** — quick test without editing `~/.claude/settings.json`:
+
+```bash
+export ANTHROPIC_BASE_URL=http://127.0.0.1:7575
+claude
+```
+
+For day-to-day use, prefer the `~/.claude/settings.json` `env` block above.
+
+### Claude Cowork
+
+Point **Claude Cowork** at the same **Anthropic base URL** as Claude Code: your CCRelay server root (e.g. `http://127.0.0.1:7575`), not the upstream provider URL. Switch models and backends in the CCRelay VSCode extension or `config.yaml` as usual.
+
+### Codex (`~/.codex/config.toml`)
+
+**Codex** can use CCRelay by defining a custom provider whose `base_url` targets CCRelay’s **OpenAI-compatible** base path (`/v1` on the same host as the proxy).
+
+Example (adjust `model` to one your current CCRelay provider maps, e.g. via `modelMap`):
+
+```toml
+# ~/.codex/config.toml
+model = "glm-5-turbo"
+model_provider = "ccrelay"
+
+[model_providers.ccrelay]
+name = "CCRelay"
+base_url = "http://localhost:7575/v1"
+```
+
+- **`base_url`** must include the `/v1` prefix so Codex calls `http://localhost:7575/v1/...` on the proxy.
+- Ensure CCRelay is running (VSCode extension) and the selected provider in CCRelay matches the model routing you need.
 
 ---
 

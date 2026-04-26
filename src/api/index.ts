@@ -12,6 +12,7 @@ import { handleStatus, setServer as setStatusServer } from "./status";
 import {
   handleListProviders,
   handleAddProvider,
+  handleDuplicateProvider,
   handleDeleteProvider,
   handleReloadConfig,
   setServer as setProvidersServer,
@@ -21,6 +22,11 @@ import { handleLogs, handleLogDetail, handleDeleteLogs, handleClearLogs } from "
 import { handleStats } from "./stats";
 import { handleVersion } from "./version";
 import { handleQueueStats, handleClearQueue, setServer as setQueueServer } from "./queue";
+import {
+  handleGetClientConfig,
+  handleApplyClientConfig,
+  setServer as setClientConfigServer,
+} from "./clientConfig";
 import { ScopedLogger } from "../utils/logger";
 
 const log = new ScopedLogger("API");
@@ -33,6 +39,7 @@ export function setServer(server: ProxyServer): void {
   setProvidersServer(server);
   setSwitchServer(server);
   setQueueServer(server);
+  setClientConfigServer(server);
 }
 
 // API routes mapping
@@ -117,6 +124,17 @@ export function handleApiRequest(req: http.IncomingMessage, res: http.ServerResp
     return true;
   }
 
+  // Check for POST /ccrelay/api/providers/duplicate
+  if (reqPath === "/ccrelay/api/providers/duplicate" && method === "POST") {
+    handleDuplicateProvider(req, res, {}).catch(err => {
+      log.error("Error handling POST /providers/duplicate", err);
+      if (!res.headersSent) {
+        sendJson(res, 500, { error: "Internal server error" });
+      }
+    });
+    return true;
+  }
+
   // Check for POST /ccrelay/api/providers (add provider)
   if (reqPath === "/ccrelay/api/providers" && method === "POST") {
     handleAddProvider(req, res, {}).catch(err => {
@@ -126,8 +144,8 @@ export function handleApiRequest(req: http.IncomingMessage, res: http.ServerResp
     return true;
   }
 
-  // Check for DELETE /ccrelay/api/providers/:id
-  const providersIdMatch = reqPath.match(/^\/ccrelay\/api\/providers\/([a-zA-Z0-9_-]+)$/);
+  // Check for DELETE /ccrelay/api/providers/:id (any single path segment; validate in handler)
+  const providersIdMatch = reqPath.match(/^\/ccrelay\/api\/providers\/([^/]+)$/);
   if (providersIdMatch && method === "DELETE") {
     handleDeleteProvider(req, res, { id: providersIdMatch[1] });
     return true;
@@ -136,6 +154,21 @@ export function handleApiRequest(req: http.IncomingMessage, res: http.ServerResp
   // Check for POST /ccrelay/api/reload
   if (reqPath === "/ccrelay/api/reload" && method === "POST") {
     handleReloadConfig(req, res, {});
+    return true;
+  }
+
+  if (reqPath === "/ccrelay/api/client-config" && method === "GET") {
+    handleGetClientConfig(req, res);
+    return true;
+  }
+
+  if (reqPath === "/ccrelay/api/client-config/apply" && method === "POST") {
+    handleApplyClientConfig(req, res).catch(err => {
+      log.error("Error handling POST /client-config/apply", err);
+      if (!res.headersSent) {
+        sendJson(res, 500, { error: "Internal server error" });
+      }
+    });
     return true;
   }
 
@@ -202,6 +235,7 @@ export {
   handleStatus,
   handleListProviders,
   handleAddProvider,
+  handleDuplicateProvider,
   handleDeleteProvider,
   handleReloadConfig,
   handleSwitchProvider,

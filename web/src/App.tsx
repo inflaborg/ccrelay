@@ -53,7 +53,7 @@ function App() {
   }, []);
 
   return (
-    <div className="h-screen bg-background flex flex-col overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
       {/* Header - Tab Style */}
       <header className="bg-card flex-shrink-0 border-b border-border">
         <div className="max-w-full px-2 sm:px-4">
@@ -103,8 +103,8 @@ function App() {
         </div>
       </header>
 
-      {/* Main Content - Each component handles its own scroll */}
-      <main className="flex-1 min-h-0 px-2 sm:px-4 py-3">
+      {/* Main content scrolls; flex min-h-0 is required for overflow in nested flex layouts */}
+      <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-2 sm:px-4 py-3 [scrollbar-gutter:stable] [-webkit-overflow-scrolling:touch]">
         {activeTab === "dashboard" && <Dashboard />}
         {activeTab === "providers" && <Providers />}
         {activeTab === "logs" && <Logs />}

@@ -71,6 +71,19 @@ export interface AddProviderResponse {
   message?: string;
 }
 
+/** POST /providers/duplicate — client supplies `newId` (e.g. `sourceId + "_copy"`) */
+export interface DuplicateProviderRequest {
+  sourceId: string;
+  newId: string;
+  name: string;
+}
+
+export interface DuplicateProviderResponse {
+  status: "ok" | "error";
+  provider?: Pick<Provider, "id" | "name" | "mode" | "providerType" | "baseUrl" | "active">;
+  message?: string;
+}
+
 export interface DeleteProviderResponse {
   status: "ok" | "error";
   message?: string;
@@ -166,4 +179,29 @@ export interface VersionResponse {
     modelExtraction: boolean;
     logListWithoutBody: boolean;
   };
+}
+
+export type ClientConfigItemStatus = "ok" | "missing" | "wrong_target" | "invalid";
+
+export interface ClientConfigItem {
+  status: ClientConfigItemStatus;
+  filePath: string;
+  currentValue?: string;
+  modelProvider?: string;
+  message?: string;
+}
+
+export interface ClaudeDefaultModels {
+  opus?: string;
+  sonnet?: string;
+  haiku?: string;
+}
+
+export interface ClientConfigGetResponse {
+  expectedAnthropicBase: string;
+  expectedCodexBaseUrl: string;
+  port: number;
+  claudeCode: ClientConfigItem;
+  codex: ClientConfigItem;
+  claudeDefaultModels: ClaudeDefaultModels;
 }

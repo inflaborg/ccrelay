@@ -156,8 +156,15 @@ function expandEnvVars(value: string): string {
 /**
  * Recursively expand environment variables in an object
  * Preserves the structure of the input object
+ *
+ * @param isProvidersMap — When true, object keys are **not** run through snake→camel, because
+ *   those keys are provider **ids** (e.g. `minimax-m2-5_copy`). The previous behavior mangled
+ *   `_copy` into `Copy` by turning `_c` into `C`.
  */
-function expandEnvVarsInObject<T>(obj: T): T {
+export function expandEnvVarsInObject<T>(
+  obj: T,
+  options?: { isProvidersMap?: boolean }
+): T {
   if (!obj) {
     return obj;
   }
@@ -165,16 +172,33 @@ function expandEnvVarsInObject<T>(obj: T): T {
     return expandEnvVars(obj) as T;
   }
   if (Array.isArray(obj)) {
-    return obj.map(expandEnvVarsInObject) as T;
+    const out: unknown[] = [];
+    for (const item of obj) {
+      out.push(expandEnvVarsInObject(item as never));
+    }
+    return out as T;
   }
   if (typeof obj === "object") {
     const result: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(obj)) {
-      // Convert snake_case to camelCase for API compatibility
-      const camelKey = key.replace(/(?<!^)_([a-zA-Z])/g, (_, letter: string) =>
-        letter.toUpperCase()
-      );
-      result[camelKey] = expandEnvVarsInObject(value);
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      if (options?.isProvidersMap) {
+        // Provider ids are arbitrary; never treat them as snake_case field names.
+        result[key] = expandEnvVarsInObject(value);
+      } else {
+        // Convert snake_case to camelCase for config field names (not provider map keys)
+        const camelKey = key.replace(/(?<!^)_([a-zA-Z])/g, (_, letter: string) =>
+          letter.toUpperCase()
+        );
+        const isProvidersObject =
+          key === "providers" &&
+          value !== null &&
+          value !== undefined &&
+          typeof value === "object" &&
+          !Array.isArray(value);
+        result[camelKey] = isProvidersObject
+          ? expandEnvVarsInObject(value, { isProvidersMap: true })
+          : expandEnvVarsInObject(value);
+      }
     }
     return result as T;
   }
@@ -247,8 +271,111 @@ function parseProvider(id: string, config: ProviderConfigInput): Provider {
     modelMap: modelMap && modelMap.length > 0 ? modelMap : undefined,
     vlModelMap: vlModelMap && vlModelMap.length > 0 ? vlModelMap : undefined,
     headers: config.headers ?? {},
-    enabled: config.enabled !== false,
+    // `official` is always on; YAML may be hand-edited to false
+    enabled: id === "official" ? true : config.enabled !== false,
   };
+}
+
+/**
+ * Rebuild a providers map with stable key order for YAML: `official` first when present,
+ * then remaining ids sorted with English locale and numeric awareness.
+ */
+export function sortProviderMapKeys<T>(providers: Record<string, T>): Record<string, T> {
+  const keys = Object.keys(providers);
+  if (keys.length === 0) {
+    return {};
+  }
+  const rest = keys.filter(k => k !== "official");
+  rest.sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base", numeric: true }));
+  const ordered = keys.includes("official") ? (["official", ...rest] as const) : rest;
+  const out: Record<string, T> = {};
+  for (const k of ordered) {
+    out[k] = providers[k];
+  }
+  return out;
+}
+
+/**
+ * Map duplicate-style ids to a common base: `x_copy` vs `xCopy` vs `xcopy` (long ids).
+ * Used only to pair **one** request id with the canonical YAML key (duplicate workflow).
+ */
+export function providerIdFuzzyBaseForDuplicateKey(id: string): string {
+  if (id.length < 1) {
+    return id;
+  }
+  if (/_copy$/i.test(id)) {
+    return id.replace(/_copy$/i, "");
+  }
+  if (id.length > 4 && /Copy$/.test(id)) {
+    return id.slice(0, -4);
+  }
+  if (id.length >= 10 && /copy$/i.test(id)) {
+    return id.slice(0, -4);
+  }
+  return id;
+}
+
+/** True for ids that look like a duplicate of another (never the bare source id by itself). */
+export function isDuplicateStyleProviderId(id: string): boolean {
+  if (/_copy$/i.test(id)) {
+    return true;
+  }
+  if (id.length > 4 && /Copy$/.test(id)) {
+    return true;
+  }
+  if (id.length >= 10 && /copy$/i.test(id)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Map a requested provider id (from URL) to the exact key in a providers map.
+ * Handles decodeURIComponent, trim, Unicode NFC, and a single case-insensitive match
+ * (some stacks alter path segment casing; YAML keys are case-sensitive).
+ * Also matches duplicate variants: e.g. `local-hysp-llm-routerCopy` in the URL
+ * to YAML key `local-hysp-llm-router_copy` when the fuzzy base is unique in the file.
+ */
+export function resolveProviderKeyInMap(
+  mapKeys: string[],
+  requestedId: string
+): string | null {
+  let q: string;
+  try {
+    q = decodeURIComponent(requestedId).trim();
+  } catch {
+    q = requestedId.trim();
+  }
+  if (!q) {
+    return null;
+  }
+  if (mapKeys.includes(q)) {
+    return q;
+  }
+  const nfcQ = q.normalize("NFC");
+  for (const k of mapKeys) {
+    if (k === q || k.normalize("NFC") === nfcQ) {
+      return k;
+    }
+  }
+  const low = q.toLowerCase();
+  const byCase = mapKeys.filter(k => k.toLowerCase() === low);
+  if (byCase.length === 1) {
+    return byCase[0] ?? null;
+  }
+  if (isDuplicateStyleProviderId(q)) {
+    const bq = providerIdFuzzyBaseForDuplicateKey(q);
+    const byFuzzy = mapKeys.filter(k => {
+      if (providerIdFuzzyBaseForDuplicateKey(k) !== bq) {
+        return false;
+      }
+      return isDuplicateStyleProviderId(k);
+    });
+    if (byFuzzy.length === 1) {
+      return byFuzzy[0] ?? null;
+    }
+  }
+  return null;
 }
 
 export class ConfigManager {
@@ -665,7 +792,7 @@ export class ConfigManager {
         // eslint-disable-next-line @typescript-eslint/naming-convention
         vl_model_map: config.vl_model_map,
         headers: config.headers,
-        enabled: config.enabled,
+        enabled: id === "official" ? true : (config.enabled ?? true),
         openaiChatCompletionsPath: config.openaiChatCompletionsPath,
         // eslint-disable-next-line @typescript-eslint/naming-convention
         openai_chat_completions_path: config.openai_chat_completions_path,
@@ -673,6 +800,8 @@ export class ConfigManager {
         // eslint-disable-next-line @typescript-eslint/naming-convention
         models_list_format: config.models_list_format,
       };
+
+      rawConfig.providers = sortProviderMapKeys(providers);
 
       // Write back to file
       const yamlContent = yaml.dump(rawConfig, {
@@ -699,30 +828,46 @@ export class ConfigManager {
    */
   deleteProvider(id: string): boolean {
     try {
-      // Don't allow deleting the official provider
-      if (id === "official") {
-        console.error("[ConfigManager] Cannot delete the official provider");
-        return false;
-      }
-
       // Read current file content
       const content = fs.readFileSync(this.configPath, "utf-8");
       const rawConfig = yaml.load(content) as Record<string, unknown>;
 
-      // Check if provider exists
       const providers = rawConfig.providers as Record<string, unknown> | undefined;
-      if (!providers || !providers[id]) {
-        console.error(`[ConfigManager] Provider "${id}" not found`);
+      if (!providers) {
+        console.error(`[ConfigManager] Provider "${id}" not found (no providers map)`);
+        return false;
+      }
+
+      const keys = Object.keys(providers);
+      const resolved = resolveProviderKeyInMap(keys, id);
+      if (!resolved) {
+        console.error(`[ConfigManager] Provider "${id}" not found in config file`);
+        return false;
+      }
+
+      if (resolved === "official") {
+        console.error("[ConfigManager] Cannot delete the official provider");
         return false;
       }
 
       // Delete the provider
-      delete providers[id];
+      delete providers[resolved];
 
       // If deleted provider was default, update default to official
-      if (rawConfig.defaultProvider === id) {
-        rawConfig.defaultProvider = "official";
+      const dfp = rawConfig.defaultProvider;
+      if (dfp !== undefined && dfp !== null) {
+        const dfpStr =
+          typeof dfp === "string" || typeof dfp === "number" ? String(dfp) : null;
+        if (dfpStr) {
+          const defKey =
+            resolveProviderKeyInMap(keys, dfpStr) ?? (keys.includes(dfpStr) ? dfpStr : null);
+          if (defKey === resolved) {
+            rawConfig.defaultProvider = "official";
+          }
+        }
       }
+
+      rawConfig.providers = sortProviderMapKeys(providers);
 
       // Write back to file
       const yamlContent = yaml.dump(rawConfig, {
