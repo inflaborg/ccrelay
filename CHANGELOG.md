@@ -9,7 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.0] - 2026-04-26 (pre-release)
 
-Pre-release line for 0.2.0. To build a beta VSIX with a timestamped pre-release version, use `npm run package:beta` (extension version `0.2.0-beta.<build>`). For the stable 0.2.0 extension package, use `npm run package:release` when ready.
+This is the **0.2.0** development line until a stable release is tagged. **Packaging:** `npm run package:beta` rewrites the version to `0.2.0-beta.<build>` and runs `package`; `npm run package:release` strips a `-beta…` suffix for a `0.2.0` build, then `package` (see root `package.json` scripts).
+
+### Fixed
+
+- **Web dashboard in browser-backed editors (e.g. code-server)**: sidebar and log-viewer webviews no longer hardcode `http://127.0.0.1:<port>` for API calls, which in a browser targets the user’s local machine. The extension resolves the ccrelay HTTP base with `vscode.env.asExternalUri` so requests use the workbench port proxy (e.g. code-server’s `/proxy/<port>`) and hit the ccrelay server on the same host as the extension. On resolution failure, falls back to the previous local URL. **Follower** mode still uses the leader origin only.
 
 ## [0.1.6] - 2026-04-26
 
