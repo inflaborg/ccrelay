@@ -180,3 +180,28 @@ export interface VersionResponse {
     logListWithoutBody: boolean;
   };
 }
+
+export type ClientConfigItemStatus = "ok" | "missing" | "wrong_target" | "invalid";
+
+export interface ClientConfigItem {
+  status: ClientConfigItemStatus;
+  filePath: string;
+  currentValue?: string;
+  modelProvider?: string;
+  message?: string;
+}
+
+export interface ClaudeDefaultModels {
+  opus?: string;
+  sonnet?: string;
+  haiku?: string;
+}
+
+export interface ClientConfigGetResponse {
+  expectedAnthropicBase: string;
+  expectedCodexBaseUrl: string;
+  port: number;
+  claudeCode: ClientConfigItem;
+  codex: ClientConfigItem;
+  claudeDefaultModels: ClaudeDefaultModels;
+}

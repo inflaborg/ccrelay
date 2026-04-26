@@ -22,6 +22,11 @@ import { handleLogs, handleLogDetail, handleDeleteLogs, handleClearLogs } from "
 import { handleStats } from "./stats";
 import { handleVersion } from "./version";
 import { handleQueueStats, handleClearQueue, setServer as setQueueServer } from "./queue";
+import {
+  handleGetClientConfig,
+  handleApplyClientConfig,
+  setServer as setClientConfigServer,
+} from "./clientConfig";
 import { ScopedLogger } from "../utils/logger";
 
 const log = new ScopedLogger("API");
@@ -34,6 +39,7 @@ export function setServer(server: ProxyServer): void {
   setProvidersServer(server);
   setSwitchServer(server);
   setQueueServer(server);
+  setClientConfigServer(server);
 }
 
 // API routes mapping
@@ -148,6 +154,21 @@ export function handleApiRequest(req: http.IncomingMessage, res: http.ServerResp
   // Check for POST /ccrelay/api/reload
   if (reqPath === "/ccrelay/api/reload" && method === "POST") {
     handleReloadConfig(req, res, {});
+    return true;
+  }
+
+  if (reqPath === "/ccrelay/api/client-config" && method === "GET") {
+    handleGetClientConfig(req, res);
+    return true;
+  }
+
+  if (reqPath === "/ccrelay/api/client-config/apply" && method === "POST") {
+    handleApplyClientConfig(req, res).catch(err => {
+      log.error("Error handling POST /client-config/apply", err);
+      if (!res.headersSent) {
+        sendJson(res, 500, { error: "Internal server error" });
+      }
+    });
     return true;
   }
 

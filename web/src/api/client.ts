@@ -13,6 +13,7 @@ import type {
   DuplicateProviderResponse,
   DeleteProviderResponse,
   ReloadConfigResponse,
+  ClientConfigGetResponse,
 } from "../types/api";
 
 // Re-export types for convenience
@@ -113,4 +114,32 @@ export const api = {
 
   // Version
   getVersion: (): Promise<VersionResponse> => fetchAPI<VersionResponse>("/version"),
+
+  getClientConfig: (): Promise<ClientConfigGetResponse> =>
+    fetchAPI<ClientConfigGetResponse>("/client-config"),
+
+  applyClientConfig: async (body: {
+    target: "claudeCode" | "codex";
+    overwrite?: boolean;
+    patchClaudeModelsOnly?: boolean;
+    claudeDefaultModels?: { opus?: string; sonnet?: string; haiku?: string };
+  }) => {
+    const response = await fetch(`${API_BASE}/client-config/apply`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    const data = (await response.json().catch(() => ({}))) as { message?: string; status?: string };
+    if (response.status === 409) {
+      const err = new Error(data.message || "Confirm overwrite to apply CCRelay settings");
+      (err as Error & { status: number }).status = 409;
+      throw err;
+    }
+    if (!response.ok) {
+      throw new Error(data.message || `HTTP ${response.status}`);
+    }
+    return data as { status: string; message?: string };
+  },
 };
