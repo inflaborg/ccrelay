@@ -14,6 +14,16 @@ This is the **0.2.0** development line until a stable release is tagged. **Packa
 ### Fixed
 
 - **Web dashboard in browser-backed editors (e.g. code-server)**: sidebar and log-viewer webviews no longer hardcode `http://127.0.0.1:<port>` for API calls, which in a browser targets the user’s local machine. The extension resolves the ccrelay HTTP base with `vscode.env.asExternalUri` so requests use the workbench port proxy (e.g. code-server’s `/proxy/<port>`) and hit the ccrelay server on the same host as the extension. On resolution failure, falls back to the previous local URL. **Follower** mode still uses the leader origin only.
+- **Converters (cross-protocol)**
+  - Anthropic `tool_choice` with `type: "any"` now maps to OpenAI `"required"` (matches “must use a tool”), not `"auto"`.
+  - Responses → Chat Completions: `namespace` tools are expanded to nested `function` tools; they were previously counted as stripped and never reached the expansion branch.
+  - Anthropic `stop_reason: "stop_sequence"` maps to OpenAI `finish_reason: "stop"` (not `"content_filter"`). OpenAI `finish_reason: "content_filter"` maps to Anthropic `stop_reason: "end_turn"` (not `"stop_sequence"`).
+  - Anthropic → OpenAI user images: incomplete `base64` sources (missing `media_type` or `data`) yield an empty `image_url` URL instead of `data:undefined;base64,...`.
+  - OpenAI → Anthropic requests: when system messages mix plain string and array `content`, string parts are merged into the Anthropic `system` block list instead of being dropped.
+
+### Changed
+
+- **Converters**: `parseFunctionArguments` simplified (removed unreachable branch); tool message `content` serialization uses a shared helper; Anthropic → OpenAI request conversion no longer deep-clones messages or keeps an unreachable post-`user`/`assistant` fallback in `convertMessage`.
 
 ## [0.1.6] - 2026-04-26
 

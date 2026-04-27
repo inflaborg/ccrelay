@@ -37,4 +37,12 @@ describe("convertAnthropicResponseToOpenAI", () => {
     expect(isAnthropicMessageResponse(base)).toBe(true);
     expect(isAnthropicMessageResponse({ type: "error" })).toBe(false);
   });
+
+  it("maps stop_reason stop_sequence to OpenAI finish_reason stop", () => {
+    const o = convertAnthropicResponseToOpenAI(
+      { ...base, stop_reason: "stop_sequence" },
+      "claude-3"
+    );
+    expect(o.choices[0].finish_reason).toBe("stop");
+  });
 });

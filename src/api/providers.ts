@@ -188,8 +188,7 @@ function buildDuplicateConfigFromProvider(source: Provider, name: string): Provi
     modelsListFormat: source.modelsListFormat,
     modelMap: source.modelMap,
     vlModelMap: source.vlModelMap,
-    headers:
-      source.headers && Object.keys(source.headers).length > 0 ? source.headers : undefined,
+    headers: source.headers && Object.keys(source.headers).length > 0 ? source.headers : undefined,
     enabled: source.enabled,
   };
 }
@@ -223,8 +222,7 @@ export async function handleDuplicateProvider(
     if (!/^[a-zA-Z0-9_-]+$/.test(body.newId)) {
       sendJson(res, 400, {
         status: "error",
-        message:
-          "Invalid newId format. Only alphanumeric, underscore, and hyphen are allowed.",
+        message: "Invalid newId format. Only alphanumeric, underscore, and hyphen are allowed.",
       });
       return;
     }
@@ -246,7 +244,10 @@ export async function handleDuplicateProvider(
 
     const source = configManager.getProvider(body.sourceId);
     if (!source) {
-      sendJson(res, 404, { status: "error", message: `Source provider "${body.sourceId}" not found` });
+      sendJson(res, 404, {
+        status: "error",
+        message: `Source provider "${body.sourceId}" not found`,
+      });
       return;
     }
 

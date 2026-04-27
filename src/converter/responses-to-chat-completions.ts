@@ -5,7 +5,12 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 
 import { ScopedLogger } from "../utils/logger";
-import type { OpenAIMessage, OpenAIMessageRequest, OpenAITool, OpenAIToolChoice } from "./anthropic-to-openai";
+import type {
+  OpenAIMessage,
+  OpenAIMessageRequest,
+  OpenAITool,
+  OpenAIToolChoice,
+} from "./anthropic-to-openai";
 import { isOpenAIChatCompletionsRequest } from "./openai-to-anthropic-request";
 import type { OpenAIPathProvider } from "./openaiPath";
 import { getOpenAIChatCompletionsPath } from "./openaiPath";
@@ -23,7 +28,6 @@ const STRIPPED_TOOL_TYPES = new Set([
   "local_shell",
   "shell",
   "tool_search",
-  "namespace",
 ]);
 
 export interface ResponsesToChatResult {
@@ -149,8 +153,7 @@ function mapResponsesToolChoice(tc: unknown): OpenAIToolChoice | undefined {
     const t = (tc as { type?: string; name?: string; function?: { name?: string } }).type;
     if (t === "function") {
       const n =
-        (tc as { function?: { name?: string } }).function?.name ??
-        (tc as { name?: string }).name;
+        (tc as { function?: { name?: string } }).function?.name ?? (tc as { name?: string }).name;
       if (n) {
         return { type: "function", function: { name: n } };
       }
@@ -159,9 +162,7 @@ function mapResponsesToolChoice(tc: unknown): OpenAIToolChoice | undefined {
   return undefined;
 }
 
-function mapResponsesTools(
-  tools: unknown
-): { tools: OpenAITool[]; stripped: number } {
+function mapResponsesTools(tools: unknown): { tools: OpenAITool[]; stripped: number } {
   if (!Array.isArray(tools)) {
     return { tools: [], stripped: 0 };
   }
@@ -180,21 +181,31 @@ function mapResponsesTools(
         function: {
           name: fnName,
           description: typeof o.description === "string" ? o.description : undefined,
-          parameters: (o.parameters as Record<string, unknown>) ?? { type: "object", properties: {} },
+          parameters: (o.parameters as Record<string, unknown>) ?? {
+            type: "object",
+            properties: {},
+          },
         },
       });
     } else if (typeof typ === "string" && STRIPPED_TOOL_TYPES.has(typ)) {
       stripped += 1;
     } else if (typ === "namespace" && Array.isArray(o.tools)) {
       for (const inner of o.tools as unknown[]) {
-        if (inner && typeof inner === "object" && (inner as { type?: string }).type === "function") {
+        if (
+          inner &&
+          typeof inner === "object" &&
+          (inner as { type?: string }).type === "function"
+        ) {
           const f = inner as { name?: string; description?: string; parameters?: unknown };
           out.push({
             type: "function",
             function: {
               name: String(f.name ?? ""),
               description: typeof f.description === "string" ? f.description : undefined,
-              parameters: (f.parameters as Record<string, unknown>) ?? { type: "object", properties: {} },
+              parameters: (f.parameters as Record<string, unknown>) ?? {
+                type: "object",
+                properties: {},
+              },
             },
           });
         }
@@ -255,9 +266,17 @@ function appendInputItemsToMessages(items: unknown[], messages: OpenAIMessage[])
       const role = o.role;
       const r = typeof role === "string" ? role : "user";
       if (r === "user" || r === "system" || r === "developer" || r === "assistant") {
-        const text = mapEasyMessageContentToText(o.content) ?? (typeof o.content === "string" ? o.content : "");
+        const text =
+          mapEasyMessageContentToText(o.content) ??
+          (typeof o.content === "string" ? o.content : "");
         const oaiRole: OpenAIMessage["role"] =
-          r === "developer" ? "developer" : r === "system" ? "system" : r === "assistant" ? "assistant" : "user";
+          r === "developer"
+            ? "developer"
+            : r === "system"
+              ? "system"
+              : r === "assistant"
+                ? "assistant"
+                : "user";
         if (oaiRole === "assistant" && !text && !Array.isArray(o.content)) {
           continue;
         }

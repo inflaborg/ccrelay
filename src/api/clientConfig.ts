@@ -191,10 +191,7 @@ export function parseTomlLite(content: string): ParsedTomlLite {
     }
     const key = t.slice(0, eq).trim();
     let val = t.slice(eq + 1).trim();
-    if (
-      (val.startsWith('"') && val.endsWith('"')) ||
-      (val.startsWith("'") && val.endsWith("'"))
-    ) {
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
       val = val.slice(1, -1);
     }
     if (current) {
@@ -268,10 +265,7 @@ function detectCodex(codexPath: string, port: number): ClientConfigItem {
 /**
  * GET /ccrelay/api/client-config
  */
-export function handleGetClientConfig(
-  _req: http.IncomingMessage,
-  res: http.ServerResponse
-): void {
+export function handleGetClientConfig(_req: http.IncomingMessage, res: http.ServerResponse): void {
   if (!serverInstance) {
     sendJson(res, 503, { error: "Server not initialized" });
     return;
@@ -366,7 +360,10 @@ export async function handleApplyClientConfig(
       }
       root.env = env;
       fs.writeFileSync(claudePath, `${JSON.stringify(root, null, 2)}\n`, "utf-8");
-      sendJson(res, 200, { status: "ok", message: `Updated Claude default model env in ${claudePath}` });
+      sendJson(res, 200, {
+        status: "ok",
+        message: `Updated Claude default model env in ${claudePath}`,
+      });
       return;
     }
 

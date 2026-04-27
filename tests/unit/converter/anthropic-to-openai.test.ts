@@ -559,7 +559,7 @@ describe("converter: anthropic-to-openai", () => {
       expect(result.request.tool_choice).toBe("auto");
     });
 
-    it("should convert { type: 'any' } to 'auto'", () => {
+    it("should convert { type: 'any' } to 'required'", () => {
       const request: AnthropicMessageRequest = {
         model: "claude-3-5-sonnet-20241022",
         max_tokens: 4096,
@@ -569,7 +569,7 @@ describe("converter: anthropic-to-openai", () => {
 
       const result = convertRequestToOpenAI(request, basePath);
 
-      expect(result.request.tool_choice).toBe("auto");
+      expect(result.request.tool_choice).toBe("required");
     });
 
     it("should convert { type: 'none' } to 'none'", () => {
@@ -932,14 +932,14 @@ describe("converter: anthropic-to-openai", () => {
 
       const result = convertRequestToOpenAI(request, basePath);
 
-      // When media_type is missing, should still convert to base64 URL
+      // Incomplete base64 (missing media_type) → empty URL, no invalid data: URL
       expect(result.request.messages[0]).toEqual({
         role: "user",
         content: [
           {
             type: "image_url",
             image_url: {
-              url: "data:undefined;base64,iVBORw0KGgoAAAANSUhEUgAA",
+              url: "",
             },
           },
         ],
@@ -976,7 +976,7 @@ describe("converter: anthropic-to-openai", () => {
           {
             type: "image_url",
             image_url: {
-              url: "data:image/png;base64,undefined",
+              url: "",
             },
           },
         ],

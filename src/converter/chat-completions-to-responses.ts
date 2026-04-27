@@ -157,7 +157,8 @@ function pushFunctionCallOutputItemSse(
     call_id?: string;
     status?: string;
   };
-  const itemId = typeof fc.id === "string" && fc.id.length > 0 ? fc.id : `fc_${randomUUID().replace(/-/g, "")}`;
+  const itemId =
+    typeof fc.id === "string" && fc.id.length > 0 ? fc.id : `fc_${randomUUID().replace(/-/g, "")}`;
   const fullArgs = typeof fc.arguments === "string" ? fc.arguments : "";
   const inProgress = {
     type: "function_call" as const,

@@ -57,7 +57,7 @@ function mapAnthropicStopReasonToOpenAI(reason: string): string {
     end_turn: "stop",
     max_tokens: "length",
     tool_use: "tool_calls",
-    stop_sequence: "content_filter",
+    stop_sequence: "stop",
   };
   return mapping[reason] || "stop";
 }
