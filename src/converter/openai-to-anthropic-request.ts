@@ -117,6 +117,13 @@ function effortToBudgetTokens(effort?: string): number | undefined {
   return 2048;
 }
 
+function stringifyToolContent(rawContent: OpenAIMessage["content"]): string {
+  if (typeof rawContent === "string") {
+    return rawContent;
+  }
+  return JSON.stringify(rawContent ?? "");
+}
+
 function extractSystem(messages: OpenAIMessage[]): {
   systemText?: string;
   systemBlocks?: Array<{
@@ -135,18 +142,6 @@ function extractSystem(messages: OpenAIMessage[]): {
       rest.push(m);
       continue;
     }
-    if (m.role === "developer") {
-      if (typeof m.content === "string") {
-        systemParts.push(m.content);
-      } else if (Array.isArray(m.content)) {
-        for (const part of m.content) {
-          if (part.type === "text" && "text" in part) {
-            systemBlockParts.push({ type: "text", text: part.text });
-          }
-        }
-      }
-      continue;
-    }
     if (typeof m.content === "string") {
       systemParts.push(m.content);
     } else if (Array.isArray(m.content)) {
@@ -159,8 +154,12 @@ function extractSystem(messages: OpenAIMessage[]): {
   }
 
   if (systemBlockParts.length > 0) {
+    const mergedBlocks = [
+      ...systemParts.map(text => ({ type: "text" as const, text })),
+      ...systemBlockParts,
+    ];
     return {
-      systemBlocks: systemBlockParts,
+      systemBlocks: mergedBlocks,
       restMessages: rest,
     };
   }
@@ -187,13 +186,7 @@ function buildAnthropicMessages(messages: OpenAIMessage[]): MessageParam[] {
       const toolResults: ContentBlockParam[] = [];
       while (i < messages.length && messages[i].role === "tool") {
         const t = messages[i];
-        const rawContent = t.content;
-        const text =
-          typeof rawContent === "string"
-            ? rawContent
-            : Array.isArray(rawContent)
-              ? JSON.stringify(rawContent)
-              : JSON.stringify(rawContent ?? "");
+        const text = stringifyToolContent(t.content);
         toolResults.push({
           type: "tool_result",
           tool_use_id: t.tool_call_id || "",
@@ -208,11 +201,10 @@ function buildAnthropicMessages(messages: OpenAIMessage[]): MessageParam[] {
       const toolResults: ContentBlockParam[] = [];
       while (i < messages.length && messages[i].role === "tool") {
         const t = messages[i];
-        const text = typeof t.content === "string" ? t.content : JSON.stringify(t.content ?? "");
         toolResults.push({
           type: "tool_result",
           tool_use_id: t.tool_call_id || "",
-          content: text,
+          content: stringifyToolContent(t.content),
         });
         i++;
       }

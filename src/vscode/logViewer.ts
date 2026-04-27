@@ -76,7 +76,12 @@ export class LogViewerPanel {
     this.panel.webview.html = await this.getWebviewContent(leaderUrl, role, host, port);
   }
 
-  private async updateState(leaderUrl: string, role: string, host?: string, port?: number): Promise<void> {
+  private async updateState(
+    leaderUrl: string,
+    role: string,
+    host?: string,
+    port?: number
+  ): Promise<void> {
     this.panel.webview.html = await this.getWebviewContent(leaderUrl, role, host, port);
   }
 

@@ -62,7 +62,9 @@ export function buildOpenAIModelsListFromProvider(provider: Provider): OpenAIMod
 /**
  * Build a minimal Anthropic-style model list from provider.modelMap
  */
-export function buildAnthropicModelsListFromProvider(provider: Provider): AnthropicModelsListResponse {
+export function buildAnthropicModelsListFromProvider(
+  provider: Provider
+): AnthropicModelsListResponse {
   const data: AnthropicModelInfo[] = [];
 
   for (const entry of provider.modelMap ?? []) {

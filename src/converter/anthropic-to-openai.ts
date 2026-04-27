@@ -212,7 +212,7 @@ export function convertRequestToOpenAI(
   }
 
   // Convert each message - a single Anthropic message may produce multiple OpenAI messages
-  const requestMessages = JSON.parse(JSON.stringify(anthropic.messages || [])) as MessageParam[];
+  const requestMessages = anthropic.messages || [];
   const targetModel = openai.model;
   for (const msg of requestMessages) {
     const converted = convertMessage(msg, targetModel);
@@ -340,17 +340,7 @@ function convertMessage(msg: MessageParam, targetModel: string): OpenAIMessage[]
   }
 
   // === ASSISTANT MESSAGES ===
-  if (msg.role === "assistant") {
-    return [convertAssistantMessage(content, targetModel)];
-  }
-
-  // Fallback for any other role
-  return [
-    {
-      role: msg.role,
-      content: convertContentBlocksToString(content),
-    },
-  ];
+  return [convertAssistantMessage(content, targetModel)];
 }
 
 /**
@@ -496,16 +486,6 @@ function convertAssistantMessage(content: ContentBlockParam[], targetModel: stri
 }
 
 /**
- * Convert content blocks to a plain string (fallback)
- */
-function convertContentBlocksToString(blocks: ContentBlockParam[]): string {
-  return blocks
-    .filter((b): b is Extract<ContentBlockParam, { type: "text" }> => b.type === "text")
-    .map(b => b.text)
-    .join("\n");
-}
-
-/**
  * Convert image source from Anthropic to OpenAI format
  */
 function convertImageSource(source: {
@@ -515,9 +495,10 @@ function convertImageSource(source: {
   url?: string;
 }): string {
   if (source.type === "base64") {
-    const mediaType = source.media_type ?? undefined;
-    const data = source.data ?? undefined;
-    return `data:${mediaType};base64,${data}`;
+    if (!source.media_type || !source.data) {
+      return "";
+    }
+    return `data:${source.media_type};base64,${source.data}`;
   }
   if (source.type === "url") {
     return source.url ?? "";
@@ -552,7 +533,7 @@ function convertToolChoice(choice: AnthropicToolChoice): OpenAIToolChoice {
     };
   }
   if (choice.type === "any") {
-    return "auto";
+    return "required";
   }
   if (choice.type === "auto") {
     return "auto";

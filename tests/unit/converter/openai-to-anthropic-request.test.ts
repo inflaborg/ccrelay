@@ -40,6 +40,30 @@ describe("convertOpenAIRequestToAnthropic", () => {
     expect(request.messages[0].content).toBe("Hi");
   });
 
+  it("merges string and array system messages into system blocks without dropping strings", () => {
+    const { request } = convertOpenAIRequestToAnthropic(
+      {
+        model: "m",
+        max_tokens: 100,
+        messages: [
+          { role: "system", content: "Prefix from string." },
+          {
+            role: "system",
+            content: [{ type: "text", text: "From array block." }],
+          },
+          { role: "user", content: "Hi" },
+        ],
+      },
+      "/v1/chat/completions"
+    );
+    expect(request.system).toEqual([
+      { type: "text", text: "Prefix from string." },
+      { type: "text", text: "From array block." },
+    ]);
+    expect(request.messages).toHaveLength(1);
+    expect(request.messages[0].content).toBe("Hi");
+  });
+
   it("isOpenAIChatCompletionsRequest returns true when messages array present", () => {
     expect(isOpenAIChatCompletionsRequest({ messages: [], model: "x" })).toBe(true);
     expect(isOpenAIChatCompletionsRequest({ model: "x" })).toBe(false);

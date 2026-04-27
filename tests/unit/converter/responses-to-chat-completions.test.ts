@@ -66,4 +66,38 @@ describe("convertResponsesRequestToChatCompletions", () => {
     );
     expect(request.tool_choice).toBe("required");
   });
+
+  it("expands namespace tools with nested function tools", () => {
+    const { request } = convertResponsesRequestToChatCompletions(
+      {
+        model: "m",
+        input: "x",
+        tools: [
+          {
+            type: "namespace",
+            name: "ns",
+            tools: [
+              {
+                type: "function",
+                name: "inner_tool",
+                description: "d",
+                parameters: { type: "object", properties: {} },
+              },
+            ],
+          },
+        ],
+      },
+      "/v1/responses"
+    );
+    expect(request.tools).toEqual([
+      {
+        type: "function",
+        function: {
+          name: "inner_tool",
+          description: "d",
+          parameters: { type: "object", properties: {} },
+        },
+      },
+    ]);
+  });
 });

@@ -9,9 +9,7 @@ export const DEFAULT_OPENAI_CHAT_COMPLETIONS_PATH = "/chat/completions" as const
 
 export type OpenAIPathProvider = Pick<Provider, "openaiChatCompletionsPath">;
 
-export function getOpenAIChatCompletionsPath(
-  provider?: OpenAIPathProvider | null
-): string {
+export function getOpenAIChatCompletionsPath(provider?: OpenAIPathProvider | null): string {
   const p = provider?.openaiChatCompletionsPath;
   if (p && p.length > 0) {
     return p.trim();

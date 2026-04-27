@@ -161,10 +161,7 @@ function expandEnvVars(value: string): string {
  *   those keys are provider **ids** (e.g. `minimax-m2-5_copy`). The previous behavior mangled
  *   `_copy` into `Copy` by turning `_c` into `C`.
  */
-export function expandEnvVarsInObject<T>(
-  obj: T,
-  options?: { isProvidersMap?: boolean }
-): T {
+export function expandEnvVarsInObject<T>(obj: T, options?: { isProvidersMap?: boolean }): T {
   if (!obj) {
     return obj;
   }
@@ -252,11 +249,10 @@ function parseProvider(id: string, config: ProviderConfigInput): Provider {
   const authHeader = config.authHeader || config.auth_header;
   const modelMap = config.modelMap || config.model_map;
   const vlModelMap = config.vlModelMap || config.vl_model_map;
-  const providerType = (config.providerType || config.provider_type || "anthropic");
+  const providerType = config.providerType || config.provider_type || "anthropic";
   const openaiChatCompletionsPath =
     config.openaiChatCompletionsPath || config.openai_chat_completions_path;
-  const modelsListFormat =
-    config.modelsListFormat || config.models_list_format || "auto";
+  const modelsListFormat = config.modelsListFormat || config.models_list_format || "auto";
 
   return {
     id,
@@ -336,10 +332,7 @@ export function isDuplicateStyleProviderId(id: string): boolean {
  * Also matches duplicate variants: e.g. `local-hysp-llm-routerCopy` in the URL
  * to YAML key `local-hysp-llm-router_copy` when the fuzzy base is unique in the file.
  */
-export function resolveProviderKeyInMap(
-  mapKeys: string[],
-  requestedId: string
-): string | null {
+export function resolveProviderKeyInMap(mapKeys: string[], requestedId: string): string | null {
   let q: string;
   try {
     q = decodeURIComponent(requestedId).trim();
@@ -856,8 +849,7 @@ export class ConfigManager {
       // If deleted provider was default, update default to official
       const dfp = rawConfig.defaultProvider;
       if (dfp !== undefined && dfp !== null) {
-        const dfpStr =
-          typeof dfp === "string" || typeof dfp === "number" ? String(dfp) : null;
+        const dfpStr = typeof dfp === "string" || typeof dfp === "number" ? String(dfp) : null;
         if (dfpStr) {
           const defKey =
             resolveProviderKeyInMap(keys, dfpStr) ?? (keys.includes(dfpStr) ? dfpStr : null);

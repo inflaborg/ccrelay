@@ -312,7 +312,7 @@ function convertFinishReason(reason: string): string {
     stop: "end_turn",
     length: "max_tokens",
     tool_calls: "tool_use",
-    content_filter: "stop_sequence",
+    content_filter: "end_turn",
   };
   return mapping[reason] || "end_turn";
 }
@@ -322,14 +322,10 @@ function convertFinishReason(reason: string): string {
  */
 function parseFunctionArguments(args: string): Record<string, unknown> {
   try {
-    const argumentsStr = args || "{}";
-    if (typeof argumentsStr === "object") {
-      return argumentsStr;
-    }
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- JSON.parse returns any
-    const parsed = JSON.parse(argumentsStr);
-
-    return typeof parsed === "object" ? (parsed as Record<string, unknown>) : { text: args || "" };
+    const parsed = JSON.parse(args || "{}") as unknown;
+    return typeof parsed === "object" && parsed !== null
+      ? (parsed as Record<string, unknown>)
+      : { text: args || "" };
   } catch {
     return { text: args || "" };
   }

@@ -773,7 +773,7 @@ describe("converter: openai-to-anthropic", () => {
   });
 
   describe("finish_reason mapping edge cases", () => {
-    it("should map 'content_filter' to 'stop_sequence'", () => {
+    it("should map 'content_filter' to 'end_turn'", () => {
       const openai: OpenAIChatCompletionResponse = {
         id: "chatcmpl-abc123",
         object: "chat.completion",
@@ -790,7 +790,7 @@ describe("converter: openai-to-anthropic", () => {
 
       const result = convertResponseToAnthropic(openai, originalModel);
 
-      expect(result.stop_reason).toBe("stop_sequence");
+      expect(result.stop_reason).toBe("end_turn");
     });
 
     it("should map empty string finish_reason to 'end_turn'", () => {
