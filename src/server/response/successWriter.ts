@@ -16,15 +16,14 @@ export class SuccessWriter extends BaseWriter {
    * Write success response from proxy result
    */
   write(result: ProxyResult, clientId?: string): void {
-    // Check if client already disconnected
-    if (this.isWritable() === false) {
-      log.info(`[${clientId}] Client disconnected, skipping response`);
+    // Streaming handlers already wrote to the socket / ended the response
+    if (result.streamed) {
+      log.info(`[${clientId}] Streaming done`);
       return;
     }
 
-    // Handle streaming case - already handled by executor
-    if (result.streamed) {
-      log.info(`[${clientId}] Streaming done`);
+    if (this.isWritable() === false) {
+      log.info(`[${clientId}] Client disconnected, skipping response`);
       return;
     }
 

@@ -7,6 +7,7 @@
 
 import * as http from "http";
 import { z } from "zod";
+import type { ResponsesRequestEcho } from "../converter/responses-echo";
 
 export type ProviderMode = "passthrough" | "inject";
 
@@ -83,11 +84,39 @@ export const BlockPatternSchema = z.object({
 
 export type BlockPattern = z.infer<typeof BlockPatternSchema>;
 
-// Routing configuration schema
+// ── New unified routing schemas ─────────────────────────────────────────────
+
+export const BlockConditionSchema = z
+  .object({
+    kind: z.array(z.string()).optional(),
+  })
+  .optional();
+
+export const ForwardRuleSchema = z.object({
+  path: z.string().min(1),
+  provider: z.string().min(1), // "auto" or a provider ID
+});
+
+export const BlockRuleSchema = z.object({
+  path: z.string().min(1),
+  condition: BlockConditionSchema,
+  response: z.string(),
+  code: z.number().int().default(200),
+});
+
+export type ForwardRule = z.infer<typeof ForwardRuleSchema>;
+export type BlockRule = z.infer<typeof BlockRuleSchema>;
+export type BlockCondition = z.infer<typeof BlockConditionSchema>;
+
+// ── Routing config schema (supports both legacy and new format) ─────────────
+
 export const RoutingConfigSchema = z.object({
+  // New unified format
+  forward: z.array(ForwardRuleSchema).optional(),
+  block: z.array(BlockRuleSchema).optional(),
+  // Legacy (kept for backward compat; ignored when forward exists)
   proxy: z.array(z.string()).optional(),
   passthrough: z.array(z.string()).optional(),
-  block: z.array(BlockPatternSchema).optional(),
   openaiBlock: z.array(BlockPatternSchema).optional(),
 });
 
@@ -164,6 +193,7 @@ export type LoggingConfigInput = z.infer<typeof LoggingConfigSchema>;
 
 // Full file configuration schema
 export const FileConfigSchema = z.object({
+  configVersion: z.string().optional(),
   server: ServerConfigSchema.optional(),
   providers: z.record(z.string(), ProviderConfigSchema).optional(),
   defaultProvider: z.string().optional(),
@@ -223,10 +253,8 @@ export interface RouterConfig {
   defaultProvider: string;
   providers: Record<string, Provider>;
   routing: {
-    proxy: string[];
-    passthrough: string[];
-    block: BlockPattern[];
-    openaiBlock: BlockPattern[];
+    forward: ForwardRule[];
+    block: BlockRule[];
   };
   concurrency?: ConcurrencyConfig;
   routeQueues?: RouteQueueConfig[]; // Route-based queue configurations
@@ -493,6 +521,10 @@ export interface RequestTask {
   responsesStreamRequested?: boolean;
   /** Client had `stream: true` on cross-protocol POST /v1/chat/completions; response may be synthesized as SSE */
   streamRequested?: boolean;
+  /** Fields from client's /v1/responses body echoed into response shells */
+  originalResponsesEcho?: ResponsesRequestEcho;
+  /** Streaming handler finished writing successfully (avoids disconnect false positives) */
+  streamCompleted?: boolean;
   /** Optional response object for streaming support in queue mode */
   res?: http.ServerResponse;
   /** Whether the task has been cancelled */
@@ -517,6 +549,8 @@ export interface ProxyResult {
   errorMessage?: string;
   /** Whether the response was streamed directly to client */
   streamed?: boolean;
+  /** True when streamed bytes were flushed before downstream closed (lifecycle / logging only) */
+  streamCompleted?: boolean;
 }
 
 /**

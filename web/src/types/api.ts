@@ -204,3 +204,55 @@ export interface ClientConfigGetResponse {
   codex: ClientConfigItem;
   claudeDefaultModels: ClaudeDefaultModels;
 }
+
+// Settings API types
+export interface SettingsConfig {
+  logging: LoggingSettings;
+  concurrency: ConcurrencySettings;
+  server: ServerSettings;
+  routing: RoutingSettings;
+}
+
+export interface LoggingSettings {
+  enabled: boolean;
+  database?: {
+    type: "sqlite" | "postgres";
+    path?: string;
+    host?: string;
+    port?: number;
+    name?: string;
+    user?: string;
+    password?: string;
+    ssl?: boolean;
+  };
+}
+
+export interface ConcurrencySettings {
+  enabled: boolean;
+  maxWorkers: number;
+  maxQueueSize?: number;
+  requestTimeout?: number;
+  retry429?: {
+    enabled: boolean;
+    maxRetries: number;
+    delayMs: number;
+  };
+  routes?: Array<Record<string, unknown>>;
+}
+
+export interface ServerSettings {
+  port: number;
+  host: string;
+  autoStart: boolean;
+}
+
+export interface RoutingSettings {
+  forward: Array<{ path: string; provider: string }>;
+  block: Array<{ path: string; condition?: { kind?: string[] }; response: string; code: number }>;
+}
+
+export interface PatchConfigResponse {
+  status: string;
+  restartRequired?: boolean;
+  message?: string;
+}

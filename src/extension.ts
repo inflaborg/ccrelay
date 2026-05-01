@@ -7,6 +7,7 @@ import { Logger } from "./utils/logger";
 import { LeaderElection } from "./server/leaderElection";
 import { DashboardWebviewProvider } from "./vscode/dashboardView";
 import * as Api from "./api";
+import { BUILD_HASH, BUILD_VERSION, GIT_HASH } from "./api/version.generated";
 
 let server: ProxyServer | null = null;
 let statusBar: StatusBarManager | null = null;
@@ -25,6 +26,9 @@ export function activate(context: vscode.ExtensionContext) {
     `[Extension:${instanceId}] ===== ACTIVATION START ===== at ${new Date().toISOString()}`
   );
   logger.info(`[Extension:${instanceId}] Process ID: ${process.pid}`);
+  logger.info(
+    `[Extension:${instanceId}] Build version=${BUILD_VERSION} buildHash=${BUILD_HASH} gitHash=${GIT_HASH}`
+  );
 
   // Initialize configuration manager (auto-creates config file if not exists)
   const configStart = Date.now();

@@ -75,6 +75,9 @@ export class TaskExecutor {
       res,
       ...(bodyResult.responsesStreamRequested ? { responsesStreamRequested: true } : {}),
       ...(bodyResult.streamRequested ? { streamRequested: true } : {}),
+      ...(bodyResult.originalResponsesEcho !== undefined
+        ? { originalResponsesEcho: bodyResult.originalResponsesEcho }
+        : {}),
     };
   }
 
@@ -144,6 +147,9 @@ export class TaskExecutor {
 
     // Register disconnect handler
     const cleanup = responseWriter.onClientDisconnect(clientId, () => {
+      if (task.streamCompleted) {
+        return;
+      }
       if (!clientDisconnected) {
         clientDisconnected = true;
         task.cancelled = true;
@@ -159,7 +165,7 @@ export class TaskExecutor {
         cleanup();
         const totalTime = Date.now() - requestReceiveStart;
 
-        if (clientDisconnected || !responseWriter.isWritable()) {
+        if (!result.streamCompleted && (clientDisconnected || !responseWriter.isWritable())) {
           log.info(
             `[Perf:${clientId}] TaskComplete: client disconnected, skipping response (status: ${result.statusCode}, time: ${totalTime}ms)`
           );

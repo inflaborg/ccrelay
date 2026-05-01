@@ -211,7 +211,7 @@ Example (adjust `model` to one your current CCRelay provider maps, e.g. via `mod
 
 ```toml
 # ~/.codex/config.toml
-model = "glm-5-turbo"
+model = "gpt-5.4-mini"
 model_provider = "ccrelay"
 
 [model_providers.ccrelay]
@@ -298,7 +298,7 @@ vlModelMap:
 | `/v1/responses` | POST | OpenAI Responses API (create) |
 | `/v1/models` | GET | OpenAI models list |
 
-`routing.proxy` in `config.yaml` should include the paths you use (defaults include the rows above).
+`routing.forward` in `config.yaml` should include the paths you use (defaults include the rows above). Unmatched paths return 404.
 
 **Conversion rules**
 
@@ -306,10 +306,6 @@ vlModelMap:
 - Client **OpenAI** (chat) + provider `providerType: anthropic`: request O→A, response A→O.
 - Client **OpenAI Responses** + any provider: request is converted to Chat Completions, then to Anthropic if needed; response is converted back to the Responses JSON shape. Hosted-only tools (e.g. web search, MCP) are stripped in v1.
 - Same **family** on both sides (e.g. chat + `openai` provider): no format conversion (only model name mapping, etc.).
-
-**OpenAI Chat Completions path** (`openaiChatCompletionsPath`, optional)
-
-When converting to OpenAI Chat Completions (Anthropic → OpenAI, or Responses → Chat as a hub), CCRelay appends a path to `baseUrl`. The default is `/chat/completions` (no extra `/v1` segment in the path). If your `baseUrl` already ends with a version segment (e.g. `https://api.z.ai/api/coding/paas/v4`) and the upstream expects `.../v4/chat/completions` rather than `.../v4/v1/chat/completions`, leave the default or set `openaiChatCompletionsPath: "/chat/completions"` explicitly. If your gateway expects the full OpenAI-style segment (e.g. `baseUrl` is only the host root), set `openaiChatCompletionsPath: "/v1/chat/completions"`.
 
 **Limitations (first iteration)**
 
@@ -351,6 +347,7 @@ CCRelay has a built-in Web UI dashboard that provides:
 - **Client configuration** (optional): Set Claude Code’s `~/.claude/settings.json` `env` from the UI (e.g. `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN` placeholder) and, if needed, per-tier `ANTHROPIC_DEFAULT_*_MODEL` — see [Claude Code](#claude-code).
 - **Providers**: View and switch providers
 - **Logs**: Request/response log viewer (requires enabling log storage)
+- **Settings**: Manage all YAML config groups (Logging, Concurrency, Server, Routing) from the UI. Changes to concurrency and routing hot-reload; server and logging changes require a restart.
 
 **Client configuration** in the Web UI (same flows as the dashboard’s **Client configuration** / **Configure default models** actions):
 
@@ -400,10 +397,9 @@ CCRelay uses a YAML configuration file (`~/.ccrelay/config.yaml` by default). Th
 Each provider supports:
 - `name` - Display name
 - `baseUrl` - API base URL
-- `openaiChatCompletionsPath` (optional) - Path for OpenAI Chat Completions when converting to that API (default: `/chat/completions`; use `/v1/chat/completions` if your base URL does not include a version prefix)
 - `modelsListFormat` (optional) - `auto` | `openai` | `anthropic` — wire for `GET /v1/models` (default `auto` matches `providerType`)
 - `mode` - `passthrough` or `inject`
-- `providerType` - `anthropic` (default) or `openai`
+- `providerType` - `anthropic` (default), `openai` (full passthrough), or `openai_chat` (Chat Completions only)
 - `apiKey` - API key (inject mode, supports `${ENV_VAR}` environment variables)
 - `authHeader` - Authorization header name (default: `authorization`)
 - `modelMap` - Model name mappings (array of `{pattern, model}`, supports wildcards)
@@ -415,10 +411,9 @@ Each provider supports:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `routing.proxy` | `["/v1/messages", "/messages", "/v1/chat/completions", "/v1/models", "/v1/responses"]` | Paths routed to current provider |
-| `routing.passthrough` | `["/v1/users/*", "/v1/organizations/*"]` | Paths always going to official API |
-| `routing.block` | `[{path: "/api/event_logging/*", ...}]` | Paths returning custom response in inject mode |
-| `routing.openaiBlock` | `[{path: "/v1/messages/count_tokens", ...}]` | Block patterns for OpenAI providers |
+| `configVersion` | `"0.2.0"` | Config schema version. Legacy configs without this field are auto-migrated on load. |
+| `routing.forward` | `[{path, provider}, ...]` | Forward rules — first match wins. `provider: "auto"` = current active provider; or a specific provider ID (e.g. `"official"`). Unmatched paths return 404. |
+| `routing.block` | `[{path, response, code, condition?}, ...]` | Block rules — return custom response instead of forwarding. Checked before forward. Optional `condition.kind` (array of protocol names) restricts the block to specific client surfaces. |
 
 #### Concurrency Control
 
@@ -457,6 +452,7 @@ Each provider supports:
 ```yaml
 # CCRelay Configuration
 # Docs: https://github.com/inflaborg/ccrelay#configuration
+configVersion: "0.2.0"
 
 # ==================== Server Configuration ====================
 server:
@@ -470,7 +466,7 @@ providers:
     name: "Claude Official"
     baseUrl: "https://api.anthropic.com"
     mode: "passthrough"         # passthrough | inject
-    providerType: "anthropic"   # anthropic | openai
+    providerType: "anthropic"   # anthropic | openai | openai_chat
     enabled: true
 
   glm:
@@ -504,25 +500,35 @@ defaultProvider: "official"
 
 # ==================== Routing Configuration ====================
 routing:
-  # Proxy routes: Forward to current provider
-  proxy:
-    - "/v1/messages"
-    - "/messages"
+  # Forward rules: path → provider mapping. First match wins.
+  # provider: "auto" = current active provider; or a specific provider ID.
+  # Unmatched paths return 404.
+  forward:
+    - path: "/v1/messages"
+      provider: "auto"
+    - path: "/v1/chat/completions"
+      provider: "auto"
+    - path: "/v1/responses"
+      provider: "auto"
+    - path: "/v1/models"
+      provider: "auto"
+    - path: "/v1/messages/count_tokens"
+      provider: "auto"
+    - path: "/v1/users/*"
+      provider: "official"
+    - path: "/v1/organizations/*"
+      provider: "official"
 
-  # Passthrough routes: Always go to official API
-  passthrough:
-    - "/v1/users/*"
-    - "/v1/organizations/*"
-
-  # Block routes (inject mode): Return custom response
+  # Block rules: return custom response instead of forwarding.
+  # Checked before forward rules. condition.kind filters by client protocol.
+  # Omit condition to block all protocols.
   block:
     - path: "/api/event_logging/*"
       response: ""
       code: 200
-
-  # OpenAI format block routes
-  openaiBlock:
     - path: "/v1/messages/count_tokens"
+      condition:
+        kind: ["openai", "openai_chat", "openai_responses"]
       response: '{"input_tokens": 0}'
       code: 200
 

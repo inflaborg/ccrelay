@@ -8,8 +8,10 @@ import {
   convertRequestToOpenAI,
   convertOpenAIRequestToAnthropic,
   convertResponsesRequestToChatCompletions,
+  extractResponsesEcho,
   isOpenAIChatCompletionsRequest,
   isOpenAIResponsesRequest,
+  type ResponsesRequestEcho,
 } from "../../converter";
 import { ScopedLogger } from "../../utils/logger";
 import type { ApiSurface } from "../../types";
@@ -98,6 +100,8 @@ export class BodyProcessor {
 
     let responsesStreamRequested = false;
     let streamRequested = false;
+    let originalResponsesEcho: ResponsesRequestEcho | undefined;
+
     if (needsConversion && (clientSurface === "openai_responses" || clientSurface === "openai") && body.length > 0) {
       try {
         const d = JSON.parse(body.toString("utf-8")) as Record<string, unknown>;
@@ -114,10 +118,12 @@ export class BodyProcessor {
     }
 
     if (needsConversion) {
-      body = forceDisableStreamInBody(
-        body,
-        `${clientSurface}->${upstreamWire}`
-      );
+      // Responses→Chat supports true SSE streaming; let the stream flag pass through.
+      const skipDisableStream =
+        clientSurface === "openai_responses" && upstreamWire === "openai";
+      if (!skipDisableStream) {
+        body = forceDisableStreamInBody(body, `${clientSurface}->${upstreamWire}`);
+      }
     }
 
     if (!needsConversion) {
@@ -127,6 +133,7 @@ export class BodyProcessor {
       if (result) {
         body = result.body;
         originalModel = result.originalModel;
+        originalResponsesEcho = result.originalResponsesEcho;
         routing.targetPath = result.newPath;
         routing.targetUrl = buildTargetUrl(
           routing.provider.baseUrl,
@@ -142,6 +149,7 @@ export class BodyProcessor {
       if (result) {
         body = result.body;
         originalModel = result.originalModel;
+        originalResponsesEcho = result.originalResponsesEcho;
         routing.targetPath = result.newPath;
         routing.targetUrl = buildTargetUrl(
           routing.provider.baseUrl,
@@ -202,6 +210,7 @@ export class BodyProcessor {
       requestBodyLog,
       ...(responsesStreamRequested ? { responsesStreamRequested: true } : {}),
       ...(streamRequested ? { streamRequested: true } : {}),
+      ...(originalResponsesEcho !== undefined ? { originalResponsesEcho } : {}),
     };
   }
 
@@ -240,13 +249,14 @@ export class BodyProcessor {
   private convertResponsesToChatCompletionsOnly(
     body: Buffer,
     routing: RoutingContext
-  ): { body: Buffer; newPath: string; originalModel: string | undefined } | null {
+  ): { body: Buffer; newPath: string; originalModel: string | undefined; originalResponsesEcho: ResponsesRequestEcho } | null {
     try {
       const bodyStr = body.toString("utf-8");
       const raw = JSON.parse(bodyStr) as Record<string, unknown>;
       if (!isOpenAIResponsesRequest(raw)) {
         return null;
       }
+      const originalResponsesEcho = extractResponsesEcho(raw);
       const c = convertResponsesRequestToChatCompletions(
         raw,
         routing.targetPath
@@ -256,6 +266,7 @@ export class BodyProcessor {
         body: Buffer.from(JSON.stringify(c.request), "utf-8"),
         newPath: c.newPath,
         originalModel,
+        originalResponsesEcho,
       };
     } catch (err) {
       log.error("[Resp->Chat] Failed to convert request", err);
@@ -266,13 +277,14 @@ export class BodyProcessor {
   private convertResponsesToAnthropicChain(
     body: Buffer,
     routing: RoutingContext
-  ): { body: Buffer; newPath: string; originalModel: string | undefined } | null {
+  ): { body: Buffer; newPath: string; originalModel: string | undefined; originalResponsesEcho: ResponsesRequestEcho } | null {
     try {
       const bodyStr = body.toString("utf-8");
       const raw = JSON.parse(bodyStr) as Record<string, unknown>;
       if (!isOpenAIResponsesRequest(raw)) {
         return null;
       }
+      const originalResponsesEcho = extractResponsesEcho(raw);
       const chat = convertResponsesRequestToChatCompletions(
         raw,
         routing.path
@@ -286,6 +298,7 @@ export class BodyProcessor {
         body: Buffer.from(JSON.stringify(c.request), "utf-8"),
         newPath: c.newPath,
         originalModel,
+        originalResponsesEcho,
       };
     } catch (err) {
       log.error("[Resp->Chat->A] Failed to convert request", err);

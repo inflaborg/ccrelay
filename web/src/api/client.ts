@@ -14,6 +14,8 @@ import type {
   DeleteProviderResponse,
   ReloadConfigResponse,
   ClientConfigGetResponse,
+  SettingsConfig,
+  PatchConfigResponse,
 } from "../types/api";
 
 // Re-export types for convenience
@@ -144,4 +146,16 @@ export const api = {
     }
     return data as { status: string; message?: string };
   },
+
+  // Settings
+  getConfig: (): Promise<SettingsConfig> => fetchAPI<SettingsConfig>("/config"),
+
+  patchConfig: (body: {
+    section: string;
+    data: Record<string, unknown>;
+  }): Promise<PatchConfigResponse> =>
+    fetchAPI<PatchConfigResponse>("/config", {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
 };

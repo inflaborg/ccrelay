@@ -16,42 +16,47 @@ export class RouterStage {
   constructor(private router: Router) {}
 
   /**
-   * Process request routing - returns RoutingContext
+   * Process request routing - returns RoutingContext.
+   * Returns null when the path should get a 404 (not_found).
    */
   process(
     req: http.IncomingMessage,
     path: string,
     parsedUrl: url.UrlWithParsedQuery
-  ): RoutingContext {
+  ): RoutingContext | null {
     const method = req.method || "GET";
-    const defaultSurface: ApiSurface = detectApiSurface(method, path) ?? "anthropic";
+    const clientSurface: ApiSurface = detectApiSurface(method, path) ?? "anthropic";
 
-    // 1. Check if path should be blocked
-    const blockResult = this.router.shouldBlock(path);
-    if (blockResult.blocked) {
+    // 1. Unified resolve: block → forward → not_found
+    const result = this.router.resolve(path, clientSurface);
+
+    if (result.type === "block") {
       return {
         blocked: true,
-        blockResponse: blockResult.response ?? JSON.stringify({ ok: true }),
-        blockStatusCode: blockResult.responseCode ?? 200,
+        blockResponse: result.response,
+        blockStatusCode: result.code,
         method,
         path,
-        provider: null as never, // Not needed if blocked
+        provider: null as never,
         headers: {},
         targetUrl: "",
         targetPath: "",
         targetQuery: "",
         isRouted: false,
         isOpenAIProvider: false,
-        clientSurface: defaultSurface,
+        clientSurface,
       };
     }
 
-    // 2. Get target provider
-    const provider = this.router.getTargetProvider(path);
-    const isRouted = this.router.shouldRoute(path);
+    if (result.type === "not_found") {
+      return null;
+    }
+
+    // type === "forward"
+    const { provider, isRouted } = result;
     const isOpenAIProvider = isOpenAIType(provider.providerType);
 
-    // 3. Prepare headers
+    // 2. Prepare headers
     const originalHeaders: Record<string, string> = {};
     for (const [key, value] of Object.entries(req.headers)) {
       if (value) {
@@ -60,9 +65,9 @@ export class RouterStage {
     }
     const headers = this.router.prepareHeaders(originalHeaders, provider);
 
-    // 4. Build target URL
+    // 3. Build target URL
     const targetQuery = typeof parsedUrl.search === "string" ? parsedUrl.search : "";
-    let targetPath = path;
+    const targetPath = path;
     let targetUrl = this.router.getTargetUrl(path, provider);
     if (targetQuery) {
       targetUrl += targetQuery;

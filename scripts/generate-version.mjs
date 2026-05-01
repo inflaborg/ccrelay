@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
  * Generate build version info
- * Creates version.ts with build timestamp and git hash
+ * Creates version.ts with build timestamp and a per-build random hash
  */
 
+import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -21,19 +22,18 @@ const outFile = path.join(srcDir, "version.generated.ts");
 // Get current timestamp
 const now = new Date();
 const dateStr = now.toISOString().split("T")[0]; // YYYY-MM-DD
-const timeStr = now.toISOString().replace(/[:.]/g, "-").slice(0, -1); // YYYY-MM-DDTHH-MM-SS-sssZ
+const buildHash = crypto.randomBytes(4).toString("hex");
 
-// Get git short hash if available
+// Get git short hash if available. This is informational only; local edits do not change HEAD.
 let gitHash = "unknown";
 try {
   gitHash = execSync("git rev-parse --short HEAD", { encoding: "utf-8" }).trim();
 } catch {
-  // Fallback to random string if not in git
-  gitHash = Math.random().toString(36).substring(2, 8);
+  // ignore
 }
 
-// Build version string: package.version-date-hash
-const buildVersion = `${packageJson.version}-${dateStr}-${gitHash}`;
+// Build version string: package.version-date-randomHash
+const buildVersion = `${packageJson.version}-${dateStr}-${buildHash}`;
 
 const content = `/**
  * Auto-generated build version info
@@ -41,7 +41,8 @@ const content = `/**
  */
 export const BUILD_VERSION = "${buildVersion}";
 export const BUILD_DATE = "${dateStr}";
-export const BUILD_HASH = "${gitHash}";
+export const BUILD_HASH = "${buildHash}";
+export const GIT_HASH = "${gitHash}";
 export const PACKAGE_VERSION = "${packageJson.version}";
 `;
 
@@ -53,6 +54,8 @@ try {
   fs.writeFileSync(outFile, content, "utf-8");
 
   console.log(`✓ Generated version: ${buildVersion}`);
+  console.log(`  build hash: ${buildHash}`);
+  console.log(`  git hash: ${gitHash}`);
   console.log(`  → ${outFile}`);
 } catch (err) {
   console.warn(`! failed to write version file: ${err.message}`);
