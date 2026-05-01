@@ -496,9 +496,21 @@ export class ConfigManager {
         // Only rewrite if there are new fields added
         if (JSON.stringify(merged) !== JSON.stringify(existingConfig)) {
           console.log(`[ConfigManager] Merging new default fields into ${this.configPath}`);
-          // Preserve comments by not overwriting if user has a customized file
-          // For now, we just use the merged config without rewriting the file
-          // This allows users to keep their comments
+          try {
+            const yamlContent = yaml.dump(merged, {
+              indent: 2,
+              lineWidth: -1,
+              noRefs: true,
+              quotingType: '"',
+              forceQuotes: false,
+            });
+            this.saving = true;
+            fs.writeFileSync(this.configPath, yamlContent, "utf-8");
+            this.saving = false;
+          } catch (writeErr) {
+            this.saving = false;
+            console.error("[ConfigManager] Failed to write merged config:", writeErr);
+          }
         }
       }
     } catch (err) {
