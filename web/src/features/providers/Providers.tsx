@@ -352,17 +352,17 @@ export default function Providers() {
               ]}
             >
               <Card
-                className={`p-0 ${provider.active ? "border-primary" : ""} ${!provider.enabled ? "opacity-50" : ""}`}
+                className={`p-0 h-full border ${provider.active ? "border-primary shadow-[inset_0_0_0_1px_var(--color-primary),0_0_0_2px_var(--color-primary)] dark:shadow-[inset_0_0_0_1px_var(--color-primary),0_0_0_2px_var(--color-primary)]" : "border-border"} ${!provider.enabled ? "opacity-50" : ""}`}
               >
                 <CardHeader className="p-3 pb-1">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-sm truncate mr-1">{provider.name}</CardTitle>
-                    <div className="flex items-center gap-1 flex-shrink-0">
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
                       {(() => {
                         const proto = PROVIDER_PROTOCOL_LABEL[provider.providerType];
                         return proto ? (
                           <span
-                            className={`inline-flex items-center rounded-md px-1.5 py-0 text-[9px] font-semibold leading-none ${proto.className}`}
+                            className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${proto.className}`}
                           >
                             {proto.label}
                           </span>
@@ -371,16 +371,16 @@ export default function Providers() {
                       {!provider.enabled && (
                         <Badge
                           variant="outline"
-                          className="text-[10px] px-1 py-0 text-muted-foreground"
+                          className="text-[10px] px-1.5 py-0.5 text-muted-foreground"
                         >
                           Disabled
                         </Badge>
                       )}
                       {provider.active && (
-                        <Badge variant="success" className="gap-0.5 text-[10px] px-1 py-0">
-                          <Check className="h-2.5 w-2.5" />
+                        <span className="inline-flex items-center gap-0.5 rounded-md bg-primary/10 text-primary px-1.5 py-0.5 text-[10px] font-semibold">
+                          <Check className="h-3 w-3" />
                           Active
-                        </Badge>
+                        </span>
                       )}
                     </div>
                   </div>
