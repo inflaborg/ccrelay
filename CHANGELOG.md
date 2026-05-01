@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **WebSocket `config_changed` broadcast**: Leader broadcasts config changes to all Follower instances via WebSocket, so Followers reload their local config automatically.
 - **Duplicate provider: editable New provider ID**: the Duplicate dialog now lets you customize the new provider ID instead of being locked to `<sourceId>_copy`.
 - **Codex model input**: applying the Codex CCRelay template now shows a model input dialog before writing `~/.codex/config.toml`, defaulting to `gpt-5.4-mini` when left empty (replaces the previous hardcoded `glm-5-turbo`).
+- **Codex "Configure model" button**: the Codex section of Client configuration now shows the current model value and a "Configure model" button (like Claude Code's "Configure default models") that patches only the `model` field in an existing `~/.codex/config.toml` without replacing the full file. Backend exposes `model` in the GET response and accepts `patchCodexModelOnly` in the apply POST body.
 - **Provider protocol badge**: each provider card now displays a colored protocol label (Anthropic / OpenAI / OpenAI Chat) in the top-right corner for quick identification.
 
 ### Changed

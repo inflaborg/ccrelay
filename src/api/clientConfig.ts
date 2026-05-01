@@ -50,6 +50,8 @@ export interface ClientConfigItem {
   currentValue?: string;
   /** For Codex, which model_provider is selected */
   modelProvider?: string;
+  /** For Codex, the current model value from config.toml */
+  model?: string;
   message?: string;
 }
 
@@ -250,18 +252,25 @@ function detectCodex(codexPath: string, port: number): ClientConfigItem {
   const raw = fs.readFileSync(codexPath, "utf-8");
   const toml = parseTomlLite(raw);
   const modelProvider = toml.top.model_provider;
+  const model = toml.top.model;
   if (!modelProvider) {
-    return { status: "missing", filePath, message: "model_provider not set" };
+    return { status: "missing", filePath, model, message: "model_provider not set" };
   }
   const sec = toml.sections[`model_providers.${modelProvider}`];
   const baseUrl = sec?.base_url;
   if (!baseUrl) {
-    return { status: "missing", filePath, modelProvider, message: "base_url not set for provider" };
+    return {
+      status: "missing",
+      filePath,
+      modelProvider,
+      model,
+      message: "base_url not set for provider",
+    };
   }
   if (isLocalProxyCodexBase(baseUrl, port)) {
-    return { status: "ok", filePath, currentValue: baseUrl, modelProvider };
+    return { status: "ok", filePath, currentValue: baseUrl, modelProvider, model };
   }
-  return { status: "wrong_target", filePath, currentValue: baseUrl, modelProvider };
+  return { status: "wrong_target", filePath, currentValue: baseUrl, modelProvider, model };
 }
 
 /**
@@ -313,6 +322,7 @@ export async function handleApplyClientConfig(
       overwrite?: boolean;
       model?: string;
       patchClaudeModelsOnly?: boolean;
+      patchCodexModelOnly?: boolean;
       claudeDefaultModels?: { opus?: string; sonnet?: string; haiku?: string };
     }>(req);
     const target = body.target;
@@ -367,6 +377,22 @@ export async function handleApplyClientConfig(
         status: "ok",
         message: `Updated Claude default model env in ${claudePath}`,
       });
+      return;
+    }
+
+    if (target === "codex" && body.patchCodexModelOnly) {
+      const m = typeof body.model === "string" ? body.model.trim() : "";
+      if (!fs.existsSync(codexPath)) {
+        sendJson(res, 400, {
+          status: "error",
+          message: "Codex config file does not exist yet. Apply the template first.",
+        });
+        return;
+      }
+      const raw = fs.readFileSync(codexPath, "utf-8");
+      const updated = raw.replace(/^model\s*=\s*".*"$/m, `model = "${m || CODEX_DEFAULT_MODEL}"`);
+      fs.writeFileSync(codexPath, updated, "utf-8");
+      sendJson(res, 200, { status: "ok", message: `Updated model in ${codexPath}` });
       return;
     }
 

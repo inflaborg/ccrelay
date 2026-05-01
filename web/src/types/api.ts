@@ -186,6 +186,7 @@ export interface ClientConfigItem {
   filePath: string;
   currentValue?: string;
   modelProvider?: string;
+  model?: string;
   message?: string;
 }
 

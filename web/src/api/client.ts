@@ -123,6 +123,7 @@ export const api = {
     overwrite?: boolean;
     model?: string;
     patchClaudeModelsOnly?: boolean;
+    patchCodexModelOnly?: boolean;
     claudeDefaultModels?: { opus?: string; sonnet?: string; haiku?: string };
   }) => {
     const response = await fetch(`${API_BASE}/client-config/apply`, {
