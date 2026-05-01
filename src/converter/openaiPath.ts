@@ -1,35 +1,19 @@
 /**
- * Resolves the upstream path for OpenAI Chat Completions after protocol conversion
- * (Anthropic → OpenAI, OpenAI Responses → Chat Completions).
+ * OpenAI path utilities for protocol detection and type checks.
  */
 
-import type { Provider } from "../types";
+import type { ProviderType } from "../types";
 
-export const DEFAULT_OPENAI_CHAT_COMPLETIONS_PATH = "/chat/completions" as const;
-
-export type OpenAIPathProvider = Pick<Provider, "openaiChatCompletionsPath">;
-
-export function getOpenAIChatCompletionsPath(provider?: OpenAIPathProvider | null): string {
-  const p = provider?.openaiChatCompletionsPath;
-  if (p && p.length > 0) {
-    return p.trim();
-  }
-  return DEFAULT_OPENAI_CHAT_COMPLETIONS_PATH;
+/**
+ * True if `originalPath` is a recognized OpenAI Chat Completions endpoint.
+ */
+export function isOpenAIChatCompletionsWirePath(originalPath: string): boolean {
+  return originalPath === "/chat/completions" || originalPath === "/v1/chat/completions";
 }
 
 /**
- * True if `originalPath` is the OpenAI Chat Completions endpoint for this provider
- * (including legacy literals when provider is unknown).
+ * True if the provider type is any OpenAI variant (full or chat-only).
  */
-export function isOpenAIChatCompletionsWirePath(
-  originalPath: string,
-  provider?: OpenAIPathProvider | null
-): boolean {
-  if (originalPath === "/v1/chat/completions" || originalPath === "/chat/completions") {
-    return true;
-  }
-  if (provider && originalPath === getOpenAIChatCompletionsPath(provider)) {
-    return true;
-  }
-  return false;
+export function isOpenAIType(providerType: ProviderType): boolean {
+  return providerType === "openai" || providerType === "openai_chat";
 }

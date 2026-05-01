@@ -359,20 +359,6 @@ describe("converter: anthropic-to-openai", () => {
       expect(result.newPath).toBe("/chat/completions");
     });
 
-    it("should use openaiChatCompletionsPath from provider when set", () => {
-      const request: AnthropicMessageRequest = {
-        model: "claude-3-5-sonnet-20241022",
-        max_tokens: 4096,
-        messages: [],
-      };
-
-      const result = convertRequestToOpenAI(request, "/v1/messages", {
-        openaiChatCompletionsPath: "/v1/chat/completions",
-      });
-
-      expect(result.newPath).toBe("/v1/chat/completions");
-    });
-
     it("should not modify path for non-matching paths", () => {
       const request: AnthropicMessageRequest = {
         model: "claude-3-5-sonnet-20241022",

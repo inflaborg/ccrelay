@@ -69,15 +69,6 @@ describe("convertOpenAIRequestToAnthropic", () => {
     expect(isOpenAIChatCompletionsRequest({ model: "x" })).toBe(false);
   });
 
-  it("maps custom openaiChatCompletionsPath to /v1/messages", () => {
-    const { newPath } = convertOpenAIRequestToAnthropic(
-      { model: "m", max_tokens: 1, messages: [{ role: "user", content: "x" }] },
-      "/custom/chat/completions",
-      { openaiChatCompletionsPath: "/custom/chat/completions" }
-    );
-    expect(newPath).toBe("/v1/messages");
-  });
-
   const sampleFunctionTool = {
     type: "function" as const,
     function: {

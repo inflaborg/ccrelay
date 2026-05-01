@@ -14,7 +14,6 @@ import type {
   OpenAIMessageRequest,
   OpenAITool,
 } from "./anthropic-to-openai";
-import type { OpenAIPathProvider } from "./openaiPath";
 import { isOpenAIChatCompletionsWirePath } from "./openaiPath";
 
 export interface OpenAIToAnthropicRequestResult {
@@ -28,8 +27,7 @@ export interface OpenAIToAnthropicRequestResult {
  */
 export function convertOpenAIRequestToAnthropic(
   openai: OpenAIMessageRequest,
-  originalPath: string,
-  provider?: OpenAIPathProvider | null
+  originalPath: string
 ): OpenAIToAnthropicRequestResult {
   const messages = openai.messages || [];
   const { systemText, systemBlocks, restMessages } = extractSystem(messages);
@@ -76,7 +74,7 @@ export function convertOpenAIRequestToAnthropic(
   }
 
   let newPath = originalPath;
-  if (isOpenAIChatCompletionsWirePath(originalPath, provider)) {
+  if (isOpenAIChatCompletionsWirePath(originalPath)) {
     newPath = "/v1/messages";
   }
 

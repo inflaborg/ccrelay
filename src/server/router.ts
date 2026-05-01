@@ -5,6 +5,7 @@
 import { Provider } from "../types";
 import { ConfigManager } from "../config";
 import { minimatch } from "../utils/helpers";
+import { isOpenAIType } from "../converter";
 
 // Callback type for provider changes
 type ProviderChangeCallback = (providerId: string) => void;
@@ -99,7 +100,7 @@ export class Router {
     }
 
     // Check OpenAI block patterns if current provider is OpenAI
-    if (provider.providerType === "openai") {
+    if (isOpenAIType(provider.providerType)) {
       for (const pattern of this.config.openaiBlockPatterns) {
         if (minimatch(normalizedPath, pattern.path)) {
           return { blocked: true, response: pattern.response, responseCode: pattern.code };

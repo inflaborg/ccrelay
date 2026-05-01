@@ -12,8 +12,6 @@
 // External API fields use snake_case (max_tokens, tool_choice, etc.)
 
 import type { MessageParam, ContentBlockParam } from "../types";
-import type { OpenAIPathProvider } from "./openaiPath";
-import { getOpenAIChatCompletionsPath } from "./openaiPath";
 
 /**
  * Anthropic Messages API request format
@@ -178,8 +176,7 @@ export interface ConversionResult {
  */
 export function convertRequestToOpenAI(
   anthropic: AnthropicMessageRequest,
-  originalPath: string,
-  provider?: OpenAIPathProvider | null
+  originalPath: string
 ): ConversionResult {
   const openai: OpenAIMessageRequest = {
     model: anthropic.model,
@@ -266,10 +263,10 @@ export function convertRequestToOpenAI(
     };
   }
 
-  // Convert path: /v1/messages -> configured OpenAI Chat Completions path
+  // Convert path: /v1/messages -> /chat/completions
   let newPath = originalPath;
   if (originalPath === "/v1/messages" || originalPath === "/messages") {
-    newPath = getOpenAIChatCompletionsPath(provider);
+    newPath = "/chat/completions";
   }
 
   return {

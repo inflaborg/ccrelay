@@ -4,6 +4,7 @@
 /* eslint-disable @typescript-eslint/naming-convention -- API wire uses snake_case */
 
 import type { ModelsListFormat, Provider } from "../types";
+import { isOpenAIType } from "./openaiPath";
 
 export interface OpenAIModelsListResponse {
   object: "list";
@@ -137,7 +138,7 @@ export function buildModelsListFallback(
   if (fmt === "anthropic") {
     return buildAnthropicModelsListFromProvider(provider);
   }
-  return provider.providerType === "openai"
+  return isOpenAIType(provider.providerType)
     ? buildOpenAIModelsListFromProvider(provider)
     : buildAnthropicModelsListFromProvider(provider);
 }

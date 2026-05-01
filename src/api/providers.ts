@@ -60,7 +60,6 @@ export function handleListProviders(
     active: p.id === currentId,
     enabled: p.enabled !== false,
     apiKey: maskApiKey(p.apiKey),
-    openaiChatCompletionsPath: p.openaiChatCompletionsPath,
     modelsListFormat: p.modelsListFormat,
     modelMap: p.modelMap,
   }));
@@ -120,7 +119,6 @@ export async function handleAddProvider(
       modelMap: body.modelMap,
       vlModelMap: body.vlModelMap,
       headers: body.headers,
-      openaiChatCompletionsPath: body.openaiChatCompletionsPath,
       modelsListFormat: body.modelsListFormat,
     };
 
@@ -191,7 +189,6 @@ function buildDuplicateConfigFromProvider(source: Provider, name: string): Provi
     providerType: source.providerType,
     apiKey: source.apiKey,
     authHeader: source.authHeader,
-    openaiChatCompletionsPath: source.openaiChatCompletionsPath,
     modelsListFormat: source.modelsListFormat,
     modelMap: source.modelMap,
     vlModelMap: source.vlModelMap,
@@ -316,7 +313,7 @@ interface AddProviderRequest {
   id: string;
   name: string;
   baseUrl: string;
-  providerType: "anthropic" | "openai";
+  providerType: "anthropic" | "openai" | "openai_chat";
   mode: "passthrough" | "inject";
   apiKey?: string;
   authHeader?: string;
@@ -324,6 +321,5 @@ interface AddProviderRequest {
   modelMap?: ModelMapEntry[];
   vlModelMap?: ModelMapEntry[];
   headers?: Record<string, string>;
-  openaiChatCompletionsPath?: string;
   modelsListFormat?: "auto" | "openai" | "anthropic";
 }

@@ -44,7 +44,7 @@ providers:
     name: "Claude Official"
     baseUrl: "https://api.anthropic.com"
     mode: "passthrough"         # passthrough | inject
-    providerType: "anthropic"   # anthropic | openai
+    providerType: "anthropic"   # anthropic | openai | openai_chat
     enabled: true
 
   # Example: Custom provider
@@ -250,8 +250,6 @@ function parseProvider(id: string, config: ProviderConfigInput): Provider {
   const modelMap = config.modelMap || config.model_map;
   const vlModelMap = config.vlModelMap || config.vl_model_map;
   const providerType = config.providerType || config.provider_type || "anthropic";
-  const openaiChatCompletionsPath =
-    config.openaiChatCompletionsPath || config.openai_chat_completions_path;
   const modelsListFormat = config.modelsListFormat || config.models_list_format || "auto";
 
   return {
@@ -262,7 +260,6 @@ function parseProvider(id: string, config: ProviderConfigInput): Provider {
     providerType,
     apiKey,
     authHeader: authHeader || "authorization",
-    openaiChatCompletionsPath: openaiChatCompletionsPath || undefined,
     modelsListFormat,
     modelMap: modelMap && modelMap.length > 0 ? modelMap : undefined,
     vlModelMap: vlModelMap && vlModelMap.length > 0 ? vlModelMap : undefined,
@@ -866,9 +863,6 @@ export class ConfigManager {
         vl_model_map: config.vl_model_map,
         headers: config.headers,
         enabled: id === "official" ? true : (config.enabled ?? true),
-        openaiChatCompletionsPath: config.openaiChatCompletionsPath,
-        // eslint-disable-next-line @typescript-eslint/naming-convention
-        openai_chat_completions_path: config.openai_chat_completions_path,
         modelsListFormat: config.modelsListFormat,
         // eslint-disable-next-line @typescript-eslint/naming-convention
         models_list_format: config.models_list_format,

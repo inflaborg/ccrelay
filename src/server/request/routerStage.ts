@@ -7,6 +7,7 @@ import type * as url from "url";
 import type { Router } from "../router";
 import type { ApiSurface, RoutingContext } from "./context";
 import { detectApiSurface, resolveInboundClientSurface } from "./apiSurfaceDetector";
+import { isOpenAIType } from "../../converter";
 
 /**
  * RouterStage processes request routing and blocking
@@ -48,7 +49,7 @@ export class RouterStage {
     // 2. Get target provider
     const provider = this.router.getTargetProvider(path);
     const isRouted = this.router.shouldRoute(path);
-    const isOpenAIProvider = provider.providerType === "openai";
+    const isOpenAIProvider = isOpenAIType(provider.providerType);
 
     // 3. Prepare headers
     const originalHeaders: Record<string, string> = {};

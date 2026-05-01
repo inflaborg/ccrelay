@@ -21,12 +21,7 @@ export {
   isOpenAIChatCompletionsRequest,
 } from "./openai-to-anthropic-request";
 
-export {
-  getOpenAIChatCompletionsPath,
-  isOpenAIChatCompletionsWirePath,
-  DEFAULT_OPENAI_CHAT_COMPLETIONS_PATH,
-  type OpenAIPathProvider,
-} from "./openaiPath";
+export { isOpenAIChatCompletionsWirePath, isOpenAIType } from "./openaiPath";
 
 export {
   convertAnthropicResponseToOpenAI,

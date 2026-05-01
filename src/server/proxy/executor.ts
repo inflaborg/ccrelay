@@ -18,6 +18,7 @@ import {
   convertResponseToAnthropic,
   convertOpenAIModelsToAnthropic,
   convertAnthropicModelsToOpenAI,
+  isOpenAIType,
 } from "../../converter";
 import { isAnthropicMessageResponse } from "../../converter/anthropic-to-openai-response";
 import type { OpenAIChatCompletionResponse } from "../../converter/openai-to-anthropic";
@@ -243,8 +244,14 @@ export class ProxyExecutor {
     _reject: (reason: unknown) => void
   ): void {
     const { clientId, provider, originalModel, res: clientRes, clientSurface } = task;
-    const upstreamWire: ApiSurface = provider.providerType === "openai" ? "openai" : "anthropic";
-    const needsResponseConversion = clientSurface !== upstreamWire;
+    const pt = provider.providerType;
+    const upstreamWire: ApiSurface = pt === "anthropic" ? "anthropic" : "openai";
+    const needsResponseConversion =
+      pt === "anthropic"
+        ? clientSurface !== "anthropic"
+        : pt === "openai_chat"
+          ? clientSurface !== "openai"
+          : clientSurface !== "openai" && clientSurface !== "openai_responses";
 
     const ttfb = Date.now() - ctx.requestSentTime;
     const duration = Date.now() - ctx.startTime;
@@ -984,7 +991,7 @@ export class ProxyExecutor {
       }
 
       // Cross-protocol: convert /v1/models response format to match client's expected API surface
-      const upstreamWireFmt: ApiSurface = task.provider.providerType === "openai" ? "openai" : "anthropic";
+      const upstreamWireFmt: ApiSurface = isOpenAIType(task.provider.providerType) ? "openai" : "anthropic";
       if (
         task.method === "GET" &&
         (task.requestPath === "/v1/models" || task.requestPath.split("?")[0] === "/v1/models") &&
@@ -1028,7 +1035,7 @@ export class ProxyExecutor {
       }
 
       // Cross-protocol: convert error response format to match client's expected API surface
-      const upstreamWire: ApiSurface = task.provider.providerType === "openai" ? "openai" : "anthropic";
+      const upstreamWire: ApiSurface = isOpenAIType(task.provider.providerType) ? "openai" : "anthropic";
       if (outStatus >= 400 && task.clientSurface !== upstreamWire && ctx.responseChunks.length > 0) {
         try {
           const errorBody = Buffer.concat(ctx.responseChunks).toString("utf-8");
