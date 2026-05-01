@@ -5,10 +5,26 @@ import * as yaml from "js-yaml";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { ContextMenuWrapper } from "@/components/ui/context-menu";
 import { Select } from "@/components/ui/select";
 import { api } from "@/api/client";
 import type { AddProviderRequest, Provider, ModelMapEntry } from "@/types/api";
+
+const PROVIDER_PROTOCOL_LABEL: Record<string, { label: string; className: string }> = {
+  anthropic: { label: "Anthropic", className: "bg-indigo-500 text-white" },
+  openai: { label: "OpenAI", className: "bg-emerald-600 text-white" },
+  openai_chat: { label: "OpenAI Chat", className: "bg-teal-500 text-white" },
+};
 
 const DEFAULT_FORM: AddProviderRequest = {
   id: "",
@@ -34,6 +50,8 @@ export default function Providers() {
   const [duplicateSource, setDuplicateSource] = useState<Provider | null>(null);
   const [dupName, setDupName] = useState("");
   const [dupNewId, setDupNewId] = useState("");
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [pendingDeleteProvider, setPendingDeleteProvider] = useState<Provider | null>(null);
   // Raw text states for YAML fields (allow editing invalid YAML temporarily)
   const [modelMapText, setModelMapText] = useState("");
   const [modelMapError, setModelMapError] = useState<string | null>(null);
@@ -221,8 +239,17 @@ export default function Providers() {
     addMutation.mutate(dataToSubmit);
   };
 
-  const handleDelete = (id: string) => {
-    deleteMutation.mutate(id);
+  const requestDelete = (provider: Provider) => {
+    setPendingDeleteProvider(provider);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (pendingDeleteProvider) {
+      deleteMutation.mutate(pendingDeleteProvider.id);
+      setDeleteConfirmOpen(false);
+      setPendingDeleteProvider(null);
+    }
   };
 
   const handleReload = () => {
@@ -318,32 +345,42 @@ export default function Providers() {
                 },
                 {
                   label: "Delete",
-                  onClick: () => handleDelete(provider.id),
+                  onClick: () => requestDelete(provider),
                   destructive: true,
                   show: provider.id !== "official",
                 },
               ]}
             >
               <Card
-                className={`p-0 ${provider.active ? "border-primary" : ""} ${!provider.enabled ? "opacity-50" : ""}`}
+                className={`p-0 h-full border ${provider.active ? "border-primary shadow-[inset_0_0_0_1px_var(--color-primary),0_0_0_2px_var(--color-primary)] dark:shadow-[inset_0_0_0_1px_var(--color-primary),0_0_0_2px_var(--color-primary)]" : "border-border"} ${!provider.enabled ? "opacity-50" : ""}`}
               >
                 <CardHeader className="p-3 pb-1">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-sm truncate mr-1">{provider.name}</CardTitle>
-                    <div className="flex items-center gap-1 flex-shrink-0">
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {(() => {
+                        const proto = PROVIDER_PROTOCOL_LABEL[provider.providerType];
+                        return proto ? (
+                          <span
+                            className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${proto.className}`}
+                          >
+                            {proto.label}
+                          </span>
+                        ) : null;
+                      })()}
                       {!provider.enabled && (
                         <Badge
                           variant="outline"
-                          className="text-[10px] px-1 py-0 text-muted-foreground"
+                          className="text-[10px] px-1.5 py-0.5 text-muted-foreground"
                         >
                           Disabled
                         </Badge>
                       )}
                       {provider.active && (
-                        <Badge variant="success" className="gap-0.5 text-[10px] px-1 py-0">
-                          <Check className="h-2.5 w-2.5" />
+                        <span className="inline-flex items-center gap-0.5 rounded-md bg-primary/10 text-primary px-1.5 py-0.5 text-[10px] font-semibold">
+                          <Check className="h-3 w-3" />
                           Active
-                        </Badge>
+                        </span>
                       )}
                     </div>
                   </div>
@@ -585,9 +622,7 @@ export default function Providers() {
 
               {/* Model Map */}
               <div className="space-y-1">
-                <label className="text-xs font-medium">
-                  Model Map (YAML) <span className="text-destructive">*</span>
-                </label>
+                <label className="text-xs font-medium">Model Map (YAML)</label>
                 <textarea
                   className={`w-full px-2 py-1 text-xs border rounded-md bg-background font-mono ${modelMapError ? "border-destructive" : ""}`}
                   placeholder={`- pattern: "claude-*"\n  model: "custom-model"`}
@@ -606,6 +641,9 @@ export default function Providers() {
                   }}
                 />
                 {modelMapError && <p className="text-[10px] text-destructive">{modelMapError}</p>}
+                <p className="text-[10px] text-muted-foreground">
+                  Optional. Leave empty to pass models through without remapping.
+                </p>
               </div>
             </CardContent>
 
@@ -638,6 +676,47 @@ export default function Providers() {
           </Card>
         </div>
       )}
+
+      <AlertDialog
+        open={deleteConfirmOpen}
+        onOpenChange={o => {
+          setDeleteConfirmOpen(o);
+          if (!o) {
+            setPendingDeleteProvider(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete provider?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete{" "}
+              <span className="font-semibold text-foreground">
+                {pendingDeleteProvider?.name ?? "this provider"}
+              </span>
+              {pendingDeleteProvider?.id ? (
+                <>
+                  {" "}
+                  (<span className="font-mono">{pendingDeleteProvider.id}</span>)
+                </>
+              ) : null}
+              ? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={e => {
+                e.preventDefault();
+                confirmDelete();
+              }}
+            >
+              {deleteMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Duplicate provider — name + new id (server copies full config including API key) */}
       {showDuplicateModal && duplicateSource && (
