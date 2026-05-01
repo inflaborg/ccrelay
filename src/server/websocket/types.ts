@@ -6,6 +6,7 @@
 export type WsMessageType =
   | "connected" // Server -> Client: Connection established
   | "provider_changed" // Server -> Client: Provider changed
+  | "config_changed" // Server -> Client: Config file changed (provider add/delete/edit)
   | "server_stopping" // Server -> Client: Leader is stopping
   | "switch_provider" // Client -> Server: Request to switch provider
   | "switch_result" // Server -> Client: Result of switch request
@@ -32,6 +33,8 @@ export interface WsProviderChangedMessage extends WsMessage<"provider_changed"> 
     providerName: string;
   };
 }
+
+export type WsConfigChangedMessage = WsMessage<"config_changed">;
 
 export type WsServerStoppingMessage = WsMessage<"server_stopping">;
 
@@ -63,6 +66,7 @@ export type WsConnectionState = "connecting" | "connected" | "disconnected" | "e
 export type ProviderChangeCallback = (providerId: string, providerName: string) => void;
 export type ServerStoppingCallback = () => void;
 export type ConnectionStateCallback = (state: WsConnectionState) => void;
+export type ConfigChangedCallback = () => void;
 
 /**
  * WebSocket ready states (mirrors ws library's WebSocket.readyState)

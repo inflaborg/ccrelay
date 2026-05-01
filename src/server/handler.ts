@@ -84,6 +84,12 @@ export class ProxyServer {
       this.handleProviderChangeFromRouter(providerId);
     });
 
+    // Listen to config changes (provider add/delete/edit, file watch, etc.)
+    // - For Leader: broadcasts to Followers so they reload local config
+    config.onConfigChanged(() => {
+      this.handleConfigChanged();
+    });
+
     // Listen for role changes if election is enabled
     if (leaderElection) {
       leaderElection.onRoleChanged((info: RoleChangeInfo) => {
@@ -218,6 +224,9 @@ export class ProxyServer {
         // Update local Router - UI will be updated via Router's callback
         this.router.setCurrentProviderId(providerId);
       },
+      onConfigChanged: () => {
+        // Leader's own config_changed — already reloaded locally, skip
+      },
       onServerStopping: () => {
         this.log.info("[Server] Local WebSocket connection closing");
         this.disconnectFromLeader();
@@ -254,6 +263,10 @@ export class ProxyServer {
         // Update local Router - this will trigger UI update via Router's callback
         this.router.setCurrentProviderId(providerId);
       },
+      onConfigChanged: () => {
+        // Leader's config changed — reload local config so providers/routes stay in sync
+        this.config.reload();
+      },
       onServerStopping: () => {
         this.log.info("[Server] Leader is stopping, waiting for re-election");
         this.disconnectFromLeader();
@@ -274,6 +287,16 @@ export class ProxyServer {
       this.wsClient.disconnect();
       this.wsClient = null;
       this.log.info("[Server] Disconnected from Leader's WebSocket");
+    }
+  }
+
+  /**
+   * Handle config change from ConfigManager
+   * - Leader: Broadcast to Followers so they reload local config
+   */
+  private handleConfigChanged(): void {
+    if (this.wsBroadcaster) {
+      this.wsBroadcaster.broadcastConfigChanged();
     }
   }
 
@@ -537,6 +560,13 @@ export class ProxyServer {
 
   getConfig(): ConfigManager {
     return this.config;
+  }
+
+  /**
+   * Reload configuration from file (used by follower on config_changed WS message)
+   */
+  reloadConfig(): void {
+    this.config.reload();
   }
 
   /**

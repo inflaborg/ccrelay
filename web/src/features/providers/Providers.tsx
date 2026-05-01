@@ -34,6 +34,7 @@ export default function Providers() {
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [duplicateSource, setDuplicateSource] = useState<Provider | null>(null);
   const [dupName, setDupName] = useState("");
+  const [dupNewId, setDupNewId] = useState("");
   // Raw text states for YAML fields (allow editing invalid YAML temporarily)
   const [modelMapText, setModelMapText] = useState("");
   const [modelMapError, setModelMapError] = useState<string | null>(null);
@@ -175,6 +176,7 @@ export default function Providers() {
   const openDuplicateModal = (provider: Provider) => {
     setDuplicateSource(provider);
     setDupName(`${provider.name} (copy)`);
+    setDupNewId(`${provider.id}_copy`);
     setShowDuplicateModal(true);
   };
 
@@ -182,6 +184,7 @@ export default function Providers() {
     setShowDuplicateModal(false);
     setDuplicateSource(null);
     setDupName("");
+    setDupNewId("");
   };
 
   const handleDuplicateSubmit = () => {
@@ -189,8 +192,8 @@ export default function Providers() {
       return;
     }
     const name = dupName.trim();
-    const newId = `${duplicateSource.id}_copy`;
-    if (!name || !/^[a-zA-Z0-9_-]+$/.test(newId)) {
+    const newId = dupNewId.trim();
+    if (!name || !newId || !/^[a-zA-Z0-9_-]+$/.test(newId)) {
       return;
     }
     duplicateMutation.mutate({
@@ -704,14 +707,16 @@ export default function Providers() {
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-medium">New provider ID</label>
-                <div className="w-full h-8 px-2 text-xs border rounded-md bg-muted font-mono flex items-center">
-                  {duplicateSource
-                    ? `${duplicateSource.id}_copy`
-                    : "—"}
-                </div>
+                <input
+                  type="text"
+                  className="w-full h-8 px-2 text-xs border rounded-md bg-background font-mono"
+                  value={dupNewId}
+                  onChange={e => setDupNewId(e.target.value)}
+                  placeholder="e.g. my-provider_copy"
+                />
                 <p className="text-[10px] text-muted-foreground">
-                  The source id is suffixed with <span className="font-mono">_copy</span> (no other spelling). If
-                  that key already exists, the request will fail; remove or rename the other entry first.
+                  Only alphanumeric, underscore, and hyphen. If that key already exists, the request
+                  will fail; remove or rename the other entry first.
                 </p>
               </div>
             </CardContent>
@@ -728,7 +733,7 @@ export default function Providers() {
                 size="sm"
                 className="h-7 text-xs"
                 onClick={handleDuplicateSubmit}
-                disabled={duplicateMutation.isPending || !dupName.trim() || !duplicateSource}
+                disabled={duplicateMutation.isPending || !dupName.trim() || !dupNewId.trim() || !duplicateSource}
               >
                 {duplicateMutation.isPending ? (
                   <Loader2 className="h-3 w-3 animate-spin" />

@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cross-protocol error format conversion**: error responses (status >= 400) are re-wrapped to match the client's expected API surface — Anthropic `{ type, error: { type, message } }` or OpenAI `{ error: { type, message, code } }` shapes.
 - **`GET /v1/models`**: model list now shows both pattern names and target model names from `modelMap`, with deduplication when they match.
 - **Converters**: `convertOpenAIModelsToAnthropic` and `convertAnthropicModelsToOpenAI` for bidirectional models list format conversion.
+- **Config hot-reload**: `ConfigManager` now watches the YAML config file with `fs.watch` (300ms debounce). External edits to `~/.ccrelay/config.yaml` are picked up automatically without needing to click Reload.
+- **Config change event bus**: `ConfigManager.onConfigChanged` event notifies all subscribers (status bar, server, WebSocket broadcaster) when config is reloaded, whether from file watch or API mutation.
+- **WebSocket `config_changed` broadcast**: Leader broadcasts config changes to all Follower instances via WebSocket, so Followers reload their local config automatically.
+- **Duplicate provider: editable New provider ID**: the Duplicate dialog now lets you customize the new provider ID instead of being locked to `<sourceId>_copy`.
 
 ### Fixed
 
@@ -23,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Empty choices handling**: `convertChatCompletionToResponses` and `convertResponseToAnthropic` now handle upstream responses with empty `choices` arrays gracefully instead of crashing.
 - **Cross-protocol streaming guard**: `stream: "true"` (string) is now also detected and forced to `false` for cross-protocol conversion, not just `stream: true` (boolean).
 - **Custom auth headers**: router now supports any custom `authHeader` value on a provider, not just `authorization` or `x-api-key`.
+- **Delete active provider**: deleting the currently active provider now automatically switches to the default provider instead of leaving a stale `currentProviderId` that caused incorrect status bar display.
 
 ## [0.2.0] - 2026-04-26 (pre-release)
 

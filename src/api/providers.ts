@@ -167,9 +167,16 @@ export function handleDeleteProvider(
   }
 
   const configManager = serverInstance.getConfig();
+  const router = serverInstance.getRouter();
+  const wasActive = router.getCurrentProviderId() === id;
   const success = configManager.deleteProvider(id);
 
   if (success) {
+    // If the deleted provider was active, switch to the default
+    if (wasActive) {
+      const fallbackId = configManager.defaultProvider;
+      void router.switchProvider(fallbackId);
+    }
     sendJson(res, 200, { status: "ok", message: `Provider "${id}" deleted` });
   } else {
     sendJson(res, 400, { status: "error", message: `Failed to delete provider "${id}"` });
