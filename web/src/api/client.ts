@@ -121,6 +121,7 @@ export const api = {
   applyClientConfig: async (body: {
     target: "claudeCode" | "codex";
     overwrite?: boolean;
+    model?: string;
     patchClaudeModelsOnly?: boolean;
     claudeDefaultModels?: { opus?: string; sonnet?: string; haiku?: string };
   }) => {

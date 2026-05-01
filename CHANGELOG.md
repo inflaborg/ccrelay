@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Config change event bus**: `ConfigManager.onConfigChanged` event notifies all subscribers (status bar, server, WebSocket broadcaster) when config is reloaded, whether from file watch or API mutation.
 - **WebSocket `config_changed` broadcast**: Leader broadcasts config changes to all Follower instances via WebSocket, so Followers reload their local config automatically.
 - **Duplicate provider: editable New provider ID**: the Duplicate dialog now lets you customize the new provider ID instead of being locked to `<sourceId>_copy`.
+- **Codex model input**: applying the Codex CCRelay template now shows a model input dialog before writing `~/.codex/config.toml`, defaulting to `gpt-5.4-mini` when left empty (replaces the previous hardcoded `glm-5-turbo`).
 
 ### Changed
 

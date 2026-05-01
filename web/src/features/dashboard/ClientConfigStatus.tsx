@@ -15,7 +15,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { api } from "@/api/client";
-import { CLAUDE_CODE_DEFAULT_MODELS } from "@/constants/claudeCodeDefaults";
+import { CLAUDE_CODE_DEFAULT_MODELS, CODEX_DEFAULT_MODEL } from "@/constants/claudeCodeDefaults";
 import type { ClientConfigItem, ClientConfigItemStatus } from "@/types/api";
 
 function statusBadge(status: ClientConfigItemStatus) {
@@ -62,6 +62,9 @@ export default function ClientConfigStatus() {
   const [opus, setOpus] = useState("");
   const [sonnet, setSonnet] = useState("");
   const [haiku, setHaiku] = useState("");
+  const [codexModelModalOpen, setCodexModelModalOpen] = useState(false);
+  const [codexModel, setCodexModel] = useState("");
+  const [pendingCodexModel, setPendingCodexModel] = useState<string | undefined>(undefined);
 
   const { data, isLoading } = useQuery({
     queryKey: ["clientConfig"],
@@ -95,9 +98,9 @@ export default function ClientConfigStatus() {
     },
   });
 
-  const runApply = (target: "claudeCode" | "codex", overwrite: boolean) => {
+  const runApply = (target: "claudeCode" | "codex", overwrite: boolean, model?: string) => {
     setApplyingTo(target);
-    applyMutation.mutate({ target, overwrite });
+    applyMutation.mutate({ target, overwrite, ...(model ? { model } : {}) });
   };
 
   const onConfigureClick = (target: "claudeCode" | "codex") => {
@@ -106,6 +109,11 @@ export default function ClientConfigStatus() {
       return;
     }
     if (item.status === "ok") {
+      return;
+    }
+    if (target === "codex") {
+      setCodexModel("");
+      setCodexModelModalOpen(true);
       return;
     }
     if (needsOverwriteBeforeApply(item)) {
@@ -118,7 +126,8 @@ export default function ClientConfigStatus() {
 
   const onConfirmOverwrite = () => {
     if (pendingTarget) {
-      runApply(pendingTarget, true);
+      const model = pendingTarget === "codex" ? pendingCodexModel : undefined;
+      runApply(pendingTarget, true, model);
     }
   };
 
@@ -313,7 +322,7 @@ export default function ClientConfigStatus() {
                   Your <span className="font-mono">~/.codex/config.toml</span> points to another API (
                   {pendingItem?.currentValue ?? "unknown"}). Applying will{" "}
                   <strong>replace the file</strong> with the CCRelay template (model{" "}
-                  <span className="font-mono">glm-5-turbo</span>, provider{" "}
+                  <span className="font-mono">{pendingCodexModel || CODEX_DEFAULT_MODEL}</span>, provider{" "}
                   <span className="font-mono">ccrelay</span>).
                 </>
               ) : (
@@ -343,6 +352,83 @@ export default function ClientConfigStatus() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {codexModelModalOpen && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+          <Card className="w-full max-w-[360px] flex flex-col">
+            <CardHeader className="border-b p-3 flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm">Codex model</CardTitle>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0"
+                  onClick={() => setCodexModelModalOpen(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-[10px] text-muted-foreground font-normal pt-1">
+                Written to <span className="font-mono">model</span> in{" "}
+                <span className="font-mono">~/.codex/config.toml</span>. Leave empty to use the
+                default.
+              </p>
+            </CardHeader>
+            <CardContent className="p-4 space-y-2">
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Model</label>
+                <input
+                  type="text"
+                  className="w-full h-8 px-2 text-xs border rounded-md bg-background font-mono"
+                  value={codexModel}
+                  onChange={e => setCodexModel(e.target.value)}
+                  placeholder={CODEX_DEFAULT_MODEL}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      const effectiveModel = codexModel.trim() || CODEX_DEFAULT_MODEL;
+                      const codexItem = data?.codex;
+                      setCodexModelModalOpen(false);
+                      if (codexItem && needsOverwriteBeforeApply(codexItem)) {
+                        setPendingCodexModel(effectiveModel);
+                        setPendingTarget("codex");
+                        setConfirmOpen(true);
+                      } else {
+                        runApply("codex", false, effectiveModel);
+                      }
+                    }
+                  }}
+                />
+              </div>
+              {applyMutation.isError && (
+                <p className="text-[10px] text-destructive">{(applyMutation.error as Error).message}</p>
+              )}
+            </CardContent>
+            <div className="border-t p-3 flex justify-end">
+              <Button
+                type="button"
+                size="sm"
+                className="h-7 text-xs"
+                disabled={applyMutation.isPending}
+                onClick={() => {
+                  const effectiveModel = codexModel.trim() || CODEX_DEFAULT_MODEL;
+                  const codexItem = data?.codex;
+                  setCodexModelModalOpen(false);
+                  if (codexItem && needsOverwriteBeforeApply(codexItem)) {
+                    setPendingCodexModel(effectiveModel);
+                    setPendingTarget("codex");
+                    setConfirmOpen(true);
+                  } else {
+                    runApply("codex", false, effectiveModel);
+                  }
+                }}
+              >
+                {applyMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save & Apply"}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {modelModalOpen && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
