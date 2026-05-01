@@ -653,7 +653,7 @@ describe("converter: anthropic-to-openai", () => {
       const result = convertRequestToOpenAI(request, basePath);
 
       expect(result.request.reasoning).toEqual({
-        effort: "medium",
+        effort: "high",
         enabled: true,
       });
     });
@@ -682,7 +682,7 @@ describe("converter: anthropic-to-openai", () => {
       const result = convertRequestToOpenAI(request, basePath);
 
       expect(result.request.reasoning).toEqual({
-        effort: "medium",
+        effort: "high",
         enabled: true,
       });
     });

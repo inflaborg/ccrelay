@@ -505,6 +505,8 @@ export interface RequestTask {
   startedAt?: number;
   /** Client had `stream: true` on POST /v1/responses; response may be synthesized as SSE */
   responsesStreamRequested?: boolean;
+  /** Client had `stream: true` on cross-protocol POST /v1/chat/completions; response may be synthesized as SSE */
+  streamRequested?: boolean;
   /** Optional response object for streaming support in queue mode */
   res?: http.ServerResponse;
   /** Whether the task has been cancelled */

@@ -39,7 +39,7 @@ describe("buildModelsListFallback", () => {
 });
 
 describe("buildOpenAIModelsListFromProvider", () => {
-  it("uses modelMap ids", () => {
+  it("shows pattern and model ids", () => {
     const j = buildOpenAIModelsListFromProvider(
       prov({
         id: "p",
@@ -47,7 +47,21 @@ describe("buildOpenAIModelsListFromProvider", () => {
         modelMap: [{ pattern: "*", model: "m1" }],
       })
     );
-    expect(j.data[0].id).toBe("m1");
+    expect(j.data[0].id).toBe("*");
+    expect(j.data[1].id).toBe("m1");
+    expect(j.data).toHaveLength(2);
+  });
+
+  it("deduplicates when pattern equals model", () => {
+    const j = buildOpenAIModelsListFromProvider(
+      prov({
+        id: "p",
+        providerType: "openai",
+        modelMap: [{ pattern: "gpt-4o", model: "gpt-4o" }],
+      })
+    );
+    expect(j.data).toHaveLength(1);
+    expect(j.data[0].id).toBe("gpt-4o");
   });
 });
 
@@ -56,8 +70,9 @@ describe("buildAnthropicModelsListFromProvider", () => {
     const j = buildAnthropicModelsListFromProvider(
       prov({ id: "p", providerType: "anthropic", modelMap: [{ pattern: "*", model: "claude-x" }] })
     );
-    expect(j.first_id).toBe("claude-x");
+    expect(j.first_id).toBe("*");
     expect(j.last_id).toBe("claude-x");
     expect(j.has_more).toBe(false);
+    expect(j.data).toHaveLength(2);
   });
 });

@@ -38,6 +38,8 @@ export {
   buildOpenAIModelsListFromProvider,
   buildAnthropicModelsListFromProvider,
   buildModelsListFallback,
+  convertOpenAIModelsToAnthropic,
+  convertAnthropicModelsToOpenAI,
   type OpenAIModelsListResponse,
   type AnthropicModelsListResponse,
 } from "./modelsFallback";
@@ -51,5 +53,6 @@ export {
 export {
   convertChatCompletionToResponses,
   formatOpenAIResponsesSse,
+  formatOpenAIChatCompletionsSse,
   type OpenAIResponsesApiObject,
 } from "./chat-completions-to-responses";

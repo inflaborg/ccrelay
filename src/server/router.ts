@@ -200,8 +200,10 @@ export class Router {
         const authHeader = provider.authHeader || "authorization";
         if (authHeader.toLowerCase() === "authorization") {
           headers["authorization"] = `Bearer ${provider.apiKey}`;
-        } else {
+        } else if (authHeader.toLowerCase() === "x-api-key") {
           headers["x-api-key"] = provider.apiKey;
+        } else {
+          headers[authHeader] = provider.apiKey;
         }
       }
     }

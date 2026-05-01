@@ -175,13 +175,16 @@ function extractSystem(messages: OpenAIMessage[]): {
 function buildAnthropicMessages(messages: OpenAIMessage[]): MessageParam[] {
   const out: MessageParam[] = [];
   let i = 0;
+  let lastAssistantHadToolCalls = false;
   while (i < messages.length) {
     const m = messages[i];
     if (m.role === "user") {
       out.push({ role: "user", content: convertUserContent(m) });
       i++;
+      lastAssistantHadToolCalls = false;
     } else if (m.role === "assistant") {
       out.push({ role: "assistant", content: convertAssistantContent(m) });
+      lastAssistantHadToolCalls = Boolean(m.tool_calls && m.tool_calls.length > 0);
       i++;
       const toolResults: ContentBlockParam[] = [];
       while (i < messages.length && messages[i].role === "tool") {
@@ -198,6 +201,11 @@ function buildAnthropicMessages(messages: OpenAIMessage[]): MessageParam[] {
         out.push({ role: "user", content: toolResults });
       }
     } else if (m.role === "tool") {
+      // Skip orphaned tool messages (no preceding assistant message with tool_calls)
+      if (!lastAssistantHadToolCalls) {
+        i++;
+        continue;
+      }
       const toolResults: ContentBlockParam[] = [];
       while (i < messages.length && messages[i].role === "tool") {
         const t = messages[i];

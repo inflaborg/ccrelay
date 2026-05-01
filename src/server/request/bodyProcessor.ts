@@ -31,7 +31,7 @@ function forceDisableStreamInBody(body: Buffer, label: string): Buffer {
   }
   try {
     const data = JSON.parse(body.toString("utf-8")) as Record<string, unknown>;
-    if (data.stream === true) {
+    if (data.stream === true || data.stream === "true") {
       data.stream = false;
       log.info(`[${label}] stream=true is not supported for cross-protocol conversion; forcing stream=false`);
       return Buffer.from(JSON.stringify(data), "utf-8");
@@ -92,10 +92,17 @@ export class BodyProcessor {
     let body = applyModelMapping(rawBody, routing.provider);
 
     let responsesStreamRequested = false;
-    if (needsConversion && clientSurface === "openai_responses" && body.length > 0) {
+    let streamRequested = false;
+    if (needsConversion && (clientSurface === "openai_responses" || clientSurface === "openai") && body.length > 0) {
       try {
         const d = JSON.parse(body.toString("utf-8")) as Record<string, unknown>;
-        responsesStreamRequested = d.stream === true;
+        if (d.stream === true) {
+          if (clientSurface === "openai_responses") {
+            responsesStreamRequested = true;
+          } else {
+            streamRequested = true;
+          }
+        }
       } catch {
         // ignore
       }
@@ -190,6 +197,7 @@ export class BodyProcessor {
       originalRequestBody,
       requestBodyLog,
       ...(responsesStreamRequested ? { responsesStreamRequested: true } : {}),
+      ...(streamRequested ? { streamRequested: true } : {}),
     };
   }
 

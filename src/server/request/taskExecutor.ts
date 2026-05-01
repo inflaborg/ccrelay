@@ -74,6 +74,7 @@ export class TaskExecutor {
       priority: 0,
       res,
       ...(bodyResult.responsesStreamRequested ? { responsesStreamRequested: true } : {}),
+      ...(bodyResult.streamRequested ? { streamRequested: true } : {}),
     };
   }
 

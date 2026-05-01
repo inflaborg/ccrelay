@@ -14,7 +14,10 @@ import {
   convertAnthropicResponseToOpenAI,
   convertChatCompletionToResponses,
   formatOpenAIResponsesSse,
+  formatOpenAIChatCompletionsSse,
   convertResponseToAnthropic,
+  convertOpenAIModelsToAnthropic,
+  convertAnthropicModelsToOpenAI,
 } from "../../converter";
 import { isAnthropicMessageResponse } from "../../converter/anthropic-to-openai-response";
 import type { OpenAIChatCompletionResponse } from "../../converter/openai-to-anthropic";
@@ -537,24 +540,49 @@ export class ProxyExecutor {
           parsed,
           originalModel || (parsed as { model?: string }).model || "none"
         );
-        const outJson = JSON.stringify(openaiResponse);
-        ctx.responseChunks.push(Buffer.from(outJson, "utf-8"));
-        this.responseLogger.logResponse(
-          clientId,
-          duration,
-          status,
-          ctx.responseChunks,
-          undefined,
-          ctx.originalResponseBody
-        );
-        resolve({
-          statusCode: status,
-          headers: responseHeaders,
-          body: outJson,
-          duration,
-          responseBodyChunks: ctx.responseChunks,
-          originalResponseBody: ctx.originalResponseBody,
-        });
+
+        if (task.streamRequested) {
+          const sse = formatOpenAIChatCompletionsSse(openaiResponse);
+          log.info(
+            `[A->ChatCompletions] synthetic SSE: bytes=${sse.length}`
+          );
+          ctx.responseChunks.push(Buffer.from(sse, "utf-8"));
+          this.responseLogger.logResponse(
+            clientId,
+            duration,
+            status,
+            ctx.responseChunks,
+            undefined,
+            ctx.originalResponseBody
+          );
+          resolve({
+            statusCode: status,
+            headers: headersForResponsesSse(responseHeaders),
+            body: sse,
+            duration,
+            responseBodyChunks: ctx.responseChunks,
+            originalResponseBody: ctx.originalResponseBody,
+          });
+        } else {
+          const outJson = JSON.stringify(openaiResponse);
+          ctx.responseChunks.push(Buffer.from(outJson, "utf-8"));
+          this.responseLogger.logResponse(
+            clientId,
+            duration,
+            status,
+            ctx.responseChunks,
+            undefined,
+            ctx.originalResponseBody
+          );
+          resolve({
+            statusCode: status,
+            headers: responseHeaders,
+            body: outJson,
+            duration,
+            responseBodyChunks: ctx.responseChunks,
+            originalResponseBody: ctx.originalResponseBody,
+          });
+        }
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         log.warn(`[A->O response] Conversion failed for ${provider.id}: ${errMsg}`);
@@ -953,6 +981,85 @@ export class ProxyExecutor {
           delete outHeaders["Content-Length"];
         }
         log.info(`[${clientId}] GET /v1/models upstream returned ${status}; using config model list fallback`);
+      }
+
+      // Cross-protocol: convert /v1/models response format to match client's expected API surface
+      const upstreamWireFmt: ApiSurface = task.provider.providerType === "openai" ? "openai" : "anthropic";
+      if (
+        task.method === "GET" &&
+        (task.requestPath === "/v1/models" || task.requestPath.split("?")[0] === "/v1/models") &&
+        outStatus === 200 &&
+        task.clientSurface !== upstreamWireFmt &&
+        ctx.responseChunks.length > 0
+      ) {
+        try {
+          const bodyStr = Buffer.concat(ctx.responseChunks).toString("utf-8");
+          const parsed = JSON.parse(bodyStr) as Record<string, unknown>;
+          const clientWantsAnthropic = task.clientSurface === "anthropic";
+          const upstreamIsOpenAI =
+            Array.isArray(parsed.data) &&
+            (parsed.data as unknown[]).length > 0 &&
+            ((parsed.data as Record<string, unknown>[])[0] as { object?: string })?.object === "model";
+          const upstreamIsAnthropic =
+            Array.isArray(parsed.data) &&
+            (parsed.data as unknown[]).length > 0 &&
+            ((parsed.data as Record<string, unknown>[])[0] as { type?: string })?.type === "model";
+
+          if (upstreamIsOpenAI && clientWantsAnthropic) {
+            const anthropicList = convertOpenAIModelsToAnthropic(
+              parsed as unknown as Parameters<typeof convertOpenAIModelsToAnthropic>[0]
+            );
+            const buf = Buffer.from(JSON.stringify(anthropicList), "utf-8");
+            ctx.responseChunks = [buf];
+            outHeaders["content-type"] = "application/json";
+            log.info(`[${clientId}] GET /v1/models: converted OpenAI -> Anthropic format`);
+          } else if (upstreamIsAnthropic && !clientWantsAnthropic) {
+            const openaiList = convertAnthropicModelsToOpenAI(
+              parsed as unknown as Parameters<typeof convertAnthropicModelsToOpenAI>[0]
+            );
+            const buf = Buffer.from(JSON.stringify(openaiList), "utf-8");
+            ctx.responseChunks = [buf];
+            outHeaders["content-type"] = "application/json";
+            log.info(`[${clientId}] GET /v1/models: converted Anthropic -> OpenAI format`);
+          }
+        } catch {
+          // Parse failed; keep original response
+        }
+      }
+
+      // Cross-protocol: convert error response format to match client's expected API surface
+      const upstreamWire: ApiSurface = task.provider.providerType === "openai" ? "openai" : "anthropic";
+      if (outStatus >= 400 && task.clientSurface !== upstreamWire && ctx.responseChunks.length > 0) {
+        try {
+          const errorBody = Buffer.concat(ctx.responseChunks).toString("utf-8");
+          const parsed = JSON.parse(errorBody) as Record<string, unknown>;
+          let wrappedError: string;
+          if (task.clientSurface === "anthropic") {
+            const message =
+              ((parsed.error as Record<string, unknown>)?.message as string) ||
+              (parsed.message as string) ||
+              errorBody;
+            const type =
+              ((parsed.error as Record<string, unknown>)?.type as string) || "api_error";
+            wrappedError = JSON.stringify({ type: "error", error: { type, message } });
+          } else {
+            const message =
+              ((parsed.error as Record<string, unknown>)?.message as string) ||
+              (parsed.message as string) ||
+              errorBody;
+            const type =
+              ((parsed.error as Record<string, unknown>)?.type as string) || "server_error";
+            wrappedError = JSON.stringify({ error: { type, message, code: String(outStatus) } });
+          }
+          const wrappedBuf = Buffer.from(wrappedError, "utf-8");
+          ctx.responseChunks = [wrappedBuf];
+          outHeaders["content-type"] = "application/json";
+          log.info(
+            `[${clientId}] Cross-protocol error format converted: ${upstreamWire} -> ${task.clientSurface}`
+          );
+        } catch {
+          // Parse failed; keep original error body
+        }
       }
 
       this.responseLogger.logResponse(clientId, totalDuration, outStatus, ctx.responseChunks, undefined);
