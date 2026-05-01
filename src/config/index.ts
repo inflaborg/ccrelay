@@ -638,13 +638,18 @@ export class ConfigManager {
     }
 
     // Build routing config (migrate legacy format if needed)
+    // Check the raw file config (not merged with defaults) to detect legacy format
+    const rawFileRouting = (fileConfig as Record<string, unknown>).routing as
+      | Record<string, unknown>
+      | undefined;
+    const hasNewFormat = Array.isArray(rawFileRouting?.forward) && rawFileRouting.forward.length > 0;
     const rawRouting = merged.routing ?? {};
     let forwardRules: ForwardRule[];
     let blockRules: BlockRule[];
 
-    if (rawRouting.forward && rawRouting.forward.length > 0) {
-      // New format present — use directly
-      forwardRules = rawRouting.forward.map((f: { path: string; provider: string }) => ({
+    if (hasNewFormat) {
+      // New format present in user's file — use directly
+      forwardRules = (rawRouting.forward ?? []).map((f: { path: string; provider: string }) => ({
         path: f.path,
         provider: f.provider,
       }));
@@ -705,6 +710,28 @@ export class ConfigManager {
           code: b.code ?? 200,
         })),
       ];
+
+      // Write migrated routing back to disk so the user sees the new format
+      try {
+        merged.routing = { forward: forwardRules, block: blockRules };
+        delete merged.routing.proxy;
+        delete merged.routing.passthrough;
+        delete merged.routing.openaiBlock;
+        const yamlContent = yaml.dump(merged, {
+          indent: 2,
+          lineWidth: -1,
+          noRefs: true,
+          quotingType: '"',
+          forceQuotes: false,
+        });
+        this.saving = true;
+        fs.writeFileSync(this.configPath, yamlContent, "utf-8");
+        this.saving = false;
+        console.log("[ConfigManager] Migrated routing config to new forward/block format");
+      } catch (err) {
+        this.saving = false;
+        console.error("[ConfigManager] Failed to write migrated routing config:", err);
+      }
     }
 
     const routing = { forward: forwardRules, block: blockRules };
