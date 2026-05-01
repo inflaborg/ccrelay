@@ -40,8 +40,10 @@ export interface BodyProcessResult {
   originalModel: string | undefined;
   originalRequestBody: string | undefined;
   requestBodyLog: string | undefined;
-  /** True if client POST /v1/responses had `stream: true` before we forced `stream: false` for conversion */
+  /** True if client had `stream: true` before we forced `stream: false` for cross-protocol conversion (both /v1/chat/completions and /v1/responses) */
   responsesStreamRequested?: boolean;
+  /** True if client sent `stream: true` on a cross-protocol Chat Completions request */
+  streamRequested?: boolean;
 }
 
 /**

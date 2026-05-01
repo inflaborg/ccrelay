@@ -27,6 +27,9 @@ export class StatusBarManager implements vscode.Disposable {
     // Router is updated by WebSocket client for all instances (Leader + Followers)
     const router = this.server.getRouter();
     router.onProviderChanged(this.handleProviderChange);
+
+    // Subscribe to config changes (provider list, settings, etc.)
+    this.config.onConfigChanged(this.handleConfigChange);
   }
 
   /**
@@ -40,6 +43,13 @@ export class StatusBarManager implements vscode.Disposable {
    * Handle provider change events from Router
    */
   private handleProviderChange = (_providerId: string): void => {
+    this.update();
+  };
+
+  /**
+   * Handle config changes (provider list, settings, etc.)
+   */
+  private handleConfigChange = (): void => {
     this.update();
   };
 
@@ -324,6 +334,7 @@ export class StatusBarManager implements vscode.Disposable {
     this.server.offRoleChanged(this.handleRoleChange);
     const router = this.server.getRouter();
     router.offProviderChanged(this.handleProviderChange);
+    this.config.offConfigChanged(this.handleConfigChange);
     this.statusBarItem.dispose();
   }
 }

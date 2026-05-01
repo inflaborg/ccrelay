@@ -9,6 +9,7 @@ import { ScopedLogger } from "../../utils/logger";
 import {
   WsMessage,
   WsProviderChangedMessage,
+  WsConfigChangedMessage,
   WsServerStoppingMessage,
   WsSwitchProviderMessage,
 } from "./types";
@@ -126,6 +127,19 @@ export class WsBroadcaster {
     this.log.info(
       `[WsServer] Broadcasting provider change: ${providerId} (${providerName}) to ${this.clients.size} clients`
     );
+    this.broadcast(message);
+  }
+
+  /**
+   * Broadcast config changed to all connected clients (so followers reload)
+   */
+  broadcastConfigChanged(): void {
+    const message: WsConfigChangedMessage = {
+      type: "config_changed",
+      timestamp: Date.now(),
+    };
+
+    this.log.info(`[WsServer] Broadcasting config changed to ${this.clients.size} clients`);
     this.broadcast(message);
   }
 

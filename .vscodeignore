@@ -13,6 +13,11 @@ tests/**
 .gitignore
 .yarnrc
 
+# Dev tooling
+.husky/**
+.claude/**
+CLAUDE.md
+
 # TypeScript configuration
 **/tsconfig.json
 **/.eslintrc.json

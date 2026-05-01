@@ -48,15 +48,6 @@ describe("convertResponsesRequestToChatCompletions", () => {
     expect(request.messages[1]).toEqual({ role: "user", content: "q" });
   });
 
-  it("uses openaiChatCompletionsPath from provider when set", () => {
-    const { newPath } = convertResponsesRequestToChatCompletions(
-      { model: "gpt-4o", input: "x" },
-      "/v1/responses",
-      { openaiChatCompletionsPath: "/v1/chat/completions" }
-    );
-    expect(newPath).toBe("/v1/chat/completions");
-  });
-
   it("maps tool_choice 'required' to OpenAI 'required' for downstream O-to-A", () => {
     const { request } = convertResponsesRequestToChatCompletions(
       // OpenAI Responses API uses snake_case fields

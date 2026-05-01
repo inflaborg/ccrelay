@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`providerType` split**: `providerType` now has three values — `"anthropic"` (unchanged), `"openai"` (full passthrough — both Chat Completions and Responses API are forwarded without conversion), `"openai_chat"` (Chat Completions only — Responses API requests are converted to Chat Completions before forwarding). Existing `"openai"` configs are treated as full passthrough; update to `"openai_chat"` to preserve the previous Responses→Chat conversion behavior.
+- **Synthetic SSE for `POST /v1/chat/completions` with `stream: true` (cross-protocol)**: when upstream returns non-streaming but the client requested streaming, ccrelay emits `text/event-stream` with `chat.completion.chunk` deltas (text, thinking, tool calls) and `[DONE]`. Previously this path only existed for `POST /v1/responses`.
+- **Cross-protocol `GET /v1/models` conversion**: when the client's API surface (OpenAI vs Anthropic) differs from the upstream provider type, the response is automatically converted to the client's expected format.
+- **Cross-protocol error format conversion**: error responses (status >= 400) are re-wrapped to match the client's expected API surface — Anthropic `{ type, error: { type, message } }` or OpenAI `{ error: { type, message, code } }` shapes.
+- **`GET /v1/models`**: model list now shows both pattern names and target model names from `modelMap`, with deduplication when they match.
+- **Converters**: `convertOpenAIModelsToAnthropic` and `convertAnthropicModelsToOpenAI` for bidirectional models list format conversion.
+- **Config hot-reload**: `ConfigManager` now watches the YAML config file with `fs.watch` (300ms debounce). External edits to `~/.ccrelay/config.yaml` are picked up automatically without needing to click Reload.
+- **Config change event bus**: `ConfigManager.onConfigChanged` event notifies all subscribers (status bar, server, WebSocket broadcaster) when config is reloaded, whether from file watch or API mutation.
+- **WebSocket `config_changed` broadcast**: Leader broadcasts config changes to all Follower instances via WebSocket, so Followers reload their local config automatically.
+- **Duplicate provider: editable New provider ID**: the Duplicate dialog now lets you customize the new provider ID instead of being locked to `<sourceId>_copy`.
+
+### Changed
+
+- **Converter simplification**: `convertRequestToOpenAI`, `convertOpenAIRequestToAnthropic`, and `convertResponsesRequestToChatCompletions` no longer accept a `provider` parameter for custom path resolution — paths are now deterministic (`/chat/completions` for OpenAI, `/v1/messages` for Anthropic).
+- **Cross-protocol conversion guard**: `needsConversion` and upstream wire detection now correctly distinguish all three provider types (`"anthropic"`, `"openai"`, `"openai_chat"`) instead of treating anything non-Anthropic as full OpenAI passthrough.
+
+### Removed
+
+- **`openaiChatCompletionsPath` provider setting**: the Chat Completions endpoint is always `/chat/completions`; adjust `baseUrl` to include any path prefix (e.g. change `baseUrl: "https://example.com"` + `openaiChatCompletionsPath: "/v1/chat/completions"` to `baseUrl: "https://example.com/v1"`).
+
+### Fixed
+
+- **Anthropic → OpenAI thinking blocks**: multiple thinking blocks in a single assistant message are now merged (content joined, last non-empty signature used) instead of only using the first one.
+- **Reasoning budget thresholds**: Anthropic `thinking.budget_tokens` 4097–8192 now maps to OpenAI `"high"` effort instead of `"medium"`, avoiding round-trip budget loss (medium → 4096 would reduce the budget).
+- **Orphaned tool messages**: `buildAnthropicMessages` now skips `role: "tool"` messages that don't follow an assistant message with tool calls, preventing upstream 400 errors.
+- **Empty choices handling**: `convertChatCompletionToResponses` and `convertResponseToAnthropic` now handle upstream responses with empty `choices` arrays gracefully instead of crashing.
+- **Cross-protocol streaming guard**: `stream: "true"` (string) is now also detected and forced to `false` for cross-protocol conversion, not just `stream: true` (boolean).
+- **Custom auth headers**: router now supports any custom `authHeader` value on a provider, not just `authorization` or `x-api-key`.
+- **Delete active provider**: deleting the currently active provider now automatically switches to the default provider instead of leaving a stale `currentProviderId` that caused incorrect status bar display.
+
 ## [0.2.0] - 2026-04-26 (pre-release)
 
 This is the **0.2.0** development line until a stable release is tagged. **Packaging:** `npm run package:beta` rewrites the version to `0.2.0-beta.<build>` and runs `package`; `npm run package:release` strips a `-beta…` suffix for a `0.2.0` build, then `package` (see root `package.json` scripts).

@@ -4,6 +4,7 @@
  */
 
 import type { ApiSurface, Provider } from "../../types";
+import { isOpenAIType } from "../../converter";
 
 function normalizePath(path: string): string {
   const noQuery = path.split("?")[0] || path;
@@ -29,7 +30,7 @@ export function resolveInboundClientSurface(
     if (fmt === "anthropic") {
       return "anthropic";
     }
-    return provider.providerType === "openai" ? "openai" : "anthropic";
+    return isOpenAIType(provider.providerType) ? "openai" : "anthropic";
   }
   return detectApiSurface(method, path) ?? "anthropic";
 }

@@ -22,7 +22,6 @@ const DEFAULT_FORM: AddProviderRequest = {
   modelMap: undefined,
   vlModelMap: undefined,
   headers: undefined,
-  openaiChatCompletionsPath: undefined,
   modelsListFormat: "auto",
 };
 
@@ -34,6 +33,7 @@ export default function Providers() {
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [duplicateSource, setDuplicateSource] = useState<Provider | null>(null);
   const [dupName, setDupName] = useState("");
+  const [dupNewId, setDupNewId] = useState("");
   // Raw text states for YAML fields (allow editing invalid YAML temporarily)
   const [modelMapText, setModelMapText] = useState("");
   const [modelMapError, setModelMapError] = useState<string | null>(null);
@@ -156,7 +156,6 @@ export default function Providers() {
       modelMap,
       vlModelMap: undefined,
       headers: undefined,
-      openaiChatCompletionsPath: provider.openaiChatCompletionsPath,
       modelsListFormat: provider.modelsListFormat ?? "auto",
     });
     setModelMapText(modelMap ? yaml.dump(modelMap, { indent: 2, lineWidth: -1 }) : "");
@@ -175,6 +174,7 @@ export default function Providers() {
   const openDuplicateModal = (provider: Provider) => {
     setDuplicateSource(provider);
     setDupName(`${provider.name} (copy)`);
+    setDupNewId(`${provider.id}_copy`);
     setShowDuplicateModal(true);
   };
 
@@ -182,6 +182,7 @@ export default function Providers() {
     setShowDuplicateModal(false);
     setDuplicateSource(null);
     setDupName("");
+    setDupNewId("");
   };
 
   const handleDuplicateSubmit = () => {
@@ -189,8 +190,8 @@ export default function Providers() {
       return;
     }
     const name = dupName.trim();
-    const newId = `${duplicateSource.id}_copy`;
-    if (!name || !/^[a-zA-Z0-9_-]+$/.test(newId)) {
+    const newId = dupNewId.trim();
+    if (!name || !newId || !/^[a-zA-Z0-9_-]+$/.test(newId)) {
       return;
     }
     duplicateMutation.mutate({
@@ -204,7 +205,6 @@ export default function Providers() {
     if (!formData.id || !formData.name || !formData.baseUrl) {
       return;
     }
-    const trimmedPath = formData.openaiChatCompletionsPath?.trim();
     // When editing, use the provider we opened (ids stay in sync) and never send apiKey.
     const isOfficial = editingProvider?.id === "official" || formData.id === "official";
     const dataToSubmit = editingProvider
@@ -212,12 +212,10 @@ export default function Providers() {
           ...formData,
           id: editingProvider.id,
           apiKey: undefined,
-          openaiChatCompletionsPath: trimmedPath || undefined,
           enabled: isOfficial ? true : formData.enabled,
         }
       : {
           ...formData,
-          openaiChatCompletionsPath: trimmedPath || undefined,
           enabled: isOfficial ? true : formData.enabled,
         };
     addMutation.mutate(dataToSubmit);
@@ -369,14 +367,6 @@ export default function Providers() {
                       </span>
                     </div>
                   )}
-                  {provider.openaiChatCompletionsPath && (
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">Chat path</span>
-                      <span className="font-mono text-[10px] truncate max-w-[140px]">
-                        {provider.openaiChatCompletionsPath}
-                      </span>
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             </ContextMenuWrapper>
@@ -510,22 +500,6 @@ export default function Providers() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-medium">OpenAI Chat Completions path</label>
-                <input
-                  type="text"
-                  className="w-full h-8 px-2 text-xs border rounded-md bg-background font-mono"
-                  placeholder="e.g. /chat/completions (default) or /v1/chat/completions"
-                  value={formData.openaiChatCompletionsPath ?? ""}
-                  onChange={e => updateForm("openaiChatCompletionsPath", e.target.value || undefined)}
-                />
-                <p className="text-[10px] text-muted-foreground">
-                  Appended to base URL for A→O and Responses→Chat. Use when the upstream has no
-                  &quot;v1&quot; segment in the path (e.g. some Z.AI base URLs). Leave empty for the
-                  default.
-                </p>
-              </div>
-
-              <div className="space-y-1">
                 <label className="text-xs font-medium">GET /v1/models wire</label>
                 <Select
                   value={formData.modelsListFormat ?? "auto"}
@@ -553,9 +527,10 @@ export default function Providers() {
                     value={formData.providerType}
                     options={[
                       { value: "anthropic", label: "Anthropic" },
-                      { value: "openai", label: "OpenAI" },
+                      { value: "openai", label: "OpenAI (Full)" },
+                      { value: "openai_chat", label: "OpenAI (Chat Only)" },
                     ]}
-                    onChange={v => updateForm("providerType", v as "anthropic" | "openai")}
+                    onChange={v => updateForm("providerType", v as "anthropic" | "openai" | "openai_chat")}
                     className="h-8 text-xs"
                   />
                 </div>
@@ -704,14 +679,16 @@ export default function Providers() {
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-medium">New provider ID</label>
-                <div className="w-full h-8 px-2 text-xs border rounded-md bg-muted font-mono flex items-center">
-                  {duplicateSource
-                    ? `${duplicateSource.id}_copy`
-                    : "—"}
-                </div>
+                <input
+                  type="text"
+                  className="w-full h-8 px-2 text-xs border rounded-md bg-background font-mono"
+                  value={dupNewId}
+                  onChange={e => setDupNewId(e.target.value)}
+                  placeholder="e.g. my-provider_copy"
+                />
                 <p className="text-[10px] text-muted-foreground">
-                  The source id is suffixed with <span className="font-mono">_copy</span> (no other spelling). If
-                  that key already exists, the request will fail; remove or rename the other entry first.
+                  Only alphanumeric, underscore, and hyphen. If that key already exists, the request
+                  will fail; remove or rename the other entry first.
                 </p>
               </div>
             </CardContent>
@@ -728,7 +705,7 @@ export default function Providers() {
                 size="sm"
                 className="h-7 text-xs"
                 onClick={handleDuplicateSubmit}
-                disabled={duplicateMutation.isPending || !dupName.trim() || !duplicateSource}
+                disabled={duplicateMutation.isPending || !dupName.trim() || !dupNewId.trim() || !duplicateSource}
               >
                 {duplicateMutation.isPending ? (
                   <Loader2 className="h-3 w-3 animate-spin" />

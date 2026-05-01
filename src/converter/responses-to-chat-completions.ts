@@ -12,8 +12,6 @@ import type {
   OpenAIToolChoice,
 } from "./anthropic-to-openai";
 import { isOpenAIChatCompletionsRequest } from "./openai-to-anthropic-request";
-import type { OpenAIPathProvider } from "./openaiPath";
-import { getOpenAIChatCompletionsPath } from "./openaiPath";
 
 const log = new ScopedLogger("ResponsesToChat");
 
@@ -54,8 +52,7 @@ export function isOpenAIResponsesRequest(data: Record<string, unknown>): boolean
  */
 export function convertResponsesRequestToChatCompletions(
   raw: Record<string, unknown>,
-  _originalPath: string,
-  provider?: OpenAIPathProvider | null
+  _originalPath: string
 ): ResponsesToChatResult {
   const messages: OpenAIMessage[] = [];
   const instructions = raw.instructions;
@@ -135,7 +132,7 @@ export function convertResponsesRequestToChatCompletions(
 
   return {
     request: out,
-    newPath: getOpenAIChatCompletionsPath(provider),
+    newPath: "/chat/completions",
   };
 }
 

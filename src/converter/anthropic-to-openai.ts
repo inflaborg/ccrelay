@@ -12,8 +12,6 @@
 // External API fields use snake_case (max_tokens, tool_choice, etc.)
 
 import type { MessageParam, ContentBlockParam } from "../types";
-import type { OpenAIPathProvider } from "./openaiPath";
-import { getOpenAIChatCompletionsPath } from "./openaiPath";
 
 /**
  * Anthropic Messages API request format
@@ -178,8 +176,7 @@ export interface ConversionResult {
  */
 export function convertRequestToOpenAI(
   anthropic: AnthropicMessageRequest,
-  originalPath: string,
-  provider?: OpenAIPathProvider | null
+  originalPath: string
 ): ConversionResult {
   const openai: OpenAIMessageRequest = {
     model: anthropic.model,
@@ -266,10 +263,10 @@ export function convertRequestToOpenAI(
     };
   }
 
-  // Convert path: /v1/messages -> configured OpenAI Chat Completions path
+  // Convert path: /v1/messages -> /chat/completions
   let newPath = originalPath;
   if (originalPath === "/v1/messages" || originalPath === "/messages") {
-    newPath = getOpenAIChatCompletionsPath(provider);
+    newPath = "/chat/completions";
   }
 
   return {
@@ -290,9 +287,11 @@ function getThinkLevel(budgetTokens?: number): string {
   if (budgetTokens <= 1024) {
     return "low";
   }
-  if (budgetTokens <= 8192) {
+  if (budgetTokens <= 4096) {
     return "medium";
   }
+  // 4097–8192+ maps to "high" to avoid round-trip loss
+  // (medium → 4096 would reduce budget; high → 16000 preserves or increases it)
   return "high";
 }
 
@@ -422,13 +421,23 @@ function convertAssistantMessage(content: ContentBlockParam[], targetModel: stri
 
   const gemini = isGeminiModel(targetModel);
 
-  // Extract thinking block signature first (needed for both paths)
+  // Extract thinking blocks (may be multiple; merge content, use last non-empty signature)
   let thoughtSignature: string | undefined;
-  const thinkingPart = content.find(c => c.type === "thinking");
-  if (thinkingPart) {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- Type narrowing after find
-    const thinking = thinkingPart as Extract<ContentBlockParam, { type: "thinking" }>;
-    thoughtSignature = thinking.signature;
+  let combinedThinkingContent: string | undefined;
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- filter does not narrow generic unions
+  const thinkingParts = content.filter(c => c.type === "thinking") as Extract<
+    ContentBlockParam,
+    { type: "thinking" }
+  >[];
+  if (thinkingParts.length > 0) {
+    combinedThinkingContent = thinkingParts.map(t => t.thinking).join("\n\n");
+    // Use the last non-empty signature
+    for (let i = thinkingParts.length - 1; i >= 0; i--) {
+      if (thinkingParts[i].signature) {
+        thoughtSignature = thinkingParts[i].signature;
+        break;
+      }
+    }
   }
 
   // Extract text blocks → join into single string
@@ -473,12 +482,10 @@ function convertAssistantMessage(content: ContentBlockParam[], targetModel: stri
 
   // For non-Gemini: keep thinking as standalone field
   // For Gemini: signature is already attached to tool_calls above
-  if (!gemini && thinkingPart && thoughtSignature) {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- Type narrowing after find
-    const thinking = thinkingPart as Extract<ContentBlockParam, { type: "thinking" }>;
+  if (!gemini && combinedThinkingContent && thoughtSignature) {
     assistantMessage.thinking = {
-      content: thinking.thinking,
-      signature: thinking.signature,
+      content: combinedThinkingContent,
+      signature: thoughtSignature,
     };
   }
 

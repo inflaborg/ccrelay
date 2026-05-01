@@ -13,6 +13,7 @@ import {
   ProviderChangeCallback,
   ServerStoppingCallback,
   ConnectionStateCallback,
+  ConfigChangedCallback,
 } from "./types";
 
 // Reconnection settings
@@ -41,6 +42,7 @@ export class WsFollowerClient {
   private onProviderChange: ProviderChangeCallback | null = null;
   private onServerStopping: ServerStoppingCallback | null = null;
   private onConnectionStateChange: ConnectionStateCallback | null = null;
+  private onConfigChanged: ConfigChangedCallback | null = null;
 
   constructor(leaderUrl: string) {
     this.leaderUrl = leaderUrl;
@@ -53,6 +55,7 @@ export class WsFollowerClient {
     onProviderChange?: ProviderChangeCallback;
     onServerStopping?: ServerStoppingCallback;
     onConnectionStateChange?: ConnectionStateCallback;
+    onConfigChanged?: ConfigChangedCallback;
   }): void {
     if (callbacks.onProviderChange) {
       this.onProviderChange = callbacks.onProviderChange;
@@ -62,6 +65,9 @@ export class WsFollowerClient {
     }
     if (callbacks.onConnectionStateChange) {
       this.onConnectionStateChange = callbacks.onConnectionStateChange;
+    }
+    if (callbacks.onConfigChanged) {
+      this.onConfigChanged = callbacks.onConfigChanged;
     }
   }
 
@@ -242,6 +248,11 @@ export class WsFollowerClient {
           this.onProviderChange?.(payload.providerId, payload.providerName);
           break;
         }
+
+        case "config_changed":
+          this.log.info(`[WsClient] Received config change notification`);
+          this.onConfigChanged?.();
+          break;
 
         case "server_stopping":
           this.log.info(`[WsClient] Leader is stopping`);

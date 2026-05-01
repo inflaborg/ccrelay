@@ -31,7 +31,7 @@ function forceDisableStreamInBody(body: Buffer, label: string): Buffer {
   }
   try {
     const data = JSON.parse(body.toString("utf-8")) as Record<string, unknown>;
-    if (data.stream === true) {
+    if (data.stream === true || data.stream === "true") {
       data.stream = false;
       log.info(`[${label}] stream=true is not supported for cross-protocol conversion; forcing stream=false`);
       return Buffer.from(JSON.stringify(data), "utf-8");
@@ -67,9 +67,14 @@ export class BodyProcessor {
     }
 
     const clientSurface: ApiSurface = routing.clientSurface;
-    const upstreamWire: ApiSurface =
-      routing.provider.providerType === "openai" ? "openai" : "anthropic";
-    const needsConversion = clientSurface !== upstreamWire;
+    const pt = routing.provider.providerType;
+    const upstreamWire: ApiSurface = pt === "anthropic" ? "anthropic" : "openai";
+    const needsConversion =
+      pt === "anthropic"
+        ? clientSurface !== "anthropic"
+        : pt === "openai_chat"
+          ? clientSurface !== "openai"
+          : clientSurface !== "openai" && clientSurface !== "openai_responses";
 
     // GET (e.g. /v1/models): no body conversion
     if (routing.method === "GET" || !rawBody || rawBody.length === 0) {
@@ -92,10 +97,17 @@ export class BodyProcessor {
     let body = applyModelMapping(rawBody, routing.provider);
 
     let responsesStreamRequested = false;
-    if (needsConversion && clientSurface === "openai_responses" && body.length > 0) {
+    let streamRequested = false;
+    if (needsConversion && (clientSurface === "openai_responses" || clientSurface === "openai") && body.length > 0) {
       try {
         const d = JSON.parse(body.toString("utf-8")) as Record<string, unknown>;
-        responsesStreamRequested = d.stream === true;
+        if (d.stream === true) {
+          if (clientSurface === "openai_responses") {
+            responsesStreamRequested = true;
+          } else {
+            streamRequested = true;
+          }
+        }
       } catch {
         // ignore
       }
@@ -143,8 +155,7 @@ export class BodyProcessor {
     } else if (clientSurface === "anthropic" && upstreamWire === "openai") {
       const result = this.convertAnthropicToOpenAIRequest(
         body,
-        routing.targetPath,
-        routing.provider
+        routing.targetPath
       );
       if (result) {
         body = result.body;
@@ -190,13 +201,13 @@ export class BodyProcessor {
       originalRequestBody,
       requestBodyLog,
       ...(responsesStreamRequested ? { responsesStreamRequested: true } : {}),
+      ...(streamRequested ? { streamRequested: true } : {}),
     };
   }
 
   private convertAnthropicToOpenAIRequest(
     body: Buffer,
-    path: string,
-    provider: RoutingContext["provider"]
+    path: string
   ): { body: Buffer; newPath: string; originalModel: string | undefined } | null {
     try {
       const bodyStr = body.toString("utf-8");
@@ -206,8 +217,7 @@ export class BodyProcessor {
       }
       const conversionResult = convertRequestToOpenAI(
         anthropicRequest as unknown as Parameters<typeof convertRequestToOpenAI>[0],
-        path,
-        provider
+        path
       );
       let originalModel: string | undefined;
       try {
@@ -239,8 +249,7 @@ export class BodyProcessor {
       }
       const c = convertResponsesRequestToChatCompletions(
         raw,
-        routing.targetPath,
-        routing.provider
+        routing.targetPath
       );
       const originalModel = typeof raw.model === "string" ? raw.model : undefined;
       return {
@@ -266,13 +275,11 @@ export class BodyProcessor {
       }
       const chat = convertResponsesRequestToChatCompletions(
         raw,
-        routing.path,
-        routing.provider
+        routing.path
       );
       const c = convertOpenAIRequestToAnthropic(
         chat.request,
-        chat.newPath,
-        routing.provider
+        chat.newPath
       );
       const originalModel = typeof raw.model === "string" ? raw.model : undefined;
       return {
@@ -299,8 +306,7 @@ export class BodyProcessor {
       const originalModel = typeof oai.model === "string" ? oai.model : undefined;
       const c = convertOpenAIRequestToAnthropic(
         oai as unknown as Parameters<typeof convertOpenAIRequestToAnthropic>[0],
-        routing.targetPath,
-        routing.provider
+        routing.targetPath
       );
       return {
         body: Buffer.from(JSON.stringify(c.request), "utf-8"),

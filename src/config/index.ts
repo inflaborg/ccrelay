@@ -44,7 +44,7 @@ providers:
     name: "Claude Official"
     baseUrl: "https://api.anthropic.com"
     mode: "passthrough"         # passthrough | inject
-    providerType: "anthropic"   # anthropic | openai
+    providerType: "anthropic"   # anthropic | openai | openai_chat
     enabled: true
 
   # Example: Custom provider
@@ -250,8 +250,6 @@ function parseProvider(id: string, config: ProviderConfigInput): Provider {
   const modelMap = config.modelMap || config.model_map;
   const vlModelMap = config.vlModelMap || config.vl_model_map;
   const providerType = config.providerType || config.provider_type || "anthropic";
-  const openaiChatCompletionsPath =
-    config.openaiChatCompletionsPath || config.openai_chat_completions_path;
   const modelsListFormat = config.modelsListFormat || config.models_list_format || "auto";
 
   return {
@@ -262,7 +260,6 @@ function parseProvider(id: string, config: ProviderConfigInput): Provider {
     providerType,
     apiKey,
     authHeader: authHeader || "authorization",
-    openaiChatCompletionsPath: openaiChatCompletionsPath || undefined,
     modelsListFormat,
     modelMap: modelMap && modelMap.length > 0 ? modelMap : undefined,
     vlModelMap: vlModelMap && vlModelMap.length > 0 ? vlModelMap : undefined,
@@ -376,6 +373,12 @@ export class ConfigManager {
   private context: vscode.ExtensionContext;
   private disposables: vscode.Disposable[] = [];
   private configPath: string;
+  private configChangeCallbacks: Set<() => void> = new Set();
+
+  // File watcher state
+  private fileWatcher: fs.FSWatcher | null = null;
+  private fileWatchDebounce: NodeJS.Timeout | null = null;
+  private saving = false;
 
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
@@ -391,17 +394,63 @@ export class ConfigManager {
     // Load configuration
     this.config = this.loadConfig();
 
-    // Watch for configuration changes
+    // Watch for VS Code setting changes (config path)
     const configWatcher = vscode.workspace.onDidChangeConfiguration(e => {
       if (e.affectsConfiguration("ccrelay.configPath")) {
-        // Config path changed, reload everything
         const newPath = vscodeConfig.get<string>("configPath", "~/.ccrelay/config.yaml");
         this.configPath = expandPath(newPath);
         this.ensureConfigFile();
         this.config = this.loadConfig();
+        this.startFileWatcher();
       }
     });
     this.disposables.push(configWatcher);
+
+    // Watch the YAML config file for external edits
+    this.startFileWatcher();
+  }
+
+  /**
+   * Start watching the config YAML file for external changes
+   */
+  private startFileWatcher(): void {
+    this.stopFileWatcher();
+
+    if (!fs.existsSync(this.configPath)) {
+      return;
+    }
+
+    try {
+      this.fileWatcher = fs.watch(this.configPath, () => {
+        if (this.saving) {
+          return;
+        }
+        if (this.fileWatchDebounce) {
+          clearTimeout(this.fileWatchDebounce);
+        }
+        this.fileWatchDebounce = setTimeout(() => {
+          this.fileWatchDebounce = null;
+          console.log("[ConfigManager] Config file changed externally, reloading...");
+          this.reload();
+        }, 300);
+      });
+    } catch {
+      // fs.watch may fail on some platforms; non-critical
+    }
+  }
+
+  /**
+   * Stop watching the config YAML file
+   */
+  private stopFileWatcher(): void {
+    if (this.fileWatchDebounce) {
+      clearTimeout(this.fileWatchDebounce);
+      this.fileWatchDebounce = null;
+    }
+    if (this.fileWatcher) {
+      this.fileWatcher.close();
+      this.fileWatcher = null;
+    }
   }
 
   /**
@@ -620,12 +669,40 @@ export class ConfigManager {
   }
 
   /**
+   * Register a callback for config changes
+   */
+  onConfigChanged(callback: () => void): void {
+    this.configChangeCallbacks.add(callback);
+  }
+
+  /**
+   * Unregister a config change callback
+   */
+  offConfigChanged(callback: () => void): void {
+    this.configChangeCallbacks.delete(callback);
+  }
+
+  /**
+   * Notify all registered config change listeners
+   */
+  private notifyConfigChanged(): void {
+    for (const callback of this.configChangeCallbacks) {
+      try {
+        callback();
+      } catch {
+        // Ignore callback errors
+      }
+    }
+  }
+
+  /**
    * Reload configuration from file
    */
   reload(): void {
     console.log("[ConfigManager] Reloading configuration...");
     this.ensureConfigFile();
     this.config = this.loadConfig();
+    this.notifyConfigChanged();
   }
 
   get configValue(): RouterConfig {
@@ -786,9 +863,6 @@ export class ConfigManager {
         vl_model_map: config.vl_model_map,
         headers: config.headers,
         enabled: id === "official" ? true : (config.enabled ?? true),
-        openaiChatCompletionsPath: config.openaiChatCompletionsPath,
-        // eslint-disable-next-line @typescript-eslint/naming-convention
-        openai_chat_completions_path: config.openai_chat_completions_path,
         modelsListFormat: config.modelsListFormat,
         // eslint-disable-next-line @typescript-eslint/naming-convention
         models_list_format: config.models_list_format,
@@ -804,13 +878,16 @@ export class ConfigManager {
         quotingType: '"',
         forceQuotes: false,
       });
+      this.saving = true;
       fs.writeFileSync(this.configPath, yamlContent, "utf-8");
+      this.saving = false;
 
       // Reload in-memory config
       this.reload();
 
       return true;
     } catch (err) {
+      this.saving = false;
       console.error("[ConfigManager] Failed to add provider:", err);
       return false;
     }
@@ -867,19 +944,23 @@ export class ConfigManager {
         lineWidth: -1,
         noRefs: true,
       });
+      this.saving = true;
       fs.writeFileSync(this.configPath, yamlContent, "utf-8");
+      this.saving = false;
 
       // Reload in-memory config
       this.reload();
 
       return true;
     } catch (err) {
+      this.saving = false;
       console.error("[ConfigManager] Failed to delete provider:", err);
       return false;
     }
   }
 
   dispose(): void {
+    this.stopFileWatcher();
     for (const d of this.disposables) {
       d.dispose();
     }

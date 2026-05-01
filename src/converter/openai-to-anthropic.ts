@@ -198,6 +198,18 @@ export function convertResponseToAnthropic(
   openai: OpenAIChatCompletionResponse,
   originalModel: string
 ): AnthropicMessageResponse {
+  if (!openai.choices || openai.choices.length === 0) {
+    return {
+      id: openai.id || `msg_${randomUUID().replace(/-/g, "")}`,
+      type: "message",
+      role: "assistant",
+      content: [{ type: "text", text: "" }],
+      model: originalModel,
+      stop_reason: "end_turn",
+      stop_sequence: null,
+      usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0 },
+    };
+  }
   const choice = openai.choices[0];
   const message = choice.message;
 

@@ -1,5 +1,6 @@
 /**
  * Chat Completions (non-streaming) JSON -> OpenAI Responses API JSON shape
+ * + Chat Completions synthetic SSE (cross-protocol streaming)
  */
 
 /* eslint-disable @typescript-eslint/naming-convention */
@@ -195,10 +196,147 @@ function pushFunctionCallOutputItemSse(
   });
 }
 
+/**
+ * Synthesize OpenAI Chat Completions SSE for clients that sent `stream: true` during
+ * cross-protocol conversion (upstream returned non-streaming JSON).
+ *
+ * Emits:
+ * 1. Initial chunk with role: "assistant" and empty content
+ * 2. Content text delta chunks (SSE_TEXT_CHUNK chars each)
+ * 3. Thinking delta chunks (if present)
+ * 4. Tool call chunks: first chunk has name + empty arguments, subsequent chunks have argument deltas
+ * 5. Final chunk with finish_reason and usage
+ * 6. [DONE]
+ */
+export function formatOpenAIChatCompletionsSse(response: OpenAIChatCompletionResponse): string {
+  const choice = response.choices?.[0];
+  if (!choice) {
+    return `data: ${JSON.stringify({
+      id: response.id,
+      object: "chat.completion.chunk",
+      created: response.created,
+      model: response.model,
+      choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+    })}\n\ndata: [DONE]\n\n`;
+  }
+
+  const message = choice.message;
+  const lines: string[] = [];
+  const baseChunk = {
+    id: response.id,
+    object: "chat.completion.chunk" as const,
+    created: response.created,
+    model: response.model,
+  };
+
+  const push = (delta: Record<string, unknown>, finishReason: string | null = null): void => {
+    lines.push(
+      `data: ${JSON.stringify({
+        ...baseChunk,
+        choices: [{ index: 0, delta, finish_reason: finishReason }],
+      })}\n\n`
+    );
+  };
+
+  // 1. Initial chunk with role
+  push({ role: "assistant", content: "" });
+
+  // 2. Text content deltas
+  const text = typeof message.content === "string" ? message.content : "";
+  if (text.length > 0) {
+    for (let i = 0; i < text.length; i += SSE_TEXT_CHUNK) {
+      push({ content: text.slice(i, i + SSE_TEXT_CHUNK) });
+    }
+  }
+
+  // 3. Thinking deltas
+  if (message.thinking?.content) {
+    const thinkingText = message.thinking.content;
+    for (let i = 0; i < thinkingText.length; i += SSE_TEXT_CHUNK) {
+      push({
+        thinking: {
+          content: thinkingText.slice(i, i + SSE_TEXT_CHUNK),
+          ...(i === 0 && message.thinking.signature
+            ? { signature: message.thinking.signature }
+            : {}),
+        },
+      });
+    }
+  }
+
+  // 4. Tool call deltas
+  const toolCalls = message.tool_calls ?? [];
+  for (let tcIndex = 0; tcIndex < toolCalls.length; tcIndex++) {
+    const tc = toolCalls[tcIndex];
+    const fullArgs = tc.function.arguments ?? "";
+
+    // First chunk: tool call metadata with empty arguments
+    push({
+      tool_calls: [
+        {
+          index: tcIndex,
+          id: tc.id,
+          type: "function",
+          function: { name: tc.function.name, arguments: "" },
+          ...(tc.extra_content ? { extra_content: tc.extra_content } : {}),
+        },
+      ],
+    });
+
+    // Argument deltas
+    if (fullArgs.length > 0) {
+      for (let i = 0; i < fullArgs.length; i += SSE_TEXT_CHUNK) {
+        push({
+          tool_calls: [
+            {
+              index: tcIndex,
+              function: { arguments: fullArgs.slice(i, i + SSE_TEXT_CHUNK) },
+            },
+          ],
+        });
+      }
+    }
+  }
+
+  // 5. Final chunk with finish_reason
+  const finishReason = choice.finish_reason === "tool_calls" ? "tool_calls" : "stop";
+  push({}, finishReason);
+
+  // 6. Usage chunk (as a separate final data event)
+  if (response.usage) {
+    lines.push(
+      `data: ${JSON.stringify({
+        ...baseChunk,
+        choices: [],
+        usage: {
+          prompt_tokens: response.usage.prompt_tokens,
+          completion_tokens: response.usage.completion_tokens,
+          total_tokens: response.usage.total_tokens,
+        },
+      })}\n\n`
+    );
+  }
+
+  // 7. DONE
+  lines.push("data: [DONE]\n\n");
+  return lines.join("");
+}
+
 export function convertChatCompletionToResponses(
   chat: OpenAIChatCompletionResponse,
   _originalModel: string
 ): OpenAIResponsesApiObject {
+  if (!chat.choices || chat.choices.length === 0) {
+    return {
+      id: `resp_${randomUUID().replace(/-/g, "")}`,
+      object: "response",
+      created_at: chat.created || Math.floor(Date.now() / 1000),
+      model: chat.model || "",
+      status: "completed",
+      output: [],
+      usage: undefined,
+    };
+  }
   const choice = chat.choices[0];
   const message = choice?.message;
   const output: unknown[] = [];

@@ -60,7 +60,6 @@ export function handleListProviders(
     active: p.id === currentId,
     enabled: p.enabled !== false,
     apiKey: maskApiKey(p.apiKey),
-    openaiChatCompletionsPath: p.openaiChatCompletionsPath,
     modelsListFormat: p.modelsListFormat,
     modelMap: p.modelMap,
   }));
@@ -120,7 +119,6 @@ export async function handleAddProvider(
       modelMap: body.modelMap,
       vlModelMap: body.vlModelMap,
       headers: body.headers,
-      openaiChatCompletionsPath: body.openaiChatCompletionsPath,
       modelsListFormat: body.modelsListFormat,
     };
 
@@ -167,9 +165,16 @@ export function handleDeleteProvider(
   }
 
   const configManager = serverInstance.getConfig();
+  const router = serverInstance.getRouter();
+  const wasActive = router.getCurrentProviderId() === id;
   const success = configManager.deleteProvider(id);
 
   if (success) {
+    // If the deleted provider was active, switch to the default
+    if (wasActive) {
+      const fallbackId = configManager.defaultProvider;
+      void router.switchProvider(fallbackId);
+    }
     sendJson(res, 200, { status: "ok", message: `Provider "${id}" deleted` });
   } else {
     sendJson(res, 400, { status: "error", message: `Failed to delete provider "${id}"` });
@@ -184,7 +189,6 @@ function buildDuplicateConfigFromProvider(source: Provider, name: string): Provi
     providerType: source.providerType,
     apiKey: source.apiKey,
     authHeader: source.authHeader,
-    openaiChatCompletionsPath: source.openaiChatCompletionsPath,
     modelsListFormat: source.modelsListFormat,
     modelMap: source.modelMap,
     vlModelMap: source.vlModelMap,
@@ -309,7 +313,7 @@ interface AddProviderRequest {
   id: string;
   name: string;
   baseUrl: string;
-  providerType: "anthropic" | "openai";
+  providerType: "anthropic" | "openai" | "openai_chat";
   mode: "passthrough" | "inject";
   apiKey?: string;
   authHeader?: string;
@@ -317,6 +321,5 @@ interface AddProviderRequest {
   modelMap?: ModelMapEntry[];
   vlModelMap?: ModelMapEntry[];
   headers?: Record<string, string>;
-  openaiChatCompletionsPath?: string;
   modelsListFormat?: "auto" | "openai" | "anthropic";
 }

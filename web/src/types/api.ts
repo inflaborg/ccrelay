@@ -10,12 +10,11 @@ export interface Provider {
   id: string;
   name: string;
   mode: "inject" | "passthrough";
-  providerType: "anthropic" | "openai";
+  providerType: "anthropic" | "openai" | "openai_chat";
   baseUrl?: string;
   active: boolean;
   enabled: boolean;
   apiKey?: string;
-  openaiChatCompletionsPath?: string;
   /** GET /v1/models wire when protocol cannot be detected (default: auto) */
   modelsListFormat?: "auto" | "openai" | "anthropic";
   modelMap?: ModelMapEntry[];
@@ -52,7 +51,7 @@ export interface AddProviderRequest {
   id: string;
   name: string;
   baseUrl: string;
-  providerType: "anthropic" | "openai";
+  providerType: "anthropic" | "openai" | "openai_chat";
   mode: "passthrough" | "inject";
   apiKey?: string;
   enabled?: boolean;
@@ -61,7 +60,6 @@ export interface AddProviderRequest {
   modelMap?: ModelMapEntry[];
   vlModelMap?: ModelMapEntry[];
   headers?: Record<string, string>;
-  openaiChatCompletionsPath?: string;
   modelsListFormat?: "auto" | "openai" | "anthropic";
 }
 
