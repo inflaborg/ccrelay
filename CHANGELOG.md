@@ -20,11 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **WebSocket `config_changed` broadcast**: Leader broadcasts config changes to all Follower instances via WebSocket, so Followers reload their local config automatically.
 - **Duplicate provider: editable New provider ID**: the Duplicate dialog now lets you customize the new provider ID instead of being locked to `<sourceId>_copy`.
 - **Codex model input**: applying the Codex CCRelay template now shows a model input dialog before writing `~/.codex/config.toml`, defaulting to `gpt-5.4-mini` when left empty (replaces the previous hardcoded `glm-5-turbo`).
+- **Provider protocol badge**: each provider card now displays a colored protocol label (Anthropic / OpenAI / OpenAI Chat) in the top-right corner for quick identification.
 
 ### Changed
 
 - **Converter simplification**: `convertRequestToOpenAI`, `convertOpenAIRequestToAnthropic`, and `convertResponsesRequestToChatCompletions` no longer accept a `provider` parameter for custom path resolution — paths are now deterministic (`/chat/completions` for OpenAI, `/v1/messages` for Anthropic).
 - **Cross-protocol conversion guard**: `needsConversion` and upstream wire detection now correctly distinguish all three provider types (`"anthropic"`, `"openai"`, `"openai_chat"`) instead of treating anything non-Anthropic as full OpenAI passthrough.
+- **Model Map field**: no longer marked as required; empty means models are passed through without remapping.
+- **Delete provider confirmation**: deleting a provider now requires confirmation via a dialog showing the provider name and ID.
 
 ### Removed
 
