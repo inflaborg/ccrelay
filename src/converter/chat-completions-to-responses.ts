@@ -7,6 +7,8 @@
 
 import { randomUUID } from "crypto";
 import type { OpenAIChatCompletionResponse, OpenAIResponseMessage } from "./openai-to-anthropic";
+import type { ResponsesRequestEcho } from "./responses-echo";
+import { mergedResponseShellEcho } from "./responses-echo";
 
 /** Minimal Response object fields used by many SDKs */
 export interface OpenAIResponsesApiObject {
@@ -21,10 +23,31 @@ export interface OpenAIResponsesApiObject {
     output_tokens: number;
     total_tokens: number;
   };
+  instructions?: string | null;
+  parallel_tool_calls?: boolean;
+  previous_response_id?: string | null;
+  reasoning?: { effort?: string | null; summary?: string | null };
+  store?: boolean;
+  text?: { format?: unknown };
+  tool_choice?: unknown;
+  tools?: unknown[];
+  truncation?: string;
+  user?: string | null;
+  metadata?: Record<string, unknown>;
 }
 
 /** Chars per synthetic delta chunk when upstream is non-streaming. */
 const SSE_TEXT_CHUNK = 64;
+
+function appendResponsesSseEvent(
+  lines: string[],
+  nextSeq: () => number,
+  obj: Record<string, unknown>
+): void {
+  const eventType = typeof obj.type === "string" ? obj.type : "message";
+  const json = JSON.stringify({ ...obj, sequence_number: nextSeq() });
+  lines.push(`event: ${eventType}\ndata: ${json}\n\n`);
+}
 
 /**
  * Synthesize OpenAI Responses API SSE for clients that sent `stream: true` (e.g. Codex).
@@ -42,12 +65,14 @@ export function formatOpenAIResponsesSse(response: OpenAIResponsesApiObject): st
 function formatOpenAIResponsesSseMinimal(response: OpenAIResponsesApiObject): string {
   let sequence_number = 0;
   const lines: string[] = [];
-  const push = (obj: Record<string, unknown>) => {
-    lines.push(`data: ${JSON.stringify({ ...obj, sequence_number: sequence_number++ })}\n\n`);
-  };
+  const nextSeq = () => sequence_number++;
   const createdResponse = { ...response, status: "in_progress" as const, output: [] as unknown[] };
-  push({ type: "response.created", response: createdResponse });
-  push({ type: "response.completed", response });
+  appendResponsesSseEvent(lines, nextSeq, { type: "response.created", response: createdResponse });
+  appendResponsesSseEvent(lines, nextSeq, {
+    type: "response.in_progress",
+    response: { ...createdResponse },
+  });
+  appendResponsesSseEvent(lines, nextSeq, { type: "response.completed", response });
   lines.push("data: [DONE]\n\n");
   return lines.join("");
 }
@@ -55,12 +80,12 @@ function formatOpenAIResponsesSseMinimal(response: OpenAIResponsesApiObject): st
 function formatOpenAIResponsesSseFullStream(response: OpenAIResponsesApiObject): string {
   let sequence_number = 0;
   const lines: string[] = [];
-  const push = (obj: Record<string, unknown>) => {
-    lines.push(`data: ${JSON.stringify({ ...obj, sequence_number: sequence_number++ })}\n\n`);
-  };
+  const nextSeq = () => sequence_number++;
+  const push = (obj: Record<string, unknown>) => appendResponsesSseEvent(lines, nextSeq, obj);
 
   const createdResponse = { ...response, status: "in_progress" as const, output: [] as unknown[] };
   push({ type: "response.created", response: createdResponse });
+  push({ type: "response.in_progress", response: { ...createdResponse } });
 
   for (let outputIndex = 0; outputIndex < response.output.length; outputIndex++) {
     const item = response.output[outputIndex];
@@ -118,6 +143,13 @@ function pushMessageOutputItemSse(
     output_index: outputIndex,
   });
   if (text.length > 0) {
+    push({
+      type: "response.content_part.added",
+      item_id: itemId,
+      content_index: 0,
+      output_index: outputIndex,
+      part: { type: "output_text", text: "", annotations: [] },
+    });
     for (let i = 0; i < text.length; i += SSE_TEXT_CHUNK) {
       const delta = text.slice(i, i + SSE_TEXT_CHUNK);
       push({
@@ -136,6 +168,13 @@ function pushMessageOutputItemSse(
       output_index: outputIndex,
       text,
       logprobs: [] as unknown[],
+    });
+    push({
+      type: "response.content_part.done",
+      item_id: itemId,
+      content_index: 0,
+      output_index: outputIndex,
+      part: { type: "output_text", text, annotations: [] },
     });
   }
   push({
@@ -324,8 +363,11 @@ export function formatOpenAIChatCompletionsSse(response: OpenAIChatCompletionRes
 
 export function convertChatCompletionToResponses(
   chat: OpenAIChatCompletionResponse,
-  _originalModel: string
+  _originalModel: string,
+  echo?: ResponsesRequestEcho
 ): OpenAIResponsesApiObject {
+  const shell = mergedResponseShellEcho(echo);
+
   if (!chat.choices || chat.choices.length === 0) {
     return {
       id: `resp_${randomUUID().replace(/-/g, "")}`,
@@ -335,6 +377,7 @@ export function convertChatCompletionToResponses(
       status: "completed",
       output: [],
       usage: undefined,
+      ...shell,
     };
   }
   const choice = chat.choices[0];
@@ -352,6 +395,14 @@ export function convertChatCompletionToResponses(
   }
 
   const u = chat.usage;
+  const coreUsage = u
+    ? {
+        input_tokens: u.prompt_tokens ?? 0,
+        output_tokens: u.completion_tokens ?? 0,
+        total_tokens: u.total_tokens ?? 0,
+      }
+    : undefined;
+
   return {
     id: `resp_${randomUUID().replace(/-/g, "")}`,
     object: "response",
@@ -359,13 +410,8 @@ export function convertChatCompletionToResponses(
     model: chat.model,
     status: "completed",
     output,
-    usage: u
-      ? {
-          input_tokens: u.prompt_tokens ?? 0,
-          output_tokens: u.completion_tokens ?? 0,
-          total_tokens: u.total_tokens ?? 0,
-        }
-      : undefined,
+    usage: coreUsage,
+    ...shell,
   };
 }
 

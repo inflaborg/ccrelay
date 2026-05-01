@@ -5,6 +5,7 @@
 import type * as http from "http";
 import type * as url from "url";
 import type { ApiSurface, Provider } from "../../types";
+import type { ResponsesRequestEcho } from "../../converter";
 
 /**
  * Re-export for convenience
@@ -44,6 +45,8 @@ export interface BodyProcessResult {
   responsesStreamRequested?: boolean;
   /** True if client sent `stream: true` on a cross-protocol Chat Completions request */
   streamRequested?: boolean;
+  /** Original POST /v1/responses fields echoed into synthesized Responses output */
+  originalResponsesEcho?: ResponsesRequestEcho;
 }
 
 /**

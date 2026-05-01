@@ -7,6 +7,7 @@
 
 import * as http from "http";
 import { z } from "zod";
+import type { ResponsesRequestEcho } from "../converter/responses-echo";
 
 export type ProviderMode = "passthrough" | "inject";
 
@@ -520,6 +521,10 @@ export interface RequestTask {
   responsesStreamRequested?: boolean;
   /** Client had `stream: true` on cross-protocol POST /v1/chat/completions; response may be synthesized as SSE */
   streamRequested?: boolean;
+  /** Fields from client's /v1/responses body echoed into response shells */
+  originalResponsesEcho?: ResponsesRequestEcho;
+  /** Streaming handler finished writing successfully (avoids disconnect false positives) */
+  streamCompleted?: boolean;
   /** Optional response object for streaming support in queue mode */
   res?: http.ServerResponse;
   /** Whether the task has been cancelled */
@@ -544,6 +549,8 @@ export interface ProxyResult {
   errorMessage?: string;
   /** Whether the response was streamed directly to client */
   streamed?: boolean;
+  /** True when streamed bytes were flushed before downstream closed (lifecycle / logging only) */
+  streamCompleted?: boolean;
 }
 
 /**

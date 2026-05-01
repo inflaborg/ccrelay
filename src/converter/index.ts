@@ -51,3 +51,16 @@ export {
   formatOpenAIChatCompletionsSse,
   type OpenAIResponsesApiObject,
 } from "./chat-completions-to-responses";
+
+export {
+  createStreamingState,
+  processStreamingChunk,
+  createSseLineBuffer,
+  type StreamingConversionState,
+} from "./chat-completions-streaming-to-responses";
+
+export {
+  extractResponsesEcho,
+  mergedResponseShellEcho,
+  type ResponsesRequestEcho,
+} from "./responses-echo";

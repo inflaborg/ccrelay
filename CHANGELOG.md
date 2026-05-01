@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Settings tab**: new dashboard tab exposes all YAML config groups — Logging (toggle, database type/path/host/port), Concurrency (maxWorkers, maxQueueSize, requestTimeout, retry429), Server (port, host, autoStart), and Routing (forward rules, block rules). Changes are persisted via `PATCH /ccrelay/api/config`; concurrency and routing settings hot-reload, while server and logging changes require a restart.
 - **Unified routing config**: replaced `routing.proxy`/`routing.passthrough`/`routing.block`/`routing.openaiBlock` with two unified constructs: `routing.forward` (path → provider mapping, first match wins) and `routing.block` (path + optional `condition.kind` filter → custom response). Unmatched paths now return 404 instead of silently routing to the current provider. Old config files are auto-migrated at load time.
 - **Config version tracking**: added `configVersion` field to the YAML config (set to `"0.2.0"`). Legacy configs without this field are automatically migrated and rewritten with the version stamp on first load.
+- **Streaming Chat→Responses SSE** (`chat-completions-streaming-to-responses`): for `POST /v1/responses` with `stream: true` and upstream `openai_chat`, converts Chat Completions SSE to OpenAI Responses API SSE in real time (e.g. `reasoning_content` → `response.reasoning_text.*`, assistant text wrapped in `content_part` / `output_text` events). Emits `event:` lines alongside `data:`, plus `response.created`, `response.in_progress`, and schema-aligned shells.
+- **Responses request echo** (`responses-echo`, plumbed via `originalResponsesEcho`): echoes client `tools` (function definitions and nested `namespace` tools only — hosted tools omitted to match upstream stripping), plus `reasoning`, `text`, `tool_choice`, `parallel_tool_calls`, `instructions`, `metadata`, `truncation`, `store`, etc. into `response.*` for both streaming SSE and non-streaming `convertChatCompletionToResponses` JSON.
+- **Build fingerprint**: `scripts/generate-version.mjs` adds a random per-build `BUILD_HASH`; `/ccrelay/api/version` and extension activation log expose `hash` / `gitHash` so running VSIX matches the packaged build.
 
 ### Changed
 
@@ -32,10 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cross-protocol conversion guard**: `needsConversion` and upstream wire detection now correctly distinguish all three provider types (`"anthropic"`, `"openai"`, `"openai_chat"`) instead of treating anything non-Anthropic as full OpenAI passthrough.
 - **Model Map field**: no longer marked as required; empty means models are passed through without remapping.
 - **Delete provider confirmation**: deleting a provider now requires confirmation via a dialog showing the provider name and ID.
+- **`response.completed` usage on streaming conversions**: emits final completion and `[DONE]` only after upstream `[DONE]` (or EOF fallback) so a trailing usage-only chunk is merged when upstream sends `finish_reason` before `usage` (MiMo-style split chunks).
 
 ### Removed
 
 - **`openaiChatCompletionsPath` provider setting**: the Chat Completions endpoint is always `/chat/completions`; adjust `baseUrl` to include any path prefix (e.g. change `baseUrl: "https://example.com"` + `openaiChatCompletionsPath: "/v1/chat/completions"` to `baseUrl: "https://example.com/v1"`).
+- **Temporary SSE debug dumps** to `/tmp/ccrelay-sse-dump` from the Chat→Responses streaming handler (use logs and unit tests for diagnosis instead).
 
 ### Fixed
 
@@ -46,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cross-protocol streaming guard**: `stream: "true"` (string) is now also detected and forced to `false` for cross-protocol conversion, not just `stream: true` (boolean).
 - **Custom auth headers**: router now supports any custom `authHeader` value on a provider, not just `authorization` or `x-api-key`.
 - **Delete active provider**: deleting the currently active provider now automatically switches to the default provider instead of leaving a stale `currentProviderId` that caused incorrect status bar display.
+- **Streaming task lifecycle (queue mode)**: `streamCompleted` on `RequestTask` / `ProxyResult` and updated `TaskExecutor` / `ResponseWriter` handling avoid spurious `Marked as cancelled`, “client disconnected, skipping response”, and unnecessary upstream aborts after a successful streamed response when the client closes the socket post-`[DONE]`.
 
 ## [0.2.0] - 2026-04-26 (pre-release)
 

@@ -32,8 +32,8 @@ export class ResponseWriter {
    * Write success response
    */
   write(result: ProxyResult, clientId?: string): void {
-    // Check if client already disconnected
-    if (this.res.writableEnded) {
+    const allowEndedStream = Boolean(result.streamed && result.streamCompleted);
+    if (this.res.writableEnded && !allowEndedStream) {
       return;
     }
 
