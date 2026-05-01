@@ -473,9 +473,7 @@ export default function Providers() {
                     className="w-full h-8 px-2 text-xs border rounded-md bg-background disabled:opacity-50"
                     placeholder="e.g., my_provider"
                     value={editingProvider != null ? editingProvider.id : formData.id}
-                    onChange={e =>
-                      updateForm("id", e.target.value.replace(/[^A-Za-z0-9_-]/g, ""))
-                    }
+                    onChange={e => updateForm("id", e.target.value.replace(/[^A-Za-z0-9_-]/g, ""))}
                     disabled={editingProvider != null}
                   />
                   <p className="text-[10px] text-muted-foreground">
@@ -500,7 +498,10 @@ export default function Providers() {
                       Enabled
                     </label>
                     {(editingProvider?.id === "official" || formData.id === "official") && (
-                      <span className="text-[10px] text-muted-foreground" title="The official provider must stay enabled.">
+                      <span
+                        className="text-[10px] text-muted-foreground"
+                        title="The official provider must stay enabled."
+                      >
                         (always on)
                       </span>
                     )}
@@ -567,7 +568,9 @@ export default function Providers() {
                       { value: "openai", label: "OpenAI (Full)" },
                       { value: "openai_chat", label: "OpenAI (Chat Only)" },
                     ]}
-                    onChange={v => updateForm("providerType", v as "anthropic" | "openai" | "openai_chat")}
+                    onChange={v =>
+                      updateForm("providerType", v as "anthropic" | "openai" | "openai_chat")
+                    }
                     className="h-8 text-xs"
                   />
                 </div>
@@ -784,7 +787,12 @@ export default function Providers() {
                 size="sm"
                 className="h-7 text-xs"
                 onClick={handleDuplicateSubmit}
-                disabled={duplicateMutation.isPending || !dupName.trim() || !dupNewId.trim() || !duplicateSource}
+                disabled={
+                  duplicateMutation.isPending ||
+                  !dupName.trim() ||
+                  !dupNewId.trim() ||
+                  !duplicateSource
+                }
               >
                 {duplicateMutation.isPending ? (
                   <Loader2 className="h-3 w-3 animate-spin" />

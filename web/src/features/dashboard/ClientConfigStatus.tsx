@@ -147,7 +147,11 @@ export default function ClientConfigStatus() {
   };
 
   const pendingItem =
-    pendingTarget === "claudeCode" ? data?.claudeCode : pendingTarget === "codex" ? data?.codex : null;
+    pendingTarget === "claudeCode"
+      ? data?.claudeCode
+      : pendingTarget === "codex"
+        ? data?.codex
+        : null;
 
   return (
     <>
@@ -158,8 +162,8 @@ export default function ClientConfigStatus() {
             Client configuration
           </CardTitle>
           <p className="text-[10px] text-muted-foreground font-normal pt-0.5">
-            Check Claude Code (<span className="font-mono">~/.claude/settings.json</span>) and Codex (
-            <span className="font-mono">~/.codex/config.toml</span>) for CCRelay on port{" "}
+            Check Claude Code (<span className="font-mono">~/.claude/settings.json</span>) and Codex
+            (<span className="font-mono">~/.codex/config.toml</span>) for CCRelay on port{" "}
             {data?.port ?? "—"}.
           </p>
         </CardHeader>
@@ -195,9 +199,11 @@ export default function ClientConfigStatus() {
                     </p>
                     <div className="mt-2 pt-2 border-t border-border/50 space-y-1.5">
                       <p className="text-[10px] text-muted-foreground">
-                        <span className="font-medium text-foreground/90">Optional default model names</span>{" "}
-                        (CCRelay <span className="font-mono">modelMap</span> is usually enough. Set these only if
-                        you want Claude Code to request specific ids.)
+                        <span className="font-medium text-foreground/90">
+                          Optional default model names
+                        </span>{" "}
+                        (CCRelay <span className="font-mono">modelMap</span> is usually enough. Set
+                        these only if you want Claude Code to request specific ids.)
                       </p>
                       {data?.claudeDefaultModels &&
                       (data.claudeDefaultModels.opus ||
@@ -212,8 +218,8 @@ export default function ClientConfigStatus() {
                         <p className="text-[10px] text-muted-foreground">
                           <span className="italic">Not set in settings.json.</span> Suggested:{" "}
                           <span className="font-mono text-foreground/80">
-                            {CLAUDE_CODE_DEFAULT_MODELS.opus} · {CLAUDE_CODE_DEFAULT_MODELS.sonnet} ·{" "}
-                            {CLAUDE_CODE_DEFAULT_MODELS.haiku}
+                            {CLAUDE_CODE_DEFAULT_MODELS.opus} · {CLAUDE_CODE_DEFAULT_MODELS.sonnet}{" "}
+                            · {CLAUDE_CODE_DEFAULT_MODELS.haiku}
                           </span>
                         </p>
                       )}
@@ -284,12 +290,13 @@ export default function ClientConfigStatus() {
                       </p>
                     )}
                     <p className="text-[10px] text-muted-foreground mt-0.5">
-                      Expected: <span className="font-mono">{data?.expectedCodexBaseUrl ?? "—"}</span>
+                      Expected:{" "}
+                      <span className="font-mono">{data?.expectedCodexBaseUrl ?? "—"}</span>
                     </p>
                     <div className="mt-2 pt-2 border-t border-border/50 space-y-1.5">
                       <p className="text-[10px] text-muted-foreground">
-                        <span className="font-medium text-foreground/90">Model</span>{" "}
-                        (written to <span className="font-mono">model</span> in config.toml)
+                        <span className="font-medium text-foreground/90">Model</span> (written to{" "}
+                        <span className="font-mono">model</span> in config.toml)
                       </p>
                       {data?.codex?.model ? (
                         <p className="text-[10px] font-mono text-foreground/80">
@@ -298,7 +305,9 @@ export default function ClientConfigStatus() {
                       ) : (
                         <p className="text-[10px] text-muted-foreground">
                           <span className="italic">Not set.</span> Default:{" "}
-                          <span className="font-mono text-foreground/80">{CODEX_DEFAULT_MODEL}</span>
+                          <span className="font-mono text-foreground/80">
+                            {CODEX_DEFAULT_MODEL}
+                          </span>
                         </p>
                       )}
                       <div>
@@ -327,7 +336,10 @@ export default function ClientConfigStatus() {
                     variant={data?.codex.status === "ok" ? "outline" : "default"}
                     className="h-7 text-xs"
                     disabled={
-                      data?.codex.status === "ok" || applyMutation.isPending || modelsMutation.isPending || codexModelPatchMutation.isPending
+                      data?.codex.status === "ok" ||
+                      applyMutation.isPending ||
+                      modelsMutation.isPending ||
+                      codexModelPatchMutation.isPending
                     }
                     onClick={() => onConfigureClick("codex")}
                   >
@@ -343,7 +355,9 @@ export default function ClientConfigStatus() {
               </div>
 
               {applyMutation.isError && (
-                <p className="text-[10px] text-destructive">{(applyMutation.error as Error).message}</p>
+                <p className="text-[10px] text-destructive">
+                  {(applyMutation.error as Error).message}
+                </p>
               )}
             </>
           )}
@@ -362,21 +376,23 @@ export default function ClientConfigStatus() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {pendingTarget === "codex" ? "Replace Codex config?" : "Overwrite Claude Code settings?"}
+              {pendingTarget === "codex"
+                ? "Replace Codex config?"
+                : "Overwrite Claude Code settings?"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {pendingTarget === "codex" ? (
                 <>
-                  Your <span className="font-mono">~/.codex/config.toml</span> points to another API (
-                  {pendingItem?.currentValue ?? "unknown"}). Applying will{" "}
+                  Your <span className="font-mono">~/.codex/config.toml</span> points to another API
+                  ({pendingItem?.currentValue ?? "unknown"}). Applying will{" "}
                   <strong>replace the file</strong> with the CCRelay template (model{" "}
-                  <span className="font-mono">{pendingCodexModel || CODEX_DEFAULT_MODEL}</span>, provider{" "}
-                  <span className="font-mono">ccrelay</span>).
+                  <span className="font-mono">{pendingCodexModel || CODEX_DEFAULT_MODEL}</span>,
+                  provider <span className="font-mono">ccrelay</span>).
                 </>
               ) : (
                 <>
-                  Your <span className="font-mono">settings.json</span> is missing CCRelay or points to{" "}
-                  {pendingItem?.currentValue ?? "another URL"}. Applying will merge recommended{" "}
+                  Your <span className="font-mono">settings.json</span> is missing CCRelay or points
+                  to {pendingItem?.currentValue ?? "another URL"}. Applying will merge recommended{" "}
                   <span className="font-mono">env</span> keys (including{" "}
                   <span className="font-mono">ANTHROPIC_BASE_URL</span> →{" "}
                   {data?.expectedAnthropicBase ?? "this server"}).
@@ -453,10 +469,14 @@ export default function ClientConfigStatus() {
                 />
               </div>
               {applyMutation.isError && (
-                <p className="text-[10px] text-destructive">{(applyMutation.error as Error).message}</p>
+                <p className="text-[10px] text-destructive">
+                  {(applyMutation.error as Error).message}
+                </p>
               )}
               {codexModelPatchMutation.isError && (
-                <p className="text-[10px] text-destructive">{(codexModelPatchMutation.error as Error).message}</p>
+                <p className="text-[10px] text-destructive">
+                  {(codexModelPatchMutation.error as Error).message}
+                </p>
               )}
             </CardContent>
             <div className="border-t p-3 flex justify-end">
@@ -512,8 +532,9 @@ export default function ClientConfigStatus() {
                 </Button>
               </div>
               <p className="text-[10px] text-muted-foreground font-normal pt-1">
-                Written to <span className="font-mono">env.ANTHROPIC_DEFAULT_*_MODEL</span> in settings.json.
-                Leave blank and save to remove a key. Empty all three to rely only on CCRelay mapping.
+                Written to <span className="font-mono">env.ANTHROPIC_DEFAULT_*_MODEL</span> in
+                settings.json. Leave blank and save to remove a key. Empty all three to rely only on
+                CCRelay mapping.
               </p>
             </CardHeader>
             <CardContent className="p-4 space-y-2">
@@ -548,7 +569,9 @@ export default function ClientConfigStatus() {
                 />
               </div>
               {modelsMutation.isError && (
-                <p className="text-[10px] text-destructive">{(modelsMutation.error as Error).message}</p>
+                <p className="text-[10px] text-destructive">
+                  {(modelsMutation.error as Error).message}
+                </p>
               )}
             </CardContent>
             <div className="border-t p-3 flex flex-wrap justify-end gap-2">
