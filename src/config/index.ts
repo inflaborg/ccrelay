@@ -74,8 +74,6 @@ routing:
   forward:
     - path: "/v1/messages"
       provider: "auto"
-    - path: "/messages"
-      provider: "auto"
     - path: "/v1/chat/completions"
       provider: "auto"
     - path: "/v1/responses"
@@ -692,7 +690,6 @@ export class ConfigManager {
       // Legacy config (no configVersion) — migrate routing format
       const proxy: string[] = rawRouting.proxy ?? [
         "/v1/messages",
-        "/messages",
         "/v1/chat/completions",
         "/v1/models",
         "/v1/responses",

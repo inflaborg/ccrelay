@@ -506,8 +506,6 @@ routing:
   forward:
     - path: "/v1/messages"
       provider: "auto"
-    - path: "/messages"
-      provider: "auto"
     - path: "/v1/chat/completions"
       provider: "auto"
     - path: "/v1/responses"
