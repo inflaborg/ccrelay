@@ -63,6 +63,7 @@ export default function ClientConfigStatus() {
   const [sonnet, setSonnet] = useState("");
   const [haiku, setHaiku] = useState("");
   const [codexModelModalOpen, setCodexModelModalOpen] = useState(false);
+  const [codexModalMode, setCodexModalMode] = useState<"apply" | "configure">("apply");
   const [codexModel, setCodexModel] = useState("");
   const [pendingCodexModel, setPendingCodexModel] = useState<string | undefined>(undefined);
 
@@ -98,6 +99,19 @@ export default function ClientConfigStatus() {
     },
   });
 
+  const codexModelPatchMutation = useMutation({
+    mutationFn: (model: string) =>
+      api.applyClientConfig({
+        target: "codex",
+        patchCodexModelOnly: true,
+        model,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["clientConfig"] });
+      setCodexModelModalOpen(false);
+    },
+  });
+
   const runApply = (target: "claudeCode" | "codex", overwrite: boolean, model?: string) => {
     setApplyingTo(target);
     applyMutation.mutate({ target, overwrite, ...(model ? { model } : {}) });
@@ -112,6 +126,7 @@ export default function ClientConfigStatus() {
       return;
     }
     if (target === "codex") {
+      setCodexModalMode("apply");
       setCodexModel("");
       setCodexModelModalOpen(true);
       return;
@@ -271,6 +286,39 @@ export default function ClientConfigStatus() {
                     <p className="text-[10px] text-muted-foreground mt-0.5">
                       Expected: <span className="font-mono">{data?.expectedCodexBaseUrl ?? "—"}</span>
                     </p>
+                    <div className="mt-2 pt-2 border-t border-border/50 space-y-1.5">
+                      <p className="text-[10px] text-muted-foreground">
+                        <span className="font-medium text-foreground/90">Model</span>{" "}
+                        (written to <span className="font-mono">model</span> in config.toml)
+                      </p>
+                      {data?.codex?.model ? (
+                        <p className="text-[10px] font-mono text-foreground/80">
+                          {data.codex.model}
+                        </p>
+                      ) : (
+                        <p className="text-[10px] text-muted-foreground">
+                          <span className="italic">Not set.</span> Default:{" "}
+                          <span className="font-mono text-foreground/80">{CODEX_DEFAULT_MODEL}</span>
+                        </p>
+                      )}
+                      <div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          className="h-7 text-xs gap-1"
+                          disabled={applyMutation.isPending || codexModelPatchMutation.isPending}
+                          onClick={() => {
+                            setCodexModalMode("configure");
+                            setCodexModel(data?.codex?.model ?? "");
+                            setCodexModelModalOpen(true);
+                          }}
+                        >
+                          <SlidersHorizontal className="h-3 w-3" />
+                          Configure model
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div className="flex shrink-0 sm:pl-2">
@@ -279,7 +327,7 @@ export default function ClientConfigStatus() {
                     variant={data?.codex.status === "ok" ? "outline" : "default"}
                     className="h-7 text-xs"
                     disabled={
-                      data?.codex.status === "ok" || applyMutation.isPending || modelsMutation.isPending
+                      data?.codex.status === "ok" || applyMutation.isPending || modelsMutation.isPending || codexModelPatchMutation.isPending
                     }
                     onClick={() => onConfigureClick("codex")}
                   >
@@ -386,15 +434,19 @@ export default function ClientConfigStatus() {
                   placeholder={CODEX_DEFAULT_MODEL}
                   onKeyDown={e => {
                     if (e.key === "Enter") {
-                      const effectiveModel = codexModel.trim() || CODEX_DEFAULT_MODEL;
-                      const codexItem = data?.codex;
-                      setCodexModelModalOpen(false);
-                      if (codexItem && needsOverwriteBeforeApply(codexItem)) {
-                        setPendingCodexModel(effectiveModel);
-                        setPendingTarget("codex");
-                        setConfirmOpen(true);
+                      if (codexModalMode === "configure") {
+                        codexModelPatchMutation.mutate(codexModel.trim() || CODEX_DEFAULT_MODEL);
                       } else {
-                        runApply("codex", false, effectiveModel);
+                        const effectiveModel = codexModel.trim() || CODEX_DEFAULT_MODEL;
+                        const codexItem = data?.codex;
+                        setCodexModelModalOpen(false);
+                        if (codexItem && needsOverwriteBeforeApply(codexItem)) {
+                          setPendingCodexModel(effectiveModel);
+                          setPendingTarget("codex");
+                          setConfirmOpen(true);
+                        } else {
+                          runApply("codex", false, effectiveModel);
+                        }
                       }
                     }
                   }}
@@ -403,27 +455,40 @@ export default function ClientConfigStatus() {
               {applyMutation.isError && (
                 <p className="text-[10px] text-destructive">{(applyMutation.error as Error).message}</p>
               )}
+              {codexModelPatchMutation.isError && (
+                <p className="text-[10px] text-destructive">{(codexModelPatchMutation.error as Error).message}</p>
+              )}
             </CardContent>
             <div className="border-t p-3 flex justify-end">
               <Button
                 type="button"
                 size="sm"
                 className="h-7 text-xs"
-                disabled={applyMutation.isPending}
+                disabled={applyMutation.isPending || codexModelPatchMutation.isPending}
                 onClick={() => {
-                  const effectiveModel = codexModel.trim() || CODEX_DEFAULT_MODEL;
-                  const codexItem = data?.codex;
-                  setCodexModelModalOpen(false);
-                  if (codexItem && needsOverwriteBeforeApply(codexItem)) {
-                    setPendingCodexModel(effectiveModel);
-                    setPendingTarget("codex");
-                    setConfirmOpen(true);
+                  if (codexModalMode === "configure") {
+                    codexModelPatchMutation.mutate(codexModel.trim() || CODEX_DEFAULT_MODEL);
                   } else {
-                    runApply("codex", false, effectiveModel);
+                    const effectiveModel = codexModel.trim() || CODEX_DEFAULT_MODEL;
+                    const codexItem = data?.codex;
+                    setCodexModelModalOpen(false);
+                    if (codexItem && needsOverwriteBeforeApply(codexItem)) {
+                      setPendingCodexModel(effectiveModel);
+                      setPendingTarget("codex");
+                      setConfirmOpen(true);
+                    } else {
+                      runApply("codex", false, effectiveModel);
+                    }
                   }
                 }}
               >
-                {applyMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save & Apply"}
+                {applyMutation.isPending || codexModelPatchMutation.isPending ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : codexModalMode === "configure" ? (
+                  "Save"
+                ) : (
+                  "Save & Apply"
+                )}
               </Button>
             </div>
           </Card>
