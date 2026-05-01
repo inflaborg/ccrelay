@@ -192,6 +192,7 @@ export type LoggingConfigInput = z.infer<typeof LoggingConfigSchema>;
 
 // Full file configuration schema
 export const FileConfigSchema = z.object({
+  configVersion: z.string().optional(),
   server: ServerConfigSchema.optional(),
   providers: z.record(z.string(), ProviderConfigSchema).optional(),
   defaultProvider: z.string().optional(),

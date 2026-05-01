@@ -26,6 +26,7 @@ import {
 } from "../types";
 
 const CONFIG_STATE_KEY = "ccrelay.currentProvider";
+const CONFIG_VERSION = "0.2.0";
 
 // Environment variable pattern for substitution
 const ENV_VAR_PATTERN = /\$\{(\w+)\}/g;
@@ -33,6 +34,7 @@ const ENV_VAR_PATTERN = /\$\{(\w+)\}/g;
 // Default config with comments template
 const DEFAULT_CONFIG_YAML = `# CCRelay Configuration
 # Docs: https://github.com/inflaborg/ccrelay#configuration
+configVersion: "${CONFIG_VERSION}"
 
 # ==================== Server Configuration ====================
 server:
@@ -637,18 +639,26 @@ export class ConfigManager {
       }
     }
 
-    // Build routing config (migrate legacy format if needed)
-    // Check the raw file config (not merged with defaults) to detect legacy format
-    const rawFileRouting = (fileConfig as Record<string, unknown>).routing as
-      | Record<string, unknown>
-      | undefined;
-    const hasNewFormat = Array.isArray(rawFileRouting?.forward) && rawFileRouting.forward.length > 0;
+    // Build routing config — check version to decide whether migration is needed
+    // Read raw YAML to get the actual file content (before merge with defaults)
+    const rawFileObj = ((): Record<string, unknown> => {
+      try {
+        const raw = fs.readFileSync(this.configPath, "utf-8");
+        return (yaml.load(raw) as Record<string, unknown>) ?? {};
+      } catch {
+        return {};
+      }
+    })();
+    const fileConfigVersion =
+      typeof rawFileObj.configVersion === "string" ? rawFileObj.configVersion : null;
+    const needsMigration = !fileConfigVersion;
+
     const rawRouting = merged.routing ?? {};
     let forwardRules: ForwardRule[];
     let blockRules: BlockRule[];
 
-    if (hasNewFormat) {
-      // New format present in user's file — use directly
+    if (!needsMigration) {
+      // Current version — use merged config directly
       forwardRules = (rawRouting.forward ?? []).map((f: { path: string; provider: string }) => ({
         path: f.path,
         provider: f.provider,
@@ -667,7 +677,7 @@ export class ConfigManager {
         })
       );
     } else {
-      // Legacy format — migrate proxy/passthrough → forward, block/openaiBlock → block
+      // Legacy config (no configVersion) — migrate routing format
       const proxy: string[] = rawRouting.proxy ?? [
         "/v1/messages",
         "/messages",
@@ -711,13 +721,17 @@ export class ConfigManager {
         })),
       ];
 
-      // Write migrated routing back to disk so the user sees the new format
+      // Write migrated config back to disk with version stamp
       try {
+        merged.configVersion = CONFIG_VERSION;
         merged.routing = { forward: forwardRules, block: blockRules };
-        delete merged.routing.proxy;
-        delete merged.routing.passthrough;
-        delete merged.routing.openaiBlock;
-        const yamlContent = yaml.dump(merged, {
+        const writeTarget = { ...rawFileObj, ...merged };
+        if (writeTarget.routing) {
+          delete writeTarget.routing.proxy;
+          delete writeTarget.routing.passthrough;
+          delete writeTarget.routing.openaiBlock;
+        }
+        const yamlContent = yaml.dump(writeTarget, {
           indent: 2,
           lineWidth: -1,
           noRefs: true,
@@ -727,10 +741,10 @@ export class ConfigManager {
         this.saving = true;
         fs.writeFileSync(this.configPath, yamlContent, "utf-8");
         this.saving = false;
-        console.log("[ConfigManager] Migrated routing config to new forward/block format");
+        console.log(`[ConfigManager] Migrated config to version ${CONFIG_VERSION}`);
       } catch (err) {
         this.saving = false;
-        console.error("[ConfigManager] Failed to write migrated routing config:", err);
+        console.error("[ConfigManager] Failed to write migrated config:", err);
       }
     }
 
