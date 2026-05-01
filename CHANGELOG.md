@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Provider protocol badge**: each provider card now displays a colored protocol label (Anthropic / OpenAI / OpenAI Chat) in the top-right corner for quick identification.
 - **Settings tab**: new dashboard tab exposes all YAML config groups — Logging (toggle, database type/path/host/port), Concurrency (maxWorkers, maxQueueSize, requestTimeout, retry429), Server (port, host, autoStart), and Routing (forward rules, block rules). Changes are persisted via `PATCH /ccrelay/api/config`; concurrency and routing settings hot-reload, while server and logging changes require a restart.
 - **Unified routing config**: replaced `routing.proxy`/`routing.passthrough`/`routing.block`/`routing.openaiBlock` with two unified constructs: `routing.forward` (path → provider mapping, first match wins) and `routing.block` (path + optional `condition.kind` filter → custom response). Unmatched paths now return 404 instead of silently routing to the current provider. Old config files are auto-migrated at load time.
+- **Config version tracking**: added `configVersion` field to the YAML config (set to `"0.2.0"`). Legacy configs without this field are automatically migrated and rewritten with the version stamp on first load.
 
 ### Changed
 
