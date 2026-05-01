@@ -21,6 +21,8 @@ import {
   type DatabaseConfig,
   type RouteQueueConfig,
   type BlockPattern,
+  type ForwardRule,
+  type BlockRule,
 } from "../types";
 
 const CONFIG_STATE_KEY = "ccrelay.currentProvider";
@@ -64,28 +66,37 @@ defaultProvider: "official"
 
 # ==================== Routing Configuration ====================
 routing:
-  # Proxy routes: Forward to current provider (Anthropic + OpenAI surfaces + Responses API)
-  proxy:
-    - "/v1/messages"
-    - "/messages"
-    - "/v1/chat/completions"
-    - "/v1/models"
-    - "/v1/responses"
+  # Forward rules: path → provider mapping. First match wins.
+  # provider: "auto" = current active provider; or a specific provider ID.
+  # Unmatched paths return 404.
+  forward:
+    - path: "/v1/messages"
+      provider: "auto"
+    - path: "/messages"
+      provider: "auto"
+    - path: "/v1/chat/completions"
+      provider: "auto"
+    - path: "/v1/responses"
+      provider: "auto"
+    - path: "/v1/models"
+      provider: "auto"
+    - path: "/v1/messages/count_tokens"
+      provider: "auto"
+    - path: "/v1/users/*"
+      provider: "official"
+    - path: "/v1/organizations/*"
+      provider: "official"
 
-  # Passthrough routes: Always go to official API
-  passthrough:
-    - "/v1/users/*"
-    - "/v1/organizations/*"
-
-  # Block routes (inject mode): Return custom response
+  # Block rules: return custom response instead of forwarding.
+  # Checked before forward rules. condition.kind filters by client protocol.
+  # Omit condition to block all protocols.
   block:
     - path: "/api/event_logging/*"
       response: ""
       code: 200
-
-  # OpenAI format block routes
-  openaiBlock:
     - path: "/v1/messages/count_tokens"
+      condition:
+        kind: ["openai", "openai_chat", "openai_responses"]
       response: '{"input_tokens": 0}'
       code: 200
 
@@ -626,31 +637,77 @@ export class ConfigManager {
       }
     }
 
-    // Build routing config
-    const routing = {
-      proxy: merged.routing?.proxy || [
+    // Build routing config (migrate legacy format if needed)
+    const rawRouting = merged.routing ?? {};
+    let forwardRules: ForwardRule[];
+    let blockRules: BlockRule[];
+
+    if (rawRouting.forward && rawRouting.forward.length > 0) {
+      // New format present — use directly
+      forwardRules = rawRouting.forward.map((f: { path: string; provider: string }) => ({
+        path: f.path,
+        provider: f.provider,
+      }));
+      blockRules = (rawRouting.block || []).map(
+        (b: {
+          path: string;
+          condition?: { kind?: string[] };
+          response: string;
+          code: number;
+        }): BlockRule => ({
+          path: b.path,
+          condition: b.condition,
+          response: b.response,
+          code: b.code,
+        })
+      );
+    } else {
+      // Legacy format — migrate proxy/passthrough → forward, block/openaiBlock → block
+      const proxy: string[] = rawRouting.proxy ?? [
         "/v1/messages",
         "/messages",
         "/v1/chat/completions",
         "/v1/models",
         "/v1/responses",
-      ],
-      passthrough: merged.routing?.passthrough || ["/v1/users/*", "/v1/organizations/*"],
-      block: (merged.routing?.block || []).map(
-        (b): BlockPattern => ({
+      ];
+      const passthrough: string[] = rawRouting.passthrough ?? [
+        "/v1/users/*",
+        "/v1/organizations/*",
+      ];
+      forwardRules = [
+        ...proxy.map((p: string) => ({ path: p, provider: "auto" })),
+        ...passthrough.map((p: string) => ({ path: p, provider: "official" })),
+      ];
+      const legacyBlock: BlockPattern[] = (rawRouting.block || []).map(
+        (b: { path: string; response?: string; code?: number }): BlockPattern => ({
           path: b.path,
           response: b.response || "",
           code: b.code ?? 200,
         })
-      ),
-      openaiBlock: (merged.routing?.openaiBlock || []).map(
-        (b): BlockPattern => ({
+      );
+      const legacyOpenaiBlock: BlockPattern[] = (rawRouting.openaiBlock || []).map(
+        (b: { path: string; response?: string; code?: number }): BlockPattern => ({
           path: b.path,
           response: b.response || "",
           code: b.code ?? 200,
         })
-      ),
-    };
+      );
+      blockRules = [
+        ...legacyBlock.map((b: BlockPattern) => ({
+          path: b.path,
+          response: b.response,
+          code: b.code ?? 200,
+        })),
+        ...legacyOpenaiBlock.map((b: BlockPattern) => ({
+          path: b.path,
+          condition: { kind: ["openai", "openai_chat", "openai_responses"] },
+          response: b.response,
+          code: b.code ?? 200,
+        })),
+      ];
+    }
+
+    const routing = { forward: forwardRules, block: blockRules };
 
     return {
       port: merged.server?.port || 7575,
@@ -750,20 +807,12 @@ export class ConfigManager {
     return this.config.routing;
   }
 
-  get routePatterns(): string[] {
-    return this.config.routing.proxy;
+  get forwardRules(): ForwardRule[] {
+    return this.config.routing.forward;
   }
 
-  get passthroughPatterns(): string[] {
-    return this.config.routing.passthrough;
-  }
-
-  get blockPatterns(): BlockPattern[] {
+  get blockRules(): BlockRule[] {
     return this.config.routing.block;
-  }
-
-  get openaiBlockPatterns(): BlockPattern[] {
-    return this.config.routing.openaiBlock;
   }
 
   get concurrencyConfig(): ConcurrencyConfig | undefined {
@@ -956,6 +1005,57 @@ export class ConfigManager {
       this.saving = false;
       console.error("[ConfigManager] Failed to delete provider:", err);
       return false;
+    }
+  }
+
+  /**
+   * Read the raw YAML config and return only the settings sections
+   * (excludes providers and defaultProvider).
+   */
+  getConfigRaw(): Record<string, unknown> {
+    const content = fs.readFileSync(this.configPath, "utf-8");
+    const raw = yaml.load(content) as Record<string, unknown>;
+    return {
+      logging: raw.logging ?? {},
+      concurrency: raw.concurrency ?? {},
+      server: raw.server ?? {},
+      routing: raw.routing ?? {},
+    };
+  }
+
+  /**
+   * Deep-merge `data` into `rawConfig[section]` and write the YAML back.
+   * Only the four settings sections are allowed.
+   */
+  updateConfigSection(
+    section: "logging" | "concurrency" | "server" | "routing",
+    data: Record<string, unknown>
+  ): { ok: boolean; error?: string } {
+    try {
+      const content = fs.readFileSync(this.configPath, "utf-8");
+      const rawConfig = yaml.load(content) as Record<string, unknown>;
+
+      const existing = (rawConfig[section] as Record<string, unknown>) ?? {};
+      rawConfig[section] = deepMerge(existing, data);
+
+      const yamlContent = yaml.dump(rawConfig, {
+        indent: 2,
+        lineWidth: -1,
+        noRefs: true,
+        quotingType: '"',
+        forceQuotes: false,
+      });
+      this.saving = true;
+      fs.writeFileSync(this.configPath, yamlContent, "utf-8");
+      this.saving = false;
+
+      this.reload();
+      return { ok: true };
+    } catch (err) {
+      this.saving = false;
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[ConfigManager] Failed to update ${section}:`, err);
+      return { ok: false, error: msg };
     }
   }
 

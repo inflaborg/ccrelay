@@ -83,11 +83,39 @@ export const BlockPatternSchema = z.object({
 
 export type BlockPattern = z.infer<typeof BlockPatternSchema>;
 
-// Routing configuration schema
+// ── New unified routing schemas ─────────────────────────────────────────────
+
+export const BlockConditionSchema = z
+  .object({
+    kind: z.array(z.string()).optional(),
+  })
+  .optional();
+
+export const ForwardRuleSchema = z.object({
+  path: z.string().min(1),
+  provider: z.string().min(1), // "auto" or a provider ID
+});
+
+export const BlockRuleSchema = z.object({
+  path: z.string().min(1),
+  condition: BlockConditionSchema,
+  response: z.string(),
+  code: z.number().int().default(200),
+});
+
+export type ForwardRule = z.infer<typeof ForwardRuleSchema>;
+export type BlockRule = z.infer<typeof BlockRuleSchema>;
+export type BlockCondition = z.infer<typeof BlockConditionSchema>;
+
+// ── Routing config schema (supports both legacy and new format) ─────────────
+
 export const RoutingConfigSchema = z.object({
+  // New unified format
+  forward: z.array(ForwardRuleSchema).optional(),
+  block: z.array(BlockRuleSchema).optional(),
+  // Legacy (kept for backward compat; ignored when forward exists)
   proxy: z.array(z.string()).optional(),
   passthrough: z.array(z.string()).optional(),
-  block: z.array(BlockPatternSchema).optional(),
   openaiBlock: z.array(BlockPatternSchema).optional(),
 });
 
@@ -223,10 +251,8 @@ export interface RouterConfig {
   defaultProvider: string;
   providers: Record<string, Provider>;
   routing: {
-    proxy: string[];
-    passthrough: string[];
-    block: BlockPattern[];
-    openaiBlock: BlockPattern[];
+    forward: ForwardRule[];
+    block: BlockRule[];
   };
   concurrency?: ConcurrencyConfig;
   routeQueues?: RouteQueueConfig[]; // Route-based queue configurations

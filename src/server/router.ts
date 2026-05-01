@@ -2,13 +2,18 @@
  * Request routing logic for CCRelay
  */
 
-import { Provider } from "../types";
+import { Provider, type ApiSurface } from "../types";
 import { ConfigManager } from "../config";
 import { minimatch } from "../utils/helpers";
-import { isOpenAIType } from "../converter";
 
 // Callback type for provider changes
 type ProviderChangeCallback = (providerId: string) => void;
+
+/** Unified routing result */
+export type RouteResult =
+  | { type: "block"; response: string; code: number }
+  | { type: "forward"; provider: Provider; isRouted: boolean }
+  | { type: "not_found" };
 
 export class Router {
   private config: ConfigManager;
@@ -82,96 +87,61 @@ export class Router {
   }
 
   /**
-   * Check if path should be blocked (return mock OK)
-   * Returns { blocked: boolean; response?: string; responseCode?: number }
+   * Unified routing: block → forward → not_found.
+   * Block is checked first (with optional condition.kind filter on clientSurface).
+   * Forward matches first rule; provider="auto" uses current provider.
+   * Unmatched paths return not_found (404).
    */
-  shouldBlock(path: string): { blocked: boolean; response?: string; responseCode?: number } {
-    const provider = this.getCurrentProvider();
-    if (!provider || provider.mode !== "inject") {
-      return { blocked: false };
-    }
-
+  resolve(path: string, clientSurface: ApiSurface): RouteResult {
     const normalizedPath = path.startsWith("/") ? path : `/${path}`;
 
-    for (const pattern of this.config.blockPatterns) {
-      if (minimatch(normalizedPath, pattern.path)) {
-        return { blocked: true, response: pattern.response, responseCode: pattern.code };
+    // 1. Block rules (first match wins)
+    for (const rule of this.config.blockRules) {
+      if (!minimatch(normalizedPath, rule.path)) {
+        continue;
       }
-    }
-
-    // Check OpenAI block patterns if current provider is OpenAI
-    if (isOpenAIType(provider.providerType)) {
-      for (const pattern of this.config.openaiBlockPatterns) {
-        if (minimatch(normalizedPath, pattern.path)) {
-          return { blocked: true, response: pattern.response, responseCode: pattern.code };
+      if (rule.condition?.kind && rule.condition.kind.length > 0) {
+        if (!rule.condition.kind.includes(clientSurface)) {
+          continue;
         }
       }
+      return { type: "block", response: rule.response, code: rule.code };
     }
 
-    return { blocked: false };
+    // 2. Forward rules (first match wins)
+    for (const rule of this.config.forwardRules) {
+      if (!minimatch(normalizedPath, rule.path)) {
+        continue;
+      }
+      const provider = this.resolveProvider(rule.provider);
+      if (provider) {
+        return { type: "forward", provider, isRouted: rule.provider !== "official" };
+      }
+    }
+
+    // 3. Fallback: 404
+    return { type: "not_found" };
   }
 
   /**
-   * Check if path should be routed to current provider
+   * Resolve a provider by ID. "auto" → current provider.
+   * Falls back through current → official → first available.
    */
-  shouldRoute(path: string): boolean {
-    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-
-    // Check passthrough patterns first (always go to official)
-    for (const pattern of this.config.passthroughPatterns) {
-      if (minimatch(normalizedPath, pattern)) {
-        return false;
-      }
+  private resolveProvider(providerId: string): Provider | undefined {
+    if (providerId === "auto") {
+      return this.getCurrentProvider() ?? this.getOfficialProvider() ?? this.getFirstProvider();
     }
-
-    // Check route patterns
-    for (const pattern of this.config.routePatterns) {
-      if (minimatch(normalizedPath, pattern)) {
-        return true;
-      }
-    }
-
-    // Default: route to current provider
-    return true;
+    return (
+      this.config.getProvider(providerId) ??
+      this.getCurrentProvider() ??
+      this.getOfficialProvider() ??
+      this.getFirstProvider()
+    );
   }
 
-  /**
-   * Get the target provider for this path
-   * Always returns a valid provider (falls back to official if needed)
-   */
-  getTargetProvider(path: string): Provider {
-    const shouldRoute = this.shouldRoute(path);
-
-    let provider: Provider | undefined;
-    if (shouldRoute) {
-      provider = this.getCurrentProvider();
-    } else {
-      provider = this.getOfficialProvider();
-    }
-
-    // Fallback logic: try alternative providers
-    if (!provider) {
-      provider = this.getCurrentProvider();
-    }
-    if (!provider) {
-      provider = this.getOfficialProvider();
-    }
-
-    // Final fallback: get the first available provider
-    if (!provider) {
-      const providers = this.config.providers;
-      const firstProviderId = Object.keys(providers)[0];
-      if (firstProviderId) {
-        provider = providers[firstProviderId];
-      }
-    }
-
-    // This should never happen given the initialization logic
-    if (!provider) {
-      throw new Error("No provider available. Please configure at least one provider.");
-    }
-
-    return provider;
+  private getFirstProvider(): Provider | undefined {
+    const ids = Object.keys(this.config.providers);
+    return ids.length > 0 ? this.config.providers[ids[0]] : undefined;
   }
 
   /**

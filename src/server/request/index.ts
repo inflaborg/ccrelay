@@ -8,6 +8,7 @@ import type { Router } from "../router";
 import type { QueueManager } from "../queueManager";
 import type { ProxyExecutor } from "../proxy/executor";
 import type { LogDatabase } from "../../database";
+import type { RoutingContext } from "./context";
 import { RouterStage } from "./routerStage";
 import { BodyProcessor } from "./bodyProcessor";
 import { TaskExecutor } from "./taskExecutor";
@@ -49,6 +50,15 @@ export class RequestHandler {
     // Stage 1: Router - check blocking and resolve routing
     const routing = this.routerStage.process(req, path, parsedUrl);
 
+    // Not found — path not in forward rules
+    if (routing === null) {
+      log.info(`${req.method || "GET"} ${path} -> [NOT_FOUND]`);
+      // eslint-disable-next-line @typescript-eslint/naming-convention -- HTTP header
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: { type: "not_found", message: "Path not routed" } }));
+      return;
+    }
+
     // If blocked, write blocked response and return
     if (routing.blocked) {
       log.info(`${routing.method} ${path} -> [BLOCKED]`);
@@ -77,7 +87,7 @@ export class RequestHandler {
    */
   private collectBody(
     req: http.IncomingMessage,
-    routing: ReturnType<RouterStage["process"]>,
+    routing: RoutingContext,
     requestReceiveStart: number,
     res: http.ServerResponse
   ): void {
