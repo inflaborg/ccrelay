@@ -14,7 +14,7 @@ function dashboardUrl(server: ProxyServer, config: ConfigManager): string {
 }
 
 function trayIconPath(): string {
-  return path.join(__dirname, "..", "assets", "tray-icon.png");
+  return path.join(__dirname, "..", "assets", "tray-icon-template.png");
 }
 
 function roleLabel(role: string, running: boolean): string {
@@ -26,6 +26,7 @@ function roleLabel(role: string, running: boolean): string {
 
 export function createTray(server: ProxyServer, config: ConfigManager): Tray {
   const img = nativeImage.createFromPath(trayIconPath());
+  img.setTemplateImage(true);
   const tray = new Tray(img.resize({ width: 22, height: 22 }));
 
   const updateMenu = (): void => {
