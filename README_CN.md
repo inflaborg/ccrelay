@@ -113,7 +113,7 @@ npm run compile
 - **`~/.ccrelay/config.yaml`**、**`~/.ccrelay/state.json`**、Leader/Follower 选举、WebSocket 同步、Provider 切换、HTTP API、`/ccrelay/` Web UI 等与扩展保持一致。
 - 托盘菜单 **打开控制台**：在 Electron **`BrowserWindow`** 内通过 **HTTP** 访问本地代理加载仪表盘（不用 `file://`）；再次启动应用会聚焦已有窗口。
 - **Windows / Linux**：隐藏 Electron 内置的窗口内菜单栏（**文件 / 编辑 / 视图 / 窗口**）；**macOS** 继续使用系统顶层菜单。
-- 安装包输出在 **`packages/desktop/dist/`**（**macOS：** 含 `CCRelay.app` 的 **zip**，默认不再打 DMG——无签名场景下 CI 产出的 DMG 不是合法 UDIF；**Windows：** NSIS `.exe`）。本地需在目标系统上执行 `npm run desktop:pack:mac` 或 `desktop:pack:win`。
+- 安装包输出在 **`packages/desktop/dist/`**（**macOS：** **仅 zip**，文件名含架构如 `CCRelay-0.2.0-arm64.zip`，CI 默认不打 DMG；**Windows：** NSIS `*.exe`，如 `CCRelay-0.2.0-x64.exe` 与 `CCRelay-0.2.0-arm64.exe`。本地需在目标系统上执行 `npm run desktop:pack:mac` 或 `desktop:pack:win`。
 - **`electron-builder` 产物**面向 **`x64` 与 `arm64`**（Intel / Apple Silicon Mac；x64 / ARM64 Windows）。**GitHub Actions**（**Build Dev** 自动与 Manual、**Build Prod**）在打完 **VSIX** 之后，再通过 **四条并行任务矩阵**（mac/win × 两架构）上传桌面安装包；其中 **Build Dev (Manual)** 仅上传 artifact（不自动发 GitHub Release），**Build Dev (Auto)** 与 **Build Prod** 会发布包含 VSIX + 桌面包的 Release。
 
 ### macOS：从 GitHub Release zip 首次打开
