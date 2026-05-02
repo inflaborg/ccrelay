@@ -48,12 +48,12 @@ interface WorkerResponse {
   error?: string;
 }
 
-// Default timeout for worker operations (30 seconds)
-const DEFAULT_TIMEOUT_MS = 30_000;
-
 /**
- * Generate unique request ID
+ * Outer timeout must be larger than CliConnection.commandTimeoutMs (15s)
+ * to give the inner layer time to detect and recover from errors.
  */
+const DEFAULT_TIMEOUT_MS = 25_000;
+
 function generateRequestId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
 }
@@ -74,21 +74,24 @@ export class DatabaseWorkerClient implements DatabaseDriver {
   private log = Logger.getInstance();
   private _enabled: boolean = false;
   private config: DatabaseDriverConfig;
+  private isClosing = false;
+
+  private workerRestartCount = 0;
+  private readonly maxWorkerRestarts = 5;
+  private workerRestartTimer: NodeJS.Timeout | null = null;
 
   constructor(config: DatabaseDriverConfig) {
     this.config = config;
   }
 
   /**
-   * Start the worker thread
+   * Start the worker thread and wire up event handlers
    */
   private startWorker(): void {
     if (this.worker) {
       return;
     }
 
-    // Worker is bundled separately by esbuild to out/dist/database-worker.cjs
-    // __dirname points to out/dist/ after bundling
     const workerPath = path.join(__dirname, "database-worker.cjs");
     this.worker = new Worker(workerPath);
 
@@ -108,7 +111,6 @@ export class DatabaseWorkerClient implements DatabaseDriver {
 
     this.worker.on("error", err => {
       this.log.error("[DatabaseWorker] Worker error:", err);
-      // Reject all pending requests
       for (const [id, pending] of this.pendingRequests) {
         clearTimeout(pending.timeout);
         pending.reject(err);
@@ -120,7 +122,55 @@ export class DatabaseWorkerClient implements DatabaseDriver {
       this.log.info(`[DatabaseWorker] Worker exited with code ${code}`);
       this.worker = null;
       this._enabled = false;
+
+      if (!this.isClosing) {
+        void this.restartWorker();
+      }
     });
+  }
+
+  /**
+   * Automatically restart the worker thread with exponential backoff.
+   * Resets the restart counter on success so transient crashes don't
+   * permanently disable the database.
+   */
+  private async restartWorker(): Promise<void> {
+    if (this.isClosing) {
+      return;
+    }
+
+    if (this.workerRestartCount >= this.maxWorkerRestarts) {
+      this.log.error(
+        "[DatabaseWorker] Max worker restarts exceeded, database permanently disabled"
+      );
+      return;
+    }
+
+    this.workerRestartCount++;
+    const delay = Math.min(1000 * Math.pow(2, this.workerRestartCount - 1), 30_000);
+    this.log.warn(
+      `[DatabaseWorker] Scheduling worker restart in ${delay}ms (attempt ${this.workerRestartCount}/${this.maxWorkerRestarts})`
+    );
+
+    await new Promise<void>(resolve => {
+      this.workerRestartTimer = setTimeout(resolve, delay);
+    });
+    this.workerRestartTimer = null;
+
+    if (this.isClosing) {
+      return;
+    }
+
+    try {
+      this.startWorker();
+      await this.send("init", this.config);
+      this._enabled = true;
+      this.workerRestartCount = 0;
+      this.log.info("[DatabaseWorker] Worker restarted successfully");
+    } catch (err) {
+      this.log.error("[DatabaseWorker] Worker restart failed:", err);
+      // The exit handler will trigger another attempt if the worker crashed
+    }
   }
 
   /**
@@ -159,6 +209,7 @@ export class DatabaseWorkerClient implements DatabaseDriver {
    * Initialize the database
    */
   async initialize(): Promise<void> {
+    this.isClosing = false;
     this.startWorker();
     await this.send("init", this.config);
     this._enabled = true;
@@ -169,9 +220,24 @@ export class DatabaseWorkerClient implements DatabaseDriver {
    * Close the database and terminate worker
    */
   async close(): Promise<void> {
+    this.isClosing = true;
+
+    if (this.workerRestartTimer) {
+      clearTimeout(this.workerRestartTimer);
+      this.workerRestartTimer = null;
+    }
+
     if (this.worker) {
-      await this.send("close");
-      await this.worker.terminate();
+      try {
+        await this.send("close");
+      } catch {
+        // Worker may already be dead
+      }
+      try {
+        await this.worker.terminate();
+      } catch {
+        // ignore
+      }
       this.worker = null;
     }
     this._enabled = false;
@@ -256,17 +322,31 @@ export class DatabaseWorkerClient implements DatabaseDriver {
   }
 
   /**
-   * Query logs with filter
+   * Query logs with filter — returns empty on failure for graceful degradation
    */
   async queryLogs(filter: LogFilter): Promise<LogQueryResult> {
-    return this.send<LogQueryResult>("queryLogs", { filter });
+    try {
+      return await this.send<LogQueryResult>("queryLogs", { filter });
+    } catch (err) {
+      this.log.warn(
+        `[DatabaseWorker] queryLogs failed, returning empty: ${err instanceof Error ? err.message : String(err)}`
+      );
+      return { logs: [], total: 0 };
+    }
   }
 
   /**
-   * Get a single log by ID
+   * Get a single log by ID — returns null on failure
    */
   async getLogById(id: number): Promise<RequestLog | null> {
-    return this.send<RequestLog | null>("getLogById", { id });
+    try {
+      return await this.send<RequestLog | null>("getLogById", { id });
+    } catch (err) {
+      this.log.warn(
+        `[DatabaseWorker] getLogById failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+      return null;
+    }
   }
 
   /**
@@ -284,10 +364,23 @@ export class DatabaseWorkerClient implements DatabaseDriver {
   }
 
   /**
-   * Get database statistics
+   * Get database statistics — returns zeroed stats on failure
    */
   async getStats(): Promise<DatabaseStats> {
-    return this.send<DatabaseStats>("getStats");
+    try {
+      return await this.send<DatabaseStats>("getStats");
+    } catch (err) {
+      this.log.warn(
+        `[DatabaseWorker] getStats failed, returning empty: ${err instanceof Error ? err.message : String(err)}`
+      );
+      return {
+        totalLogs: 0,
+        successCount: 0,
+        errorCount: 0,
+        avgDuration: 0,
+        byProvider: {},
+      };
+    }
   }
 
   /**

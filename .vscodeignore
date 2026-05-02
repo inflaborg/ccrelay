@@ -1,69 +1,45 @@
-# VS Code configuration
-.vscode**
-.vscode-test/**
+# -----------------------------------------------------------------------------
+# VSIX whitelist packaging
+#
+# Ignore everything first, then un-ignore only paths required at runtime.
+# New repo folders (internal-docs/, docs/, etc.) are NOT packaged unless added
+# below — avoids accidentally shipping large or sensitive files.
+#
+# vsce expands folder-only lines (see @vscode/vsce collectFiles). Never use bare `!node_modules/` — it becomes `!node_modules/**`
+# and pulls in every production dependency (js-yaml, ws, zod, …).
+# https://code.visualstudio.com/api/working-with-extensions/publishing-extension#.vscodeignore
+# -----------------------------------------------------------------------------
 
-# GitHub configuration
-.github/**
+**/*
 
-# Source code
-src/**
-tests/**
+# Extension manifest & marketplace metadata
+!package.json
+!README.md
+!README_CN.md
+!CHANGELOG.md
+!LICENSE
 
-# Git
-.gitignore
-.yarnrc
+# Icons / activity bar (paths referenced from package.json & contributes)
+!assets/
 
-# Dev tooling
-.husky/**
-.claude/**
-CLAUDE.md
+# Bundled extension entrypoints + webview build output
+!out/
+!out/dist/
+!out/web/
 
-# TypeScript configuration
-**/tsconfig.json
-**/.eslintrc.json
-**/*.map
-**/*.ts
-
-# Web source directory
-web/**
-!out/web/**
-
-# Web node_modules
-web/node_modules/**
-
-# Scripts
-scripts/**
-
-# Compiled output
-out/src/**
-out/tests/**
-
-# Dev config files
-.tool-versions
-eslint.config.js
-eslint.config.mjs
-.prettierrc
-vsc-extension-quickstart.md
-
-# Documentation
-docs/**
-
-# Exclude all node_modules
-node_modules/**
-
-# Only keep runtime dependencies
-!out/dist/**
-!node_modules/pg/**
-!node_modules/pg-*/
-!node_modules/pg-protocol/**
-!node_modules/pg-pool/**
-!node_modules/pg-types/**
-!node_modules/postgres-array/**
-!node_modules/postgres-bytea/**
-!node_modules/postgres-date/**
-!node_modules/postgres-interval/**
-!node_modules/pgpass/**
-!node_modules/pg-int8/**
-!node_modules/pg-cloudflare/**
-!node_modules/split2/**
-!node_modules/xtend/**
+# Runtime deps kept external by esbuild (scripts/esbuild.config.mjs).
+# One line per package (trailing `/` → vsce adds /**); keep in sync when pg changes.
+!node_modules/pg/
+!node_modules/pg-cloudflare/
+!node_modules/pg-connection-string/
+!node_modules/pg-int8/
+!node_modules/pg-pool/
+!node_modules/pg-protocol/
+!node_modules/pg-types/
+!node_modules/pgpass/
+!node_modules/postgres-array/
+!node_modules/postgres-bytea/
+!node_modules/postgres-date/
+!node_modules/postgres-interval/
+!node_modules/split2/
+!node_modules/xtend/
