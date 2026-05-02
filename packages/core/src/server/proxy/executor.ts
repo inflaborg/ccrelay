@@ -216,8 +216,9 @@ export class ProxyExecutor {
         reject
       );
 
-      // No request timeout - rely on client disconnect detection
-      // Long-running LLM requests can take arbitrary time
+      // Explicitly disable upstream socket idle-timeout. Some runtimes (e.g. Electron)
+      // inherit a ~5s default; LLM upstream TTFB can exceed that. Rely on client disconnect + abortSignal.
+      proxyReq.setTimeout(0);
 
       if (body) {
         proxyReq.write(body);
