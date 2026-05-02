@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Model Map field**: no longer marked as required; empty means models are passed through without remapping.
 - **Delete provider confirmation**: deleting a provider now requires confirmation via a dialog showing the provider name and ID.
 - **`response.completed` usage on streaming conversions**: emits final completion and `[DONE]` only after upstream `[DONE]` (or EOF fallback) so a trailing usage-only chunk is merged when upstream sends `finish_reason` before `usage` (MiMo-style split chunks).
+- **Database worker client**: restarts the worker thread automatically with exponential backoff after an unexpected exit; outer RPC timeout is slightly longer than the CLI driver command timeout; read APIs (`queryLogs`, `getLogById`, `getStats`) degrade to empty or null results on transient failures instead of always surfacing errors to callers.
 
 ### Removed
 
@@ -44,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **SQLite log database (CLI driver)**: eliminated the race between manual `restart()` and the subprocess `exit` handler spawning overlapping sqlite3 processes (which broke sentinel framing on the stdin/stdout pipe); stale I/O is ignored via a process generation counter and listeners are stripped before kill. Stdin writes respect pipe backpressure; list queries use explicit columns plus a short `request_body` preview to shrink IPC traffic; pragma cache/mmap limits tightened for extension RAM.
+- **VSIX packaging**: `.vscodeignore` is now an explicit whitelist (`**/*` plus selective `!` entries). Documents vsce’s rule expansion for trailing `/` (never use bare `!node_modules/` — it becomes `!node_modules/**` and pulled in every prod dependency). Stray trees such as `internal-docs/` are excluded unless explicitly listed.
 - **Anthropic → OpenAI thinking blocks**: multiple thinking blocks in a single assistant message are now merged (content joined, last non-empty signature used) instead of only using the first one.
 - **Reasoning budget thresholds**: Anthropic `thinking.budget_tokens` 4097–8192 now maps to OpenAI `"high"` effort instead of `"medium"`, avoiding round-trip budget loss (medium → 4096 would reduce the budget).
 - **Orphaned tool messages**: `buildAnthropicMessages` now skips `role: "tool"` messages that don't follow an assistant message with tool calls, preventing upstream 400 errors.

@@ -1,7 +1,7 @@
 /**
  * SQLite CLI Driver
- * Manages a long-lived sqlite3 CLI process via stdin/stdout pipes.
- * Eliminates WASM memory overhead by delegating all DB operations to a native subprocess.
+ * Manages TWO long-lived sqlite3 CLI processes (read + write) via stdin/stdout pipes.
+ * WAL mode enables concurrent reads while a write connection is busy.
  * Implements DatabaseDriver interface with business-level methods.
  */
 
@@ -19,8 +19,9 @@ import type {
   RequestStatus,
 } from "../types";
 
-// Maximum database file size (50MB)
-const MAX_DB_FILE_SIZE = 50 * 1024 * 1024;
+// Cleanup thresholds
+const MAX_LOG_ROWS = 10000;
+const MAX_LOG_AGE_DAYS = 30;
 
 /**
  * Base64 encoding helpers for storage
@@ -65,7 +66,6 @@ function escapeValue(value: string | number | boolean | null | undefined): strin
     }
     return value.toString();
   }
-  // String: wrap in single quotes, escape internal single quotes
   const escaped = value.replace(/\u0000/g, "").replace(/'/g, "''");
   return `'${escaped}'`;
 }
@@ -239,101 +239,16 @@ interface PendingQuery {
   isExec: boolean;
 }
 
-/**
- * Async write queue for database operations
- */
-class WriteQueue {
-  private queue: RequestLog[] = [];
-  private driver: SqliteCliDriver | null = null;
-  private isProcessing: boolean = false;
-  private flushTimer: NodeJS.Timeout | null = null;
-  private readonly batchSize = 50;
-  private readonly flushInterval = 1000;
-  private isEnabled: boolean = false;
+// ---------------------------------------------------------------------------
+// CliConnection — manages a single sqlite3 CLI subprocess
+// ---------------------------------------------------------------------------
 
-  setDriver(driver: SqliteCliDriver | null): void {
-    this.driver = driver;
-  }
-
-  setEnabled(enabled: boolean): void {
-    this.isEnabled = enabled;
-    if (!enabled) {
-      this.clear();
-    }
-  }
-
-  add(log: RequestLog): void {
-    if (!this.isEnabled || !this.driver) {
-      return;
-    }
-    this.queue.push(log);
-
-    if (this.queue.length >= this.batchSize) {
-      this.flush();
-    } else {
-      this.scheduleFlush();
-    }
-  }
-
-  private scheduleFlush(): void {
-    if (!this.flushTimer) {
-      this.flushTimer = setTimeout(() => {
-        this.flush();
-      }, this.flushInterval);
-    }
-  }
-
-  private flush(): void {
-    if (this.flushTimer) {
-      clearTimeout(this.flushTimer);
-      this.flushTimer = null;
-    }
-
-    if (this.isProcessing || this.queue.length === 0 || !this.driver) {
-      return;
-    }
-
-    this.isProcessing = true;
-    const itemsToWrite = this.queue.splice(0);
-
-    this.driver
-      .writeBatch(itemsToWrite)
-      .catch(err => {
-        console.error("[WriteQueue] Failed to write logs:", err);
-      })
-      .finally(() => {
-        this.isProcessing = false;
-        if (this.queue.length > 0) {
-          this.flush();
-        }
-      });
-  }
-
-  clear(): void {
-    if (this.flushTimer) {
-      clearTimeout(this.flushTimer);
-      this.flushTimer = null;
-    }
-    this.queue = [];
-  }
-
-  get size(): number {
-    return this.queue.length;
-  }
-
-  forceFlush(): void {
-    this.flush();
-  }
-}
-
-/**
- * SqliteCliDriver: SQLite driver implementation using CLI subprocess
- */
-export class SqliteCliDriver implements DatabaseDriver {
+class CliConnection {
   private process: ChildProcess | null = null;
   private readonly config: SqliteDriverConfig;
-  private readonly log = Logger.getInstance();
-  private sqlite3Path: string | null = null;
+  private readonly sqlite3Path: string;
+  private readonly log: Logger;
+  private readonly label: string;
 
   private readonly commandQueue: Array<() => void> = [];
   private isProcessingCommand = false;
@@ -343,88 +258,162 @@ export class SqliteCliDriver implements DatabaseDriver {
 
   private isClosing = false;
   private restartCount = 0;
-  private readonly maxRestarts = 3;
+  private readonly maxRestarts = 10;
   private isStarted = false;
   private needsRestart = false;
-  private readonly commandTimeoutMs = 10000;
+  private readonly commandTimeoutMs = 15_000;
   private commandTimer: NodeJS.Timeout | null = null;
 
-  private readonly writeQueue: WriteQueue = new WriteQueue();
-  private isEnabled = false;
+  /** Guards against exit handler spawning a duplicate process during restart */
+  private isRestarting = false;
+  /** Monotonic generation counter to ignore stale exit/data events */
+  private processGeneration = 0;
+  /** Timestamp of last successful command — used to decay restartCount */
+  private lastSuccessTime = 0;
 
-  constructor(config: SqliteDriverConfig) {
+  private healthCheckInterval: NodeJS.Timeout | null = null;
+  private static readonly healthCheckIntervalMs = 30_000;
+
+  constructor(
+    config: SqliteDriverConfig,
+    sqlite3Path: string,
+    log: Logger,
+    label: string
+  ) {
     this.config = config;
+    this.sqlite3Path = sqlite3Path;
+    this.log = log;
+    this.label = label;
   }
 
-  /**
-   * Initialize the database
-   */
-  async initialize(): Promise<void> {
-    const dbPath = this.config.path;
-    const dir = path.dirname(dbPath);
+  get started(): boolean {
+    return this.isStarted;
+  }
 
-    if (!fsSync.existsSync(dir)) {
-      fsSync.mkdirSync(dir, { recursive: true });
-    }
+  // ---- Lifecycle ----------------------------------------------------------
 
-    // Find sqlite3 binary
-    this.sqlite3Path = this.findSqlite3();
-    if (!this.sqlite3Path) {
-      throw new Error("sqlite3 CLI not found. Please install SQLite3.");
-    }
-
-    this.log.info(`[SqliteCli] Database path: ${dbPath}`);
-
+  async start(): Promise<void> {
     await this.spawnProcess();
-    await this.createSchema();
-
-    this.writeQueue.setDriver(this);
-    this.isEnabled = true;
-    this.writeQueue.setEnabled(true);
-
-    // Clean old logs in background
-    setTimeout(() => {
-      this.cleanOldLogs().catch(err => {
-        this.log.error("[SqliteCli] Background cleanup failed:", err);
-      });
-    }, 0);
   }
 
-  private findSqlite3(): string | null {
-    try {
-      const result = execSync("which sqlite3", { encoding: "utf-8" }).trim();
-      return result || null;
-    } catch {
-      return null;
+  async close(): Promise<void> {
+    this.stopHealthCheck();
+    this.isClosing = true;
+    this.isStarted = false;
+
+    if (!this.process) { return; }
+
+    const proc = this.process;
+    return new Promise<void>(resolve => {
+      const timeout = setTimeout(() => {
+        if (this.process === proc) {
+          try { proc.kill("SIGKILL"); } catch { /* ignore */ }
+          this.process = null;
+        }
+        resolve();
+      }, 5000);
+
+      proc.once("exit", () => {
+        clearTimeout(timeout);
+        if (this.process === proc) {
+          this.process = null;
+        }
+        resolve();
+      });
+
+      try {
+        proc.stdin?.write(".quit\n");
+        proc.stdin?.end();
+      } catch {
+        clearTimeout(timeout);
+        if (this.process === proc) {
+          this.process = null;
+        }
+        resolve();
+      }
+    });
+  }
+
+  // ---- Health check -------------------------------------------------------
+
+  startHealthCheck(): void {
+    if (this.healthCheckInterval) { return; }
+    this.healthCheckInterval = setInterval(() => {
+      if (!this.isStarted || this.isClosing) { return; }
+      this.queryScalar<number>("SELECT 1").catch(() => {
+        this.log.warn(`[SqliteCli:${this.label}] Health check failed, triggering restart`);
+        this.needsRestart = true;
+        void this.processNextCommand();
+      });
+    }, CliConnection.healthCheckIntervalMs);
+  }
+
+  stopHealthCheck(): void {
+    if (this.healthCheckInterval) {
+      clearInterval(this.healthCheckInterval);
+      this.healthCheckInterval = null;
     }
   }
+
+  // ---- SQL helpers --------------------------------------------------------
+
+  async exec(sql: string, params?: (string | number | boolean | null | undefined)[]): Promise<void> {
+    const interpolated = interpolateSql(sql, params);
+    await this.sendCommand(interpolated, true);
+  }
+
+  async query(sql: string, params?: (string | number | boolean | null | undefined)[]): Promise<Record<string, unknown>[]> {
+    const interpolated = interpolateSql(sql, params);
+    return this.sendCommand(interpolated, false);
+  }
+
+  async queryScalar<T = number>(sql: string, params?: (string | number | boolean | null | undefined)[]): Promise<T | null> {
+    const rows = await this.query(sql, params);
+    if (rows.length === 0) { return null; }
+    const firstRow = rows[0];
+    const keys = Object.keys(firstRow);
+    if (keys.length === 0) { return null; }
+    return firstRow[keys[0]] as T;
+  }
+
+  async transaction(sqls: string[]): Promise<void> {
+    const combined = ["BEGIN TRANSACTION", ...sqls, "COMMIT"]
+      .map(s => (s.trim().endsWith(";") ? s : s + ";"))
+      .join("\n");
+    await this.sendCommand(combined, true);
+  }
+
+  // ---- Private: process management ----------------------------------------
 
   private spawnProcess(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
-      if (!this.sqlite3Path) {
-        reject(new Error("sqlite3 path not set"));
-        return;
-      }
+      const generation = ++this.processGeneration;
 
-      this.process = spawn(this.sqlite3Path, [this.config.path], {
+      const proc = spawn(this.sqlite3Path, [this.config.path], {
         stdio: ["pipe", "pipe", "pipe"],
         env: { ...process.env },
       });
+      this.process = proc;
 
       this.stdoutBuffer = "";
       this.stderrBuffer = "";
 
-      this.process.stdout!.on("data", (data: Buffer) => {
+      proc.stdout.on("data", (data: Buffer) => {
+        if (generation !== this.processGeneration) { return; }
         this.stdoutBuffer += data.toString();
         this.checkForSentinel();
       });
 
-      this.process.stderr!.on("data", (data: Buffer) => {
+      proc.stderr.on("data", (data: Buffer) => {
+        if (generation !== this.processGeneration) { return; }
         this.stderrBuffer += data.toString();
         this.checkForSentinel();
       });
 
-      this.process.on("exit", (code: number | null, signal: NodeJS.Signals | null) => {
+      proc.on("exit", (code: number | null, signal: NodeJS.Signals | null) => {
+        // Ignore stale exit events from a previous generation
+        if (generation !== this.processGeneration) { return; }
+
         this.process = null;
 
         if (this.commandTimer) {
@@ -439,19 +428,26 @@ export class SqliteCliDriver implements DatabaseDriver {
           this.currentQuery = null;
         }
 
-        if (!this.isClosing && this.restartCount < this.maxRestarts) {
+        // If restart() is driving the respawn, let it handle everything
+        if (this.isRestarting || this.isClosing) { return; }
+
+        if (this.restartCount < this.maxRestarts) {
           this.restartCount++;
+          this.log.warn(`[SqliteCli:${this.label}] Process exited unexpectedly (code=${code}, signal=${signal}), restarting (${this.restartCount}/${this.maxRestarts})`);
           this.spawnProcess()
             .then(() => void this.processNextCommand())
             .catch((err: unknown) => {
               this.drainQueueWithError(err instanceof Error ? err : new Error(String(err)));
             });
-        } else if (!this.isClosing) {
+        } else {
+          this.log.error(`[SqliteCli:${this.label}] Max restarts exceeded, draining queue`);
+          this.isStarted = false;
           this.drainQueueWithError(new Error("sqlite3 crashed and max restarts exceeded"));
         }
       });
 
-      this.process.on("error", (err: Error) => {
+      proc.on("error", (err: Error) => {
+        if (generation !== this.processGeneration) { return; }
         reject(err);
       });
 
@@ -460,7 +456,10 @@ export class SqliteCliDriver implements DatabaseDriver {
         ".headers on",
         "PRAGMA journal_mode=WAL;",
         "PRAGMA synchronous=NORMAL;",
-        "PRAGMA busy_timeout=5000;",
+        "PRAGMA busy_timeout=30000;",
+        "PRAGMA cache_size=-8000;",
+        "PRAGMA temp_store=MEMORY;",
+        "PRAGMA mmap_size=16777216;",
       ].join("\n");
 
       const initSentinel = this.generateSentinelId();
@@ -471,6 +470,7 @@ export class SqliteCliDriver implements DatabaseDriver {
         resolve: () => {
           this.currentQuery = null;
           this.restartCount = 0;
+          this.lastSuccessTime = Date.now();
           if (this.commandTimer) {
             clearTimeout(this.commandTimer);
             this.commandTimer = null;
@@ -494,7 +494,7 @@ export class SqliteCliDriver implements DatabaseDriver {
         reject(new Error("sqlite3 initialization timed out"));
       }, this.commandTimeoutMs);
 
-      this.process.stdin!.write(initSql);
+      this.writeToStdin(initSql);
     });
   }
 
@@ -506,13 +506,6 @@ export class SqliteCliDriver implements DatabaseDriver {
     if (!this.currentQuery) { return; }
 
     const sentinel = this.currentQuery.sentinelId;
-    const stderrContent = this.stderrBuffer.trim();
-
-    if (stderrContent) {
-      void this.handleError(new Error(`sqlite3 error: ${stderrContent}`));
-      return;
-    }
-
     const sentinelIdIndex = this.stdoutBuffer.indexOf(sentinel);
     if (sentinelIdIndex === -1) { return; }
 
@@ -529,10 +522,22 @@ export class SqliteCliDriver implements DatabaseDriver {
     const resultText = this.stdoutBuffer.substring(0, prefixIndex).trim();
     this.stdoutBuffer = this.stdoutBuffer.substring(sentinelEndIndex).trimStart();
 
+    const stderrContent = this.stderrBuffer.trim();
+    if (stderrContent) {
+      this.log.warn(`[SqliteCli:${this.label}] stderr during successful command: ${stderrContent}`);
+    }
+    this.stderrBuffer = "";
+
     if (this.commandTimer) {
       clearTimeout(this.commandTimer);
       this.commandTimer = null;
     }
+
+    // Decay restart count after sustained healthy operation (>60s since last success)
+    if (this.restartCount > 0 && Date.now() - this.lastSuccessTime > 60_000) {
+      this.restartCount = Math.max(0, this.restartCount - 1);
+    }
+    this.lastSuccessTime = Date.now();
 
     if (this.currentQuery.isExec || !resultText) {
       this.currentQuery.resolve([]);
@@ -604,8 +609,7 @@ export class SqliteCliDriver implements DatabaseDriver {
             );
             results.push(...objects);
           } catch {
-            // Warn about malformed array to avoid silent failures
-            this.log.warn(`[SqliteCli] Skipped malformed JSON array chunk: ${currentArray.trim()}`);
+            this.log.warn(`[SqliteCli:${this.label}] Skipped malformed JSON array chunk: ${currentArray.trim()}`);
           }
           inArray = false;
           currentArray = "";
@@ -618,30 +622,20 @@ export class SqliteCliDriver implements DatabaseDriver {
     return results;
   }
 
-  private async exec(sql: string, params?: (string | number | boolean | null | undefined)[]): Promise<void> {
-    const interpolated = interpolateSql(sql, params);
-    await this.sendCommand(interpolated, true);
-  }
-
-  private async query(sql: string, params?: (string | number | boolean | null | undefined)[]): Promise<Record<string, unknown>[]> {
-    const interpolated = interpolateSql(sql, params);
-    return this.sendCommand(interpolated, false);
-  }
-
-  private async queryScalar<T = number>(sql: string, params?: (string | number | boolean | null | undefined)[]): Promise<T | null> {
-    const rows = await this.query(sql, params);
-    if (rows.length === 0) { return null; }
-    const firstRow = rows[0];
-    const keys = Object.keys(firstRow);
-    if (keys.length === 0) { return null; }
-    return firstRow[keys[0]] as T;
-  }
-
-  private async transaction(sqls: string[]): Promise<void> {
-    const combined = ["BEGIN TRANSACTION", ...sqls, "COMMIT"]
-      .map(s => (s.trim().endsWith(";") ? s : s + ";"))
-      .join("\n");
-    await this.sendCommand(combined, true);
+  /**
+   * Write data to stdin with backpressure awareness.
+   * The command timer still guards against a total hang if the pipe stays full.
+   */
+  private writeToStdin(data: string): void {
+    if (!this.process?.stdin || this.process.stdin.destroyed) {
+      return;
+    }
+    const ok = this.process.stdin.write(data);
+    if (!ok) {
+      this.process.stdin.once("drain", () => {
+        // Pipe drained — sentinel callback will drive the next step
+      });
+    }
   }
 
   private sendCommand(sql: string, isExec: boolean): Promise<Record<string, unknown>[]> {
@@ -669,7 +663,7 @@ export class SqliteCliDriver implements DatabaseDriver {
         const command = `${finalSql}\nSELECT '${sentinelId}' as _s;\n`;
         const safeCommand = this.validateAndSanitize(command);
 
-        this.process.stdin.write(safeCommand);
+        this.writeToStdin(safeCommand);
       };
 
       this.commandQueue.push(task);
@@ -696,7 +690,10 @@ export class SqliteCliDriver implements DatabaseDriver {
       clearTimeout(this.commandTimer);
     }
     this.commandTimer = setTimeout(() => {
-      void this.handleError(new Error(`Command timed out after ${this.commandTimeoutMs}ms`));
+      const stderrInfo = this.stderrBuffer.trim();
+      void this.handleError(
+        new Error(`Command timed out after ${this.commandTimeoutMs}ms${stderrInfo ? `: ${stderrInfo}` : ""}`)
+      );
     }, this.commandTimeoutMs);
 
     const next = this.commandQueue.shift()!;
@@ -711,79 +708,291 @@ export class SqliteCliDriver implements DatabaseDriver {
   }
 
   private drainQueueWithError(_err: Error): void {
-    while (this.commandQueue.length > 0) {
-      const task = this.commandQueue.shift()!;
+    const pending = this.commandQueue.splice(0);
+    this.isProcessingCommand = false;
+    for (const task of pending) {
       try {
         task();
       } catch {
-        // ignore
+        // task's reject will fire with "process not running"
       }
-    }
-    this.isProcessingCommand = false;
-  }
-
-  private async restart(): Promise<void> {
-    if (this.needsRestart) {
-      this.needsRestart = false;
-
-      if (this.process) {
-        try {
-          this.process.kill("SIGKILL");
-        } catch {
-          // ignore
-        }
-        this.process = null;
-      }
-
-      this.stdoutBuffer = "";
-      this.stderrBuffer = "";
-      this.currentQuery = null;
-
-      await this.spawnProcess();
     }
   }
 
   /**
-   * Close the database connection
+   * Kill the current process safely and respawn.
+   * Uses isRestarting flag + processGeneration counter to prevent the
+   * exit handler from spawning a duplicate process.
    */
+  private async restart(): Promise<void> {
+    if (!this.needsRestart) { return; }
+    this.needsRestart = false;
+    this.isRestarting = true;
+
+    if (this.process) {
+      const oldProc = this.process;
+      this.process = null;
+
+      // Detach all listeners so the old process's exit event
+      // does not interfere with the new process.
+      oldProc.removeAllListeners("exit");
+      oldProc.removeAllListeners("error");
+      oldProc.stdout?.removeAllListeners("data");
+      oldProc.stderr?.removeAllListeners("data");
+
+      try { oldProc.kill("SIGKILL"); } catch { /* ignore */ }
+    }
+
+    this.stdoutBuffer = "";
+    this.stderrBuffer = "";
+    this.currentQuery = null;
+
+    try {
+      await this.spawnProcess();
+      this.log.info(`[SqliteCli:${this.label}] Restarted successfully`);
+    } catch (err) {
+      this.log.error(`[SqliteCli:${this.label}] Restart failed:`, err);
+      this.isStarted = false;
+    } finally {
+      this.isRestarting = false;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// WriteQueue — async batching with retry and failure persistence
+// ---------------------------------------------------------------------------
+
+class WriteQueue {
+  private queue: RequestLog[] = [];
+  private conn: CliConnection | null = null;
+  private failedWritesPath: string | null = null;
+  private isProcessing = false;
+  private flushTimer: NodeJS.Timeout | null = null;
+  private readonly batchSize = 50;
+  private readonly flushInterval = 1000;
+  private isEnabled = false;
+
+  setConnection(conn: CliConnection, failedWritesPath: string): void {
+    this.conn = conn;
+    this.failedWritesPath = failedWritesPath;
+  }
+
+  setEnabled(enabled: boolean): void {
+    this.isEnabled = enabled;
+    if (!enabled) {
+      this.clear();
+    }
+  }
+
+  add(log: RequestLog): void {
+    if (!this.isEnabled || !this.conn) {
+      return;
+    }
+    this.queue.push(log);
+
+    if (this.queue.length >= this.batchSize) {
+      this.flush();
+    } else {
+      this.scheduleFlush();
+    }
+  }
+
+  private scheduleFlush(): void {
+    if (!this.flushTimer) {
+      this.flushTimer = setTimeout(() => {
+        this.flush();
+      }, this.flushInterval);
+    }
+  }
+
+  private flush(): void {
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+
+    if (this.isProcessing || this.queue.length === 0 || !this.conn) {
+      return;
+    }
+
+    this.isProcessing = true;
+    const itemsToWrite = this.queue.splice(0);
+
+    void this.flushWithRetry(itemsToWrite)
+      .finally(() => {
+        this.isProcessing = false;
+        if (this.queue.length > 0) {
+          this.flush();
+        }
+      });
+  }
+
+  private async flushWithRetry(items: RequestLog[]): Promise<void> {
+    const maxRetries = 3;
+    const delays = [1000, 2000, 4000];
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        await this.writeBatch(items);
+        return;
+      } catch (err) {
+        if (attempt < maxRetries) {
+          await new Promise(r => setTimeout(r, delays[attempt]));
+        } else {
+          this.persistFailedWrites(items);
+          console.error("[WriteQueue] Failed to write logs after retries, saved to disk:", err);
+        }
+      }
+    }
+  }
+
+  private async writeBatch(logs: RequestLog[]): Promise<void> {
+    if (!this.conn) { return; }
+    const stmts = logs.map(log => {
+      const { sql, params } = buildInsertSql(log);
+      return interpolateSql(sql, params);
+    });
+    await this.conn.transaction(stmts);
+  }
+
+  private persistFailedWrites(items: RequestLog[]): void {
+    if (!this.failedWritesPath) { return; }
+    try {
+      const lines = items.map(log => JSON.stringify(log)).join("\n") + "\n";
+      fsSync.appendFileSync(this.failedWritesPath, lines);
+    } catch (err) {
+      console.error("[WriteQueue] Failed to persist writes to disk:", err);
+    }
+  }
+
+  async replayFailedWrites(): Promise<void> {
+    if (!this.failedWritesPath || !this.conn) { return; }
+    if (!fsSync.existsSync(this.failedWritesPath)) { return; }
+
+    const content = fsSync.readFileSync(this.failedWritesPath, "utf-8");
+    const lines = content.trim().split("\n").filter(Boolean);
+    if (lines.length === 0) { return; }
+
+    const logs: RequestLog[] = lines.map(line => JSON.parse(line) as RequestLog);
+    try {
+      await this.writeBatch(logs);
+      fsSync.unlinkSync(this.failedWritesPath);
+    } catch {
+      console.error("[WriteQueue] Failed to replay persisted writes");
+    }
+  }
+
+  clear(): void {
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+    this.queue = [];
+  }
+
+  get size(): number {
+    return this.queue.length;
+  }
+
+  forceFlush(): void {
+    this.flush();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SqliteCliDriver — DatabaseDriver implementation using two CLI processes
+// ---------------------------------------------------------------------------
+
+export class SqliteCliDriver implements DatabaseDriver {
+  private readonly config: SqliteDriverConfig;
+  private readonly log = Logger.getInstance();
+  private sqlite3Path: string | null = null;
+
+  private writeConn: CliConnection | null = null;
+  private readConn: CliConnection | null = null;
+
+  private readonly writeQueue: WriteQueue = new WriteQueue();
+  private isEnabled = false;
+
+  constructor(config: SqliteDriverConfig) {
+    this.config = config;
+  }
+
+  /**
+   * Initialize the database with dual read/write connections
+   */
+  async initialize(): Promise<void> {
+    const dbPath = this.config.path;
+    const dir = path.dirname(dbPath);
+
+    if (!fsSync.existsSync(dir)) {
+      fsSync.mkdirSync(dir, { recursive: true });
+    }
+
+    this.sqlite3Path = this.findSqlite3();
+    if (!this.sqlite3Path) {
+      throw new Error("sqlite3 CLI not found. Please install SQLite3.");
+    }
+
+    this.log.info(`[SqliteCli] Database path: ${dbPath}`);
+
+    this.writeConn = new CliConnection(this.config, this.sqlite3Path, this.log, "write");
+    await this.writeConn.start();
+    await this.createSchema();
+
+    this.readConn = new CliConnection(this.config, this.sqlite3Path, this.log, "read");
+    try {
+      await this.readConn.start();
+      this.readConn.startHealthCheck();
+    } catch (err) {
+      this.log.warn(`[SqliteCli] Read connection failed to start, operating in write-only mode: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    const failedWritesPath = path.join(path.dirname(dbPath), "failed-writes.jsonl");
+    this.writeQueue.setConnection(this.writeConn, failedWritesPath);
+    await this.writeQueue.replayFailedWrites();
+
+    this.isEnabled = true;
+    this.writeQueue.setEnabled(true);
+
+    this.writeConn.startHealthCheck();
+
+    setTimeout(() => {
+      this.cleanOldLogs().catch(err => {
+        this.log.error("[SqliteCli] Background cleanup failed:", err);
+      });
+    }, 0);
+  }
+
+  private findSqlite3(): string | null {
+    try {
+      const result = execSync("which sqlite3", { encoding: "utf-8" }).trim();
+      return result || null;
+    } catch {
+      return null;
+    }
+  }
+
   async close(): Promise<void> {
-    this.isClosing = true;
-    this.isStarted = false;
     this.isEnabled = false;
     this.writeQueue.setEnabled(false);
     this.writeQueue.forceFlush();
 
-    if (!this.process) { return; }
-
-    const proc = this.process;
-    return new Promise<void>(resolve => {
-      const timeout = setTimeout(() => {
-        if (this.process) {
-          this.process.kill("SIGKILL");
-          this.process = null;
-        }
-        resolve();
-      }, 5000);
-
-      proc.once("exit", () => {
-        clearTimeout(timeout);
-        this.process = null;
-        resolve();
-      });
-
-      try {
-        proc.stdin?.write(".quit\n");
-        proc.stdin?.end();
-      } catch {
-        clearTimeout(timeout);
-        this.process = null;
-        resolve();
-      }
-    });
+    if (this.readConn) {
+      await this.readConn.close();
+      this.readConn = null;
+    }
+    if (this.writeConn) {
+      await this.writeConn.close();
+      this.writeConn = null;
+    }
   }
 
   private async createSchema(): Promise<void> {
-    await this.exec(`
+    if (!this.writeConn) { return; }
+
+    await this.writeConn.exec(`
       CREATE TABLE IF NOT EXISTS request_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         timestamp INTEGER NOT NULL,
@@ -816,12 +1025,11 @@ export class SqliteCliDriver implements DatabaseDriver {
     ];
 
     for (const sql of indexes) {
-      await this.exec(sql);
+      await this.writeConn.exec(sql);
     }
 
-    // Run migrations
     try {
-      const columns = await this.query("PRAGMA table_info(request_logs)");
+      const columns = await this.writeConn.query("PRAGMA table_info(request_logs)");
       const columnNames = columns.map(c => c.name as string);
 
       const migrations: Array<{ column: string; sql: string }> = [
@@ -835,7 +1043,7 @@ export class SqliteCliDriver implements DatabaseDriver {
 
       for (const migration of migrations) {
         if (!columnNames.includes(migration.column)) {
-          await this.exec(migration.sql);
+          await this.writeConn.exec(migration.sql);
         }
       }
     } catch {
@@ -843,29 +1051,22 @@ export class SqliteCliDriver implements DatabaseDriver {
     }
   }
 
-  /**
-   * Insert a log entry (async via write queue)
-   */
+  // ---- Write operations (writeConn) --------------------------------------
+
   insertLog(log: RequestLog): void {
     if (!this.isEnabled) { return; }
     this.writeQueue.add(log);
   }
 
-  /**
-   * Insert a log entry with "pending" status immediately
-   */
   insertLogPending(log: RequestLog): void {
-    if (!this.isEnabled) { return; }
+    if (!this.isEnabled || !this.writeConn?.started) { return; }
 
     const { sql, params } = buildInsertSql(log, "pending");
-    this.exec(sql, params).catch(err => {
+    this.writeConn.exec(sql, params).catch(err => {
       this.log.error("[SqliteCli] Failed to insert pending log:", err);
     });
   }
 
-  /**
-   * Update a log entry by clientId
-   */
   updateLogCompleted(
     clientId: string,
     statusCode: number,
@@ -875,9 +1076,9 @@ export class SqliteCliDriver implements DatabaseDriver {
     errorMessage: string | undefined,
     originalResponseBody?: string
   ): void {
-    if (!this.isEnabled) { return; }
+    if (!this.isEnabled || !this.writeConn?.started) { return; }
 
-    this.exec(
+    this.writeConn.exec(
       `UPDATE request_logs
        SET status_code = ?,
            response_body = ?,
@@ -901,9 +1102,6 @@ export class SqliteCliDriver implements DatabaseDriver {
     });
   }
 
-  /**
-   * Update a log entry by clientId with custom status
-   */
   updateLogStatus(
     clientId: string,
     status: RequestStatus,
@@ -911,9 +1109,9 @@ export class SqliteCliDriver implements DatabaseDriver {
     duration: number,
     errorMessage: string | undefined
   ): void {
-    if (!this.isEnabled) { return; }
+    if (!this.isEnabled || !this.writeConn?.started) { return; }
 
-    this.exec(
+    this.writeConn.exec(
       `UPDATE request_logs
        SET status_code = ?,
            duration = ?,
@@ -924,7 +1122,7 @@ export class SqliteCliDriver implements DatabaseDriver {
       [
         statusCode,
         duration,
-        0, // success is always false for cancelled/timeout
+        0,
         encodeForStorage(errorMessage),
         status,
         clientId,
@@ -934,11 +1132,8 @@ export class SqliteCliDriver implements DatabaseDriver {
     });
   }
 
-  /**
-   * Batch insert logs
-   */
   async writeBatch(logs: RequestLog[]): Promise<void> {
-    if (logs.length === 0) { return; }
+    if (!this.writeConn?.started || logs.length === 0) { return; }
 
     const stmts: string[] = [];
     for (const log of logs) {
@@ -946,14 +1141,40 @@ export class SqliteCliDriver implements DatabaseDriver {
       stmts.push(interpolateSql(sql, params));
     }
 
-    await this.transaction(stmts);
+    await this.writeConn.transaction(stmts);
   }
 
-  /**
-   * Query logs with filter
-   */
+  async deleteLogs(ids: number[]): Promise<void> {
+    if (!this.writeConn?.started || ids.length === 0) { return; }
+
+    const placeholders = ids.map(() => "?").join(",");
+    await this.writeConn.exec(`DELETE FROM request_logs WHERE id IN (${placeholders})`, ids);
+  }
+
+  async clearAllLogs(): Promise<void> {
+    if (!this.writeConn?.started) { return; }
+    await this.writeConn.exec("DELETE FROM request_logs");
+    await this.writeConn.exec("VACUUM");
+  }
+
+  async cleanOldLogs(): Promise<void> {
+    if (!this.isEnabled || !this.writeConn?.started) { return; }
+
+    const cutoff = Date.now() - MAX_LOG_AGE_DAYS * 24 * 60 * 60 * 1000;
+    await this.writeConn.exec("DELETE FROM request_logs WHERE timestamp < ?", [cutoff]);
+
+    await this.writeConn.exec(`
+      DELETE FROM request_logs
+      WHERE id NOT IN (
+        SELECT id FROM request_logs ORDER BY timestamp DESC LIMIT ${MAX_LOG_ROWS}
+      )
+    `);
+  }
+
+  // ---- Read operations (readConn) ----------------------------------------
+
   async queryLogs(filter: LogFilter = {}): Promise<LogQueryResult> {
-    if (!this.isStarted) {
+    if (!this.readConn?.started) {
       return { logs: [], total: 0 };
     }
 
@@ -1002,7 +1223,7 @@ export class SqliteCliDriver implements DatabaseDriver {
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
-    const total = (await this.queryScalar<number>(
+    const total = (await this.readConn.queryScalar<number>(
       `SELECT COUNT(*) as count FROM request_logs ${whereClause}`,
       params
     )) ?? 0;
@@ -1010,8 +1231,11 @@ export class SqliteCliDriver implements DatabaseDriver {
     const limit = filter.limit || 100;
     const offset = filter.offset || 0;
 
-    const rows = await this.query(
-      `SELECT * FROM request_logs ${whereClause} ORDER BY timestamp DESC LIMIT ? OFFSET ?`,
+    const rows = await this.readConn.query(
+      `SELECT id, timestamp, provider_id, provider_name, method, path,
+              status_code, duration, success, error_message, client_id,
+              status, route_type, SUBSTR(request_body, 1, 500) as request_body
+       FROM request_logs ${whereClause} ORDER BY timestamp DESC LIMIT ? OFFSET ?`,
       [...params, limit, offset]
     );
 
@@ -1020,71 +1244,18 @@ export class SqliteCliDriver implements DatabaseDriver {
     return { logs, total };
   }
 
-  /**
-   * Get a single log by ID
-   */
   async getLogById(id: number): Promise<RequestLog | null> {
-    if (!this.isStarted) { return null; }
+    if (!this.readConn?.started) { return null; }
 
-    const rows = await this.query("SELECT * FROM request_logs WHERE id = ?", [id]);
+    const rows = await this.readConn.query("SELECT * FROM request_logs WHERE id = ?", [id]);
 
     if (rows.length === 0) { return null; }
 
     return dbRowToLog(rows[0]);
   }
 
-  /**
-   * Delete logs by IDs
-   */
-  async deleteLogs(ids: number[]): Promise<void> {
-    if (!this.isStarted || ids.length === 0) { return; }
-
-    const placeholders = ids.map(() => "?").join(",");
-    await this.exec(`DELETE FROM request_logs WHERE id IN (${placeholders})`, ids);
-  }
-
-  /**
-   * Clear all logs
-   */
-  async clearAllLogs(): Promise<void> {
-    if (!this.isStarted) { return; }
-    await this.exec("DELETE FROM request_logs");
-  }
-
-  /**
-   * Clean old logs
-   */
-  async cleanOldLogs(): Promise<void> {
-    if (!this.isStarted) { return; }
-
-    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    await this.exec("DELETE FROM request_logs WHERE timestamp < ?", [thirtyDaysAgo]);
-
-    // Size-based cleanup
-    try {
-      if (fsSync.existsSync(this.config.path)) {
-        const stats = fsSync.statSync(this.config.path);
-        if (stats.size > MAX_DB_FILE_SIZE) {
-          this.log.warn(`[SqliteCli] Database size exceeds limit, trimming...`);
-          await this.exec(`
-            DELETE FROM request_logs
-            WHERE id NOT IN (
-              SELECT id FROM request_logs ORDER BY timestamp DESC LIMIT 1000
-            )
-          `);
-          await this.exec("VACUUM");
-        }
-      }
-    } catch (err) {
-      this.log.error("[SqliteCli] Size-based cleanup failed:", err);
-    }
-  }
-
-  /**
-   * Get database statistics
-   */
   async getStats(): Promise<DatabaseStats> {
-    if (!this.isStarted) {
+    if (!this.readConn?.started) {
       return {
         totalLogs: 0,
         successCount: 0,
@@ -1094,41 +1265,39 @@ export class SqliteCliDriver implements DatabaseDriver {
       };
     }
 
-    const total = (await this.queryScalar<number>("SELECT COUNT(*) as count FROM request_logs")) ?? 0;
-    const success = (await this.queryScalar<number>("SELECT COUNT(*) as count FROM request_logs WHERE success = 1")) ?? 0;
-    const error = (await this.queryScalar<number>("SELECT COUNT(*) as count FROM request_logs WHERE success = 0")) ?? 0;
-    const avgDuration = (await this.queryScalar<number>("SELECT AVG(duration) as avg FROM request_logs")) ?? 0;
+    const rows = await this.readConn.query(
+      `SELECT COUNT(*) as totalLogs,
+              SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successCount,
+              SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as errorCount,
+              AVG(duration) as avgDuration
+       FROM request_logs`
+    );
 
-
-    const byProviderRows = await this.query(
+    const row = rows[0] ?? {};
+    const byProviderRows = await this.readConn.query(
       "SELECT provider_id, COUNT(*) as count FROM request_logs GROUP BY provider_id"
     );
 
-
     const byProvider: Record<string, number> = {};
-    for (const row of byProviderRows) {
-      byProvider[row.provider_id as string] = row.count as number;
+    for (const r of byProviderRows) {
+      byProvider[r.provider_id as string] = r.count as number;
     }
 
     return {
-      totalLogs: total,
-      successCount: success,
-      errorCount: error,
-      avgDuration: Math.round(avgDuration),
+      totalLogs: (row.totalLogs as number) ?? 0,
+      successCount: (row.successCount as number) ?? 0,
+      errorCount: (row.errorCount as number) ?? 0,
+      avgDuration: Math.round((row.avgDuration as number) ?? 0),
       byProvider,
     };
   }
 
-  /**
-   * Check if driver is enabled
-   */
+  // ---- Properties ---------------------------------------------------------
+
   get enabled(): boolean {
-    return this.isEnabled && this.isStarted;
+    return this.isEnabled && this.writeConn?.started === true;
   }
 
-  /**
-   * Force flush pending writes
-   */
   forceFlush(): void {
     this.writeQueue.forceFlush();
   }
