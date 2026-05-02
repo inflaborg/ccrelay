@@ -9,7 +9,7 @@
  * - Route matching for API endpoints
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   isApiRequest,
   setCorsHeaders,
@@ -17,6 +17,11 @@ import {
   parseJsonBody,
   handleApiRequest,
 } from "@/api/index";
+import {
+  resetProxyServerForApi,
+  setProxyServerForApi,
+} from "@/api/serverRef";
+import type { ProxyServer } from "@/server/handler";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { EventEmitter } from "stream";
 
@@ -100,6 +105,10 @@ class MockServerResponse extends EventEmitter {
     return this;
   }
 }
+
+afterEach(() => {
+  resetProxyServerForApi();
+});
 
 describe("api: isApiRequest", () => {
   it("should return true for /ccrelay/api/ paths", () => {
@@ -539,7 +548,8 @@ describe("api: handleApiRequest specific routes", () => {
     expect(res.statusCode).toBe(503);
   });
 
-  it("should handle GET /ccrelay/api/logs", () => {
+  it("should return 503 for GET /ccrelay/api/logs without leader API ref", async () => {
+    resetProxyServerForApi();
     const req = new MockIncomingMessage(
       "/ccrelay/api/logs",
       "GET"
@@ -548,11 +558,31 @@ describe("api: handleApiRequest specific routes", () => {
 
     handleApiRequest(req, res);
 
-    // Should respond with 200 (empty list) even if server not fully initialized, as DB handles it
+    await vi.waitFor(() => expect(res.ended).toBe(true));
+    expect(res.statusCode).toBe(503);
+    expect(res.body).toContain("leader");
+  });
+
+  it("should return 200 for GET /ccrelay/api/logs when leader ref is set", async () => {
+    setProxyServerForApi({
+      getRole: () => "leader",
+    } as unknown as ProxyServer);
+
+    const req = new MockIncomingMessage(
+      "/ccrelay/api/logs",
+      "GET"
+    ) as unknown as MockIncomingMessage & IncomingMessage;
+    req.headers.host = "127.0.0.1:7575";
+    const res = new MockServerResponse() as unknown as MockServerResponse & ServerResponse;
+
+    handleApiRequest(req, res);
+
+    await vi.waitFor(() => expect(res.ended).toBe(true));
     expect(res.statusCode).toBe(200);
   });
 
-  it("should handle GET /ccrelay/api/stats", () => {
+  it("should return 503 for GET /ccrelay/api/stats without leader API ref", async () => {
+    resetProxyServerForApi();
     const req = new MockIncomingMessage(
       "/ccrelay/api/stats",
       "GET"
@@ -561,7 +591,25 @@ describe("api: handleApiRequest specific routes", () => {
 
     handleApiRequest(req, res);
 
-    // Should respond with 200 (empty stats) even if server not fully initialized
+    await vi.waitFor(() => expect(res.ended).toBe(true));
+    expect(res.statusCode).toBe(503);
+    expect(res.body).toContain("leader");
+  });
+
+  it("should return 200 for GET /ccrelay/api/stats when leader ref is set", async () => {
+    setProxyServerForApi({
+      getRole: () => "leader",
+    } as unknown as ProxyServer);
+
+    const req = new MockIncomingMessage(
+      "/ccrelay/api/stats",
+      "GET"
+    ) as unknown as MockIncomingMessage & IncomingMessage;
+    const res = new MockServerResponse() as unknown as MockServerResponse & ServerResponse;
+
+    handleApiRequest(req, res);
+
+    await vi.waitFor(() => expect(res.ended).toBe(true));
     expect(res.statusCode).toBe(200);
   });
 

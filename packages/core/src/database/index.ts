@@ -92,10 +92,7 @@ export class LogDatabase {
       }
       this.driver = null;
 
-      if (
-        this.driverConfig.type === "sqlite" &&
-        isSqliteCliUnavailableError(err)
-      ) {
+      if (this.driverConfig.type === "sqlite" && isSqliteCliUnavailableError(err)) {
         this.log.warn(
           "[LogDatabase] sqlite3 CLI is not installed or not on PATH; continuing without persisted request logs (logging remains enabled in config)."
         );

@@ -337,6 +337,12 @@ export class LeaderElection {
       const acquired = await this.serverLock.tryAclock(this.instanceId, this.port, this.host);
 
       if (acquired) {
+        const ipcOk = await this.serverLock.ensureIpcServer();
+        if (!ipcOk) {
+          this.log.warn(
+            `[LeaderElection] Acquired leadership lock but failed to bind IPC coordination socket`
+          );
+        }
         this.log.info(`[LeaderElection] Instance ${this.instanceId} became leader`);
         this.role = "leader";
         this.setState("leader"); // Server not started yet
@@ -422,6 +428,9 @@ export class LeaderElection {
       this.log.info(`[LeaderElection] Released leadership lock`);
     }
 
+    // Drop IPC listener so another process can coordinate (followers no-op if not listening)
+    await this.serverLock.close();
+
     this.role = "follower"; // Reset to follower on stop
     this.setState("idle");
     this.leaderUrl = null;
@@ -457,7 +466,7 @@ export class LeaderElection {
     this.heartbeatTimer = setInterval(
       // eslint-disable-next-line @typescript-eslint/no-misused-promises -- setInterval doesn't await callbacks
       async () => {
-        await this.serverLock.updateHeartbeat(this.instanceId);
+        await this.serverLock.updateHeartbeat(this.instanceId, this.port, this.host);
         // this.log.debug(`[LeaderElection] Heartbeat sent for instance ${this.instanceId}`);
       },
       LEADER_HEARTBEAT_INTERVAL_MS
@@ -656,6 +665,8 @@ export class LeaderElection {
 
     // Release the lock
     await this.serverLock.release(this.instanceId);
+
+    await this.serverLock.close();
 
     // Update role and state
     this.role = "follower";

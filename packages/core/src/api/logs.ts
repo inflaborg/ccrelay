@@ -9,6 +9,7 @@ import * as http from "http";
 import { getDatabase } from "../database";
 import type { LogFilter } from "../database";
 import { sendJson, parseJsonBody } from "./index";
+import { rejectLogStorageApiIfNotLeader } from "./serverRef";
 import { ScopedLogger } from "../utils/logger";
 
 const log = new ScopedLogger("API:Logs");
@@ -22,6 +23,10 @@ export async function handleLogs(
   res: http.ServerResponse,
   _params: Record<string, string>
 ): Promise<void> {
+  if (rejectLogStorageApiIfNotLeader(res)) {
+    return;
+  }
+
   log.info(`[handleLogs] Called - url=${req.url}, method=${req.method}`);
 
   const db = getDatabase();
@@ -72,6 +77,10 @@ export async function handleLogDetail(
   res: http.ServerResponse,
   params: Record<string, string>
 ): Promise<void> {
+  if (rejectLogStorageApiIfNotLeader(res)) {
+    return;
+  }
+
   const db = getDatabase();
 
   if (!db.enabled) {
@@ -97,6 +106,10 @@ export async function handleDeleteLogs(
   req: http.IncomingMessage,
   res: http.ServerResponse
 ): Promise<void> {
+  if (rejectLogStorageApiIfNotLeader(res)) {
+    return;
+  }
+
   const db = getDatabase();
 
   if (!db.enabled) {

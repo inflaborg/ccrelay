@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Multi-instance logging**: SQLite request logging initializes **only on the HTTP Leader**. Followers do not open `logs.db`; dashboard and Log Viewer call `/ccrelay/api/logs` and `/ccrelay/api/stats` on the Leader origin. Those endpoints return **503** when the Leader base URL is unknown or unreachable from the Follower.
+- **IPC leadership lifecycle**: releasing HTTP leadership or stopping the election participant **closes** the IPC lock server after `release`, freeing `ccrelay-lock.sock` / `\\.\pipe\ccrelay-lock` for the next Leader.
 - **GitHub Actions**: `build-dev-auto`, `build-dev-manual`, and `build-prod` workflows accept **`workflow_dispatch`** input **`build_targets`** (`all` default; also `vscode`, `desktop`, `desktop-mac`, `desktop-win`, and per-desktop-arch `desktop-mac-x64`, `desktop-mac-arm64`, `desktop-win-x64`, `desktop-win-arm64`). A **`configure`** job drives conditional VSIX / desktop matrix jobs so partial builds skip unused runners; **`build-dev-auto`** also supports manual trigger with this input (push builds **all** by default).
 - **Desktop packaging**: Electron `build.mac` (`identity: null`, **zip** targets only) / `build.win` declare **`x64` and `arm64`** explicitly. Packaged desktop **app icons** are generated from `packages/vscode/assets/icon.svg`.
 - **Windows / Linux Electron window**: removes the default in-window menu bar (**File / Edit / View / Window**) via `Menu.setApplicationMenu(null)`; macOS continues to use the system menu bar only.
@@ -51,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **IPC lock vs HTTP Leader**: heartbeat and leader probes can **rebind** local IPC when the socket/pipe was orphaned while HTTP leadership moved (e.g. VS Code quit leaving the desktop tray, or mixed extension/desktop instances). Takeover attempts are **cooldown-limited** to reduce reconnect stampedes.
 - **Desktop CI (Windows / macOS matrix)**: set `build.artifactName` to `${productName}-${version}-${platform}-${arch}.${ext}` (`${platform}` is Node `darwin` / `win32`) so release assets encode OS + CPU and parallel `electron-builder` jobs cannot overwrite each other when GitHub Actions merges release assets (previously identical or ambiguous names caused corrupted-looking `.exe` and NSIS “integrity check” failures).
 - **Desktop Windows NSIS**: set `build.nsis.buildUniversalInstaller` to `false`. By default electron-builder emits an extra **combined** installer when multiple architectures are built in one run and `artifactName` includes `${arch}`; that universal `.exe` drops the `${arch}` segment (often large), which is redundant for our per-arch CI matrix and confused release listings.
 - **Desktop macOS packaging (unsigned CI)**: `electron-builder` DMG output on GitHub Actions produced **invalid disk images** (`hdiutil`: "image not recognized"; `file` reported raw zlib). macOS artifacts are now **ZIP only** with `mac.identity: null` so releases ship openable `CCRelay.app` archives.

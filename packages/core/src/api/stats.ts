@@ -6,6 +6,7 @@
 import * as http from "http";
 import { getDatabase } from "../database";
 import { sendJson } from "./index";
+import { rejectLogStorageApiIfNotLeader } from "./serverRef";
 
 /**
  * Handle GET /ccrelay/api/stats
@@ -15,6 +16,10 @@ export async function handleStats(
   res: http.ServerResponse,
   _params: Record<string, string>
 ): Promise<void> {
+  if (rejectLogStorageApiIfNotLeader(res)) {
+    return;
+  }
+
   const db = getDatabase();
 
   if (!db.enabled) {

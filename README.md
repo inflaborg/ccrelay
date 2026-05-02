@@ -277,6 +277,8 @@ When multiple VSCode windows are open:
 - Followers can request provider switches through the Leader
 - If the Leader closes, a Follower automatically becomes the new Leader
 - Status bar shows your role: `$(broadcast)` for Leader, `$(radio-tower)` for Follower
+- **Request log persistence** (`logging.enabled` / `logs.db`) runs **only in the Leader process**. Followers do not open the log database; the dashboard and Log Viewer resolve the Leader’s HTTP URL and call `/ccrelay/api/logs` and `/ccrelay/api/stats` on the Leader for history and aggregates. If the Leader URL is missing or unreachable, those APIs respond with **503**.
+- **IPC leader lock** (Unix/macOS: `~/.ccrelay/ccrelay-lock.sock`; Windows: named pipe `ccrelay-lock`) coordinates **the same Leader** as the HTTP proxy across VS Code windows and the desktop tray app. When the Leader exits cleanly, the lock endpoint is released so another instance can bind; transient IPC failures trigger bounded retries so Followers do not spin on permanent `ECONNREFUSED`.
 
 ### Provider Modes
 
@@ -713,7 +715,8 @@ ccrelay/
 |------|----------|-------------|
 | YAML Config | `~/.ccrelay/config.yaml` | Main configuration file (auto-created) |
 | Runtime state | `~/.ccrelay/state.json` | Persisted active provider id (shared by extension + desktop) |
-| Log database | `~/.ccrelay/logs.db` | Request/response logs (when enabled) |
+| IPC leader lock | `~/.ccrelay/ccrelay-lock.sock` (Unix/macOS); `\\.\pipe\ccrelay-lock` (Windows) | Cross-process Leader election (extension + desktop) |
+| Log database | `~/.ccrelay/logs.db` | Request/response logs (when enabled; **Leader writes only** in multi-instance) |
 
 ---
 
