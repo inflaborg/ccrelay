@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Desktop tray app (Electron)**: packaged `CCRelay` app with system tray, shared `~/.ccrelay` config and leader election with the VS Code extension. **Open Dashboard** loads the `/ccrelay/` web UI inside an Electron `BrowserWindow` over HTTP; duplicate launches focus that window.
+- **CI desktop installers**: GitHub Actions `build-dev-auto`, `build-dev-manual`, and `build-prod` workflows build desktop artifacts after the VSIX — matrix **macOS** (`x64` + `arm64`, dmg + zip) and **Windows** (`x64` + `arm64`, NSIS `.exe`). `build-dev-auto` and `build-prod` aggregate assets into a prerelease/release; `build-dev-manual` uploads workflow artifacts only.
 - **`providerType` split**: `providerType` now has three values — `"anthropic"` (unchanged), `"openai"` (full passthrough — both Chat Completions and Responses API are forwarded without conversion), `"openai_chat"` (Chat Completions only — Responses API requests are converted to Chat Completions before forwarding). Existing `"openai"` configs are treated as full passthrough; update to `"openai_chat"` to preserve the previous Responses→Chat conversion behavior.
 - **Synthetic SSE for `POST /v1/chat/completions` with `stream: true` (cross-protocol)**: when upstream returns non-streaming but the client requested streaming, ccrelay emits `text/event-stream` with `chat.completion.chunk` deltas (text, thinking, tool calls) and `[DONE]`. Previously this path only existed for `POST /v1/responses`.
 - **Cross-protocol `GET /v1/models` conversion**: when the client's API surface (OpenAI vs Anthropic) differs from the upstream provider type, the response is automatically converted to the client's expected format.
@@ -31,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Desktop packaging**: Electron `build.mac` / `build.win` targets declare **`x64` and `arm64`** explicitly for dmg/zip (macOS) and NSIS (Windows). Packaged desktop **app icons** are generated from `packages/vscode/assets/icon.svg`.
+- **Windows / Linux Electron window**: removes the default in-window menu bar (**File / Edit / View / Window**) via `Menu.setApplicationMenu(null)`; macOS continues to use the system menu bar only.
 - **Converter simplification**: `convertRequestToOpenAI`, `convertOpenAIRequestToAnthropic`, and `convertResponsesRequestToChatCompletions` no longer accept a `provider` parameter for custom path resolution — paths are now deterministic (`/chat/completions` for OpenAI, `/v1/messages` for Anthropic).
 - **Cross-protocol conversion guard**: `needsConversion` and upstream wire detection now correctly distinguish all three provider types (`"anthropic"`, `"openai"`, `"openai_chat"`) instead of treating anything non-Anthropic as full OpenAI passthrough.
 - **Model Map field**: no longer marked as required; empty means models are passed through without remapping.
@@ -46,6 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **SQLite log storage without `sqlite3` CLI**: when `logging.enabled` uses SQLite but the **`sqlite3` executable is not installed or not on `PATH`**, the proxy starts **without** persisted request logs (warning logged); config is unchanged until you install SQLite or switch the logging driver.
+- **Desktop packaged builds**: trays ship platform-appropriate PNGs via `extraResources`; **`database-worker.cjs`** is listed in **`asarUnpack`** so Worker threads load correctly; **`sqlite3` discovery** tries common paths (e.g. `/usr/bin/sqlite3`, Homebrew on macOS, `PATH`/`where` on Windows) when the environment trims `PATH`.
 - **SQLite log database (CLI driver)**: eliminated the race between manual `restart()` and the subprocess `exit` handler spawning overlapping sqlite3 processes (which broke sentinel framing on the stdin/stdout pipe); stale I/O is ignored via a process generation counter and listeners are stripped before kill. Stdin writes respect pipe backpressure; list queries use explicit columns plus a short `request_body` preview to shrink IPC traffic; pragma cache/mmap limits tightened for extension RAM.
 - **VSIX packaging**: `.vscodeignore` is now an explicit whitelist (`**/*` plus selective `!` entries). Documents vsce’s rule expansion for trailing `/` (never use bare `!node_modules/` — it becomes `!node_modules/**` and pulled in every prod dependency). Stray trees such as `internal-docs/` are excluded unless explicitly listed.
 - **Anthropic → OpenAI thinking blocks**: multiple thinking blocks in a single assistant message are now merged (content joined, last non-empty signature used) instead of only using the first one.

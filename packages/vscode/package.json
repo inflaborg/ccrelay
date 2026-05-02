@@ -1,0 +1,87 @@
+{
+  "name": "ccrelay-vscode",
+  "displayName": "CCRelay",
+  "icon": "assets/icon-128.png",
+  "description": "VSCode extension with built-in API proxy server - switch between AI providers seamlessly",
+  "version": "0.2.0",
+  "publisher": "inflab",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/inflaborg/ccrelay.git"
+  },
+  "bugs": {
+    "url": "https://github.com/inflaborg/ccrelay/issues"
+  },
+  "homepage": "https://github.com/inflaborg/ccrelay#readme",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/dist/extension.cjs",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ccrelay.showMenu",
+        "title": "CCRelay: Show Menu"
+      },
+      {
+        "command": "ccrelay.switchProvider",
+        "title": "CCRelay: Switch Provider"
+      },
+      {
+        "command": "ccrelay.startServer",
+        "title": "CCRelay: Start Server"
+      },
+      {
+        "command": "ccrelay.stopServer",
+        "title": "CCRelay: Stop Server"
+      },
+      {
+        "command": "ccrelay.openSettings",
+        "title": "CCRelay: Open Config File"
+      },
+      {
+        "command": "ccrelay.showLogs",
+        "title": "CCRelay: Show Logs",
+        "icon": "$(output)"
+      },
+      {
+        "command": "ccrelay.clearLogs",
+        "title": "CCRelay: Clear Logs"
+      },
+      {
+        "command": "ccrelay.openWebUI",
+        "title": "CCRelay: Open Dashboard",
+        "icon": "$(dashboard)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ccrelay-dashboard-container",
+          "title": "CCRelay",
+          "icon": "assets/activitybar-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "ccrelay-dashboard-container": [
+        {
+          "type": "webview",
+          "id": "ccrelay.dashboardView",
+          "name": "Dashboard"
+        }
+      ]
+    }
+  },
+  "scripts": {},
+  "dependencies": {
+    "@ccrelay/core": "*"
+  }
+}

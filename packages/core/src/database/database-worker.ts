@@ -56,8 +56,9 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
     switch (type) {
       case "init": {
         const config = payload as SqliteDriverConfig;
-        driver = new SqliteCliDriver(config);
-        await driver.initialize();
+        const d = new SqliteCliDriver(config);
+        await d.initialize();
+        driver = d;
         return { id, success: true };
       }
 

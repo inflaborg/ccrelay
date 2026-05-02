@@ -3,8 +3,8 @@ import {
   buildModelsListFallback,
   buildOpenAIModelsListFromProvider,
   buildAnthropicModelsListFromProvider,
-} from "../../../src/converter/modelsFallback";
-import type { Provider } from "../../../src/types";
+} from "@/converter/modelsFallback";
+import type { Provider } from "@/types";
 
 function prov(over: Partial<Provider> & Pick<Provider, "id" | "providerType">): Provider {
   return {

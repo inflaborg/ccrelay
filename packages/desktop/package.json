@@ -1,0 +1,82 @@
+{
+  "name": "ccrelay-desktop",
+  "version": "0.2.0",
+  "private": true,
+  "description": "CCRelay desktop tray app",
+  "license": "MIT",
+  "main": "out/main.js",
+  "scripts": {
+    "compile": "tsc --noEmit -p tsconfig.json",
+    "build": "node ../../scripts/esbuild.desktop.mjs",
+    "start": "electron .",
+    "pack": "electron-builder",
+    "pack:mac": "electron-builder --mac",
+    "pack:win": "electron-builder --win"
+  },
+  "dependencies": {
+    "@ccrelay/core": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.11",
+    "electron": "^41.5.0",
+    "electron-builder": "^26.8.1",
+    "typescript": "^5.0.4"
+  },
+  "build": {
+    "appId": "com.inflab.ccrelay",
+    "productName": "CCRelay",
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "web",
+        "to": "web",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "assets/tray-icon-template.png",
+        "to": "assets/tray-icon-template.png"
+      },
+      {
+        "from": "assets/tray-icon.png",
+        "to": "assets/tray-icon.png"
+      }
+    ],
+    "asarUnpack": [
+      "out/database-worker.cjs"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
+        }
+      ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64", "arm64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false
+    }
+  }
+}

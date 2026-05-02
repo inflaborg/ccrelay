@@ -1,150 +1,55 @@
 {
-  "name": "ccrelay-vscode",
-  "displayName": "CCRelay",
-  "icon": "assets/icon-128.png",
-  "description": "VSCode extension with built-in API proxy server - switch between AI providers seamlessly",
+  "private": true,
+  "name": "ccrelay-monorepo",
   "version": "0.2.0",
-  "publisher": "inflab",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/inflaborg/ccrelay.git"
   },
-  "bugs": {
-    "url": "https://github.com/inflaborg/ccrelay/issues"
-  },
-  "homepage": "https://github.com/inflaborg/ccrelay#readme",
-  "engines": {
-    "vscode": "^1.80.0"
-  },
-  "categories": [
-    "Other"
+  "workspaces": [
+    "packages/core",
+    "packages/vscode",
+    "packages/desktop"
   ],
-  "activationEvents": [
-    "onStartupFinished"
-  ],
-  "main": "./out/dist/extension.cjs",
-  "contributes": {
-    "commands": [
-      {
-        "command": "ccrelay.showMenu",
-        "title": "CCRelay: Show Menu"
-      },
-      {
-        "command": "ccrelay.switchProvider",
-        "title": "CCRelay: Switch Provider"
-      },
-      {
-        "command": "ccrelay.startServer",
-        "title": "CCRelay: Start Server"
-      },
-      {
-        "command": "ccrelay.stopServer",
-        "title": "CCRelay: Stop Server"
-      },
-      {
-        "command": "ccrelay.openSettings",
-        "title": "CCRelay: Open Settings"
-      },
-      {
-        "command": "ccrelay.showLogs",
-        "title": "CCRelay: Show Logs",
-        "icon": "$(output)"
-      },
-      {
-        "command": "ccrelay.clearLogs",
-        "title": "CCRelay: Clear Logs"
-      },
-      {
-        "command": "ccrelay.openWebUI",
-        "title": "CCRelay: Open Dashboard",
-        "icon": "$(dashboard)"
-      }
-    ],
-    "configuration": {
-      "title": "CCRelay",
-      "properties": {
-        "ccrelay.configPath": {
-          "type": "string",
-          "default": "~/.ccrelay/config.yaml",
-          "description": "Path to CCRelay configuration file",
-          "scope": "window"
-        },
-        "ccrelay.ui.statusBarPosition": {
-          "type": "string",
-          "enum": [
-            "left",
-            "right"
-          ],
-          "default": "right",
-          "description": "Position of the status bar item"
-        },
-        "ccrelay.ui.statusBarPriority": {
-          "type": "number",
-          "default": 100,
-          "description": "Priority of the status bar item"
-        }
-      }
-    },
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "ccrelay-dashboard-container",
-          "title": "CCRelay",
-          "icon": "assets/activitybar-icon.svg"
-        }
-      ]
-    },
-    "views": {
-      "ccrelay-dashboard-container": [
-        {
-          "type": "webview",
-          "id": "ccrelay.dashboardView",
-          "name": "Dashboard"
-        }
-      ]
-    }
-  },
   "scripts": {
-    "clean": "npx shx rm -rf out web/dist",
-    "vscode:prepublish": "node scripts/build-config.mjs && npm run build:web && node scripts/generate-version.mjs && npm run bundle",
+    "clean": "npx shx rm -rf packages/vscode/out web/dist packages/desktop/out packages/desktop/dist packages/desktop/web",
+    "vscode:prepublish": "node scripts/build-config.mjs && npm run build:web && node scripts/generate-version.mjs && npm run bundle:vscode",
+    "bundle:vscode": "node scripts/esbuild.config.mjs",
+    "bundle:desktop": "node scripts/esbuild.desktop.mjs",
+    "desktop:build": "node scripts/generate-version.mjs && node scripts/build-config.mjs && npm run build:web:desktop && npm run bundle:desktop",
+    "desktop:start": "npm run desktop:build && npm run start -w ccrelay-desktop",
+    "desktop:pack:mac": "npm run desktop:build && npm run pack:mac -w ccrelay-desktop",
+    "desktop:pack:win": "npm run desktop:build && npm run pack:win -w ccrelay-desktop",
+    "build:web": "npx shx rm -rf packages/vscode/out/web && cd web && npm install && npm run build && npx shx mkdir -p ../packages/vscode/out/web && npx shx cp -r dist/* ../packages/vscode/out/web/",
+    "build:web:desktop": "npx shx rm -rf packages/desktop/web && cd web && npm run build && npx shx mkdir -p ../packages/desktop && npx shx cp -r dist ../packages/desktop/web",
     "dev": "npm run watch",
     "dev:web": "cd web && npm run dev",
+    "watch": "tsc -watch -p packages/core/tsconfig.json",
     "prebuild": "node scripts/generate-version.mjs",
-    "build": "npm run clean && npm run build:web && npm run compile",
+    "build": "npm run clean && npm run build:web && npm run bundle:vscode",
     "build:dev": "node scripts/build-config.mjs dev && npm run build",
     "build:prod": "node scripts/build-config.mjs prod && npm run build",
-    "build:web": "npx shx rm -rf out/web && cd web && npm install && npm run build && npx shx mkdir -p ../out/web && npx shx cp -r dist/* ../out/web/",
-    "precompile": "node scripts/generate-version.mjs",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "bundle": "node scripts/esbuild.config.mjs",
-    "type-check": "tsc --noEmit",
-    "lint": "npm run type-check && eslint src tests --max-warnings=0",
-    "lint:fix": "eslint src tests --fix",
-    "format": "prettier --write src/**/*.ts *.json tests/**/*.ts scripts/*.mjs",
-    "format:check": "prettier --check src/**/*.ts *.json tests/**/*.ts scripts/*.mjs",
+    "compile": "tsc --noEmit -p packages/core/tsconfig.json && tsc --noEmit -p packages/vscode/tsconfig.json && tsc --noEmit -p packages/desktop/tsconfig.json && tsc --noEmit -p tsconfig.json",
+    "type-check": "npm run compile",
+    "lint": "npm run type-check && eslint packages/core/src packages/vscode/src packages/desktop/src tests --max-warnings=0",
+    "lint:fix": "eslint packages/core/src packages/vscode/src packages/desktop/src tests --fix",
+    "format": "prettier --write packages/core/src/**/*.ts packages/vscode/src/**/*.ts packages/desktop/src/**/*.ts *.json packages/*/package.json tests/**/*.ts scripts/*.mjs",
+    "format:check": "prettier --check packages/core/src/**/*.ts packages/vscode/src/**/*.ts packages/desktop/src/**/*.ts *.json packages/*/package.json tests/**/*.ts scripts/*.mjs",
     "test": "npm run test:unit",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
     "test:all": "vitest run",
     "test:watch": "vitest tests/unit",
     "test:coverage": "vitest run tests/unit --coverage",
-    "test:e2e": "node ./out/test/runTest.js",
-    "package": "npm run clean && npx shx mkdir -p dists && vsce package --out dists",
+    "package:vscode": "npm run vscode:prepublish && node scripts/sync-vscode-pack-deps.mjs && npx shx cp README.md README_CN.md CHANGELOG.md LICENSE packages/vscode/ && npx shx mkdir -p dists && cd packages/vscode && npx vsce package --no-dependencies --out ../../dists && npx shx rm -f README.md README_CN.md CHANGELOG.md LICENSE",
+    "package": "npm run package:vscode",
     "package:dev": "./scripts/package.sh dev",
     "package:prod": "./scripts/package.sh prod",
-    "package:beta": "node scripts/version-beta.mjs && npm run package",
-    "package:release": "node scripts/version-release.mjs && npm run package",
     "postinstall": "cd web && npm install",
     "prepare": "husky"
   },
-  "dependencies": {
-    "js-yaml": "^4.1.1",
-    "pg": "^8.18.0",
-    "ws": "^8.18.0",
-    "zod": "^4.3.6"
-  },
+  "dependencies": {},
   "overrides": {
     "uuid": "^14.0.0",
     "@typescript-eslint/typescript-estree": {
@@ -176,6 +81,7 @@
     "lint-staged": "^16.2.7",
     "nock": "^14.0.11",
     "prettier": "^3.8.1",
+    "shx": "^0.4.0",
     "supertest": "^7.2.2",
     "typescript": "^5.0.4",
     "vitest": "^4.0.18"

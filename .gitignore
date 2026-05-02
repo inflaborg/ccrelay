@@ -1,13 +1,18 @@
 node_modules
 out
+packages/vscode/out
+packages/vscode/node_modules
+packages/desktop/out
+packages/desktop/dist
+packages/desktop/web
 .vscode-test
 *.vsix
 web/dist
 dists/
 
 # Auto-generated files
-src/config/build-config.generated.ts
-src/api/version.generated.ts
+packages/core/src/config/build-config.generated.ts
+packages/core/src/api/version.generated.ts
 .DS_Store
 /dist
 /internal-docs

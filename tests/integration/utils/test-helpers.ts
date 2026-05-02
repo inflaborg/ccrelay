@@ -5,7 +5,7 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 // External API fields use snake_case
 
-import type { QueueStats, ConcurrencyConfig, Provider } from "../../../src/types";
+import type { QueueStats, ConcurrencyConfig, Provider } from "@/types";
 
 /**
  * Wait for a specific queue state

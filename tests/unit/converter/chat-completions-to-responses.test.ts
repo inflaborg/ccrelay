@@ -3,9 +3,9 @@ import { describe, it, expect } from "vitest";
 import {
   convertChatCompletionToResponses,
   formatOpenAIResponsesSse,
-} from "../../../src/converter/chat-completions-to-responses";
-import type { OpenAIChatCompletionResponse } from "../../../src/converter/openai-to-anthropic";
-import { extractResponsesEcho } from "../../../src/converter/responses-echo";
+} from "@/converter/chat-completions-to-responses";
+import type { OpenAIChatCompletionResponse } from "@/converter/openai-to-anthropic";
+import { extractResponsesEcho } from "@/converter/responses-echo";
 
 describe("convertChatCompletionToResponses", () => {
   it("produces response object and output for text", () => {

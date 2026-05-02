@@ -19,6 +19,14 @@ import type {
   RequestStatus,
 } from "../types";
 
+/** Thrown when the `sqlite3` executable is absent; callers may degrade to disabled log storage. */
+export const SQLITE_CLI_NOT_FOUND_MESSAGE =
+  "sqlite3 CLI not found. Please install SQLite3.";
+
+export function isSqliteCliUnavailableError(err: unknown): boolean {
+  return err instanceof Error && err.message.includes("sqlite3 CLI not found");
+}
+
 // Cleanup thresholds
 const MAX_LOG_ROWS = 10000;
 const MAX_LOG_AGE_DAYS = 30;
@@ -1021,7 +1029,7 @@ export class SqliteCliDriver implements DatabaseDriver {
 
     this.sqlite3Path = this.findSqlite3();
     if (!this.sqlite3Path) {
-      throw new Error("sqlite3 CLI not found. Please install SQLite3.");
+      throw new Error(SQLITE_CLI_NOT_FOUND_MESSAGE);
     }
 
     this.log.info(`[SqliteCli] Database path: ${dbPath}`);
@@ -1059,10 +1067,22 @@ export class SqliteCliDriver implements DatabaseDriver {
   private findSqlite3(): string | null {
     try {
       const result = execSync("which sqlite3", { encoding: "utf-8" }).trim();
-      return result || null;
+      if (result) {
+        return result;
+      }
     } catch {
-      return null;
+      // which may fail in sandboxed / packaged environments with limited PATH
     }
+    const fallbacks =
+      process.platform === "win32"
+        ? ["C:\\Windows\\System32\\sqlite3.exe"]
+        : ["/usr/bin/sqlite3", "/opt/homebrew/bin/sqlite3", "/usr/local/bin/sqlite3"];
+    for (const p of fallbacks) {
+      if (fsSync.existsSync(p)) {
+        return p;
+      }
+    }
+    return null;
   }
 
   async close(): Promise<void> {

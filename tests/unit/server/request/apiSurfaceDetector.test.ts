@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   detectApiSurface,
   resolveInboundClientSurface,
-} from "../../../../src/server/request/apiSurfaceDetector";
-import type { Provider } from "../../../../src/types";
+} from "@/server/request/apiSurfaceDetector";
+import type { Provider } from "@/types";
 
 function p(partial: Partial<Provider> & Pick<Provider, "id" | "providerType">): Provider {
   return {

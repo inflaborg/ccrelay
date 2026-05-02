@@ -3,7 +3,7 @@
  * Provides a minimal ConfigManager-like interface without VSCode dependencies
  */
 
-import type { Provider, ConcurrencyConfig, RouteQueueConfig } from "../../../src/types";
+import type { Provider, ConcurrencyConfig, RouteQueueConfig } from "@/types";
 
 export interface MockConfigOptions {
   port?: number;

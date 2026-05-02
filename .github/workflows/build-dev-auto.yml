@@ -34,7 +34,7 @@ jobs:
       - name: Run tests (unit + integration)
         run: npm run test:all
 
-  build:
+  build-vscode:
     runs-on: ubuntu-latest
     needs: test
     steps:
@@ -58,7 +58,7 @@ jobs:
       - name: Get package version and build info
         id: info
         run: |
-          VERSION=$(node -p "require('./package.json').version")
+          VERSION=$(node -p "require('./packages/vscode/package.json').version")
           SHORT_SHA=$(git rev-parse --short HEAD)
           DATE=$(date +%Y%m%d)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -84,17 +84,87 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ccrelay-dev-${{ steps.info.outputs.version }}${{ steps.suffix.outputs.suffix }}
+          name: ccrelay-vscode-dev-${{ steps.info.outputs.version }}${{ steps.suffix.outputs.suffix }}
           path: dists/*.vsix
           retention-days: 30
+
+    outputs:
+      version: ${{ steps.info.outputs.version }}
+      short_sha: ${{ steps.info.outputs.short_sha }}
+      date: ${{ steps.info.outputs.date }}
+      suffix: ${{ steps.suffix.outputs.suffix }}
+
+  build-desktop:
+    needs: [test, build-vscode]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: mac
+            arch: x64
+          - os: macos-latest
+            platform: mac
+            arch: arm64
+          - os: windows-latest
+            platform: win
+            arch: x64
+          - os: windows-latest
+            platform: win
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm install
+          cd web && npm install
+
+      - name: Build desktop
+        run: npm run desktop:build
+
+      - name: Pack desktop (${{ matrix.platform }} ${{ matrix.arch }})
+        run: npx electron-builder --${{ matrix.platform }} --${{ matrix.arch }}
+        working-directory: packages/desktop
+
+      - name: Upload desktop artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ccrelay-desktop-${{ matrix.platform }}-${{ matrix.arch }}-${{ needs.build-vscode.outputs.version }}${{ needs.build-vscode.outputs.suffix }}
+          path: |
+            packages/desktop/dist/*.dmg
+            packages/desktop/dist/*.zip
+            packages/desktop/dist/*.exe
+          retention-days: 30
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [build-vscode, build-desktop]
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: List release assets
+        run: find release-assets -type f | head -50
 
       - name: Create dev release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: dev-${{ steps.info.outputs.version }}-${{ github.run_number }}
-          name: Dev Build ${{ steps.info.outputs.version }} (#${{ github.run_number }})
+          tag_name: dev-${{ needs.build-vscode.outputs.version }}-${{ github.run_number }}
+          name: Dev Build ${{ needs.build-vscode.outputs.version }} (#${{ github.run_number }})
           prerelease: true
-          files: dists/*.vsix
+          files: release-assets/*
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

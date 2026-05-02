@@ -8,6 +8,7 @@ import * as os from "os";
 import { Logger } from "../utils/logger";
 import type { DatabaseDriver, DatabaseDriverConfig } from "./types";
 import { createDriver } from "./factory";
+import { isSqliteCliUnavailableError } from "./drivers/sqlite-cli";
 
 // Re-export types
 export type {
@@ -84,8 +85,24 @@ export class LogDatabase {
 
       this.log.info("[LogDatabase] Initialization complete");
     } catch (err) {
-      this.log.error("[LogDatabase] Failed to initialize", err);
+      try {
+        await this.driver?.close();
+      } catch {
+        /* ignore teardown after failed init */
+      }
       this.driver = null;
+
+      if (
+        this.driverConfig.type === "sqlite" &&
+        isSqliteCliUnavailableError(err)
+      ) {
+        this.log.warn(
+          "[LogDatabase] sqlite3 CLI is not installed or not on PATH; continuing without persisted request logs (logging remains enabled in config)."
+        );
+        return;
+      }
+
+      this.log.error("[LogDatabase] Failed to initialize", err);
       throw err;
     }
   }

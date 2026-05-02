@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "baseUrl": "./src",
+    "paths": {
+      "@ccrelay/core": ["../core/src/index.ts"],
+      "@ccrelay/core/*": ["../core/src/*"]
+    },
+    "noEmit": true
+  },
+  "include": ["src/**/*"]
+}

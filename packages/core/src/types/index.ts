@@ -1,5 +1,5 @@
 /**
- * Core types for CCRelay VSCode extension
+ * Core types for CCRelay
  */
 
 /* eslint-disable @typescript-eslint/naming-convention */

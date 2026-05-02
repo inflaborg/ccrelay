@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   extractResponsesEcho,
   extractFunctionToolsForEcho,
-} from "../../../src/converter/responses-echo";
+} from "@/converter/responses-echo";
 
 describe("extractFunctionToolsForEcho", () => {
   it("keeps top-level type=function tools and drops hosted tools", () => {

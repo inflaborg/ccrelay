@@ -11,8 +11,20 @@ import * as fs from "fs";
 import * as path from "path";
 import { ScopedLogger } from "../utils/logger";
 
-// Web UI build directory (relative to compiled output)
-const WEB_DIST = path.join(__dirname, "../../web");
+/** Override via `setWebDistPath()` for Electron / alternate layouts */
+let webDistOverride: string | null = null;
+
+/**
+ * Set the directory containing the built Web UI (index.html, assets/).
+ * Must be called before serving requests if the default relative path is wrong.
+ */
+export function setWebDistPath(dir: string): void {
+  webDistOverride = dir;
+}
+
+function getWebDist(): string {
+  return webDistOverride ?? path.join(__dirname, "../../web");
+}
 
 // MIME types for static files
 const MIME_TYPES: Record<string, string> = {
@@ -70,7 +82,7 @@ export function serveStatic(req: http.IncomingMessage, res: http.ServerResponse)
   // Assets or other files
   if (reqPath.startsWith("/ccrelay/")) {
     const relativePath = reqPath.replace("/ccrelay/", "");
-    const filePath = path.join(WEB_DIST, relativePath);
+    const filePath = path.join(getWebDist(), relativePath);
     return serveFile(filePath, res);
   }
 
@@ -81,7 +93,7 @@ export function serveStatic(req: http.IncomingMessage, res: http.ServerResponse)
  * Serve index.html
  */
 function serveIndex(res: http.ServerResponse): boolean {
-  const indexPath = path.join(WEB_DIST, "index.html");
+  const indexPath = path.join(getWebDist(), "index.html");
 
   if (!fs.existsSync(indexPath)) {
     log.warn("index.html not found - Web UI may not be built");
@@ -112,7 +124,8 @@ function serveFile(filePath: string, res: http.ServerResponse): boolean {
   try {
     // Security check - prevent directory traversal
     const normalizedPath = path.normalize(filePath);
-    if (!normalizedPath.startsWith(WEB_DIST)) {
+    const root = getWebDist();
+    if (!normalizedPath.startsWith(root)) {
       log.warn(`Blocked directory traversal attempt: ${filePath}`);
       sendJson(res, 403, { error: "Forbidden" });
       return true;

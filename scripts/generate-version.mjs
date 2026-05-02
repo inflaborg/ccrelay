@@ -15,8 +15,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const require = createRequire(import.meta.url);
 
-const packageJson = require("../package.json");
-const srcDir = path.join(__dirname, "../src/api");
+const packageJson = require("../packages/vscode/package.json");
+const srcDir = path.join(__dirname, "../packages/core/src/api");
 const outFile = path.join(srcDir, "version.generated.ts");
 
 // Get current timestamp

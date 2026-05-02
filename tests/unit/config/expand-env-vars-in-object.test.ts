@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { expandEnvVarsInObject } from "../../../src/config/index";
+import { expandEnvVarsInObject } from "@/config/index";
 
 /* eslint-disable @typescript-eslint/naming-convention -- YAML / raw config keys are snake_case or arbitrary ids */
 describe("expandEnvVarsInObject", () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { ConcurrencyManager } from "../../../src/queue/concurrency-manager";
-import { RequestTask, ConcurrencyConfig, ProxyResult } from "../../../src/types";
+import { ConcurrencyManager } from "@/queue/concurrency-manager";
+import { RequestTask, ConcurrencyConfig, ProxyResult } from "@/types";
 
 // Mock vscode before importing ConcurrencyManager which uses Logger
 vi.mock("vscode", () => ({

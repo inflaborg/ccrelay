@@ -1,13 +1,17 @@
 import * as vscode from "vscode";
-import { ConfigManager } from "./config";
-import { ProxyServer } from "./server/handler";
+import {
+  Api,
+  BUILD_HASH,
+  BUILD_VERSION,
+  ConfigManager,
+  GIT_HASH,
+  LeaderElection,
+  Logger,
+  ProxyServer,
+} from "@ccrelay/core";
 import { StatusBarManager } from "./vscode/statusBar";
 import { LogViewerPanel } from "./vscode/logViewer";
-import { Logger } from "./utils/logger";
-import { LeaderElection } from "./server/leaderElection";
 import { DashboardWebviewProvider } from "./vscode/dashboardView";
-import * as Api from "./api";
-import { BUILD_HASH, BUILD_VERSION, GIT_HASH } from "./api/version.generated";
 
 let server: ProxyServer | null = null;
 let statusBar: StatusBarManager | null = null;
@@ -32,7 +36,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Initialize configuration manager (auto-creates config file if not exists)
   const configStart = Date.now();
-  configManager = new ConfigManager(context);
+  configManager = new ConfigManager();
   logger.info(
     `[Extension:${instanceId}] ConfigManager initialized in ${Date.now() - configStart}ms`
   );
@@ -41,55 +45,40 @@ export function activate(context: vscode.ExtensionContext) {
   const port = configManager.port;
   const host = configManager.host;
 
-  // Check if multi-instance mode is enabled
-  const multiInstanceEnabled = vscode.workspace
-    .getConfiguration("ccrelay")
-    .get<boolean>("multiInstance", true);
-
-  // Initialize leader election if multi-instance is enabled
   const leaderElectionStart = Date.now();
-  if (multiInstanceEnabled) {
-    logger.info(`[Extension:${instanceId}] Multi-instance mode enabled`);
-    leaderElection = new LeaderElection(port, host);
-  }
+  logger.info(`[Extension:${instanceId}] Leader election enabled`);
+  leaderElection = new LeaderElection(port, host);
   logger.info(
     `[Extension:${instanceId}] LeaderElection initialized in ${Date.now() - leaderElectionStart}ms`
   );
 
-  // Create server instance (with leader election if enabled)
   const serverStart = Date.now();
   server = new ProxyServer(configManager, leaderElection);
   logger.info(`[Extension:${instanceId}] ProxyServer created in ${Date.now() - serverStart}ms`);
 
-  // Initialize API module with server instance
   Api.setServer(server);
 
-  // Create status bar manager
   statusBar = new StatusBarManager(context, configManager, server);
 
-  // Initialize Dashboard Provider
   const getDashboardConfig = () => {
     if (!server || !configManager) {
-      const vsConfig = vscode.workspace.getConfiguration("ccrelay");
       return {
         role: "standalone",
         leaderUrl: "",
-        host: vsConfig.get<string>("host", "127.0.0.1"),
-        port: vsConfig.get<number>("port", 7575)
+        host: "127.0.0.1",
+        port: 7575,
       };
     }
-    const vsConfig = vscode.workspace.getConfiguration("ccrelay");
     return {
       role: server.getRole(),
       leaderUrl: server.getLeaderUrl() ?? "",
-      host: vsConfig.get<string>("host", configManager.host),
-      port: vsConfig.get<number>("port", configManager.port)
+      host: configManager.host,
+      port: configManager.port,
     };
   };
 
   dashboardProvider = new DashboardWebviewProvider(context.extensionUri, getDashboardConfig);
 
-  // Register commands
   const showMenuCommand = vscode.commands.registerCommand("ccrelay.showMenu", async () => {
     await statusBar?.showMenu();
   });
@@ -109,9 +98,22 @@ export function activate(context: vscode.ExtensionContext) {
     await stopServer();
   });
 
-  const openSettingsCommand = vscode.commands.registerCommand("ccrelay.openSettings", () => {
-    vscode.commands.executeCommand("workbench.action.openSettings", "ccrelay");
-  });
+  const openSettingsCommand = vscode.commands.registerCommand(
+    "ccrelay.openSettings",
+    async () => {
+      if (!configManager) {
+        return;
+      }
+      try {
+        const uri = vscode.Uri.file(configManager.getConfigPath());
+        const doc = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(doc);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        vscode.window.showErrorMessage(`Could not open config file: ${msg}`);
+      }
+    }
+  );
 
   const showLogsCommand = vscode.commands.registerCommand("ccrelay.showLogs", () => {
     logger?.show();
@@ -129,13 +131,10 @@ export function activate(context: vscode.ExtensionContext) {
     }
     const role = server.getRole();
     const leaderUrl = server.getLeaderUrl() ?? "";
+    const portUi = configManager.port;
+    const hostUi = configManager.host;
 
-    // Get host and port from config
-    const config = vscode.workspace.getConfiguration("ccrelay");
-    const port = config.get<number>("port", 7575);
-    const host = config.get<string>("host", "127.0.0.1");
-
-    await LogViewerPanel.createOrShow(leaderUrl, role, host, port, context.extensionUri);
+    await LogViewerPanel.createOrShow(leaderUrl, role, hostUi, portUi, context.extensionUri);
   });
 
   context.subscriptions.push(
@@ -152,14 +151,12 @@ export function activate(context: vscode.ExtensionContext) {
     logger
   );
 
-  // Log extension activation
   const activationTime = Date.now() - activationStart;
   logger.info(`[Extension:${instanceId}] ===== ACTIVATION COMPLETE in ${activationTime}ms =====`);
   logger.info(
     `[Extension:${instanceId}] Memory usage: RSS=${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB, HeapTotal=${Math.round(process.memoryUsage().heapTotal / 1024 / 1024)}MB, HeapUsed=${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`
   );
 
-  // Auto-start server if configured in yaml
   if (configManager.autoStart) {
     logger.info(`[Extension:${instanceId}] Auto-start enabled, starting server...`);
     void startServer();
@@ -240,68 +237,49 @@ async function stopServer(): Promise<void> {
 export async function deactivate(): Promise<void> {
   const deactivateStart = Date.now();
 
-  // Log extension deactivation
   logger?.info(`[Extension] ===== DEACTIVATION START ===== at ${new Date().toISOString()}`);
   logger?.info(
     `[Extension] Memory usage: RSS=${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB, HeapTotal=${Math.round(process.memoryUsage().heapTotal / 1024 / 1024)}MB, HeapUsed=${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`
   );
 
-  // Create a timeout promise for graceful shutdown (max 5 seconds)
   const timeout = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
   try {
-    // Stop server on deactivation - MUST await this!
-    // Note: server.stop() internally calls leaderElection.stop(), so we don't need to call it separately
     if (server) {
       const role = server.getRole();
       logger?.info(`[Extension] Deactivating with role: ${role}`);
 
-      // Wait for server stop with timeout
       const stopPromise = server.stop();
       const timeoutPromise = timeout(5000).then(() => {
         logger?.warn("[Extension] Server stop timed out after 5s, forcing cleanup");
-        // Even if timeout, the server.stop() will eventually complete
-        // The timeout just means we proceed with deactivation
       });
 
       await Promise.race([stopPromise, timeoutPromise]);
-
-      // Double-check: try to wait a bit more for the stop to complete
-      // This helps ensure port is released before new plugin version starts
       await Promise.race([stopPromise, timeout(1000)]);
 
       logger?.info("[Extension] Server stopped successfully");
     }
-
-    // Note: leaderElection.stop() is already called inside server.stop()
-    // No need to call it again here
   } catch (err) {
-    // Falls back to console.error which should always work
     console.error("[Extension] Error during deactivation cleanup:", err);
-    // Try to log to our logger if it's still alive, but safely
     try {
       logger?.error("Error during deactivation cleanup", err);
     } catch {
       // ignore
     }
   } finally {
-    // Always cleanup these resources
     if (configManager) {
       configManager.dispose();
     }
 
-    // Dispose logger safely
     if (logger) {
       try {
         logger.dispose();
       } catch {
         // ignore
       }
-      // Nullify global logger reference to prevent further usage
       logger = null;
     }
 
-    // Clear references to help GC
     server = null;
     leaderElection = null;
     configManager = null;
