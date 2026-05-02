@@ -19,6 +19,14 @@ import type {
   RequestStatus,
 } from "../types";
 
+/** Thrown when the `sqlite3` executable is absent; callers may degrade to disabled log storage. */
+export const SQLITE_CLI_NOT_FOUND_MESSAGE =
+  "sqlite3 CLI not found. Please install SQLite3.";
+
+export function isSqliteCliUnavailableError(err: unknown): boolean {
+  return err instanceof Error && err.message.includes("sqlite3 CLI not found");
+}
+
 // Cleanup thresholds
 const MAX_LOG_ROWS = 10000;
 const MAX_LOG_AGE_DAYS = 30;
@@ -1021,7 +1029,7 @@ export class SqliteCliDriver implements DatabaseDriver {
 
     this.sqlite3Path = this.findSqlite3();
     if (!this.sqlite3Path) {
-      throw new Error("sqlite3 CLI not found. Please install SQLite3.");
+      throw new Error(SQLITE_CLI_NOT_FOUND_MESSAGE);
     }
 
     this.log.info(`[SqliteCli] Database path: ${dbPath}`);

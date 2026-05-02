@@ -2,7 +2,7 @@
  * CCRelay desktop — Electron main process (system tray + shared core runtime)
  */
 
-import { app } from "electron";
+import { Menu, app } from "electron";
 import * as path from "path";
 import {
   Api,
@@ -13,6 +13,7 @@ import {
   setWebDistPath,
 } from "@ccrelay/core";
 import { createTray } from "./tray";
+import { showDashboardWindow, dashboardWebUrl } from "./window";
 
 function resolveWebDist(): string {
   if (app.isPackaged) {
@@ -27,28 +28,36 @@ if (!gotLock) {
   process.exit(0);
 }
 
-app.on("second-instance", () => {
-  try {
-    Logger.getInstance().info("[Desktop] Second instance attempted launch");
-  } catch {
-    // Logger may not exist yet
-    console.log("[Desktop] Second instance attempted launch");
-  }
-});
-
 if (process.platform === "darwin") {
   app.dock?.hide();
 }
 
+app.on("window-all-closed", () => {
+  // Tray-driven app: BrowserWindow teardown must not terminate the process.
+});
+
 void app.whenReady().then(async () => {
   const logger = Logger.getInstance();
   logger.info("[Desktop] App ready");
+
+  if (process.platform !== "darwin") {
+    Menu.setApplicationMenu(null);
+  }
 
   setWebDistPath(resolveWebDist());
 
   const configManager = new ConfigManager();
   const leaderElection = new LeaderElection(configManager.port, configManager.host);
   const server = new ProxyServer(configManager, leaderElection);
+
+  app.on("second-instance", () => {
+    try {
+      logger.info("[Desktop] Second instance attempted launch");
+    } catch {
+      console.log("[Desktop] Second instance attempted launch");
+    }
+    showDashboardWindow(dashboardWebUrl(server, configManager));
+  });
 
   Api.setServer(server);
 

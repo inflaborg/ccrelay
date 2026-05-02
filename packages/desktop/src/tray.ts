@@ -6,12 +6,7 @@ import { Tray, Menu, shell, nativeImage, app } from "electron";
 import * as path from "path";
 import type { ProxyServer, ConfigManager } from "@ccrelay/core";
 import { setOpenAtLogin, getOpenAtLogin } from "./autoLaunch";
-
-function dashboardUrl(server: ProxyServer, config: ConfigManager): string {
-  const base = server.getLeaderUrl() ?? `http://${config.host}:${config.port}`;
-  const normalized = base.endsWith("/") ? base.slice(0, -1) : base;
-  return `${normalized}/ccrelay/`;
-}
+import { dashboardWebUrl, showDashboardWindow } from "./window";
 
 /** macOS tray uses template (monochrome); Windows/Linux use the full-color asset. */
 function trayIconFile(): string {
@@ -70,7 +65,7 @@ export function createTray(server: ProxyServer, config: ConfigManager): Tray {
       {
         label: "Open Dashboard",
         click: (): void => {
-          void shell.openExternal(dashboardUrl(server, config));
+          showDashboardWindow(dashboardWebUrl(server, config));
         },
       },
       { type: "separator" },
@@ -126,6 +121,11 @@ export function createTray(server: ProxyServer, config: ConfigManager): Tray {
   config.onConfigChanged(() => updateMenu());
 
   tray.setToolTip("CCRelay");
+
+  tray.on("double-click", () => {
+    showDashboardWindow(dashboardWebUrl(server, config));
+  });
+
   updateMenu();
 
   return tray;
