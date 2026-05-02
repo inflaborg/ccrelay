@@ -275,7 +275,8 @@ base_url = "http://localhost:7575/v1"
 - Follower 可以通过 Leader 请求切换提供商
 - 如果 Leader 关闭，Follower 会自动成为新的 Leader
 - 状态栏显示角色：`$(broadcast)` 表示 Leader，`$(radio-tower)` 表示 Follower
-- **请求日志持久化**（`logging.enabled` / `logs.db`）仅在 **Leader 进程**中进行；Follower **不会**打开日志数据库；仪表盘与日志查看器会解析 Leader 的 HTTP 地址，并在 Leader 上调用 `/ccrelay/api/logs`、`/ccrelay/api/stats` 获取历史与统计。
+- **请求日志持久化**（`logging.enabled` / `logs.db`）仅在 **Leader 进程**中进行；Follower **不会**打开日志数据库；仪表盘与日志查看器会解析 Leader 的 HTTP 地址，并在 Leader 上调用 `/ccrelay/api/logs`、`/ccrelay/api/stats` 获取历史与统计。若 Leader 地址不可用或无法连通，上述接口返回 **503**。
+- **IPC Leader 锁**（Unix/macOS：`~/.ccrelay/ccrelay-lock.sock`；Windows：命名管道 `ccrelay-lock`）与 **HTTP 代理的 Leader** 为同一实例，用于 VS Code 多窗口与桌面托盘进程之间的选举；Leader 正常退出后会释放锁文件端点，其它实例可重新绑定；IPC 短暂故障时会有限次重试，避免 Follower 持续 **ECONNREFUSED**。
 
 ### Provider 模式
 
@@ -711,7 +712,8 @@ ccrelay/
 |------|------|------|
 | YAML 配置 | `~/.ccrelay/config.yaml` | 主配置文件（自动创建） |
 | 运行时状态 | `~/.ccrelay/state.json` | 当前启用的提供商 id（扩展与桌面端共用） |
-| 日志数据库 | `~/.ccrelay/logs.db` | 请求/响应日志（启用后） |
+| IPC Leader 锁 | `~/.ccrelay/ccrelay-lock.sock`（Unix/macOS）；`\\.\pipe\ccrelay-lock`（Windows） | 跨进程 Leader 选举（扩展与桌面端） |
+| 日志数据库 | `~/.ccrelay/logs.db` | 请求/响应日志（启用后；多实例下 **仅 Leader 写入**） |
 
 ---
 
