@@ -99,6 +99,31 @@ export class ProxyServer {
   }
 
   /**
+   * Open persisted logs only on the leader (before HTTP accepts proxy traffic).
+   */
+  private async ensureLeaderLogStorage(): Promise<void> {
+    const enabled = this.config.enableLogStorage;
+    this.log.info(
+      `[Server:${this.instanceId}] Initializing log database (leader). config.enableLogStorage=${enabled}`
+    );
+    const dbStart = Date.now();
+    await this.database.initialize(enabled);
+    this.log.info(
+      `[Server:${this.instanceId}] Database initialized in ${Date.now() - dbStart}ms. enabled=${this.database.enabled}`
+    );
+  }
+
+  /**
+   * Followers must not hold logs.db (worker/sqlite IPC).
+   */
+  private async ensureFollowerNoLogStorage(): Promise<void> {
+    await this.database.initialize(false);
+    this.log.info(
+      `[Server:${this.instanceId}] Log storage closed for follower role (enabled=${this.database.enabled})`
+    );
+  }
+
+  /**
    * Handle role change from leader election
    */
   private handleRoleChange(info: RoleChangeInfo): void {
@@ -125,45 +150,43 @@ export class ProxyServer {
 
     // If we became the leader and server is not running, start it
     if (info.role === "leader" && !this.isRunning && !this.serverStartInProgress) {
-      this.log.info("[Server] Became leader, starting HTTP server");
+      this.log.info("[Server] Became leader, starting log storage and HTTP server");
       this.serverStartInProgress = true;
-      this.startServerOnly()
-        .then(() => {
+      void (async () => {
+        try {
+          await this.ensureLeaderLogStorage();
+          await this.startServerOnly();
           this.serverStartInProgress = false;
-          // Start WebSocket server after HTTP server is running
           this.startWsServer();
-          // Notify election that server started successfully
           if (this.leaderElection) {
             this.leaderElection.notifyServerStarted();
           }
-        })
-        .catch(async err => {
+        } catch (err) {
           this.serverStartInProgress = false;
           this.log.error("[Server] Failed to start server after becoming leader", err);
-          // Record the failure and release leadership
+          await this.database.close();
           if (this.leaderElection) {
             this.leaderElection.recordLeadershipFailure();
             await this.leaderElection.releaseLeadership();
             this.role = "follower";
             this.leaderUrl = null;
 
-            // Only continue monitoring if we haven't hit the max failures
             if (!this.leaderElection.hasExternalPortConflict()) {
               this.leaderElection.startMonitoringAsFollower();
             }
             this.log.info("[Server] Released leadership after server start failure");
           }
-        });
+        }
+      })();
     }
 
     // If we became a follower and server is running, stop it
     if (info.role === "follower" && this.isRunning) {
-      this.log.info("[Server] Became follower, stopping HTTP server");
+      this.log.info("[Server] Became follower, stopping HTTP server and log storage");
       this.stopServerOnly()
-        .then(() => {
-          // Stop WebSocket server
+        .then(async () => {
+          await this.database.close();
           this.stopWsServer();
-          // Notify election that server stopped
           if (this.leaderElection) {
             this.leaderElection.notifyServerStopped();
           }
@@ -377,17 +400,6 @@ export class ProxyServer {
     // Initialize queue executor (deferred to avoid circular dependency)
     this.queueManager.setExecutor((task: RequestTask) => this.executeProxyRequest(task));
 
-    // Initialize database (async for sqlite3 CLI)
-    const logStorageEnabled = this.config.enableLogStorage;
-    this.log.info(
-      `[Server:${this.instanceId}] Initializing database. config setting: ${logStorageEnabled}`
-    );
-    const dbStart = Date.now();
-    await this.database.initialize(logStorageEnabled);
-    this.log.info(
-      `[Server:${this.instanceId}] Database initialized in ${Date.now() - dbStart}ms. enabled=${this.database.enabled}`
-    );
-
     // Run leader election if configured
     if (this.leaderElection) {
       this.log.info(`[Server:${this.instanceId}] Running leader election...`);
@@ -407,6 +419,7 @@ export class ProxyServer {
       if (electionResult.isLeader) {
         this.serverStartInProgress = true;
         try {
+          await this.ensureLeaderLogStorage();
           const httpStart = Date.now();
           await this.startServerOnly();
           this.log.info(
@@ -425,6 +438,8 @@ export class ProxyServer {
             err
           );
 
+          await this.database.close();
+
           // Record failure and release leadership
           this.leaderElection.recordLeadershipFailure();
           await this.leaderElection.releaseLeadership();
@@ -436,9 +451,12 @@ export class ProxyServer {
             this.leaderElection.startMonitoringAsFollower();
           }
 
+          await this.ensureFollowerNoLogStorage();
+
           return { role: this.role, leaderUrl: this.leaderUrl ?? undefined };
         }
       } else {
+        await this.ensureFollowerNoLogStorage();
         this.log.info(
           `[Server:${this.instanceId}] Running as follower, using leader at ${this.leaderUrl}`
         );

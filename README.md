@@ -277,6 +277,7 @@ When multiple VSCode windows are open:
 - Followers can request provider switches through the Leader
 - If the Leader closes, a Follower automatically becomes the new Leader
 - Status bar shows your role: `$(broadcast)` for Leader, `$(radio-tower)` for Follower
+- **Request log persistence** (`logging.enabled` / `logs.db`) runs **only in the Leader process**. Followers do not open the log database; the dashboard and Log Viewer resolve the Leader’s HTTP URL and call `/ccrelay/api/logs` and `/ccrelay/api/stats` on the Leader for history and aggregates.
 
 ### Provider Modes
 

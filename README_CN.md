@@ -275,6 +275,7 @@ base_url = "http://localhost:7575/v1"
 - Follower 可以通过 Leader 请求切换提供商
 - 如果 Leader 关闭，Follower 会自动成为新的 Leader
 - 状态栏显示角色：`$(broadcast)` 表示 Leader，`$(radio-tower)` 表示 Follower
+- **请求日志持久化**（`logging.enabled` / `logs.db`）仅在 **Leader 进程**中进行；Follower **不会**打开日志数据库；仪表盘与日志查看器会解析 Leader 的 HTTP 地址，并在 Leader 上调用 `/ccrelay/api/logs`、`/ccrelay/api/stats` 获取历史与统计。
 
 ### Provider 模式
 

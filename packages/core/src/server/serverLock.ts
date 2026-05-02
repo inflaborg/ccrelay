@@ -30,6 +30,9 @@ const IPC_SOCKET_PATH =
 // Connection timeout for IPC client
 const IPC_CONNECT_TIMEOUT_MS = 500;
 
+/** Min interval between IPC takeover attempts (heartbeat / probes) */
+const IPC_TAKEOVER_COOLDOWN_MS = 5_000;
+
 // Message types for IPC communication
 type MessageType = "query" | "acquire" | "heartbeat" | "release" | "response" | "error";
 
@@ -57,6 +60,12 @@ export class ServerLock {
   private instanceId: string;
   private initPromise: Promise<void> | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
+
+  /** Serialize concurrent ensureIpcServer calls within one process */
+  private ensureIpcServerInFlight: Promise<boolean> | null = null;
+
+  /** Throttle takeover attempts from heartbeat / getCurrentLeader */
+  private lastIpcTakeoverAttempt = 0;
 
   // Track connected clients for heartbeat updates
   private clients: Set<net.Socket> = new Set();
@@ -96,6 +105,12 @@ export class ServerLock {
         fs.mkdirSync(LOCK_DIR, { recursive: true, mode: 0o700 });
       }
 
+      // Avoid rebinding while already listening (repeated electLeader.initialize calls)
+      if (this.isIpcServer && this.ipcServer) {
+        this.log.debug(`[ServerLock:${this.instanceId}] Already IPC server, skipping socket setup`);
+        return;
+      }
+
       // Try to become the IPC server
       const becameServer = await this.tryBecomeIpcServer();
 
@@ -119,6 +134,49 @@ export class ServerLock {
       );
       throw err;
     }
+  }
+
+  /**
+   * Ensure this process listens on the coordination socket (HTTP Leader must hold IPC Server).
+   */
+  async ensureIpcServer(): Promise<boolean> {
+    if (this.isIpcServer) {
+      return true;
+    }
+
+    if (this.ensureIpcServerInFlight) {
+      return this.ensureIpcServerInFlight;
+    }
+
+    this.ensureIpcServerInFlight = (async (): Promise<boolean> => {
+      try {
+        const ok = await this.tryBecomeIpcServer();
+        if (ok) {
+          this.log.info(
+            `[ServerLock:${this.instanceId}] Bound IPC coordination socket as listener`
+          );
+        }
+        return ok;
+      } finally {
+        this.ensureIpcServerInFlight = null;
+      }
+    })();
+
+    return this.ensureIpcServerInFlight;
+  }
+
+  /**
+   * Attempt IPC takeover with optional cooldown (shared by heartbeat and leader probes).
+   */
+  private async maybeTakeOverIpcServer(useCooldown: boolean): Promise<boolean> {
+    const now = Date.now();
+    if (useCooldown && now - this.lastIpcTakeoverAttempt < IPC_TAKEOVER_COOLDOWN_MS) {
+      return false;
+    }
+    if (useCooldown) {
+      this.lastIpcTakeoverAttempt = now;
+    }
+    return this.ensureIpcServer();
   }
 
   /**
@@ -638,8 +696,10 @@ export class ServerLock {
 
   /**
    * Update heartbeat timestamp for this instance
+   * @param port - Coordinator HTTP port (needed to rebuild lock record after IPC takeover)
+   * @param host - Coordinator HTTP host
    */
-  async updateHeartbeat(instanceId: string): Promise<void> {
+  async updateHeartbeat(instanceId: string, port?: number, host?: string): Promise<void> {
     const now = Date.now();
 
     if (this.isIpcServer) {
@@ -659,8 +719,51 @@ export class ServerLock {
           this.currentLeader = response.leader;
         }
       } catch (err) {
+        const msg = String(err);
+        const recoverable =
+          msg.includes("ECONNREFUSED") ||
+          msg.includes("ENOENT") ||
+          msg.includes("IPC connection closed");
+
+        if (recoverable) {
+          const took = await this.maybeTakeOverIpcServer(true);
+          if (took && this.isIpcServer) {
+            const ts = Date.now();
+            this.restoreLeaderRecordAfterTakeover(instanceId, port, host, ts);
+            return;
+          }
+        }
+
         this.log.error(`[ServerLock] Failed to update heartbeat for instance ${instanceId}`, err);
       }
+    }
+  }
+
+  /**
+   * After this process becomes IPC server mid-flight, ensure currentLeader matches HTTP leader.
+   */
+  private restoreLeaderRecordAfterTakeover(
+    instanceId: string,
+    port: number | undefined,
+    host: string | undefined,
+    now: number
+  ): void {
+    if (port !== undefined && host !== undefined) {
+      if (!this.currentLeader || this.currentLeader.instanceId !== instanceId) {
+        this.currentLeader = {
+          instanceId,
+          pid: process.pid,
+          port,
+          host,
+          startTime: now,
+          lastHeartbeat: now,
+        };
+        this.log.info(`[ServerLock] Restored leader record after IPC takeover (${instanceId})`);
+      } else {
+        this.currentLeader.lastHeartbeat = now;
+      }
+    } else if (this.currentLeader?.instanceId === instanceId) {
+      this.currentLeader.lastHeartbeat = now;
     }
   }
 
@@ -712,6 +815,20 @@ export class ServerLock {
           errorMsg.includes("ENOENT") ||
           errorMsg.includes("IPC connection closed")
         ) {
+          const took = await this.maybeTakeOverIpcServer(true);
+          if (took && this.isIpcServer) {
+            if (this.currentLeader) {
+              if (now - this.currentLeader.lastHeartbeat > HEARTBEAT_TIMEOUT_MS) {
+                this.log.info(
+                  `[ServerLock] Leader ${this.currentLeader.instanceId} has stale heartbeat (age: ${now - this.currentLeader.lastHeartbeat}ms)`
+                );
+                return null;
+              }
+              return this.currentLeader;
+            }
+            return null;
+          }
+
           this.log.info(
             `[ServerLock] Leader unreachable (connection failed), assuming dead. Error: ${errorMsg}`
           );

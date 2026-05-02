@@ -28,6 +28,7 @@ import {
   setServer as setClientConfigServer,
 } from "./clientConfig";
 import { handleGetConfig, handlePatchConfig, setServer as setSettingsServer } from "./settings";
+import { setProxyServerForApi } from "./serverRef";
 import { ScopedLogger } from "../utils/logger";
 
 const log = new ScopedLogger("API");
@@ -36,6 +37,7 @@ const log = new ScopedLogger("API");
  * Set the server instance for all API handlers
  */
 export function setServer(server: ProxyServer): void {
+  setProxyServerForApi(server);
   setStatusServer(server);
   setProvidersServer(server);
   setSwitchServer(server);
