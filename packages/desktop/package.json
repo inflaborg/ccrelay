@@ -25,6 +25,7 @@
   "build": {
     "appId": "com.inflab.ccrelay",
     "productName": "CCRelay",
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
     "directories": {
       "output": "dist",
       "buildResources": "assets"

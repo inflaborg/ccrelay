@@ -50,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Desktop CI (Windows / macOS matrix)**: set `build.artifactName` to `${productName}-${version}-${arch}.${ext}` so parallel `electron-builder` jobs no longer emit identical NSIS / zip filenames that overwrote each other when GitHub Actions merged release assets (which caused a single corrupted-looking `.exe` and NSIS “integrity check” failures).
 - **Desktop macOS packaging (unsigned CI)**: `electron-builder` DMG output on GitHub Actions produced **invalid disk images** (`hdiutil`: "image not recognized"; `file` reported raw zlib). macOS artifacts are now **ZIP only** with `mac.identity: null` so releases ship openable `CCRelay.app` archives.
 - **SQLite log storage without `sqlite3` CLI**: when `logging.enabled` uses SQLite but the **`sqlite3` executable is not installed or not on `PATH`**, the proxy starts **without** persisted request logs (warning logged); config is unchanged until you install SQLite or switch the logging driver.
 - **Desktop packaged builds**: trays ship platform-appropriate PNGs via `extraResources`; **`database-worker.cjs`** is listed in **`asarUnpack`** so Worker threads load correctly; **`sqlite3` discovery** tries common paths (e.g. `/usr/bin/sqlite3`, Homebrew on macOS, `PATH`/`where` on Windows) when the environment trims `PATH`.
