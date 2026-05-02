@@ -13,6 +13,9 @@ fi
 
 cd "$(dirname "$0")/.."
 
+# Export env so vscode:prepublish (triggered by vsce) uses the correct environment
+export BUILD_ENV="$ENV"
+
 # Generate build config and extract version
 OUTPUT=$(node scripts/build-config.mjs "$ENV")
 PACKAGE_VERSION=$(echo "$OUTPUT" | grep "^PACKAGE_VERSION:" | cut -d: -f2)
@@ -25,8 +28,8 @@ fi
 echo ""
 echo "Packaging with version: $PACKAGE_VERSION"
 
-# Build
-npm run build
+# Clean (vscode:prepublish handles the actual build)
+npm run clean
 
 # Ensure dists directory exists
 mkdir -p dists

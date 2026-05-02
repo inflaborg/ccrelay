@@ -107,7 +107,7 @@
   },
   "scripts": {
     "clean": "npx shx rm -rf out web/dist",
-    "vscode:prepublish": "node scripts/build-config.mjs prod && npm run build:web && node scripts/generate-version.mjs && npm run bundle",
+    "vscode:prepublish": "node scripts/build-config.mjs && npm run build:web && node scripts/generate-version.mjs && npm run bundle",
     "dev": "npm run watch",
     "dev:web": "cd web && npm run dev",
     "prebuild": "node scripts/generate-version.mjs",
@@ -131,7 +131,7 @@
     "test:watch": "vitest tests/unit",
     "test:coverage": "vitest run tests/unit --coverage",
     "test:e2e": "node ./out/test/runTest.js",
-    "package": "npm run build:web && node scripts/generate-version.mjs && npm run bundle && npx shx mkdir -p dists && vsce package --out dists",
+    "package": "npm run clean && npx shx mkdir -p dists && vsce package --out dists",
     "package:dev": "./scripts/package.sh dev",
     "package:prod": "./scripts/package.sh prod",
     "package:beta": "node scripts/version-beta.mjs && npm run package",

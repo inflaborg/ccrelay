@@ -140,8 +140,7 @@ export function mergedResponseShellEcho(echo?: ResponsesRequestEcho): Record<str
     tools: echo?.tools ?? [],
     truncation: echo?.truncation ?? "disabled",
     user: echo?.user !== undefined ? echo.user : null,
-    metadata:
-      echo?.metadata !== undefined ? { ...echo.metadata } : {},
+    metadata: echo?.metadata !== undefined ? { ...echo.metadata } : {},
     instructions: echo?.instructions !== undefined ? echo.instructions : null,
   };
 }
