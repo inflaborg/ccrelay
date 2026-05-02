@@ -14,6 +14,9 @@ function dashboardUrl(server: ProxyServer, config: ConfigManager): string {
 }
 
 function trayIconPath(): string {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, "assets", "tray-icon-template.png");
+  }
   return path.join(__dirname, "..", "assets", "tray-icon-template.png");
 }
 

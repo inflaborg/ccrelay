@@ -1059,10 +1059,22 @@ export class SqliteCliDriver implements DatabaseDriver {
   private findSqlite3(): string | null {
     try {
       const result = execSync("which sqlite3", { encoding: "utf-8" }).trim();
-      return result || null;
+      if (result) {
+        return result;
+      }
     } catch {
-      return null;
+      // which may fail in sandboxed / packaged environments with limited PATH
     }
+    const fallbacks =
+      process.platform === "win32"
+        ? ["C:\\Windows\\System32\\sqlite3.exe"]
+        : ["/usr/bin/sqlite3", "/opt/homebrew/bin/sqlite3", "/usr/local/bin/sqlite3"];
+    for (const p of fallbacks) {
+      if (fsSync.existsSync(p)) {
+        return p;
+      }
+    }
+    return null;
   }
 
   async close(): Promise<void> {

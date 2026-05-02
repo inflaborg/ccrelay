@@ -40,7 +40,14 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "assets/tray-icon-template.png",
+        "to": "assets/tray-icon-template.png"
       }
+    ],
+    "asarUnpack": [
+      "out/database-worker.cjs"
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
