@@ -3,7 +3,7 @@ import {
   isLocalProxyAnthropicBase,
   isLocalProxyCodexBase,
   parseTomlLite,
-} from "../../../src/api/clientConfig";
+} from "@/api/clientConfig";
 
 describe("clientConfig URL helpers", () => {
   it("isLocalProxyAnthropicBase accepts localhost/127.0.0.1 and port", () => {

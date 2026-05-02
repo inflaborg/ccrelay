@@ -28,11 +28,21 @@ fi
 echo ""
 echo "Packaging with version: $PACKAGE_VERSION"
 
-# Clean (vscode:prepublish handles the actual build)
+# Clean then build
 npm run clean
+npm run vscode:prepublish
+
+# Sync runtime deps & copy marketplace metadata
+node scripts/sync-vscode-pack-deps.mjs
+cp README.md README_CN.md CHANGELOG.md LICENSE packages/vscode/
 
 # Ensure dists directory exists
 mkdir -p dists
 
+cd packages/vscode
+
 # Package with dynamic version (without modifying package.json)
-npx vsce package "$PACKAGE_VERSION" --no-update-package-json --out dists
+npx vsce package "$PACKAGE_VERSION" --no-dependencies --no-update-package-json --out ../../dists
+
+# Clean up copied metadata files
+rm -f README.md README_CN.md CHANGELOG.md LICENSE

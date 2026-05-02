@@ -4,8 +4,8 @@ import {
   createStreamingState,
   processStreamingChunk,
   createSseLineBuffer,
-} from "../../../src/converter/chat-completions-streaming-to-responses";
-import { extractResponsesEcho } from "../../../src/converter/responses-echo";
+} from "@/converter/chat-completions-streaming-to-responses";
+import { extractResponsesEcho } from "@/converter/responses-echo";
 
 function chunk(delta: Record<string, unknown>, finishReason?: string | null): string {
   return JSON.stringify({

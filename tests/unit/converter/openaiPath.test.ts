@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   isOpenAIChatCompletionsWirePath,
   isOpenAIType,
-} from "../../../src/converter/openaiPath";
+} from "@/converter/openaiPath";
 
 describe("isOpenAIChatCompletionsWirePath", () => {
   it("accepts /v1/chat/completions", () => {

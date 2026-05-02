@@ -632,6 +632,13 @@ npm run test:coverage
 # 构建 VSIX 包
 npm run package
 
+# 桌面托盘应用（与 ~/.ccrelay 配置及 leader 选举共用）
+npm run desktop:start
+
+# 桌面安装包（需在对应操作系统上构建）
+npm run desktop:pack:mac
+npm run desktop:pack:win
+
 # 开发构建
 npm run build:dev
 
@@ -643,20 +650,20 @@ npm run build:prod
 
 ```
 ccrelay/
-├── src/
-│   ├── extension.ts          # 扩展入口
-│   ├── api/                  # API 端点处理
-│   ├── config/               # 配置管理
-│   ├── converter/            # Anthropic ↔ OpenAI 格式转换
-│   ├── database/             # 数据库驱动（SQLite/PostgreSQL）
-│   ├── queue/                # 并发控制和请求队列
-│   ├── server/               # HTTP 服务器和路由
-│   ├── types/                # TypeScript 类型定义
-│   ├── utils/                # 工具函数
-│   └── vscode/               # VSCode 集成（状态栏、日志查看器）
+├── packages/
+│   ├── core/src/             # 共享运行时（代理、API、配置、转换器等）
+│   ├── vscode/
+│   │   ├── src/              # VS Code 扩展入口与 webview / 状态栏
+│   │   ├── assets/           # 图标与 activity bar SVG
+│   │   └── out/              # 构建产物（extension.cjs、web、worker）
+│   └── desktop/
+│       ├── src/              # Electron 托盘应用（主进程）
+│       ├── assets/           # 托盘图标等
+│       └── out/              # 打包后的 main.js 与 database-worker.cjs
 ├── web/                      # Web UI（React + Vite）
-├── tests/                    # 测试文件
-└── assets/                   # 扩展资源
+├── tests/                    # Vitest 单元测试与集成测试
+├── scripts/                  # esbuild、版本号、打包辅助脚本
+└── dists/                    # 打好的 .vsix（`npm run package`）
 ```
 
 ---
@@ -666,6 +673,7 @@ ccrelay/
 | 文件 | 位置 | 说明 |
 |------|------|------|
 | YAML 配置 | `~/.ccrelay/config.yaml` | 主配置文件（自动创建） |
+| 运行时状态 | `~/.ccrelay/state.json` | 当前启用的提供商 id（扩展与桌面端共用） |
 | 日志数据库 | `~/.ccrelay/logs.db` | 请求/响应日志（启用后） |
 
 ---

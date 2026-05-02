@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Semaphore } from "../../../src/queue/semaphore";
+import { Semaphore } from "@/queue/semaphore";
 
 describe("Semaphore", () => {
   it("should initialize with given permits", () => {

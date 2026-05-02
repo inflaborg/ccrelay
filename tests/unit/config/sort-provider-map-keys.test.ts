@@ -3,7 +3,7 @@ import {
   sortProviderMapKeys,
   resolveProviderKeyInMap,
   providerIdFuzzyBaseForDuplicateKey,
-} from "../../../src/config/index";
+} from "@/config/index";
 
 describe("sortProviderMapKeys", () => {
   it("returns empty object for empty input", () => {

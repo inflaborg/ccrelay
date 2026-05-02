@@ -6,7 +6,6 @@
  * - Snake_case to camelCase conversion for YAML config
  * - Provider validation using Zod schemas
  * - Default values for missing configuration
- * - VSCode settings override file config when useConfigFile is false
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";

@@ -3,8 +3,8 @@ import { describe, it, expect } from "vitest";
 import {
   convertAnthropicResponseToOpenAI,
   isAnthropicMessageResponse,
-} from "../../../src/converter/anthropic-to-openai-response";
-import type { AnthropicMessageResponse } from "../../../src/converter/openai-to-anthropic";
+} from "@/converter/anthropic-to-openai-response";
+import type { AnthropicMessageResponse } from "@/converter/openai-to-anthropic";
 
 describe("convertAnthropicResponseToOpenAI", () => {
   const base: AnthropicMessageResponse = {

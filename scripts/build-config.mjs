@@ -30,8 +30,8 @@ if (!["dev", "prod"].includes(env)) {
   process.exit(1);
 }
 
-const packageJson = require("../package.json");
-const configDir = path.join(__dirname, "../src/config");
+const packageJson = require("../packages/vscode/package.json");
+const configDir = path.join(__dirname, "../packages/core/src/config");
 const outFile = path.join(configDir, "build-config.generated.ts");
 
 // Determine log level based on environment

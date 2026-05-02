@@ -5,13 +5,14 @@ import fs from "fs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
+const coreDir = path.join(rootDir, "packages/core");
+const vscodePkgDir = path.join(rootDir, "packages/vscode");
 
-const outDir = path.join(rootDir, "out/dist");
+const outDir = path.join(vscodePkgDir, "out/dist");
 if (!fs.existsSync(outDir)) {
   fs.mkdirSync(outDir, { recursive: true });
 }
 
-// Common build options
 const commonOptions = {
   bundle: true,
   platform: "node",
@@ -31,18 +32,16 @@ const commonOptions = {
   minify: false,
 };
 
-// Build main extension
 await esbuild.build({
   ...commonOptions,
-  entryPoints: [path.join(rootDir, "src/extension.ts")],
+  entryPoints: [path.join(vscodePkgDir, "src/extension.ts")],
   outfile: path.join(outDir, "extension.cjs"),
 });
 
-// Build database worker as separate bundle
 await esbuild.build({
   ...commonOptions,
-  entryPoints: [path.join(rootDir, "src/database/database-worker.ts")],
+  entryPoints: [path.join(coreDir, "src/database/database-worker.ts")],
   outfile: path.join(outDir, "database-worker.cjs"),
 });
 
-console.log("Bundle created successfully");
+console.log("VSCode extension bundle created successfully");

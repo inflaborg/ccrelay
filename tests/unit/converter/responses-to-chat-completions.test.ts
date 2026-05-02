@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   convertResponsesRequestToChatCompletions,
   isOpenAIResponsesRequest,
-} from "../../../src/converter/responses-to-chat-completions";
+} from "@/converter/responses-to-chat-completions";
 
 describe("isOpenAIResponsesRequest", () => {
   it("is true for input string", () => {

@@ -1,10 +1,9 @@
 /**
  * Configuration management for CCRelay
- * Reads configuration from yaml file specified by vscode setting
+ * Reads configuration from ~/.ccrelay/config.yaml
  * Auto-initializes config file with defaults if not exists
  */
 
-import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
@@ -25,8 +24,10 @@ import {
   type BlockRule,
 } from "../types";
 
-const CONFIG_STATE_KEY = "ccrelay.currentProvider";
 const CONFIG_VERSION = "0.2.0";
+
+/** Persisted runtime state beside config.yaml */
+const STATE_FILENAME = "state.json";
 
 // Environment variable pattern for substitution
 const ENV_VAR_PATTERN = /\$\{(\w+)\}/g;
@@ -381,9 +382,8 @@ export function resolveProviderKeyInMap(mapKeys: string[], requestedId: string):
 
 export class ConfigManager {
   private config: RouterConfig;
-  private context: vscode.ExtensionContext;
-  private disposables: vscode.Disposable[] = [];
   private configPath: string;
+  private statePath: string;
   private configChangeCallbacks: Set<() => void> = new Set();
 
   // File watcher state
@@ -391,31 +391,15 @@ export class ConfigManager {
   private fileWatchDebounce: NodeJS.Timeout | null = null;
   private saving = false;
 
-  constructor(context: vscode.ExtensionContext) {
-    this.context = context;
-
-    // Get config path from vscode settings
-    const vscodeConfig = vscode.workspace.getConfiguration("ccrelay");
-    const configPathSetting = vscodeConfig.get<string>("configPath", "~/.ccrelay/config.yaml");
-    this.configPath = expandPath(configPathSetting);
+  constructor() {
+    this.configPath = expandPath(path.join(os.homedir(), ".ccrelay", "config.yaml"));
+    this.statePath = path.join(os.homedir(), ".ccrelay", STATE_FILENAME);
 
     // Ensure config file exists with defaults
     this.ensureConfigFile();
 
     // Load configuration
     this.config = this.loadConfig();
-
-    // Watch for VS Code setting changes (config path)
-    const configWatcher = vscode.workspace.onDidChangeConfiguration(e => {
-      if (e.affectsConfiguration("ccrelay.configPath")) {
-        const newPath = vscodeConfig.get<string>("configPath", "~/.ccrelay/config.yaml");
-        this.configPath = expandPath(newPath);
-        this.ensureConfigFile();
-        this.config = this.loadConfig();
-        this.startFileWatcher();
-      }
-    });
-    this.disposables.push(configWatcher);
 
     // Watch the YAML config file for external edits
     this.startFileWatcher();
@@ -882,17 +866,42 @@ export class ConfigManager {
   }
 
   /**
-   * Get the current provider ID from state
+   * Get the current provider ID from ~/.ccrelay/state.json
    */
   getCurrentProviderId(): string {
-    return this.context.globalState.get<string>(CONFIG_STATE_KEY, this.defaultProvider);
+    const persisted = this.readPersistedCurrentProviderId();
+    if (persisted && this.config.providers[persisted]) {
+      return persisted;
+    }
+    return this.defaultProvider;
   }
 
   /**
-   * Set the current provider ID in state
+   * Persist current provider ID to ~/.ccrelay/state.json
    */
   async setCurrentProviderId(id: string): Promise<void> {
-    await this.context.globalState.update(CONFIG_STATE_KEY, id);
+    const dir = path.dirname(this.statePath);
+    await fs.promises.mkdir(dir, { recursive: true });
+    await fs.promises.writeFile(
+      this.statePath,
+      JSON.stringify({ currentProvider: id }, null, 2),
+      "utf-8"
+    );
+  }
+
+  /** Read persisted provider id from state file (sync); ignores invalid JSON */
+  private readPersistedCurrentProviderId(): string | undefined {
+    try {
+      if (!fs.existsSync(this.statePath)) {
+        return undefined;
+      }
+      const raw = JSON.parse(fs.readFileSync(this.statePath, "utf-8")) as {
+        currentProvider?: unknown;
+      };
+      return typeof raw.currentProvider === "string" ? raw.currentProvider : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   /**
@@ -1111,8 +1120,5 @@ export class ConfigManager {
 
   dispose(): void {
     this.stopFileWatcher();
-    for (const d of this.disposables) {
-      d.dispose();
-    }
   }
 }

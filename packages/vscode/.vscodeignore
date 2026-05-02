@@ -1,0 +1,13 @@
+**/*
+
+!package.json
+!README.md
+!README_CN.md
+!CHANGELOG.md
+!LICENSE
+
+!assets
+!assets/**
+
+!out
+!out/**

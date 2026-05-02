@@ -635,6 +635,13 @@ npm run test:coverage
 # Build VSIX package
 npm run package
 
+# Desktop tray app (links against the same ~/.ccrelay config + leader election)
+npm run desktop:start
+
+# Desktop distributables (requires web build + esbuild; run on target OS)
+npm run desktop:pack:mac
+npm run desktop:pack:win
+
 # Development build
 npm run build:dev
 
@@ -646,20 +653,20 @@ npm run build:prod
 
 ```
 ccrelay/
-├── src/
-│   ├── extension.ts          # Extension entry point
-│   ├── api/                  # API endpoint handlers
-│   ├── config/               # Configuration management
-│   ├── converter/            # Anthropic ↔ OpenAI format conversion
-│   ├── database/             # Database drivers (SQLite/PostgreSQL)
-│   ├── queue/                # Concurrency control and request queue
-│   ├── server/               # HTTP server and routing
-│   ├── types/                # TypeScript type definitions
-│   ├── utils/                # Utility functions
-│   └── vscode/               # VSCode integration (status bar, log viewer)
+├── packages/
+│   ├── core/src/             # Shared runtime (proxy, API, config, converters, …)
+│   ├── vscode/
+│   │   ├── src/              # VS Code extension entry + webviews/status bar
+│   │   ├── assets/         # Icons & activity bar SVG
+│   │   └── out/              # Build output (extension.cjs, web/, worker)
+│   └── desktop/
+│       ├── src/              # Electron tray app (main process)
+│       ├── assets/           # Tray icon(s)
+│       └── out/              # Bundled main.js + database-worker.cjs
 ├── web/                      # Web UI (React + Vite)
-├── tests/                    # Test files
-└── assets/                   # Extension assets
+├── tests/                    # Vitest unit + integration tests
+├── scripts/                  # esbuild, version, packaging helpers
+└── dists/                    # Packaged .vsix (from `npm run package`)
 ```
 
 ---
@@ -669,6 +676,7 @@ ccrelay/
 | File | Location | Description |
 |------|----------|-------------|
 | YAML Config | `~/.ccrelay/config.yaml` | Main configuration file (auto-created) |
+| Runtime state | `~/.ccrelay/state.json` | Persisted active provider id (shared by extension + desktop) |
 | Log database | `~/.ccrelay/logs.db` | Request/response logs (when enabled) |
 
 ---

@@ -3,9 +3,8 @@
  */
 
 import * as vscode from "vscode";
-import { ConfigManager } from "../config";
-import { ProxyServer } from "../server/handler";
-import { Provider, InstanceRole, RoleChangeInfo, ElectionState } from "../types";
+import type { ConfigManager, ProxyServer } from "@ccrelay/core";
+import type { Provider, InstanceRole, RoleChangeInfo, ElectionState } from "@ccrelay/core";
 
 export class StatusBarManager implements vscode.Disposable {
   private statusBarItem: vscode.StatusBarItem;
@@ -54,13 +53,11 @@ export class StatusBarManager implements vscode.Disposable {
   };
 
   private createStatusBarItem(): vscode.StatusBarItem {
-    const vscodeConfig = vscode.workspace.getConfiguration("ccrelay");
-    const position = vscodeConfig.get<string>("ui.statusBarPosition", "right");
-    const priority = vscodeConfig.get<number>("ui.statusBarPriority", 100);
+    const priority = 100;
 
     const item = vscode.window.createStatusBarItem(
       "ccrelay-status",
-      position === "left" ? vscode.StatusBarAlignment.Left : vscode.StatusBarAlignment.Right,
+      vscode.StatusBarAlignment.Right,
       priority
     );
     item.name = "CCRelay";

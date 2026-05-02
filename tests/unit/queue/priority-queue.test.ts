@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PriorityQueue } from "../../../src/queue/priority-queue";
+import { PriorityQueue } from "@/queue/priority-queue";
 
 describe("PriorityQueue", () => {
   it("should start empty", () => {

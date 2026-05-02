@@ -10,10 +10,10 @@ import * as http from "http";
 import * as https from "https";
 import type { AddressInfo } from "net";
 import * as url from "url";
-import { ConcurrencyManager } from "../../../src/queue";
-import { resolveInboundClientSurface } from "../../../src/server/request/apiSurfaceDetector";
-import type { ApiSurface, RequestTask, ProxyResult, ConcurrencyConfig } from "../../../src/types";
-import { ScopedLogger } from "../../../src/utils/logger";
+import { ConcurrencyManager } from "@/queue";
+import { resolveInboundClientSurface } from "@/server/request/apiSurfaceDetector";
+import type { ApiSurface, RequestTask, ProxyResult, ConcurrencyConfig } from "@/types";
+import { ScopedLogger } from "@/utils/logger";
 import type { MockConfig } from "./mock-config";
 
 export interface TestServerOptions {
