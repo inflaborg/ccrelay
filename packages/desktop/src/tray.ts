@@ -13,11 +13,17 @@ function dashboardUrl(server: ProxyServer, config: ConfigManager): string {
   return `${normalized}/ccrelay/`;
 }
 
+/** macOS tray uses template (monochrome); Windows/Linux use the full-color asset. */
+function trayIconFile(): string {
+  return process.platform === "darwin" ? "tray-icon-template.png" : "tray-icon.png";
+}
+
 function trayIconPath(): string {
+  const file = trayIconFile();
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, "assets", "tray-icon-template.png");
+    return path.join(process.resourcesPath, "assets", file);
   }
-  return path.join(__dirname, "..", "assets", "tray-icon-template.png");
+  return path.join(__dirname, "..", "assets", file);
 }
 
 function roleLabel(role: string, running: boolean): string {
@@ -29,7 +35,9 @@ function roleLabel(role: string, running: boolean): string {
 
 export function createTray(server: ProxyServer, config: ConfigManager): Tray {
   const img = nativeImage.createFromPath(trayIconPath());
-  img.setTemplateImage(true);
+  if (process.platform === "darwin") {
+    img.setTemplateImage(true);
+  }
   const tray = new Tray(img.resize({ width: 22, height: 22 }));
 
   const updateMenu = (): void => {

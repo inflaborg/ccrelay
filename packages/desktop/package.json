@@ -44,6 +44,10 @@
       {
         "from": "assets/tray-icon-template.png",
         "to": "assets/tray-icon-template.png"
+      },
+      {
+        "from": "assets/tray-icon.png",
+        "to": "assets/tray-icon.png"
       }
     ],
     "asarUnpack": [
