@@ -3,7 +3,7 @@
 [![VSCode Extension](https://img.shields.io/badge/VSCode-Extension-blue)](https://code.visualstudio.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**CCRelay** 是一个 VSCode 扩展，内置 API 代理服务器，让你能够在不同的 AI 提供商之间无缝切换，而不会丢失对话上下文。现已明确支持 **Claude Code**、**Claude Cowork** 与 **OpenAI Codex** 等客户端，详见[客户端对接](#客户端对接)。
+**CCRelay** 是一套 VS Code 扩展，并提供可选的 **Electron 托盘应用**（`packages/desktop`）；内置 HTTP 代理，可在不同 AI 提供商之间平滑切换且不丢失会话上下文。现已明确支持 **Claude Code**、**Claude Cowork** 与 **OpenAI Codex** 等客户端，详见[客户端对接](#客户端对接)。
 
 **项目官网**: [https://ccrelay.inflab.org](https://ccrelay.inflab.org)
 
@@ -16,6 +16,7 @@
 - [核心特性](#核心特性)
 - [系统要求](#系统要求)
 - [安装](#安装)
+- [桌面托盘应用（Electron）](#桌面托盘应用electron)
 - [快速开始](#快速开始)
 - [客户端对接](#客户端对接)
 - [使用指南](#使用指南)
@@ -49,10 +50,11 @@
 - **模型映射**: 自动将 Claude 模型名称转换为提供商特定模型，支持通配符（如 `claude-*` → `glm-4.7`）
 - **视觉模型映射**: 单独配置视觉/多模态请求的模型映射（`vlModelMap`）
 - **OpenAI 格式转换（LLM 路由）**: 支持 Anthropic、OpenAI Chat Completions 与 Responses（`/v1/responses`）；跨厂商时经 Chat Completions 枢纽转换，一致时透传
-- **请求日志**: 可选的 SQLite/PostgreSQL 请求/响应日志存储，带 Web UI 查看器
+- **请求日志**: 可选的 SQLite/PostgreSQL 请求/响应日志存储（带 Web UI）；SQLite 路径依赖系统自带的 **`sqlite3` 命令行工具**。若启用日志且为 SQLite，但系统找不到该可执行文件，代理仍会运行，**不写库**（日志中会给出警告）；安装 [SQLite CLI](https://www.sqlite.org/download.html) 或改用 PostgreSQL 后即可持久化。
 - **并发控制**: 内置请求队列和并发限制，防止 API 过载
 - **自动启动**: VSCode 启动时自动启动代理服务器
 - **客户端对接**: 可与 **Claude Code**、**Claude Cowork**（Anthropic 协议）和 **Codex**（OpenAI 协议 + `~/.codex/config.toml`）配合使用，详见[客户端对接](#客户端对接)
+- **可选桌面托盘（Electron）**: 可使用独立 Electron 应用运行 CCRelay，无需打开 VS Code；与扩展共用 `~/.ccrelay` 配置与 Leader 选举；托盘「打开控制台」在当前应用窗口内通过 **HTTP** 加载 `/ccrelay/` 界面（详见[桌面托盘应用](#桌面托盘应用electron)）
 
 ---
 
@@ -100,6 +102,19 @@ npm run compile
 
 # 在 VSCode 中按 F5 打开扩展开发主机窗口
 ```
+
+---
+
+## 桌面托盘应用（Electron）
+
+本仓库 **`packages/desktop`** 提供可选的 Electron **托盘**应用，与 VS Code 扩展共用 **`@ccrelay/core`** 运行时：
+
+- **`~/.ccrelay/config.yaml`**、**`~/.ccrelay/state.json`**、Leader/Follower 选举、WebSocket 同步、Provider 切换、HTTP API、`/ccrelay/` Web UI 等与扩展保持一致。
+- 托盘菜单 **打开控制台**：在 Electron **`BrowserWindow`** 内通过 **HTTP** 访问本地代理加载仪表盘（不用 `file://`）；再次启动应用会聚焦已有窗口。
+- **Windows / Linux**：隐藏 Electron 内置的窗口内菜单栏（**文件 / 编辑 / 视图 / 窗口**）；**macOS** 继续使用系统顶层菜单。
+- 安装包输出在 **`packages/desktop/dist/`**（macOS：dmg + zip；Windows：NSIS `.exe`）。本地需在目标系统上执行 `npm run desktop:pack:mac` 或 `desktop:pack:win`。
+- **`electron-builder` 产物**面向 **`x64` 与 `arm64`**（Intel / Apple Silicon Mac；x64 / ARM64 Windows）。**GitHub Actions**（**Build Dev** 自动与 Manual、**Build Prod**）在打完 **VSIX** 之后，再通过 **四条并行任务矩阵**（mac/win × 两架构）上传桌面安装包；其中 **Build Dev (Manual)** 仅上传 artifact（不自动发 GitHub Release），**Build Dev (Auto)** 与 **Build Prod** 会发布包含 VSIX + 桌面包的 Release。
+- SQLite **日志持久化**仍需在 **`PATH`** 中能找到 **`sqlite3`**（并含常见路径回退）；无法满足时本轮进程不写库但仍可启动——见上文「请求日志」说明。
 
 ---
 
@@ -635,9 +650,12 @@ npm run package
 # 桌面托盘应用（与 ~/.ccrelay 配置及 leader 选举共用）
 npm run desktop:start
 
-# 桌面安装包（需在对应操作系统上构建）
+# 桌面安装包（需在对应宿主系统上打包，内部会先执行 desktop:build）
 npm run desktop:pack:mac
 npm run desktop:pack:win
+
+# 进阶：在完成 `npm run desktop:build` 后，可对当前宿主单独指定 electron-builder 架构
+# （cd packages/desktop && npx electron-builder --mac --x64 && npx electron-builder --mac --arm64）
 
 # 开发构建
 npm run build:dev
@@ -657,9 +675,9 @@ ccrelay/
 │   │   ├── assets/           # 图标与 activity bar SVG
 │   │   └── out/              # 构建产物（extension.cjs、web、worker）
 │   └── desktop/
-│       ├── src/              # Electron 托盘应用（主进程）
-│       ├── assets/           # 托盘图标等
-│       └── out/              # 打包后的 main.js 与 database-worker.cjs
+│       ├── src/              # Electron 托盘 + 仪表盘 BrowserWindow（主进程）
+│       ├── assets/           # 应用/托盘图标；electron-builder buildResources
+│       └── out/              # main.js、database-worker.cjs 等 bundle
 ├── web/                      # Web UI（React + Vite）
 ├── tests/                    # Vitest 单元测试与集成测试
 ├── scripts/                  # esbuild、版本号、打包辅助脚本

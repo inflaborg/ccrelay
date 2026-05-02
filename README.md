@@ -3,7 +3,7 @@
 [![VSCode Extension](https://img.shields.io/badge/VSCode-Extension-blue)](https://code.visualstudio.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**CCRelay** is a VSCode extension with a built-in API proxy server that allows you to seamlessly switch between different AI providers without losing conversation context. It is designed to work with **Claude Code**, **Claude Cowork**, and **OpenAI Codex** (among other Anthropic- and OpenAI-compatible clients)—see [Client integrations](#client-integrations).
+**CCRelay** is a VSCode extension—with an optional **Electron tray app** (`packages/desktop`)—that bundles a built-in API proxy server so you can seamlessly switch between different AI providers without losing conversation context. It is designed to work with **Claude Code**, **Claude Cowork**, and **OpenAI Codex** (among other Anthropic- and OpenAI-compatible clients)—see [Client integrations](#client-integrations).
 
 **Website**: [https://ccrelay.inflab.org](https://ccrelay.inflab.org)
 
@@ -16,6 +16,7 @@
 - [Core Features](#core-features)
 - [Requirements](#requirements)
 - [Installation](#installation)
+- [Desktop tray application (Electron)](#desktop-tray-application-electron)
 - [Quick Start](#quick-start)
 - [Client integrations](#client-integrations)
 - [Usage Guide](#usage-guide)
@@ -49,10 +50,11 @@
 - **Model Mapping**: Automatically translates Claude model names to provider-specific models with wildcard support (e.g., `claude-*` → `glm-4.7`)
 - **Vision Model Mapping**: Separate model mapping for visual/multimodal requests (`vlModelMap`)
 - **OpenAI Format Conversion (LLM router)**: Accepts Anthropic, OpenAI Chat Completions, and OpenAI Responses (`/v1/responses`); converts when the inbound wire does not match the provider (Chat/Responses are hubbed through Chat Completions for cross-provider routing)
-- **Request Logging**: Optional SQLite/PostgreSQL request/response logging with Web UI viewer
+- **Request Logging**: Optional SQLite/PostgreSQL request/response logging with Web UI viewer; SQLite paths use the system **`sqlite3` CLI**. If logging is enabled with SQLite but that binary is missing, the proxy keeps running **without** persisting logs (warning in logs) until you install SQLite [CLI](https://www.sqlite.org/download.html) or use PostgreSQL instead
 - **Concurrency Control**: Built-in request queue and concurrency limits to prevent API overload
 - **Auto-start**: Automatically starts the proxy server when VSCode launches
 - **Client integrations**: Use the same proxy with **Claude Code**, **Claude Cowork** (Anthropic wire), and **Codex** (OpenAI wire + `~/.codex/config.toml`); see [Client integrations](#client-integrations)
+- **Optional desktop tray app (Electron)**: Run CCRelay without VS Code via the bundled Electron app — same YAML config (`~/.ccrelay`) and leader election as the extension; tray menu opens the `/ccrelay/` dashboard in an in-app HTTP window ([details](#desktop-tray-application-electron))
 
 ---
 
@@ -100,6 +102,20 @@ npm run compile
 
 # Press F5 in VSCode to open Extension Development Host window
 ```
+
+---
+
+## Desktop tray application (Electron)
+
+The monorepo includes **`packages/desktop`**, an optional Electron **tray** app that drives the **same shared core** (`@ccrelay/core`) as the VS Code extension:
+
+- **`~/.ccrelay/config.yaml`**, **`~/.ccrelay/state.json`**, Leader/Follower election, WebSocket sync, provider switching, HTTP API, and **`/ccrelay/`** web UI behave the same across extension and desktop.
+- **Tray** → **Open Dashboard** loads the dashboard inside an Electron **`BrowserWindow`** via **HTTP** to the proxy (not `file:`). Duplicate app launches bring the existing dashboard window forward.
+- **Windows / Linux**: the default Electron **File / Edit / View / Window** menu bar inside the dashboard window is **hidden** (`Menu.setApplicationMenu(null)`). **macOS** uses the usual **system** menu bar.
+- Packaged installers are produced under **`packages/desktop/dist/`** (dmg + zip on macOS, NSIS `.exe` on Windows). Locally: `npm run desktop:pack:mac` or `desktop:pack:win` **on the host OS**.
+- **`electron-builder` targets** declare both **`x64`** and **`arm64`** (Intel vs Apple‑silicon Mac; x64 vs ARM64 Windows). **GitHub Actions** (**Build Dev** auto & manual, **Build Prod**) run **VSIX packaging first**, then a **four‑job matrix** (mac/win × two arches) uploads desktop binaries alongside the VSIX release assets (`Build Dev (Manual)` attaches artifacts only; Dev auto & Prod also publish a unified release).
+
+SQLite-backed **logging** still requires the **`sqlite3`** command-line binary on **`PATH`** (plus known fallbacks) when persistence is desired; otherwise the server runs with logging storage effectively off for that process—see core features above.
 
 ---
 
@@ -638,9 +654,12 @@ npm run package
 # Desktop tray app (links against the same ~/.ccrelay config + leader election)
 npm run desktop:start
 
-# Desktop distributables (requires web build + esbuild; run on target OS)
+# Desktop distributables — run on the OS you ship for (runs desktop:build under the hood)
 npm run desktop:pack:mac
 npm run desktop:pack:win
+
+# Advanced: electron-builder arch on current machine after `npm run desktop:build`
+# (cd packages/desktop && npx electron-builder --mac --x64 && npx electron-builder --mac --arm64)
 
 # Development build
 npm run build:dev
@@ -660,8 +679,8 @@ ccrelay/
 │   │   ├── assets/         # Icons & activity bar SVG
 │   │   └── out/              # Build output (extension.cjs, web/, worker)
 │   └── desktop/
-│       ├── src/              # Electron tray app (main process)
-│       ├── assets/           # Tray icon(s)
+│       ├── src/              # Electron tray + dashboard BrowserWindow (main process)
+│       ├── assets/           # App/tray icons; buildResources for electron-builder
 │       └── out/              # Bundled main.js + database-worker.cjs
 ├── web/                      # Web UI (React + Vite)
 ├── tests/                    # Vitest unit + integration tests
