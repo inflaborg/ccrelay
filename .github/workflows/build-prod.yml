@@ -3,6 +3,21 @@ name: Build Prod
 on:
   workflow_dispatch:
     inputs:
+      build_targets:
+        description: 'Which artifacts to build (default: all)'
+        required: false
+        type: choice
+        options:
+          - all
+          - vscode
+          - desktop
+          - desktop-mac
+          - desktop-win
+          - desktop-mac-x64
+          - desktop-mac-arm64
+          - desktop-win-x64
+          - desktop-win-arm64
+        default: all
       tag_name:
         description: 'Tag name to release (e.g., v1.0.0), will use package.json version if empty'
         required: false
@@ -33,9 +48,114 @@ jobs:
       - name: Run tests (unit + integration)
         run: npm run test:all
 
-  build-vscode:
+  configure:
     runs-on: ubuntu-latest
     needs: test
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag_name: ${{ steps.meta.outputs.tag_name }}
+      want_build_vscode: ${{ steps.targets.outputs.want_build_vscode }}
+      want_build_desktop: ${{ steps.targets.outputs.want_build_desktop }}
+      desktop_matrix: ${{ steps.targets.outputs.desktop_matrix }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Resolve version & release tag
+        id: meta
+        run: |
+          VERSION=$(node -p "require('./packages/vscode/package.json').version")
+          INPUT_TAG="${{ github.event.inputs.tag_name }}"
+          if [ -n "$INPUT_TAG" ]; then
+            TAG_NAME="$INPUT_TAG"
+          else
+            TAG_NAME="v${VERSION}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve build targets & desktop matrix JSON
+        id: targets
+        env:
+          TARGET: ${{ github.event.inputs.build_targets || 'all' }}
+        run: |
+          MATRIX='[{"os":"macos-latest","platform":"mac","arch":"x64"},{"os":"macos-latest","platform":"mac","arch":"arm64"},{"os":"windows-latest","platform":"win","arch":"x64"},{"os":"windows-latest","platform":"win","arch":"arm64"}]'
+          MATRIX_MAC='[{"os":"macos-latest","platform":"mac","arch":"x64"},{"os":"macos-latest","platform":"mac","arch":"arm64"}]'
+          MATRIX_WIN='[{"os":"windows-latest","platform":"win","arch":"x64"},{"os":"windows-latest","platform":"win","arch":"arm64"}]'
+          MATRIX_MAC_X64='[{"os":"macos-latest","platform":"mac","arch":"x64"}]'
+          MATRIX_MAC_ARM64='[{"os":"macos-latest","platform":"mac","arch":"arm64"}]'
+          MATRIX_WIN_X64='[{"os":"windows-latest","platform":"win","arch":"x64"}]'
+          MATRIX_WIN_ARM64='[{"os":"windows-latest","platform":"win","arch":"arm64"}]'
+
+          WANT_V=false
+          WANT_D=false
+
+          case "$TARGET" in
+            all)
+              WANT_V=true
+              WANT_D=true
+              DESKTOP_MATRIX="$MATRIX"
+              ;;
+            vscode)
+              WANT_V=true
+              DESKTOP_MATRIX='[]'
+              ;;
+            desktop)
+              WANT_D=true
+              DESKTOP_MATRIX="$MATRIX"
+              ;;
+            desktop-mac)
+              WANT_D=true
+              DESKTOP_MATRIX="$MATRIX_MAC"
+              ;;
+            desktop-win)
+              WANT_D=true
+              DESKTOP_MATRIX="$MATRIX_WIN"
+              ;;
+            desktop-mac-x64)
+              WANT_D=true
+              DESKTOP_MATRIX="$MATRIX_MAC_X64"
+              ;;
+            desktop-mac-arm64)
+              WANT_D=true
+              DESKTOP_MATRIX="$MATRIX_MAC_ARM64"
+              ;;
+            desktop-win-x64)
+              WANT_D=true
+              DESKTOP_MATRIX="$MATRIX_WIN_X64"
+              ;;
+            desktop-win-arm64)
+              WANT_D=true
+              DESKTOP_MATRIX="$MATRIX_WIN_ARM64"
+              ;;
+            *)
+              echo "Unknown build_targets=$TARGET" >&2
+              exit 1
+              ;;
+          esac
+
+          if [ "$WANT_V" = true ]; then
+            echo "want_build_vscode=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "want_build_vscode=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [ "$WANT_D" = true ]; then
+            echo "want_build_desktop=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "want_build_desktop=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          {
+            echo "desktop_matrix<<__MATRIX_EOF__"
+            echo "$DESKTOP_MATRIX"
+            echo "__MATRIX_EOF__"
+          } >> "$GITHUB_OUTPUT"
+
+  build-vscode:
+    runs-on: ubuntu-latest
+    needs: configure
+    if: ${{ needs.configure.outputs.want_build_vscode == 'true' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -54,47 +174,20 @@ jobs:
       - name: Build prod package
         run: npm run package:prod
 
-      - name: Get package version
-        id: version
-        run: |
-          VERSION=$(node -p "require('./packages/vscode/package.json').version")
-          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
-            TAG_NAME="${{ github.event.inputs.tag_name }}"
-          else
-            TAG_NAME="v${VERSION}"
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ccrelay-vscode-prod-${{ steps.version.outputs.version }}
+          name: ccrelay-vscode-prod-${{ needs.configure.outputs.version }}
           path: dists/*.vsix
           retention-days: 90
 
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-      tag_name: ${{ steps.version.outputs.tag_name }}
-
   build-desktop:
-    needs: [test, build-vscode]
+    needs: configure
+    if: ${{ needs.configure.outputs.want_build_desktop == 'true' }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: macos-latest
-            platform: mac
-            arch: x64
-          - os: macos-latest
-            platform: mac
-            arch: arm64
-          - os: windows-latest
-            platform: win
-            arch: x64
-          - os: windows-latest
-            platform: win
-            arch: arm64
+        include: ${{ fromJSON(needs.configure.outputs.desktop_matrix) }}
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
@@ -121,7 +214,7 @@ jobs:
       - name: Upload desktop artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ccrelay-desktop-${{ matrix.platform }}-${{ matrix.arch }}-${{ needs.build-vscode.outputs.version }}
+          name: ccrelay-desktop-${{ matrix.platform }}-${{ matrix.arch }}-${{ needs.configure.outputs.version }}
           path: |
             packages/desktop/dist/*.zip
             packages/desktop/dist/*.exe
@@ -129,7 +222,13 @@ jobs:
 
   release:
     runs-on: ubuntu-latest
-    needs: [build-vscode, build-desktop]
+    needs: [configure, build-vscode, build-desktop]
+    if: >-
+      ${{
+        needs.configure.result == 'success'
+        && (needs.configure.outputs.want_build_vscode != 'true' || needs.build-vscode.result == 'success')
+        && (needs.configure.outputs.want_build_desktop != 'true' || needs.build-desktop.result == 'success')
+      }}
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -143,8 +242,8 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ needs.build-vscode.outputs.tag_name }}
-          name: Release ${{ needs.build-vscode.outputs.tag_name }}
+          tag_name: ${{ needs.configure.outputs.tag_name }}
+          name: Release ${{ needs.configure.outputs.tag_name }}
           prerelease: false
           files: release-assets/*
           generate_release_notes: true
