@@ -24,7 +24,7 @@ const __dirname = path.dirname(__filename);
 const require = createRequire(import.meta.url);
 
 // Parse environment argument
-const env = process.argv[2] || "dev";
+const env = process.env.BUILD_ENV || process.argv[2] || "prod";
 if (!["dev", "prod"].includes(env)) {
   console.error(`Invalid environment: ${env}. Use 'dev' or 'prod'.`);
   process.exit(1);

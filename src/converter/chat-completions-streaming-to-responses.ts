@@ -53,7 +53,9 @@ export interface StreamingConversionState {
 /*  Public API                                                                */
 /* -------------------------------------------------------------------------- */
 
-export function createStreamingState(opts?: { echo?: ResponsesRequestEcho }): StreamingConversionState {
+export function createStreamingState(opts?: {
+  echo?: ResponsesRequestEcho;
+}): StreamingConversionState {
   return {
     responseId: `resp_${randomUUID().replace(/-/g, "")}`,
     reasoningId: `rs_${randomUUID().replace(/-/g, "")}`,
@@ -104,7 +106,8 @@ export function processStreamingChunk(state: StreamingConversionState, line: str
     state.usage = {
       input_tokens: typeof u.prompt_tokens === "number" ? u.prompt_tokens : 0,
       input_tokens_details: {
-        cached_tokens: typeof inputDetails?.cached_tokens === "number" ? inputDetails.cached_tokens : 0,
+        cached_tokens:
+          typeof inputDetails?.cached_tokens === "number" ? inputDetails.cached_tokens : 0,
       },
       output_tokens: typeof u.completion_tokens === "number" ? u.completion_tokens : 0,
       output_tokens_details: {
