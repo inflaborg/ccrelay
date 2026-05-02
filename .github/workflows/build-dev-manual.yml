@@ -3,6 +3,21 @@ name: Build Dev (Manual)
 on:
   workflow_dispatch:
     inputs:
+      build_targets:
+        description: 'Which artifacts to build (VSIX vs desktop matrix rows)'
+        required: false
+        type: choice
+        options:
+          - all
+          - vscode
+          - desktop
+          - desktop-mac
+          - desktop-win
+          - desktop-mac-x64
+          - desktop-mac-arm64
+          - desktop-win-x64
+          - desktop-win-arm64
+        default: all
       suffix:
         description: 'Optional suffix for artifact name (e.g., test, debug)'
         required: false
@@ -39,10 +54,115 @@ jobs:
       - name: Run tests (unit + integration)
         run: npm run test:all
 
-  build-vscode:
+  configure:
     runs-on: ubuntu-latest
     needs: test
-    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    if: ${{ always() && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      suffix: ${{ steps.meta.outputs.suffix }}
+      want_build_vscode: ${{ steps.targets.outputs.want_build_vscode }}
+      want_build_desktop: ${{ steps.targets.outputs.want_build_desktop }}
+      desktop_matrix: ${{ steps.targets.outputs.desktop_matrix }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Resolve version & suffix
+        id: meta
+        run: |
+          VERSION=$(node -p "require('./packages/vscode/package.json').version")
+          INPUT_SUFFIX="${{ github.event.inputs.suffix }}"
+          if [ -n "$INPUT_SUFFIX" ]; then
+            SUFFIX="-manual-${INPUT_SUFFIX}"
+          else
+            SUFFIX="-manual-${{ github.run_number }}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "suffix=$SUFFIX" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve build targets & desktop matrix JSON
+        id: targets
+        env:
+          TARGET: ${{ github.event.inputs.build_targets || 'all' }}
+        run: |
+          MATRIX='[{"os":"macos-latest","platform":"mac","arch":"x64"},{"os":"macos-latest","platform":"mac","arch":"arm64"},{"os":"windows-latest","platform":"win","arch":"x64"},{"os":"windows-latest","platform":"win","arch":"arm64"}]'
+          MATRIX_MAC='[{"os":"macos-latest","platform":"mac","arch":"x64"},{"os":"macos-latest","platform":"mac","arch":"arm64"}]'
+          MATRIX_WIN='[{"os":"windows-latest","platform":"win","arch":"x64"},{"os":"windows-latest","platform":"win","arch":"arm64"}]'
+          MATRIX_MAC_X64='[{"os":"macos-latest","platform":"mac","arch":"x64"}]'
+          MATRIX_MAC_ARM64='[{"os":"macos-latest","platform":"mac","arch":"arm64"}]'
+          MATRIX_WIN_X64='[{"os":"windows-latest","platform":"win","arch":"x64"}]'
+          MATRIX_WIN_ARM64='[{"os":"windows-latest","platform":"win","arch":"arm64"}]'
+
+          WANT_V=false
+          WANT_D=false
+
+          case "$TARGET" in
+            all)
+              WANT_V=true
+              WANT_D=true
+              DESKTOP_MATRIX="$MATRIX"
+              ;;
+            vscode)
+              WANT_V=true
+              DESKTOP_MATRIX='[]'
+              ;;
+            desktop)
+              WANT_D=true
+              DESKTOP_MATRIX="$MATRIX"
+              ;;
+            desktop-mac)
+              WANT_D=true
+              DESKTOP_MATRIX="$MATRIX_MAC"
+              ;;
+            desktop-win)
+              WANT_D=true
+              DESKTOP_MATRIX="$MATRIX_WIN"
+              ;;
+            desktop-mac-x64)
+              WANT_D=true
+              DESKTOP_MATRIX="$MATRIX_MAC_X64"
+              ;;
+            desktop-mac-arm64)
+              WANT_D=true
+              DESKTOP_MATRIX="$MATRIX_MAC_ARM64"
+              ;;
+            desktop-win-x64)
+              WANT_D=true
+              DESKTOP_MATRIX="$MATRIX_WIN_X64"
+              ;;
+            desktop-win-arm64)
+              WANT_D=true
+              DESKTOP_MATRIX="$MATRIX_WIN_ARM64"
+              ;;
+            *)
+              echo "Unknown build_targets=$TARGET" >&2
+              exit 1
+              ;;
+          esac
+
+          if [ "$WANT_V" = true ]; then
+            echo "want_build_vscode=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "want_build_vscode=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [ "$WANT_D" = true ]; then
+            echo "want_build_desktop=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "want_build_desktop=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          {
+            echo "desktop_matrix<<__MATRIX_EOF__"
+            echo "$DESKTOP_MATRIX"
+            echo "__MATRIX_EOF__"
+          } >> "$GITHUB_OUTPUT"
+
+  build-vscode:
+    runs-on: ubuntu-latest
+    needs: configure
+    if: ${{ needs.configure.outputs.want_build_vscode == 'true' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -61,28 +181,9 @@ jobs:
       - name: Build dev package
         run: npm run package:dev
 
-      - name: Get package version and build info
-        id: info
-        run: |
-          VERSION=$(node -p "require('./packages/vscode/package.json').version")
-          SHORT_SHA=$(git rev-parse --short HEAD)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
-
-      - name: Set build suffix
-        id: suffix
-        run: |
-          INPUT_SUFFIX="${{ github.event.inputs.suffix }}"
-          if [ -n "$INPUT_SUFFIX" ]; then
-            SUFFIX="-manual-${INPUT_SUFFIX}"
-          else
-            SUFFIX="-manual-${{ github.run_number }}"
-          fi
-          echo "suffix=$SUFFIX" >> $GITHUB_OUTPUT
-
       - name: Rename vsix file
         run: |
-          SUFFIX="${{ steps.suffix.outputs.suffix }}"
+          SUFFIX="${{ needs.configure.outputs.suffix }}"
           cd dists
           for file in *.vsix; do
             BASENAME="${file%.vsix}"
@@ -93,34 +194,17 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ccrelay-vscode-dev-${{ steps.info.outputs.version }}${{ steps.suffix.outputs.suffix }}
+          name: ccrelay-vscode-dev-${{ needs.configure.outputs.version }}${{ needs.configure.outputs.suffix }}
           path: dists/*.vsix
           retention-days: 30
 
-    outputs:
-      version: ${{ steps.info.outputs.version }}
-      short_sha: ${{ steps.info.outputs.short_sha }}
-      suffix: ${{ steps.suffix.outputs.suffix }}
-
   build-desktop:
-    needs: [test, build-vscode]
-    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped') && needs.build-vscode.result == 'success'
+    needs: configure
+    if: ${{ needs.configure.outputs.want_build_desktop == 'true' }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: macos-latest
-            platform: mac
-            arch: x64
-          - os: macos-latest
-            platform: mac
-            arch: arm64
-          - os: windows-latest
-            platform: win
-            arch: x64
-          - os: windows-latest
-            platform: win
-            arch: arm64
+        include: ${{ fromJSON(needs.configure.outputs.desktop_matrix) }}
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
@@ -147,7 +231,7 @@ jobs:
       - name: Upload desktop artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ccrelay-desktop-${{ matrix.platform }}-${{ matrix.arch }}-${{ needs.build-vscode.outputs.version }}${{ needs.build-vscode.outputs.suffix }}
+          name: ccrelay-desktop-${{ matrix.platform }}-${{ matrix.arch }}-${{ needs.configure.outputs.version }}${{ needs.configure.outputs.suffix }}
           path: |
             packages/desktop/dist/*.zip
             packages/desktop/dist/*.exe

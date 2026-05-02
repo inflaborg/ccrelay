@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **GitHub Actions**: `build-dev-auto`, `build-dev-manual`, and `build-prod` workflows accept **`workflow_dispatch`** input **`build_targets`** (`all` default; also `vscode`, `desktop`, `desktop-mac`, `desktop-win`, and per-desktop-arch `desktop-mac-x64`, `desktop-mac-arm64`, `desktop-win-x64`, `desktop-win-arm64`). A **`configure`** job drives conditional VSIX / desktop matrix jobs so partial builds skip unused runners; **`build-dev-auto`** also supports manual trigger with this input (push builds **all** by default).
 - **Desktop packaging**: Electron `build.mac` (`identity: null`, **zip** targets only) / `build.win` declare **`x64` and `arm64`** explicitly. Packaged desktop **app icons** are generated from `packages/vscode/assets/icon.svg`.
 - **Windows / Linux Electron window**: removes the default in-window menu bar (**File / Edit / View / Window**) via `Menu.setApplicationMenu(null)`; macOS continues to use the system menu bar only.
 - **Converter simplification**: `convertRequestToOpenAI`, `convertOpenAIRequestToAnthropic`, and `convertResponsesRequestToChatCompletions` no longer accept a `provider` parameter for custom path resolution — paths are now deterministic (`/chat/completions` for OpenAI, `/v1/messages` for Anthropic).

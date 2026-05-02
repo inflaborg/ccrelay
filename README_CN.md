@@ -114,7 +114,7 @@ npm run compile
 - 托盘菜单 **打开控制台**：在 Electron **`BrowserWindow`** 内通过 **HTTP** 访问本地代理加载仪表盘（不用 `file://`）；再次启动应用会聚焦已有窗口。
 - **Windows / Linux**：隐藏 Electron 内置的窗口内菜单栏（**文件 / 编辑 / 视图 / 窗口**）；**macOS** 继续使用系统顶层菜单。
 - 安装包输出在 **`packages/desktop/dist/`**（**macOS：** **仅 zip**，文件名为「产品名-版本-平台-架构」，如 `CCRelay-0.2.0-darwin-arm64.zip`，CI 默认不打 DMG；**Windows：** NSIS `*.exe`，如 `CCRelay-0.2.0-win32-x64.exe` 与 `CCRelay-0.2.0-win32-arm64.exe`（平台为 Node 的 `darwin` / `win32`）。本地需在目标系统上执行 `npm run desktop:pack:mac` 或 `desktop:pack:win`。
-- **`electron-builder` 产物**面向 **`x64` 与 `arm64`**（Intel / Apple Silicon Mac；x64 / ARM64 Windows）。**GitHub Actions**（**Build Dev** 自动与 Manual、**Build Prod**）在打完 **VSIX** 之后，再通过 **四条并行任务矩阵**（mac/win × 两架构）上传桌面安装包；其中 **Build Dev (Manual)** 仅上传 artifact（不自动发 GitHub Release），**Build Dev (Auto)** 与 **Build Prod** 会发布包含 VSIX + 桌面包的 Release。
+- **`electron-builder` 产物**面向 **`x64` 与 `arm64`**（Intel / Apple Silicon Mac；x64 / ARM64 Windows）。**GitHub Actions**（**Build Dev** 自动与 Manual、**Build Prod**）先跑 **`configure`**，再通过 **`workflow_dispatch`** 参数 **`build_targets`** 决定要构建的产物：默认 **`all`**（push / 留空等价于全量）；还可选 **`vscode`**、**desktop**（四门矩阵）、**desktop-mac** / **desktop-win**（该系统下两架构）；或 **单架构**：**`desktop-mac-x64`**、**`desktop-mac-arm64`**、**`desktop-win-x64`**、**`desktop-win-arm64`**。**VSIX** 与 **桌面**任务按选择执行；**Build Dev (Auto)** 也支持手动触发做部分产物构建。**Build Dev (Manual)** 仍只上传 workflow artifact；**Build Dev (Auto)** 与 **Build Prod** 的 Release 与本次勾选一致。
 
 ### macOS：从 GitHub Release zip 首次打开
 
