@@ -33,6 +33,7 @@
 - [命令](#命令)
 - [开发](#开发)
 - [文件位置](#文件位置)
+- [TODO](#todo)
 - [许可证](#许可证)
 
 ---
@@ -112,8 +113,25 @@ npm run compile
 - **`~/.ccrelay/config.yaml`**、**`~/.ccrelay/state.json`**、Leader/Follower 选举、WebSocket 同步、Provider 切换、HTTP API、`/ccrelay/` Web UI 等与扩展保持一致。
 - 托盘菜单 **打开控制台**：在 Electron **`BrowserWindow`** 内通过 **HTTP** 访问本地代理加载仪表盘（不用 `file://`）；再次启动应用会聚焦已有窗口。
 - **Windows / Linux**：隐藏 Electron 内置的窗口内菜单栏（**文件 / 编辑 / 视图 / 窗口**）；**macOS** 继续使用系统顶层菜单。
-- 安装包输出在 **`packages/desktop/dist/`**（macOS：dmg + zip；Windows：NSIS `.exe`）。本地需在目标系统上执行 `npm run desktop:pack:mac` 或 `desktop:pack:win`。
+- 安装包输出在 **`packages/desktop/dist/`**（**macOS：** 含 `CCRelay.app` 的 **zip**，默认不再打 DMG——无签名场景下 CI 产出的 DMG 不是合法 UDIF；**Windows：** NSIS `.exe`）。本地需在目标系统上执行 `npm run desktop:pack:mac` 或 `desktop:pack:win`。
 - **`electron-builder` 产物**面向 **`x64` 与 `arm64`**（Intel / Apple Silicon Mac；x64 / ARM64 Windows）。**GitHub Actions**（**Build Dev** 自动与 Manual、**Build Prod**）在打完 **VSIX** 之后，再通过 **四条并行任务矩阵**（mac/win × 两架构）上传桌面安装包；其中 **Build Dev (Manual)** 仅上传 artifact（不自动发 GitHub Release），**Build Dev (Auto)** 与 **Build Prod** 会发布包含 VSIX + 桌面包的 Release。
+
+### macOS：从 GitHub Release zip 首次打开
+
+正式发布包当前 **未经 Apple 公证**。浏览器下载_zip 解压后，`CCRelay.app` 可能带有 **隔离（quarantine）** 标记，Gatekeeper 会提示 *「Apple 无法验证 …」*。
+
+1. 去掉扩展属性后再双击（路径按实际解压位置修改）：
+
+   ```bash
+   xattr -cr ~/Downloads/CCRelay.app
+   ```
+
+   若 `.app` 在解压后的子目录内，改用该路径，例如：`xattr -cr ~/Downloads/CCRelay-darwin-arm64/CCRelay.app`。
+
+2. 或 **按住 Control 点击** → **打开** 并在弹窗中选择打开；或在 **系统设置 → 隐私与安全性** 中允许。
+
+本机 `packages/desktop/dist/` 下直接构建的产物通常没有隔离属性，故往往无需上述步骤。根本方案见 [TODO](#todo)（签名 + 公证）。
+
 - SQLite **日志持久化**仍需在 **`PATH`** 中能找到 **`sqlite3`**（并含常见路径回退）；无法满足时本轮进程不写库但仍可启动——见上文「请求日志」说明。
 
 ---
@@ -693,6 +711,12 @@ ccrelay/
 | YAML 配置 | `~/.ccrelay/config.yaml` | 主配置文件（自动创建） |
 | 运行时状态 | `~/.ccrelay/state.json` | 当前启用的提供商 id（扩展与桌面端共用） |
 | 日志数据库 | `~/.ccrelay/logs.db` | 请求/响应日志（启用后） |
+
+---
+
+## TODO
+
+- **桌面 macOS 分发**：在 CI 中通过 `electron-builder` 配置 **Apple Developer ID 签名 + 公证（notarization）**（GitHub Secrets：证书导出为 `CSC_LINK` / `CSC_KEY_PASSWORD`，以及 Apple 公证凭据，如 `APPLE_ID`、`APPLE_APP_SPECIFIC_PASSWORD`、`APPLE_TEAM_ID`），使从网页下载的版本不再被 Gatekeeper/quarantine 阻拦。签名流程稳定后可选 **恢复 DMG**（此前无签名时 CI 产物为非法 UDIF）。
 
 ---
 

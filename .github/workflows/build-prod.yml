@@ -123,7 +123,6 @@ jobs:
         with:
           name: ccrelay-desktop-${{ matrix.platform }}-${{ matrix.arch }}-${{ needs.build-vscode.outputs.version }}
           path: |
-            packages/desktop/dist/*.dmg
             packages/desktop/dist/*.zip
             packages/desktop/dist/*.exe
           retention-days: 90
