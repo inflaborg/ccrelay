@@ -73,7 +73,10 @@ function escapeValue(value: string | number | boolean | null | undefined): strin
 /**
  * Interpolate parameters into a SQL template.
  */
-function interpolateSql(sql: string, params?: (string | number | boolean | null | undefined)[]): string {
+function interpolateSql(
+  sql: string,
+  params?: (string | number | boolean | null | undefined)[]
+): string {
   if (!params || params.length === 0) {
     return sql;
   }
@@ -274,12 +277,7 @@ class CliConnection {
   private healthCheckInterval: NodeJS.Timeout | null = null;
   private static readonly healthCheckIntervalMs = 30_000;
 
-  constructor(
-    config: SqliteDriverConfig,
-    sqlite3Path: string,
-    log: Logger,
-    label: string
-  ) {
+  constructor(config: SqliteDriverConfig, sqlite3Path: string, log: Logger, label: string) {
     this.config = config;
     this.sqlite3Path = sqlite3Path;
     this.log = log;
@@ -301,13 +299,23 @@ class CliConnection {
     this.isClosing = true;
     this.isStarted = false;
 
-    if (!this.process) { return; }
+    if (!this.process) {
+      this.log.info(`[SqliteCli:${this.label}] IPC channel close requested (no subprocess)`);
+      return;
+    }
 
+    this.log.info(
+      `[SqliteCli:${this.label}] Closing sqlite3 IPC channel (pid=${this.process.pid ?? "?"})`
+    );
     const proc = this.process;
     return new Promise<void>(resolve => {
       const timeout = setTimeout(() => {
         if (this.process === proc) {
-          try { proc.kill("SIGKILL"); } catch { /* ignore */ }
+          try {
+            proc.kill("SIGKILL");
+          } catch {
+            /* ignore */
+          }
           this.process = null;
         }
         resolve();
@@ -337,11 +345,15 @@ class CliConnection {
   // ---- Health check -------------------------------------------------------
 
   startHealthCheck(): void {
-    if (this.healthCheckInterval) { return; }
+    if (this.healthCheckInterval) {
+      return;
+    }
     this.healthCheckInterval = setInterval(() => {
-      if (!this.isStarted || this.isClosing) { return; }
+      if (!this.isStarted || this.isClosing) {
+        return;
+      }
       this.queryScalar<number>("SELECT 1").catch(() => {
-        this.log.warn(`[SqliteCli:${this.label}] Health check failed, triggering restart`);
+        this.log.warn(`[SqliteCli:${this.label}] Health check failed — rebuilding IPC channel`);
         this.needsRestart = true;
         void this.processNextCommand();
       });
@@ -357,22 +369,35 @@ class CliConnection {
 
   // ---- SQL helpers --------------------------------------------------------
 
-  async exec(sql: string, params?: (string | number | boolean | null | undefined)[]): Promise<void> {
+  async exec(
+    sql: string,
+    params?: (string | number | boolean | null | undefined)[]
+  ): Promise<void> {
     const interpolated = interpolateSql(sql, params);
     await this.sendCommand(interpolated, true);
   }
 
-  async query(sql: string, params?: (string | number | boolean | null | undefined)[]): Promise<Record<string, unknown>[]> {
+  async query(
+    sql: string,
+    params?: (string | number | boolean | null | undefined)[]
+  ): Promise<Record<string, unknown>[]> {
     const interpolated = interpolateSql(sql, params);
     return this.sendCommand(interpolated, false);
   }
 
-  async queryScalar<T = number>(sql: string, params?: (string | number | boolean | null | undefined)[]): Promise<T | null> {
+  async queryScalar<T = number>(
+    sql: string,
+    params?: (string | number | boolean | null | undefined)[]
+  ): Promise<T | null> {
     const rows = await this.query(sql, params);
-    if (rows.length === 0) { return null; }
+    if (rows.length === 0) {
+      return null;
+    }
     const firstRow = rows[0];
     const keys = Object.keys(firstRow);
-    if (keys.length === 0) { return null; }
+    if (keys.length === 0) {
+      return null;
+    }
     return firstRow[keys[0]] as T;
   }
 
@@ -395,24 +420,34 @@ class CliConnection {
       });
       this.process = proc;
 
+      this.log.info(
+        `[SqliteCli:${this.label}] Spawning sqlite3 IPC channel (generation=${generation}, pid=${proc.pid ?? "pending"}, db=${this.config.path})`
+      );
+
       this.stdoutBuffer = "";
       this.stderrBuffer = "";
 
       proc.stdout.on("data", (data: Buffer) => {
-        if (generation !== this.processGeneration) { return; }
+        if (generation !== this.processGeneration) {
+          return;
+        }
         this.stdoutBuffer += data.toString();
         this.checkForSentinel();
       });
 
       proc.stderr.on("data", (data: Buffer) => {
-        if (generation !== this.processGeneration) { return; }
+        if (generation !== this.processGeneration) {
+          return;
+        }
         this.stderrBuffer += data.toString();
         this.checkForSentinel();
       });
 
       proc.on("exit", (code: number | null, signal: NodeJS.Signals | null) => {
         // Ignore stale exit events from a previous generation
-        if (generation !== this.processGeneration) { return; }
+        if (generation !== this.processGeneration) {
+          return;
+        }
 
         this.process = null;
 
@@ -429,11 +464,15 @@ class CliConnection {
         }
 
         // If restart() is driving the respawn, let it handle everything
-        if (this.isRestarting || this.isClosing) { return; }
+        if (this.isRestarting || this.isClosing) {
+          return;
+        }
 
         if (this.restartCount < this.maxRestarts) {
           this.restartCount++;
-          this.log.warn(`[SqliteCli:${this.label}] Process exited unexpectedly (code=${code}, signal=${signal}), restarting (${this.restartCount}/${this.maxRestarts})`);
+          this.log.warn(
+            `[SqliteCli:${this.label}] sqlite3 subprocess exited (code=${code}, signal=${signal}) — rebuilding IPC channel (attempt ${this.restartCount}/${this.maxRestarts})`
+          );
           this.spawnProcess()
             .then(() => void this.processNextCommand())
             .catch((err: unknown) => {
@@ -447,7 +486,13 @@ class CliConnection {
       });
 
       proc.on("error", (err: Error) => {
-        if (generation !== this.processGeneration) { return; }
+        if (generation !== this.processGeneration) {
+          return;
+        }
+        this.log.error(
+          `[SqliteCli:${this.label}] sqlite3 spawn/process error (generation=${generation})`,
+          err
+        );
         reject(err);
       });
 
@@ -476,6 +521,9 @@ class CliConnection {
             this.commandTimer = null;
           }
           this.isStarted = true;
+          this.log.info(
+            `[SqliteCli:${this.label}] IPC channel established — sentinel handshake OK (generation=${generation}, pid=${proc.pid ?? "?"})`
+          );
           resolve();
         },
         reject: err => {
@@ -503,20 +551,28 @@ class CliConnection {
   }
 
   private checkForSentinel(): void {
-    if (!this.currentQuery) { return; }
+    if (!this.currentQuery) {
+      return;
+    }
 
     const sentinel = this.currentQuery.sentinelId;
     const sentinelIdIndex = this.stdoutBuffer.indexOf(sentinel);
-    if (sentinelIdIndex === -1) { return; }
+    if (sentinelIdIndex === -1) {
+      return;
+    }
 
     const sentinelPrefix = `[{"_s":"`;
     const sentinelSuffix = `"}]`;
 
     const prefixIndex = this.stdoutBuffer.lastIndexOf(sentinelPrefix, sentinelIdIndex);
-    if (prefixIndex === -1) { return; }
+    if (prefixIndex === -1) {
+      return;
+    }
 
     const suffixIndex = this.stdoutBuffer.indexOf(sentinelSuffix, sentinelIdIndex);
-    if (suffixIndex === -1) { return; }
+    if (suffixIndex === -1) {
+      return;
+    }
 
     const sentinelEndIndex = suffixIndex + sentinelSuffix.length;
     const resultText = this.stdoutBuffer.substring(0, prefixIndex).trim();
@@ -561,6 +617,15 @@ class CliConnection {
   }
 
   private async handleError(error: Error): Promise<void> {
+    const stderrPreview = this.stderrBuffer.trim();
+    const stderrSuffix =
+      stderrPreview.length > 0
+        ? ` | stderr: ${stderrPreview.slice(0, 400)}${stderrPreview.length > 400 ? "…" : ""}`
+        : "";
+    this.log.warn(
+      `[SqliteCli:${this.label}] IPC channel fault — ${error.message}${stderrSuffix}; scheduling subprocess rebuild`
+    );
+
     this.needsRestart = true;
     this.stderrBuffer = "";
     this.stdoutBuffer = "";
@@ -580,7 +645,9 @@ class CliConnection {
 
   private parseJsonOutput(text: string): Record<string, unknown>[] {
     const trimmed = text.trim();
-    if (!trimmed) { return []; }
+    if (!trimmed) {
+      return [];
+    }
 
     const results: Record<string, unknown>[] = [];
     let currentArray = "";
@@ -609,7 +676,9 @@ class CliConnection {
             );
             results.push(...objects);
           } catch {
-            this.log.warn(`[SqliteCli:${this.label}] Skipped malformed JSON array chunk: ${currentArray.trim()}`);
+            this.log.warn(
+              `[SqliteCli:${this.label}] Skipped malformed JSON array chunk: ${currentArray.trim()}`
+            );
           }
           inArray = false;
           currentArray = "";
@@ -692,7 +761,9 @@ class CliConnection {
     this.commandTimer = setTimeout(() => {
       const stderrInfo = this.stderrBuffer.trim();
       void this.handleError(
-        new Error(`Command timed out after ${this.commandTimeoutMs}ms${stderrInfo ? `: ${stderrInfo}` : ""}`)
+        new Error(
+          `Command timed out after ${this.commandTimeoutMs}ms${stderrInfo ? `: ${stderrInfo}` : ""}`
+        )
       );
     }, this.commandTimeoutMs);
 
@@ -725,9 +796,15 @@ class CliConnection {
    * exit handler from spawning a duplicate process.
    */
   private async restart(): Promise<void> {
-    if (!this.needsRestart) { return; }
+    if (!this.needsRestart) {
+      return;
+    }
     this.needsRestart = false;
     this.isRestarting = true;
+
+    this.log.warn(
+      `[SqliteCli:${this.label}] Rebuilding IPC channel (replacing subprocess, generation=${this.processGeneration})`
+    );
 
     if (this.process) {
       const oldProc = this.process;
@@ -740,7 +817,11 @@ class CliConnection {
       oldProc.stdout?.removeAllListeners("data");
       oldProc.stderr?.removeAllListeners("data");
 
-      try { oldProc.kill("SIGKILL"); } catch { /* ignore */ }
+      try {
+        oldProc.kill("SIGKILL");
+      } catch {
+        /* ignore */
+      }
     }
 
     this.stdoutBuffer = "";
@@ -749,7 +830,6 @@ class CliConnection {
 
     try {
       await this.spawnProcess();
-      this.log.info(`[SqliteCli:${this.label}] Restarted successfully`);
     } catch (err) {
       this.log.error(`[SqliteCli:${this.label}] Restart failed:`, err);
       this.isStarted = false;
@@ -819,13 +899,12 @@ class WriteQueue {
     this.isProcessing = true;
     const itemsToWrite = this.queue.splice(0);
 
-    void this.flushWithRetry(itemsToWrite)
-      .finally(() => {
-        this.isProcessing = false;
-        if (this.queue.length > 0) {
-          this.flush();
-        }
-      });
+    void this.flushWithRetry(itemsToWrite).finally(() => {
+      this.isProcessing = false;
+      if (this.queue.length > 0) {
+        this.flush();
+      }
+    });
   }
 
   private async flushWithRetry(items: RequestLog[]): Promise<void> {
@@ -848,7 +927,9 @@ class WriteQueue {
   }
 
   private async writeBatch(logs: RequestLog[]): Promise<void> {
-    if (!this.conn) { return; }
+    if (!this.conn) {
+      return;
+    }
     const stmts = logs.map(log => {
       const { sql, params } = buildInsertSql(log);
       return interpolateSql(sql, params);
@@ -857,7 +938,9 @@ class WriteQueue {
   }
 
   private persistFailedWrites(items: RequestLog[]): void {
-    if (!this.failedWritesPath) { return; }
+    if (!this.failedWritesPath) {
+      return;
+    }
     try {
       const lines = items.map(log => JSON.stringify(log)).join("\n") + "\n";
       fsSync.appendFileSync(this.failedWritesPath, lines);
@@ -867,12 +950,18 @@ class WriteQueue {
   }
 
   async replayFailedWrites(): Promise<void> {
-    if (!this.failedWritesPath || !this.conn) { return; }
-    if (!fsSync.existsSync(this.failedWritesPath)) { return; }
+    if (!this.failedWritesPath || !this.conn) {
+      return;
+    }
+    if (!fsSync.existsSync(this.failedWritesPath)) {
+      return;
+    }
 
     const content = fsSync.readFileSync(this.failedWritesPath, "utf-8");
     const lines = content.trim().split("\n").filter(Boolean);
-    if (lines.length === 0) { return; }
+    if (lines.length === 0) {
+      return;
+    }
 
     const logs: RequestLog[] = lines.map(line => JSON.parse(line) as RequestLog);
     try {
@@ -946,7 +1035,9 @@ export class SqliteCliDriver implements DatabaseDriver {
       await this.readConn.start();
       this.readConn.startHealthCheck();
     } catch (err) {
-      this.log.warn(`[SqliteCli] Read connection failed to start, operating in write-only mode: ${err instanceof Error ? err.message : String(err)}`);
+      this.log.warn(
+        `[SqliteCli] Read connection failed to start, operating in write-only mode: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
 
     const failedWritesPath = path.join(path.dirname(dbPath), "failed-writes.jsonl");
@@ -990,7 +1081,9 @@ export class SqliteCliDriver implements DatabaseDriver {
   }
 
   private async createSchema(): Promise<void> {
-    if (!this.writeConn) { return; }
+    if (!this.writeConn) {
+      return;
+    }
 
     await this.writeConn.exec(`
       CREATE TABLE IF NOT EXISTS request_logs (
@@ -1034,10 +1127,19 @@ export class SqliteCliDriver implements DatabaseDriver {
 
       const migrations: Array<{ column: string; sql: string }> = [
         { column: "target_url", sql: "ALTER TABLE request_logs ADD COLUMN target_url TEXT" },
-        { column: "original_request_body", sql: "ALTER TABLE request_logs ADD COLUMN original_request_body TEXT" },
-        { column: "original_response_body", sql: "ALTER TABLE request_logs ADD COLUMN original_response_body TEXT" },
+        {
+          column: "original_request_body",
+          sql: "ALTER TABLE request_logs ADD COLUMN original_request_body TEXT",
+        },
+        {
+          column: "original_response_body",
+          sql: "ALTER TABLE request_logs ADD COLUMN original_response_body TEXT",
+        },
         { column: "client_id", sql: "ALTER TABLE request_logs ADD COLUMN client_id TEXT" },
-        { column: "status", sql: "ALTER TABLE request_logs ADD COLUMN status TEXT DEFAULT 'completed'" },
+        {
+          column: "status",
+          sql: "ALTER TABLE request_logs ADD COLUMN status TEXT DEFAULT 'completed'",
+        },
         { column: "route_type", sql: "ALTER TABLE request_logs ADD COLUMN route_type TEXT" },
       ];
 
@@ -1054,12 +1156,16 @@ export class SqliteCliDriver implements DatabaseDriver {
   // ---- Write operations (writeConn) --------------------------------------
 
   insertLog(log: RequestLog): void {
-    if (!this.isEnabled) { return; }
+    if (!this.isEnabled) {
+      return;
+    }
     this.writeQueue.add(log);
   }
 
   insertLogPending(log: RequestLog): void {
-    if (!this.isEnabled || !this.writeConn?.started) { return; }
+    if (!this.isEnabled || !this.writeConn?.started) {
+      return;
+    }
 
     const { sql, params } = buildInsertSql(log, "pending");
     this.writeConn.exec(sql, params).catch(err => {
@@ -1076,10 +1182,13 @@ export class SqliteCliDriver implements DatabaseDriver {
     errorMessage: string | undefined,
     originalResponseBody?: string
   ): void {
-    if (!this.isEnabled || !this.writeConn?.started) { return; }
+    if (!this.isEnabled || !this.writeConn?.started) {
+      return;
+    }
 
-    this.writeConn.exec(
-      `UPDATE request_logs
+    this.writeConn
+      .exec(
+        `UPDATE request_logs
        SET status_code = ?,
            response_body = ?,
            original_response_body = ?,
@@ -1088,18 +1197,19 @@ export class SqliteCliDriver implements DatabaseDriver {
            error_message = ?,
            status = 'completed'
        WHERE client_id = ?`,
-      [
-        statusCode,
-        encodeForStorage(responseBody),
-        encodeForStorage(originalResponseBody),
-        duration,
-        success ? 1 : 0,
-        encodeForStorage(errorMessage),
-        clientId,
-      ]
-    ).catch(err => {
-      this.log.error("[SqliteCli] Failed to update log:", err);
-    });
+        [
+          statusCode,
+          encodeForStorage(responseBody),
+          encodeForStorage(originalResponseBody),
+          duration,
+          success ? 1 : 0,
+          encodeForStorage(errorMessage),
+          clientId,
+        ]
+      )
+      .catch(err => {
+        this.log.error("[SqliteCli] Failed to update log:", err);
+      });
   }
 
   updateLogStatus(
@@ -1109,31 +1219,30 @@ export class SqliteCliDriver implements DatabaseDriver {
     duration: number,
     errorMessage: string | undefined
   ): void {
-    if (!this.isEnabled || !this.writeConn?.started) { return; }
+    if (!this.isEnabled || !this.writeConn?.started) {
+      return;
+    }
 
-    this.writeConn.exec(
-      `UPDATE request_logs
+    this.writeConn
+      .exec(
+        `UPDATE request_logs
        SET status_code = ?,
            duration = ?,
            success = ?,
            error_message = ?,
            status = ?
        WHERE client_id = ?`,
-      [
-        statusCode,
-        duration,
-        0,
-        encodeForStorage(errorMessage),
-        status,
-        clientId,
-      ]
-    ).catch(err => {
-      this.log.error("[SqliteCli] Failed to update log status:", err);
-    });
+        [statusCode, duration, 0, encodeForStorage(errorMessage), status, clientId]
+      )
+      .catch(err => {
+        this.log.error("[SqliteCli] Failed to update log status:", err);
+      });
   }
 
   async writeBatch(logs: RequestLog[]): Promise<void> {
-    if (!this.writeConn?.started || logs.length === 0) { return; }
+    if (!this.writeConn?.started || logs.length === 0) {
+      return;
+    }
 
     const stmts: string[] = [];
     for (const log of logs) {
@@ -1145,20 +1254,26 @@ export class SqliteCliDriver implements DatabaseDriver {
   }
 
   async deleteLogs(ids: number[]): Promise<void> {
-    if (!this.writeConn?.started || ids.length === 0) { return; }
+    if (!this.writeConn?.started || ids.length === 0) {
+      return;
+    }
 
     const placeholders = ids.map(() => "?").join(",");
     await this.writeConn.exec(`DELETE FROM request_logs WHERE id IN (${placeholders})`, ids);
   }
 
   async clearAllLogs(): Promise<void> {
-    if (!this.writeConn?.started) { return; }
+    if (!this.writeConn?.started) {
+      return;
+    }
     await this.writeConn.exec("DELETE FROM request_logs");
     await this.writeConn.exec("VACUUM");
   }
 
   async cleanOldLogs(): Promise<void> {
-    if (!this.isEnabled || !this.writeConn?.started) { return; }
+    if (!this.isEnabled || !this.writeConn?.started) {
+      return;
+    }
 
     const cutoff = Date.now() - MAX_LOG_AGE_DAYS * 24 * 60 * 60 * 1000;
     await this.writeConn.exec("DELETE FROM request_logs WHERE timestamp < ?", [cutoff]);
@@ -1223,10 +1338,11 @@ export class SqliteCliDriver implements DatabaseDriver {
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
-    const total = (await this.readConn.queryScalar<number>(
-      `SELECT COUNT(*) as count FROM request_logs ${whereClause}`,
-      params
-    )) ?? 0;
+    const total =
+      (await this.readConn.queryScalar<number>(
+        `SELECT COUNT(*) as count FROM request_logs ${whereClause}`,
+        params
+      )) ?? 0;
 
     const limit = filter.limit || 100;
     const offset = filter.offset || 0;
@@ -1245,11 +1361,15 @@ export class SqliteCliDriver implements DatabaseDriver {
   }
 
   async getLogById(id: number): Promise<RequestLog | null> {
-    if (!this.readConn?.started) { return null; }
+    if (!this.readConn?.started) {
+      return null;
+    }
 
     const rows = await this.readConn.query("SELECT * FROM request_logs WHERE id = ?", [id]);
 
-    if (rows.length === 0) { return null; }
+    if (rows.length === 0) {
+      return null;
+    }
 
     return dbRowToLog(rows[0]);
   }

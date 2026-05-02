@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Delete provider confirmation**: deleting a provider now requires confirmation via a dialog showing the provider name and ID.
 - **`response.completed` usage on streaming conversions**: emits final completion and `[DONE]` only after upstream `[DONE]` (or EOF fallback) so a trailing usage-only chunk is merged when upstream sends `finish_reason` before `usage` (MiMo-style split chunks).
 - **Database worker client**: restarts the worker thread automatically with exponential backoff after an unexpected exit; outer RPC timeout is slightly longer than the CLI driver command timeout; read APIs (`queryLogs`, `getLogById`, `getStats`) degrade to empty or null results on transient failures instead of always surfacing errors to callers.
+- **SQLite CLI IPC logging**: INFO for subprocess spawn, sentinel handshake, and channel close; WARN for recoverable faults (health check failure, unexpected exit, channel faults/timeouts, rebuild); ERROR for spawn errors (`proc` `"error"`), restart failure, and max-restart exhaustion.
 
 ### Removed
 
