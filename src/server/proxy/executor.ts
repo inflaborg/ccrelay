@@ -1129,7 +1129,7 @@ export class ProxyExecutor {
       const outHeaders: Record<string, string | string[]> = { ...responseHeaders };
       if (
         task.method === "GET" &&
-        (task.requestPath === "/v1/models" || task.requestPath.split("?")[0] === "/v1/models") &&
+        (task.requestPath === "/models" || task.requestPath.split("?")[0] === "/models") &&
         status >= 400
       ) {
         const fallback = buildModelsListFallback(task.provider);
@@ -1148,7 +1148,7 @@ export class ProxyExecutor {
       const upstreamWireFmt: ApiSurface = isOpenAIType(task.provider.providerType) ? "openai" : "anthropic";
       if (
         task.method === "GET" &&
-        (task.requestPath === "/v1/models" || task.requestPath.split("?")[0] === "/v1/models") &&
+        (task.requestPath === "/models" || task.requestPath.split("?")[0] === "/models") &&
         outStatus === 200 &&
         task.clientSurface !== upstreamWireFmt &&
         ctx.responseChunks.length > 0

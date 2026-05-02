@@ -10,6 +10,21 @@ import { detectApiSurface, resolveInboundClientSurface } from "./apiSurfaceDetec
 import { isOpenAIType } from "../../converter";
 
 /**
+ * Internal path mapping: client entry point → upstream endpoint path.
+ * Clients always use /v1/ prefixed paths; upstream providers may differ.
+ * Anthropic paths (/v1/messages) are kept as-is since Anthropic uses the same prefix.
+ */
+const UPSTREAM_PATH_MAP = new Map<string, string>([
+  ["/v1/chat/completions", "/chat/completions"],
+  ["/v1/responses", "/responses"],
+  ["/v1/models", "/models"],
+]);
+
+function resolveUpstreamPath(clientPath: string): string {
+  return UPSTREAM_PATH_MAP.get(clientPath) ?? clientPath;
+}
+
+/**
  * RouterStage processes request routing and blocking
  */
 export class RouterStage {
@@ -67,8 +82,8 @@ export class RouterStage {
 
     // 3. Build target URL
     const targetQuery = typeof parsedUrl.search === "string" ? parsedUrl.search : "";
-    const targetPath = path;
-    let targetUrl = this.router.getTargetUrl(path, provider);
+    const targetPath = resolveUpstreamPath(path);
+    let targetUrl = this.router.getTargetUrl(targetPath, provider);
     if (targetQuery) {
       targetUrl += targetQuery;
     }
