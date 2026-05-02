@@ -33,6 +33,7 @@
 - [Commands](#commands)
 - [Development](#development)
 - [File Locations](#file-locations)
+- [TODO](#todo)
 - [License](#license)
 
 ---
@@ -112,8 +113,24 @@ The monorepo includes **`packages/desktop`**, an optional Electron **tray** app 
 - **`~/.ccrelay/config.yaml`**, **`~/.ccrelay/state.json`**, Leader/Follower election, WebSocket sync, provider switching, HTTP API, and **`/ccrelay/`** web UI behave the same across extension and desktop.
 - **Tray** → **Open Dashboard** loads the dashboard inside an Electron **`BrowserWindow`** via **HTTP** to the proxy (not `file:`). Duplicate app launches bring the existing dashboard window forward.
 - **Windows / Linux**: the default Electron **File / Edit / View / Window** menu bar inside the dashboard window is **hidden** (`Menu.setApplicationMenu(null)`). **macOS** uses the usual **system** menu bar.
-- Packaged installers are produced under **`packages/desktop/dist/`** (dmg + zip on macOS, NSIS `.exe` on Windows). Locally: `npm run desktop:pack:mac` or `desktop:pack:win` **on the host OS**.
+- Packaged installers are produced under **`packages/desktop/dist/`** (**macOS:** zip archives containing `CCRelay.app` — no DMG by default because unsigned CI DMGs from electron-builder were not valid UDIF images; **Windows:** NSIS `.exe`). Locally: `npm run desktop:pack:mac` or `desktop:pack:win` **on the host OS**.
 - **`electron-builder` targets** declare both **`x64`** and **`arm64`** (Intel vs Apple‑silicon Mac; x64 vs ARM64 Windows). **GitHub Actions** (**Build Dev** auto & manual, **Build Prod**) run **VSIX packaging first**, then a **four‑job matrix** (mac/win × two arches) uploads desktop binaries alongside the VSIX release assets (`Build Dev (Manual)` attaches artifacts only; Dev auto & Prod also publish a unified release).
+
+### macOS: first launch from a GitHub release (zip)
+
+Release builds are **not** Apple-notarized. After you unzip, the browser may mark the download with **quarantine**; Gatekeeper can show *“Apple could not verify … is free of malware”*.
+
+1. Remove quarantine from the app bundle (adjust the path if you moved or renamed it):
+
+   ```bash
+   xattr -cr ~/Downloads/CCRelay.app
+   ```
+
+   If the `.app` is inside a folder (e.g. after unzipping), point at that path instead, e.g. `xattr -cr ~/Downloads/CCRelay-darwin-arm64/CCRelay.app`.
+
+2. Alternatively, **Control‑click (right‑click)** `CCRelay.app` → **Open** the first time, or approve the app under **System Settings → Privacy & Security**.
+
+Apps you build locally under `packages/desktop/dist/` usually have no quarantine, so they may open without these steps—see [TODO](#todo) for the long-term fix (signing + notarization).
 
 SQLite-backed **logging** still requires the **`sqlite3`** command-line binary on **`PATH`** (plus known fallbacks) when persistence is desired; otherwise the server runs with logging storage effectively off for that process—see core features above.
 
@@ -697,6 +714,12 @@ ccrelay/
 | YAML Config | `~/.ccrelay/config.yaml` | Main configuration file (auto-created) |
 | Runtime state | `~/.ccrelay/state.json` | Persisted active provider id (shared by extension + desktop) |
 | Log database | `~/.ccrelay/logs.db` | Request/response logs (when enabled) |
+
+---
+
+## TODO
+
+- **Desktop (macOS) distribution**: Ship **Apple Developer ID** signing and **notarization** via `electron-builder` in CI (GitHub Secrets: certificate export as `CSC_LINK` / `CSC_KEY_PASSWORD`, and Apple notary API credentials — e.g. `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`). That removes Gatekeeper/quarantine prompts for downloaded builds. Optionally re-enable **DMG** once signing works (CI DMGs were invalid without a proper signing pipeline).
 
 ---
 
