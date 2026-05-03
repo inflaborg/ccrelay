@@ -13,6 +13,7 @@ import {
   isOpenAIResponsesRequest,
   type ResponsesRequestEcho,
 } from "../../converter";
+import { resolveOpenAICompatForAnthropicToOpenAI } from "../../converter/openai/compat";
 import {
   mapAnthropicWirePathToOpenAiUpstream,
   mapOpenAiWirePathToAnthropicUpstream,
@@ -191,10 +192,7 @@ export class BodyProcessor {
         );
       }
     } else if (clientSurface === "anthropic" && upstreamWire === "openai") {
-      const result = this.convertAnthropicToOpenAIRequest(
-        body,
-        routing.targetPath
-      );
+      const result = this.convertAnthropicToOpenAIRequest(body, routing);
       if (result) {
         body = result.body;
         originalModel = result.originalModel;
@@ -246,7 +244,7 @@ export class BodyProcessor {
 
   private convertAnthropicToOpenAIRequest(
     body: Buffer,
-    path: string
+    routing: RoutingContext
   ): { body: Buffer; newPath: string; originalModel: string | undefined } | null {
     try {
       const bodyStr = body.toString("utf-8");
@@ -254,9 +252,11 @@ export class BodyProcessor {
       if (!anthropicRequest.messages || !Array.isArray(anthropicRequest.messages)) {
         return null;
       }
+      const openaiCompat = resolveOpenAICompatForAnthropicToOpenAI(routing.provider);
       const conversionResult = convertRequestToOpenAI(
         anthropicRequest as unknown as Parameters<typeof convertRequestToOpenAI>[0],
-        path
+        routing.targetPath,
+        { openaiCompat }
       );
       let originalModel: string | undefined;
       try {

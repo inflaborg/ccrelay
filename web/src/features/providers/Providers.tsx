@@ -179,6 +179,7 @@ export default function Providers() {
       headers: undefined,
       useCustomModelsList: Boolean(provider.useCustomModelsList),
       customModelsList: provider.customModelsList,
+      openaiCompat: provider.openaiCompat === "azure_openai" ? "azure_openai" : undefined,
     });
     setModelMapText(modelMap ? yaml.dump(modelMap, { indent: 2, lineWidth: -1 }) : "");
     setModelMapError(null);
@@ -569,9 +570,14 @@ export default function Providers() {
                       { value: "openai", label: "OpenAI (Full)" },
                       { value: "openai_chat", label: "OpenAI (Chat Only)" },
                     ]}
-                    onChange={v =>
-                      updateForm("providerType", v as "anthropic" | "openai" | "openai_chat")
-                    }
+                    onChange={v => {
+                      const t = v as "anthropic" | "openai" | "openai_chat";
+                      setFormData(prev => ({
+                        ...prev,
+                        providerType: t,
+                        ...(t === "anthropic" ? { openaiCompat: undefined } : {}),
+                      }));
+                    }}
                     className="h-8 text-xs"
                   />
                 </div>
@@ -588,6 +594,30 @@ export default function Providers() {
                   />
                 </div>
               </div>
+
+              {(formData.providerType === "openai" || formData.providerType === "openai_chat") && (
+                <div className="space-y-1">
+                  <label className="text-xs font-medium">Cross-protocol (Anthropic → Chat)</label>
+                  <Select
+                    value={formData.openaiCompat === "azure_openai" ? "azure_openai" : "standard"}
+                    options={[
+                      { value: "standard", label: "Standard" },
+                      { value: "azure_openai", label: "Azure OpenAI" },
+                    ]}
+                    onChange={v =>
+                      setFormData(prev => ({
+                        ...prev,
+                        openaiCompat: v === "azure_openai" ? "azure_openai" : undefined,
+                      }))
+                    }
+                    className="h-8 text-xs"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Choose Azure when the upstream rejects extra fields (for example{" "}
+                    <code className="font-mono text-[10px]">reasoning</code>).
+                  </p>
+                </div>
+              )}
 
               {/* API Key */}
               <div className="space-y-1">

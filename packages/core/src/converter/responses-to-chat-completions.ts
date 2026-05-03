@@ -11,6 +11,7 @@ import type {
   OpenAITool,
   OpenAIToolChoice,
 } from "./anthropic-to-openai";
+import { assignOpenAiChatMaxOutput } from "./openai/maxOutputTokens";
 import { isOpenAIChatCompletionsRequest } from "./openai-to-anthropic-request";
 
 const log = new ScopedLogger("ResponsesToChat");
@@ -102,9 +103,9 @@ export function convertResponsesRequestToChatCompletions(
     out.stream = raw.stream;
   }
   if (typeof raw.max_output_tokens === "number") {
-    out.max_tokens = raw.max_output_tokens;
+    assignOpenAiChatMaxOutput(out, raw.max_output_tokens);
   } else if (typeof raw.max_tokens === "number") {
-    out.max_tokens = raw.max_tokens;
+    assignOpenAiChatMaxOutput(out, raw.max_tokens);
   }
 
   const reasoning = raw.reasoning;

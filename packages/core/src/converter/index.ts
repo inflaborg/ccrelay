@@ -8,6 +8,7 @@ export {
   type AnthropicMessageRequest,
   type OpenAIMessageRequest,
   type ConversionResult,
+  type ConvertRequestToOpenAIOptions,
 } from "./anthropic-to-openai";
 
 export {

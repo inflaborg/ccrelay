@@ -63,6 +63,7 @@ export function handleListProviders(
     modelMap: p.modelMap,
     useCustomModelsList: Boolean(p.useCustomModelsList),
     customModelsList: p.useCustomModelsList ? (p.customModelsList ?? []) : undefined,
+    openaiCompat: p.openaiCompat,
   }));
 
   const response: ProvidersResponse = {
@@ -124,6 +125,7 @@ export async function handleAddProvider(
       ...(body.useCustomModelsList === true
         ? { customModelsList: body.customModelsList ?? [] }
         : {}),
+      ...(body.openaiCompat !== undefined ? { openaiCompat: body.openaiCompat } : {}),
     };
 
     const success = configManager.addProvider(body.id, providerConfig);
@@ -201,6 +203,9 @@ function buildDuplicateConfigFromProvider(source: Provider, name: string): Provi
   if (source.useCustomModelsList) {
     out.useCustomModelsList = true;
     out.customModelsList = [...(source.customModelsList ?? [])];
+  }
+  if (source.openaiCompat !== undefined) {
+    out.openaiCompat = source.openaiCompat;
   }
   return out;
 }
@@ -331,4 +336,5 @@ interface AddProviderRequest {
   headers?: Record<string, string>;
   useCustomModelsList?: boolean;
   customModelsList?: string[];
+  openaiCompat?: "default" | "azure_openai";
 }

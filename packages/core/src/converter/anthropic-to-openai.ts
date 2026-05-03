@@ -11,7 +11,10 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 // External API fields use snake_case (max_tokens, tool_choice, etc.)
 
-import type { MessageParam, ContentBlockParam } from "../types";
+import type { MessageParam, ContentBlockParam, OpenAICompat } from "../types";
+import { sanitizeAzureOpenAiChatRequest } from "./openai/azure";
+import { isGeminiOpenAiModel, withOptionalGeminiThoughtSignature } from "./openai/gemini";
+import { assignOpenAiChatMaxOutput } from "./openai/maxOutputTokens";
 import { mapAnthropicWirePathToOpenAiUpstream } from "./crossProtocolUpstreamPath";
 
 /**
@@ -67,6 +70,7 @@ export type AnthropicToolChoice =
 export interface OpenAIMessageRequest {
   model: string;
   max_tokens?: number;
+  max_completion_tokens?: number;
   messages: OpenAIMessage[];
   temperature?: number;
   top_p?: number;
@@ -166,6 +170,11 @@ export interface ConversionResult {
   newPath: string;
 }
 
+export interface ConvertRequestToOpenAIOptions {
+  /** When `azure_openai`, strip fields Azure Chat Completions rejects (e.g. `reasoning`). */
+  openaiCompat?: OpenAICompat;
+}
+
 /**
  * Convert Anthropic API request to OpenAI API format
  *
@@ -177,7 +186,8 @@ export interface ConversionResult {
  */
 export function convertRequestToOpenAI(
   anthropic: AnthropicMessageRequest,
-  originalPath: string
+  originalPath: string,
+  options?: ConvertRequestToOpenAIOptions
 ): ConversionResult {
   const openai: OpenAIMessageRequest = {
     model: anthropic.model,
@@ -234,9 +244,9 @@ export function convertRequestToOpenAI(
     openai.stream = anthropic.stream;
   }
 
-  // max_tokens
+  // max output budget: max_tokens vs max_completion_tokens by model family
   if (anthropic.max_tokens) {
-    openai.max_tokens = anthropic.max_tokens;
+    assignOpenAiChatMaxOutput(openai, anthropic.max_tokens);
   }
 
   // tools - format conversion
@@ -257,7 +267,7 @@ export function convertRequestToOpenAI(
   // thinking -> reasoning (conditionally, based on target model)
   // Gemini's OpenAI-compatible API rejects unknown fields like "reasoning",
   // so only include it for providers that support it.
-  if (anthropic.thinking && !isGeminiModel(openai.model)) {
+  if (anthropic.thinking && !isGeminiOpenAiModel(openai.model)) {
     openai.reasoning = {
       effort: getThinkLevel(anthropic.thinking.budget_tokens),
       enabled: anthropic.thinking.type === "enabled",
@@ -266,8 +276,11 @@ export function convertRequestToOpenAI(
 
   const newPath = mapAnthropicWirePathToOpenAiUpstream(originalPath, "POST");
 
+  const request =
+    options?.openaiCompat === "azure_openai" ? sanitizeAzureOpenAiChatRequest(openai) : openai;
+
   return {
-    request: openai,
+    request,
     originalPath,
     newPath,
   };
@@ -290,14 +303,6 @@ function getThinkLevel(budgetTokens?: number): string {
   // 4097–8192+ maps to "high" to avoid round-trip loss
   // (medium → 4096 would reduce budget; high → 16000 preserves or increases it)
   return "high";
-}
-
-/**
- * Check if a model name is a Gemini model
- * Gemini's OpenAI-compatible API rejects unknown fields like "reasoning"
- */
-function isGeminiModel(model: string): boolean {
-  return model.toLowerCase().startsWith("gemini");
 }
 
 /**
@@ -416,7 +421,7 @@ function convertAssistantMessage(content: ContentBlockParam[], targetModel: stri
     content: "",
   };
 
-  const gemini = isGeminiModel(targetModel);
+  const gemini = isGeminiOpenAiModel(targetModel);
 
   // Extract thinking blocks (may be multiple; merge content, use last non-empty signature)
   let thoughtSignature: string | undefined;
@@ -455,25 +460,15 @@ function convertAssistantMessage(content: ContentBlockParam[], targetModel: stri
     assistantMessage.tool_calls = toolCallParts.map(tool => {
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- Type narrowing after filter
       const block = tool as Extract<ContentBlockParam, { type: "tool_use" }>;
-      const toolCall: OpenAIToolCall = {
+      const base: OpenAIToolCall = {
         id: block.id,
         type: "function" as const,
         function: {
           name: block.name,
           arguments: JSON.stringify(block.input || {}),
         },
-        // For Gemini: attach thought_signature in extra_content.google
-        ...(gemini && thoughtSignature
-          ? {
-              extra_content: {
-                google: {
-                  thought_signature: thoughtSignature,
-                },
-              },
-            }
-          : {}),
       };
-      return toolCall;
+      return withOptionalGeminiThoughtSignature(base, gemini, thoughtSignature);
     });
   }
 

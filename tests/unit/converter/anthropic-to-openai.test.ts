@@ -398,6 +398,33 @@ describe("converter: anthropic-to-openai", () => {
       const result = convertRequestToOpenAI(request, basePath);
 
       expect(result.request.max_tokens).toBe(8000);
+      expect(result.request.max_completion_tokens).toBeUndefined();
+    });
+
+    it("maps max_tokens to max_completion_tokens for gpt-5 models", () => {
+      const request: AnthropicMessageRequest = {
+        model: "gpt-5-mini",
+        max_tokens: 32000,
+        messages: [],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.max_completion_tokens).toBe(32000);
+      expect(result.request.max_tokens).toBeUndefined();
+    });
+
+    it("maps max_tokens to max_completion_tokens for o-series models", () => {
+      const request: AnthropicMessageRequest = {
+        model: "o3",
+        max_tokens: 10000,
+        messages: [],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.max_completion_tokens).toBe(10000);
+      expect(result.request.max_tokens).toBeUndefined();
     });
 
     it("should not include max_tokens when undefined", () => {
@@ -658,6 +685,70 @@ describe("converter: anthropic-to-openai", () => {
         effort: "high",
         enabled: true,
       });
+    });
+  });
+
+  describe("Azure OpenAI compat (openaiCompat)", () => {
+    it("strips reasoning, cache_control, assistant thinking, and tool extra_content", () => {
+      const request: AnthropicMessageRequest = {
+        model: "gpt-4",
+        max_tokens: 256,
+        thinking: { type: "adaptive", budget_tokens: 1024 },
+        system: [{ type: "text", text: "system-a", cache_control: { type: "ephemeral" } }],
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "hi",
+                cache_control: { type: "ephemeral" },
+              },
+            ],
+          },
+          {
+            role: "assistant",
+            content: [
+              { type: "thinking", thinking: "t1", signature: "sig1" },
+              { type: "text", text: "yo" },
+              {
+                type: "tool_use",
+                id: "call_1",
+                name: "noop",
+                input: {},
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath, { openaiCompat: "azure_openai" });
+
+      expect(result.request.reasoning).toBeUndefined();
+      const systemMsg = result.request.messages[0];
+      expect(systemMsg.role).toBe("system");
+      expect(Array.isArray(systemMsg.content)).toBe(true);
+      expect((systemMsg.content as { cache_control?: unknown }[])[0].cache_control).toBeUndefined();
+      expect((systemMsg.content as { text: string }[])[0].text).toBe("system-a");
+
+      const userMsg = result.request.messages[1];
+      expect((userMsg.content as { cache_control?: unknown }[])[0].cache_control).toBeUndefined();
+
+      const asst = result.request.messages[2];
+      expect(asst.thinking).toBeUndefined();
+      expect(asst.tool_calls?.[0].extra_content).toBeUndefined();
+      expect(asst.tool_calls?.[0].function.name).toBe("noop");
+    });
+
+    it("does not strip reasoning when openaiCompat is default", () => {
+      const request: AnthropicMessageRequest = {
+        model: "gpt-4",
+        max_tokens: 100,
+        thinking: { type: "enabled" },
+        messages: [],
+      };
+      const r = convertRequestToOpenAI(request, basePath, { openaiCompat: "default" });
+      expect(r.request.reasoning).toEqual({ effort: "medium", enabled: true });
     });
   });
 

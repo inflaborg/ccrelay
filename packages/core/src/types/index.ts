@@ -26,6 +26,10 @@ export const ProviderModeSchema = z.enum(["passthrough", "inject"]);
 // Provider type enum schema
 export const ProviderTypeSchema = z.enum(["anthropic", "openai", "openai_chat"]);
 
+/** Chat Completions wire quirks when bridging Anthropic clients to OpenAI-family upstreams */
+export const OpenAICompatSchema = z.enum(["default", "azure_openai"]);
+export type OpenAICompat = z.infer<typeof OpenAICompatSchema>;
+
 // Model map entry schema (pattern -> model mapping)
 export const ModelMapEntrySchema = z.object({
   pattern: z.string(),
@@ -56,6 +60,8 @@ export const ProviderConfigSchema = z.object({
   use_custom_models_list: z.boolean().optional(),
   customModelsList: z.array(z.string()).optional(),
   custom_models_list: z.array(z.string()).optional(),
+  openaiCompat: OpenAICompatSchema.optional(),
+  openai_compat: OpenAICompatSchema.optional(),
 });
 
 export type ProviderConfigInput = z.infer<typeof ProviderConfigSchema>;
@@ -249,6 +255,8 @@ export interface Provider {
   useCustomModelsList?: boolean;
   /** Model ids exposed when {@link Provider.useCustomModelsList} is true. */
   customModelsList?: string[];
+  /** Anthropic→Chat Completions: use `azure_openai` to strip fields Azure rejects (e.g. `reasoning`). */
+  openaiCompat?: OpenAICompat;
 }
 
 export interface RouterConfig {
@@ -296,6 +304,7 @@ export interface ProviderInfo {
   modelMap?: ModelMapEntry[];
   useCustomModelsList?: boolean;
   customModelsList?: string[];
+  openaiCompat?: OpenAICompat;
 }
 
 export interface ProxyRequest {

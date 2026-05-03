@@ -29,6 +29,34 @@ describe("isOpenAIResponsesRequest", () => {
 });
 
 describe("convertResponsesRequestToChatCompletions", () => {
+  it("maps max_output_tokens to max_completion_tokens for gpt-5", () => {
+    const { request } = convertResponsesRequestToChatCompletions(
+      {
+        model: "gpt-5",
+        input: "hi",
+        // eslint-disable-next-line @typescript-eslint/naming-convention -- wire body
+        max_output_tokens: 500,
+      },
+      "/v1/responses"
+    );
+    expect(request.max_completion_tokens).toBe(500);
+    expect(request.max_tokens).toBeUndefined();
+  });
+
+  it("maps max_output_tokens to max_tokens for gpt-4o", () => {
+    const { request } = convertResponsesRequestToChatCompletions(
+      {
+        model: "gpt-4o",
+        input: "hi",
+        // eslint-disable-next-line @typescript-eslint/naming-convention -- wire body
+        max_output_tokens: 300,
+      },
+      "/v1/responses"
+    );
+    expect(request.max_tokens).toBe(300);
+    expect(request.max_completion_tokens).toBeUndefined();
+  });
+
   it("maps simple string input to user message", () => {
     const { request, newPath } = convertResponsesRequestToChatCompletions(
       { model: "gpt-4o", input: "Hello" },

@@ -529,6 +529,7 @@ function parseProvider(id: string, config: ProviderConfigInput): Provider {
     config.useCustomModelsList === true || config.use_custom_models_list === true;
   const rawList = config.customModelsList ?? config.custom_models_list;
   const customModelsListNormalized = Array.isArray(rawList) ? rawList : undefined;
+  const openaiCompat = config.openaiCompat ?? config.openai_compat;
 
   return {
     id,
@@ -549,6 +550,7 @@ function parseProvider(id: string, config: ProviderConfigInput): Provider {
           customModelsList: customModelsListNormalized ?? [],
         }
       : {}),
+    ...(openaiCompat !== undefined ? { openaiCompat } : {}),
   };
 }
 
@@ -1375,6 +1377,13 @@ export class ConfigManager {
         customModelsList: config.customModelsList,
         // eslint-disable-next-line @typescript-eslint/naming-convention -- YAML snake_case parity
         custom_models_list: config.custom_models_list,
+        ...(config.openaiCompat !== undefined
+          ? {
+              openaiCompat: config.openaiCompat,
+              // eslint-disable-next-line @typescript-eslint/naming-convention -- YAML snake_case parity
+              openai_compat: config.openai_compat,
+            }
+          : {}),
       };
 
       rawConfig.providers = sortProviderMapKeys(providers);
