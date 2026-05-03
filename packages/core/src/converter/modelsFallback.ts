@@ -3,6 +3,9 @@
  */
 /* eslint-disable @typescript-eslint/naming-convention -- API wire uses snake_case */
 
+import * as url from "url";
+import type { ApiSurface } from "../types";
+
 export interface OpenAIModelsListResponse {
   object: "list";
   data: OpenAIModelEntry[];
@@ -81,4 +84,70 @@ export function convertAnthropicModelsToOpenAI(
     owned_by: "ccrelay",
   }));
   return { object: "list", data };
+}
+
+/**
+ * Parse GET /models `limit` from a provider target URL query string (digits only).
+ * Invalid, missing, or non-positive → `undefined` (return full configured list).
+ */
+export function parseModelsListLimitFromTargetUrl(targetUrl: string): number | undefined {
+  const parsed = url.parse(targetUrl, true);
+  const raw = parsed.query?.limit;
+  const token = Array.isArray(raw) ? raw[0] : raw;
+  if (typeof token !== "string") {
+    return undefined;
+  }
+  const s = token.trim();
+  if (!/^\d+$/.test(s)) {
+    return undefined;
+  }
+  const n = Number.parseInt(s, 10);
+  if (!Number.isFinite(n) || n <= 0) {
+    return undefined;
+  }
+  return n;
+}
+
+/** Build minimal OpenAI `list` payload from model ids (custom models list synthesis). */
+export function buildOpenAIModelsListFromIds(modelIds: string[]): OpenAIModelsListResponse {
+  const now = Math.floor(Date.now() / 1000);
+  return {
+    object: "list",
+    data: modelIds.map(id => ({
+      id,
+      object: "model" as const,
+      created: now,
+      owned_by: "ccrelay",
+    })),
+  };
+}
+
+/** Like {@link convertOpenAIModelsToAnthropic}, but callers set `has_more` for pagination. */
+export function openAiModelsPageToAnthropicModelsList(
+  openaiPage: OpenAIModelsListResponse,
+  hasMore: boolean
+): AnthropicModelsListResponse {
+  const anthropicBase = convertOpenAIModelsToAnthropic(openaiPage);
+  return { ...anthropicBase, has_more: hasMore };
+}
+
+/**
+ * JSON response body for a locally synthesized models list (`useCustomModelsList`).
+ * Applies optional `limit` from `targetUrl`; `has_more` only on Anthropic wire.
+ */
+export function synthesizeCustomModelsListBody(options: {
+  clientSurface: ApiSurface;
+  fullModelIds: string[];
+  targetUrl: string;
+}): string {
+  const limit = parseModelsListLimitFromTargetUrl(options.targetUrl);
+  const full = options.fullModelIds;
+  const pageIds = limit !== undefined ? full.slice(0, limit) : [...full];
+  const hasMore = pageIds.length < full.length;
+  const openaiPage = buildOpenAIModelsListFromIds(pageIds);
+
+  if (options.clientSurface === "anthropic") {
+    return JSON.stringify(openAiModelsPageToAnthropicModelsList(openaiPage, hasMore));
+  }
+  return JSON.stringify(openaiPage);
 }

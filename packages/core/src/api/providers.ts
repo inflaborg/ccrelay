@@ -61,6 +61,8 @@ export function handleListProviders(
     enabled: p.enabled !== false,
     apiKey: maskApiKey(p.apiKey),
     modelMap: p.modelMap,
+    useCustomModelsList: Boolean(p.useCustomModelsList),
+    customModelsList: p.useCustomModelsList ? (p.customModelsList ?? []) : undefined,
   }));
 
   const response: ProvidersResponse = {
@@ -118,6 +120,10 @@ export async function handleAddProvider(
       modelMap: body.modelMap,
       vlModelMap: body.vlModelMap,
       headers: body.headers,
+      useCustomModelsList: body.useCustomModelsList === true,
+      ...(body.useCustomModelsList === true
+        ? { customModelsList: body.customModelsList ?? [] }
+        : {}),
     };
 
     const success = configManager.addProvider(body.id, providerConfig);
@@ -180,7 +186,7 @@ export function handleDeleteProvider(
 }
 
 function buildDuplicateConfigFromProvider(source: Provider, name: string): ProviderConfigInput {
-  return {
+  const out: ProviderConfigInput = {
     name,
     baseUrl: source.baseUrl,
     mode: source.mode,
@@ -192,6 +198,11 @@ function buildDuplicateConfigFromProvider(source: Provider, name: string): Provi
     headers: source.headers && Object.keys(source.headers).length > 0 ? source.headers : undefined,
     enabled: source.enabled,
   };
+  if (source.useCustomModelsList) {
+    out.useCustomModelsList = true;
+    out.customModelsList = [...(source.customModelsList ?? [])];
+  }
+  return out;
 }
 
 /**
@@ -318,4 +329,6 @@ interface AddProviderRequest {
   modelMap?: ModelMapEntry[];
   vlModelMap?: ModelMapEntry[];
   headers?: Record<string, string>;
+  useCustomModelsList?: boolean;
+  customModelsList?: string[];
 }

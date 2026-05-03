@@ -38,6 +38,8 @@ const DEFAULT_FORM: AddProviderRequest = {
   modelMap: undefined,
   vlModelMap: undefined,
   headers: undefined,
+  useCustomModelsList: false,
+  customModelsList: undefined,
 };
 
 export default function Providers() {
@@ -54,6 +56,7 @@ export default function Providers() {
   // Raw text states for YAML fields (allow editing invalid YAML temporarily)
   const [modelMapText, setModelMapText] = useState("");
   const [modelMapError, setModelMapError] = useState<string | null>(null);
+  const [customModelsText, setCustomModelsText] = useState("");
 
   // Debounce timer for YAML validation
   const modelMapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -156,6 +159,7 @@ export default function Providers() {
     setFormData(DEFAULT_FORM);
     setModelMapText("");
     setModelMapError(null);
+    setCustomModelsText("");
     setShowAddModal(true);
   };
 
@@ -173,9 +177,16 @@ export default function Providers() {
       modelMap,
       vlModelMap: undefined,
       headers: undefined,
+      useCustomModelsList: Boolean(provider.useCustomModelsList),
+      customModelsList: provider.customModelsList,
     });
     setModelMapText(modelMap ? yaml.dump(modelMap, { indent: 2, lineWidth: -1 }) : "");
     setModelMapError(null);
+    setCustomModelsText(
+      provider.useCustomModelsList && provider.customModelsList?.length
+        ? provider.customModelsList.join("\n")
+        : ""
+    );
     setShowAddModal(true);
   };
 
@@ -185,6 +196,7 @@ export default function Providers() {
     setFormData(DEFAULT_FORM);
     setModelMapText("");
     setModelMapError(null);
+    setCustomModelsText("");
   };
 
   const openDuplicateModal = (provider: Provider) => {
@@ -223,7 +235,12 @@ export default function Providers() {
     }
     // When editing, use the provider we opened (ids stay in sync) and never send apiKey.
     const isOfficial = editingProvider?.id === "official" || formData.id === "official";
-    const dataToSubmit = editingProvider
+    const customLines = customModelsText
+      .split("\n")
+      .map(l => l.trim())
+      .filter(l => l.length > 0);
+
+    const payload = editingProvider
       ? {
           ...formData,
           id: editingProvider.id,
@@ -234,6 +251,12 @@ export default function Providers() {
           ...formData,
           enabled: isOfficial ? true : formData.enabled,
         };
+
+    const dataToSubmit: AddProviderRequest = {
+      ...payload,
+      useCustomModelsList: formData.useCustomModelsList === true,
+      customModelsList: formData.useCustomModelsList === true ? customLines : undefined,
+    };
     addMutation.mutate(dataToSubmit);
   };
 
@@ -599,6 +622,37 @@ export default function Providers() {
                     </p>
                   </>
                 )}
+              </div>
+
+              {/* Custom models list */}
+              <div className="space-y-2 rounded-md border border-border/60 p-3">
+                <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="rounded border-input"
+                    checked={formData.useCustomModelsList === true}
+                    onChange={e => updateForm("useCustomModelsList", e.target.checked)}
+                  />
+                  Use custom models list
+                </label>
+                <p className="text-[10px] text-muted-foreground">
+                  When enabled, GET /models is answered locally from this list (no upstream).
+                  Optional query <code className="font-mono text-[10px]">limit</code> truncates the
+                  returned page; Anthropic-shaped responses set{" "}
+                  <code className="font-mono text-[10px]">has_more</code> accordingly.
+                </p>
+                {formData.useCustomModelsList ? (
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium">Model ids (one per line)</label>
+                    <textarea
+                      className="w-full px-2 py-1 text-xs border rounded-md bg-background font-mono"
+                      placeholder={"claude-3-5-sonnet-20241022\ngpt-4"}
+                      rows={5}
+                      value={customModelsText}
+                      onChange={e => setCustomModelsText(e.target.value)}
+                    />
+                  </div>
+                ) : null}
               </div>
 
               {/* Model Map */}

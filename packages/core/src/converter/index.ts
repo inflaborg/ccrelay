@@ -39,6 +39,10 @@ export {
   isAnthropicModelsListJson,
   convertOpenAIModelsToAnthropic,
   convertAnthropicModelsToOpenAI,
+  parseModelsListLimitFromTargetUrl,
+  buildOpenAIModelsListFromIds,
+  openAiModelsPageToAnthropicModelsList,
+  synthesizeCustomModelsListBody,
   type OpenAIModelsListResponse,
   type AnthropicModelsListResponse,
 } from "./modelsFallback";

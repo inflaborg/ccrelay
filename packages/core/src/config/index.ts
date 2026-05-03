@@ -525,6 +525,10 @@ function parseProvider(id: string, config: ProviderConfigInput): Provider {
   const modelMap = config.modelMap || config.model_map;
   const vlModelMap = config.vlModelMap || config.vl_model_map;
   const providerType = config.providerType || config.provider_type || "anthropic";
+  const useCustomModelsList =
+    config.useCustomModelsList === true || config.use_custom_models_list === true;
+  const rawList = config.customModelsList ?? config.custom_models_list;
+  const customModelsListNormalized = Array.isArray(rawList) ? rawList : undefined;
 
   return {
     id,
@@ -539,6 +543,12 @@ function parseProvider(id: string, config: ProviderConfigInput): Provider {
     headers: config.headers ?? {},
     // `official` is always on; YAML may be hand-edited to false
     enabled: id === "official" ? true : config.enabled !== false,
+    ...(useCustomModelsList
+      ? {
+          useCustomModelsList: true,
+          customModelsList: customModelsListNormalized ?? [],
+        }
+      : {}),
   };
 }
 
@@ -1359,6 +1369,12 @@ export class ConfigManager {
         vl_model_map: config.vl_model_map,
         headers: config.headers,
         enabled: id === "official" ? true : (config.enabled ?? true),
+        useCustomModelsList: config.useCustomModelsList,
+        // eslint-disable-next-line @typescript-eslint/naming-convention -- YAML snake_case parity
+        use_custom_models_list: config.use_custom_models_list,
+        customModelsList: config.customModelsList,
+        // eslint-disable-next-line @typescript-eslint/naming-convention -- YAML snake_case parity
+        custom_models_list: config.custom_models_list,
       };
 
       rawConfig.providers = sortProviderMapKeys(providers);

@@ -52,6 +52,10 @@ export const ProviderConfigSchema = z.object({
   vl_model_map: z.array(ModelMapEntrySchema).optional(),
   headers: z.record(z.string(), z.string()).optional(),
   enabled: z.boolean().optional(),
+  useCustomModelsList: z.boolean().optional(),
+  use_custom_models_list: z.boolean().optional(),
+  customModelsList: z.array(z.string()).optional(),
+  custom_models_list: z.array(z.string()).optional(),
 });
 
 export type ProviderConfigInput = z.infer<typeof ProviderConfigSchema>;
@@ -241,6 +245,10 @@ export interface Provider {
   vlModelMap?: ModelMapEntry[];
   headers?: Record<string, string>;
   enabled?: boolean;
+  /** When true, GET /models is served locally from {@link Provider.customModelsList} (no upstream). */
+  useCustomModelsList?: boolean;
+  /** Model ids exposed when {@link Provider.useCustomModelsList} is true. */
+  customModelsList?: string[];
 }
 
 export interface RouterConfig {
@@ -286,6 +294,8 @@ export interface ProviderInfo {
   baseUrl?: string;
   apiKey?: string;
   modelMap?: ModelMapEntry[];
+  useCustomModelsList?: boolean;
+  customModelsList?: string[];
 }
 
 export interface ProxyRequest {

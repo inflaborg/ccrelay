@@ -16,6 +16,8 @@ export interface Provider {
   enabled: boolean;
   apiKey?: string;
   modelMap?: ModelMapEntry[];
+  useCustomModelsList?: boolean;
+  customModelsList?: string[];
 }
 
 export interface ProvidersResponse {
@@ -58,6 +60,8 @@ export interface AddProviderRequest {
   modelMap?: ModelMapEntry[];
   vlModelMap?: ModelMapEntry[];
   headers?: Record<string, string>;
+  useCustomModelsList?: boolean;
+  customModelsList?: string[];
 }
 
 export interface AddProviderResponse {

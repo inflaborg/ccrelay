@@ -20,6 +20,7 @@ import {
   isAnthropicModelsListJson,
   isModelsListUpstreamPath,
   isOpenAIModelsListJson,
+  synthesizeCustomModelsListBody,
   isOpenAIType,
   createStreamingState,
   processStreamingChunk,
@@ -138,6 +139,33 @@ export class ProxyExecutor {
         errorMessage: "Client disconnected",
         duration: 0,
       };
+    }
+
+    if (
+      provider.useCustomModelsList &&
+      method === "GET" &&
+      isModelsListUpstreamPath(task.requestPath)
+    ) {
+      const synthStart = Date.now();
+      const ids = provider.customModelsList ?? [];
+      const body = synthesizeCustomModelsListBody({
+        clientSurface: task.clientSurface,
+        fullModelIds: ids,
+        targetUrl,
+      });
+      const chunks = [Buffer.from(body, "utf-8")];
+      const duration = Date.now() - synthStart;
+      log.info(
+        `[${clientId}] GET /models: useCustomModelsList for ${provider.id}, models=${ids.length}`
+      );
+      this.responseLogger.logResponse(clientId, duration, 200, chunks, undefined);
+      return Promise.resolve({
+        statusCode: 200,
+        headers: { "content-type": "application/json; charset=utf-8" },
+        body,
+        duration,
+        responseBodyChunks: chunks,
+      });
     }
 
     const maxRetries = 2;
@@ -269,7 +297,9 @@ export class ProxyExecutor {
     const status = proxyRes.statusCode || 200;
     ctx.firstByteTime = Date.now();
 
-    log.info(`[Perf:${clientId}] TTFB: ${ttfb}ms (upstream response headers, total elapsed: ${duration}ms)`);
+    log.info(
+      `[Perf:${clientId}] TTFB: ${ttfb}ms (upstream response headers, total elapsed: ${duration}ms)`
+    );
 
     // Log response
     if (status >= 400) {
@@ -424,7 +454,15 @@ export class ProxyExecutor {
     }
 
     // Non-streaming: buffer the response
-    this.handleBufferedResponse(proxyRes, task, ctx, onClientDisconnect, status, responseHeaders, resolve);
+    this.handleBufferedResponse(
+      proxyRes,
+      task,
+      ctx,
+      onClientDisconnect,
+      status,
+      responseHeaders,
+      resolve
+    );
   }
 
   /**
@@ -498,7 +536,10 @@ export class ProxyExecutor {
 
       try {
         const openaiResponse = JSON.parse(responseBody) as OpenAIChatCompletionResponse;
-        const anthropicResponse = convertResponseToAnthropic(openaiResponse, originalModel || "none");
+        const anthropicResponse = convertResponseToAnthropic(
+          openaiResponse,
+          originalModel || "none"
+        );
 
         ctx.responseChunks.push(Buffer.from(JSON.stringify(anthropicResponse), "utf-8"));
 
@@ -592,9 +633,7 @@ export class ProxyExecutor {
 
         if (task.streamRequested) {
           const sse = formatOpenAIChatCompletionsSse(openaiResponse);
-          log.info(
-            `[A->ChatCompletions] synthetic SSE: bytes=${sse.length}`
-          );
+          log.info(`[A->ChatCompletions] synthetic SSE: bytes=${sse.length}`);
           ctx.responseChunks.push(Buffer.from(sse, "utf-8"));
           this.responseLogger.logResponse(
             clientId,
@@ -694,8 +733,10 @@ export class ProxyExecutor {
         if (responseBody.startsWith("data:")) {
           const dataLines = responseBody
             .split("\n")
-            .map((line) => line.trim())
-            .filter((line) => line.startsWith("data:") && line !== "data: [DONE]" && line !== "data:[DONE]");
+            .map(line => line.trim())
+            .filter(
+              line => line.startsWith("data:") && line !== "data: [DONE]" && line !== "data:[DONE]"
+            );
           if (dataLines.length > 0) {
             const lastLine = dataLines[dataLines.length - 1];
             jsonBody = lastLine.slice("data:".length).trim();
@@ -714,15 +755,11 @@ export class ProxyExecutor {
         if (responsesStreamRequested) {
           const sse = formatOpenAIResponsesSse(out);
           // if (process.env.CCRELAY_LOG_RESPONSES_SSE === "1") {
-            const head = sse
-              .split("\n\n")
-              .filter(Boolean)
-              .slice(0, 6)
-              .join(" | ");
-            log.info(
-              `[Chat->Responses] synthetic SSE: bytes=${sse.length} ` +
-                `data_lines~=${sse.split("\n\n").length} head=${head.slice(0, 2000)}`
-            );
+          const head = sse.split("\n\n").filter(Boolean).slice(0, 6).join(" | ");
+          log.info(
+            `[Chat->Responses] synthetic SSE: bytes=${sse.length} ` +
+              `data_lines~=${sse.split("\n\n").length} head=${head.slice(0, 2000)}`
+          );
           // }
           ctx.responseChunks.push(Buffer.from(sse, "utf-8"));
           this.responseLogger.logResponse(
@@ -832,7 +869,10 @@ export class ProxyExecutor {
       totalBytes += chunk.length;
       if (chunkCount === 1) {
         firstChunkTime = Date.now() - startTime;
-        const preview = chunk.length > 200 ? `${chunk.slice(0, 200).toString("utf-8")}...` : chunk.toString("utf-8");
+        const preview =
+          chunk.length > 200
+            ? `${chunk.slice(0, 200).toString("utf-8")}...`
+            : chunk.toString("utf-8");
         log.info(`[Chat->Responses SSE] First chunk: ${chunk.length} bytes, preview="${preview}"`);
       }
       lineBuffer.feed(chunk);
@@ -874,7 +914,7 @@ export class ProxyExecutor {
       });
     });
 
-    proxyRes.on("error", (err) => {
+    proxyRes.on("error", err => {
       log.error(`[Chat->Responses SSE] upstream error for ${provider.id}`, err);
       clientRes!.end();
     });
@@ -927,15 +967,11 @@ export class ProxyExecutor {
         if (responsesStreamRequested) {
           const sse = formatOpenAIResponsesSse(out);
           // if (process.env.CCRELAY_LOG_RESPONSES_SSE === "1") {
-            const head = sse
-              .split("\n\n")
-              .filter(Boolean)
-              .slice(0, 6)
-              .join(" | ");
-            log.info(
-              `[A->Responses] synthetic SSE: bytes=${sse.length} ` +
-                `data_lines~=${sse.split("\n\n").length} head=${head.slice(0, 2000)}`
-            );
+          const head = sse.split("\n\n").filter(Boolean).slice(0, 6).join(" | ");
+          log.info(
+            `[A->Responses] synthetic SSE: bytes=${sse.length} ` +
+              `data_lines~=${sse.split("\n\n").length} head=${head.slice(0, 2000)}`
+          );
           // }
           ctx.responseChunks.push(Buffer.from(sse, "utf-8"));
           this.responseLogger.logResponse(
@@ -1050,7 +1086,9 @@ export class ProxyExecutor {
       if (!ctx.firstChunkLogged) {
         ctx.firstChunkLogged = true;
         const firstChunkDelay = Date.now() - ctx.firstByteTime;
-        log.info(`[Perf:${clientId}] FirstChunk: ${firstChunkDelay}ms after headers, ${chunk.length} bytes`);
+        log.info(
+          `[Perf:${clientId}] FirstChunk: ${firstChunkDelay}ms after headers, ${chunk.length} bytes`
+        );
       }
 
       // Log every 10 chunks or large chunks (>10KB)
@@ -1143,7 +1181,9 @@ export class ProxyExecutor {
       const outHeaders: Record<string, string | string[]> = { ...responseHeaders };
 
       // GET /models: convert list shape only when entry path protocol differs from provider upstream wire
-      const upstreamWireFmt: ApiSurface = isOpenAIType(task.provider.providerType) ? "openai" : "anthropic";
+      const upstreamWireFmt: ApiSurface = isOpenAIType(task.provider.providerType)
+        ? "openai"
+        : "anthropic";
       const modelsCrossProtocolConversion =
         task.method === "GET" &&
         isModelsListUpstreamPath(task.requestPath) &&
@@ -1191,8 +1231,14 @@ export class ProxyExecutor {
       }
 
       // Cross-protocol: convert error response format to match client's expected API surface
-      const upstreamWire: ApiSurface = isOpenAIType(task.provider.providerType) ? "openai" : "anthropic";
-      if (outStatus >= 400 && task.clientSurface !== upstreamWire && ctx.responseChunks.length > 0) {
+      const upstreamWire: ApiSurface = isOpenAIType(task.provider.providerType)
+        ? "openai"
+        : "anthropic";
+      if (
+        outStatus >= 400 &&
+        task.clientSurface !== upstreamWire &&
+        ctx.responseChunks.length > 0
+      ) {
         try {
           const errorBody = Buffer.concat(ctx.responseChunks).toString("utf-8");
           const parsed = JSON.parse(errorBody) as Record<string, unknown>;
@@ -1202,8 +1248,7 @@ export class ProxyExecutor {
               ((parsed.error as Record<string, unknown>)?.message as string) ||
               (parsed.message as string) ||
               errorBody;
-            const type =
-              ((parsed.error as Record<string, unknown>)?.type as string) || "api_error";
+            const type = ((parsed.error as Record<string, unknown>)?.type as string) || "api_error";
             wrappedError = JSON.stringify({ type: "error", error: { type, message } });
           } else {
             const message =
@@ -1225,7 +1270,13 @@ export class ProxyExecutor {
         }
       }
 
-      this.responseLogger.logResponse(clientId, totalDuration, outStatus, ctx.responseChunks, undefined);
+      this.responseLogger.logResponse(
+        clientId,
+        totalDuration,
+        outStatus,
+        ctx.responseChunks,
+        undefined
+      );
       resolve({
         statusCode: outStatus,
         headers: outHeaders,
@@ -1264,7 +1315,13 @@ export class ProxyExecutor {
       // Check if aborted by client disconnect
       if (abortSignal.aborted) {
         log.info(`[${clientId}] Request aborted (client disconnect) after ${duration}ms`);
-        this.responseLogger.logResponse(clientId, duration, 499, ctx.responseChunks, "Client disconnected");
+        this.responseLogger.logResponse(
+          clientId,
+          duration,
+          499,
+          ctx.responseChunks,
+          "Client disconnected"
+        );
         resolve({
           statusCode: 499,
           headers: {},
@@ -1287,7 +1344,9 @@ export class ProxyExecutor {
 
         setTimeout(() => {
           if (this.executeFn) {
-            this.executeFn({ ...task, attempt: attempt + 1 }).then(resolve).catch(reject);
+            this.executeFn({ ...task, attempt: attempt + 1 })
+              .then(resolve)
+              .catch(reject);
           } else {
             reject(new Error(`Proxy error: ${err.message} (no retry handler)`));
           }
