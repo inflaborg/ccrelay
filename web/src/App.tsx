@@ -43,7 +43,7 @@ function useHashTab(defaultTab: Tab): [Tab, (tab: Tab) => void] {
 }
 
 function App() {
-  const [activeTab, setActiveTab] = useHashTab("providers");
+  const [activeTab, setActiveTab] = useHashTab("dashboard");
   const [version, setVersion] = useState<string | null>(null);
 
   useEffect(() => {
