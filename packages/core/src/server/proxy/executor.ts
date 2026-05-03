@@ -187,6 +187,9 @@ export class ProxyExecutor {
     }
 
     log.info(`[Perf:${clientId}] ExecuteRequestStart: starting upstream request to ${provider.id}`);
+    log.info(
+      `[${clientId}] UpstreamTarget: ${method} inbound=${task.inboundPath} requestPath=${task.requestPath} url=${targetUrl}`
+    );
 
     return new Promise<ProxyResult>((resolve, reject) => {
       const proxyReq = httpModule.request(options, proxyRes => {

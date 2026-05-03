@@ -323,7 +323,7 @@ vlModelMap:
 
 **入站端点**
 
-指向 ccrelay 的 OpenAI 客户端通常使用 **`http://127.0.0.1:<端口>/openai`**（形如 `/openai/chat/completions`，无需 `/openai/v1/…`）；或使用 **`http://127.0.0.1:<端口>/v1`**，请求路径为 `/v1/chat/completions` 等。当上游 provider 的 `baseUrl` 已含 `/v1` 时，relay 会做路径对齐以免出现 `/v1/v1/…`。当 **入站 wire 与 `providerType` 不一致**（跨协议）时，**`BodyProcessor`** 会对 **GET 列模型**与 **POST `/v1/messages`** 按与请求转换器相同的规则对齐上游路径（见 [`crossProtocolUpstreamPath.ts`](packages/core/src/converter/crossProtocolUpstreamPath.ts)），而非仅在存在 JSON body 时才处理。
+指向 ccrelay 的 OpenAI 客户端通常使用 **`http://127.0.0.1:<端口>/openai`**（**`/openai/chat/completions`**、**`/openai/models`** — **不要** **`/openai/v1/…`**），或根地址上的 legacy **`/v1/...`**。**`resolveUpstreamPath`** 会将入站路径归一为**该协议的规范相对路径**（OpenAI：**`/models`**、**`/chat/completions`**、**`/responses`**；Anthropic：**`/v1/models`**、**`/v1/messages`** 等）。**`Router.getTargetUrl`** 只做 **`baseUrl` + path** 的朴素拼接（不做 `/v1` 去重），**`baseUrl`** 需按厂商文档自行配对。跨协议仍由 **`BodyProcessor`** 与 [`crossProtocolUpstreamPath.ts`](packages/core/src/converter/crossProtocolUpstreamPath.ts) 处理。
 
 | 路径 | 方法 | 客户端协议 |
 |------|------|--------------|

@@ -1,18 +1,16 @@
 /**
  * Router Stage - handles blocking check and routing resolution
  *
- * Derives upstream request paths from inbound HTTP paths:
+ * Derives the **client wire canonical path** (what the client protocol uses before cross-protocol remap):
  *
- * - **OpenAI (two supported ccrelay bases)**:
- *   - `http://host/openai` → `/openai/chat/completions`, `/openai/models`, … (no extra `/v1` in path).
- *   - `http://host/v1` → `/v1/chat/completions`, `/v1/models`, … (legacy host segment).
- *   When `provider.baseUrl` already includes `/v1`, an inbound path that still starts
- *   with `/v1/...` for these resources would join to `.../v1/v1/...`. For the three routes
- *   below we collapse `/v1/<resource>` → `/<resource>`. Same collapse applies after stripping
- *   `/openai` if an SDK emits `/openai/v1/...`.
+ * - **`/anthropic/...`** → strip `/anthropic` → Anthropic wire (`/v1/models`, `/v1/messages`, …).
+ * - **`/openai/...`** → strip `/openai` → OpenAI wire; if the remainder is **`/v1/models`** (GET) or
+ *   **`/v1/chat/completions` / `/v1/responses`** (POST), normalize to **`/models`**, **`/chat/completions`**,
+ *   **`/responses`** so custom forwards on unsupported shapes still get correct OpenAI-relative paths.
+ * - **Legacy relay root **`/v1/...`** (no prefix)** → normalize OpenAI-wire inbounds (**`/v1/models`**, …) to **`/models`**, **`/chat/completions`**,
+ *   **`/responses`** per method; Anthropic (**`/v1/messages`**, …) stays **`/v1/...`**.
  *
- * - **Anthropic**: `/anthropic/v1/messages`, `/anthropic/v1/models`, … strip `/anthropic` only;
- *   upstream path keeps canonical `/v1/...`.
+ * **`Router.getTargetUrl`** concatenates **`provider.baseUrl`** + path **without** deduplication (`/v1` is part of vendor config).
  */
 
 import type * as http from "http";
@@ -25,12 +23,25 @@ import { isOpenAIType } from "../../converter";
 const INBOUND_PREFIX_OPENAI = "/openai/";
 const INBOUND_PREFIX_ANTHROPIC = "/anthropic/";
 
-/** Collapse inbound `/v1/<resource>` for OpenAI-wire paths when upstream `baseUrl` already ends with `/v1`. */
-const LEGACY_OPENAI_V1_PATH_COLLAPSE = new Map<string, string>([
-  ["/v1/chat/completions", "/chat/completions"],
-  ["/v1/responses", "/responses"],
-  ["/v1/models", "/models"],
-]);
+function pathNoQuery(path: string): string {
+  const noQuery = path.split("?")[0] ?? path;
+  return noQuery.startsWith("/") ? noQuery : `/${noQuery}`;
+}
+
+/** Legacy `/v1/...` on relay root maps to OpenAI wire paths (method-specific). */
+function legacyV1ToOpenAiWireCanonical(method: string, path: string): string | null {
+  const m = (method || "GET").toUpperCase();
+  if (path === "/v1/models" && m === "GET") {
+    return "/models";
+  }
+  if (path === "/v1/chat/completions" && m === "POST") {
+    return "/chat/completions";
+  }
+  if (path === "/v1/responses" && m === "POST") {
+    return "/responses";
+  }
+  return null;
+}
 
 function stripAnthropicInboundPrefix(path: string): string | null {
   if (!path.startsWith(INBOUND_PREFIX_ANTHROPIC)) {
@@ -43,17 +54,23 @@ function stripOpenaiInboundPrefix(path: string): string {
   return path.startsWith(INBOUND_PREFIX_OPENAI) ? path.slice("/openai".length) : path;
 }
 
-function collapseDuplicateOpenAiV1Segment(pathAfterPrefixStrips: string): string {
-  return LEGACY_OPENAI_V1_PATH_COLLAPSE.get(pathAfterPrefixStrips) ?? pathAfterPrefixStrips;
-}
-
-export function resolveUpstreamPath(clientPath: string): string {
-  const anthropicStripped = stripAnthropicInboundPrefix(clientPath);
+/**
+ * Client wire-relative path upstream (same as upstream path when protocol matches provider).
+ *
+ * `method` is required because legacy **`/v1/models`** vs **`/v1/messages`** are disambiguated by HTTP method.
+ */
+export function resolveUpstreamPath(method: string, clientPath: string): string {
+  const p = pathNoQuery(clientPath);
+  const anthropicStripped = stripAnthropicInboundPrefix(p);
   if (anthropicStripped !== null) {
     return anthropicStripped;
   }
-  const withoutOpenAiPrefix = stripOpenaiInboundPrefix(clientPath);
-  return collapseDuplicateOpenAiV1Segment(withoutOpenAiPrefix);
+
+  const afterOpenai = stripOpenaiInboundPrefix(p);
+  const hadOpenaiPrefix = afterOpenai !== p;
+  const candidate = hadOpenaiPrefix ? afterOpenai : p;
+  const normalized = legacyV1ToOpenAiWireCanonical(method, candidate);
+  return normalized ?? candidate;
 }
 
 /**
@@ -114,7 +131,7 @@ export class RouterStage {
 
     // 3. Build target URL
     const targetQuery = typeof parsedUrl.search === "string" ? parsedUrl.search : "";
-    const targetPath = resolveUpstreamPath(path);
+    const targetPath = resolveUpstreamPath(method, path);
     let targetUrl = this.router.getTargetUrl(targetPath, provider);
     if (targetQuery) {
       targetUrl += targetQuery;

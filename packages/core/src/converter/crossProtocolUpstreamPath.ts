@@ -32,8 +32,7 @@ export function mapAnthropicWirePathToOpenAiUpstream(path: string, method: strin
 /**
  * Maps OpenAI-shape upstream-relative paths when the upstream provider speaks Anthropic wire.
  *
- * Models list after legacy collapse is often `/models`; Anthropic upstream expects `/v1/models` when
- * `baseUrl` is the API host root.
+ * Input paths are client OpenAI wire canonical (e.g. `/models`, `/chat/completions`; not `/v1/models` for models).
  */
 export function mapOpenAiWirePathToAnthropicUpstream(path: string, method: string): string {
   const m = (method || "GET").toUpperCase();
