@@ -4,8 +4,6 @@
  *
  * Key design: Stateless conversion, no external storage required.
  * Tool_use IDs are preserved directly without mapping.
- *
- * Reference: claude-code-router/anthropic.transformer.ts
  */
 
 /* eslint-disable @typescript-eslint/naming-convention */
@@ -182,7 +180,7 @@ export interface ConvertRequestToOpenAIOptions {
  * Convert Anthropic API request to OpenAI API format
  *
  * Design: Stateless conversion, preserves IDs without external storage.
- * Follows the message splitting pattern from claude-code-router:
+ * Message splitting:
  * - user messages with tool_result → split into separate tool messages
  * - assistant messages → join text, extract tool_calls & thinking
  * - system → supports both string and array forms
@@ -290,8 +288,7 @@ export function convertRequestToOpenAI(
 }
 
 /**
- * Convert thinking budget_tokens to effort level string
- * Reference: claude-code-router getThinkLevel utility
+ * Convert thinking budget_tokens to effort level string for OpenAI-style reasoning.
  */
 function getThinkLevel(budgetTokens?: number): string {
   if (!budgetTokens) {
@@ -311,7 +308,7 @@ function getThinkLevel(budgetTokens?: number): string {
 /**
  * Convert a single Anthropic message to one or more OpenAI messages.
  *
- * Key patterns (from claude-code-router reference):
+ * Key patterns:
  * - user message with tool_result blocks → each tool_result becomes a separate {role:"tool"} message
  * - user message with text/image blocks → single {role:"user"} message
  * - assistant message → joins text into string, extracts tool_calls, extracts thinking

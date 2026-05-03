@@ -3,7 +3,7 @@
  *
  * Product Requirements:
  * - Stateless conversion (no external storage for tool_use_id)
- * - Message splitting pattern follows claude-code-router design
+ * - Message splitting (tool_result → separate tool messages)
  * - User with tool_result → separate tool messages (role: "tool")
  * - User with text/image → single user message
  * - Assistant → joins text blocks, extracts tool_calls, extracts thinking
