@@ -27,6 +27,13 @@ import { QueueManager } from "./queueManager";
 import { ResponseLogger } from "./responseLogger";
 import { RequestHandler } from "./request";
 import { WsBroadcaster, WsFollowerClient } from "./websocket";
+import {
+  hasRequiredUiGateHeader,
+  isBearerAuthorized,
+  sendHtmlUiGateBlocked,
+  sendJsonUnauthorized,
+  corsExtraAllowedHeadersCsv,
+} from "./httpAccessGate";
 
 export class ProxyServer {
   private server: http.Server | null = null;
@@ -622,13 +629,23 @@ export class ProxyServer {
       return;
     }
 
-    // Serve static files (Web UI)
+    if (isApiRequest(path)) {
+      if (!isBearerAuthorized(req.headers, this.config.getApiBearerToken())) {
+        sendJsonUnauthorized(res);
+        return;
+      }
+    }
+
     if (isStaticRequest(path)) {
+      if (!hasRequiredUiGateHeader(req.headers)) {
+        sendHtmlUiGateBlocked(res);
+        return;
+      }
       serveStatic(req, res);
       return;
     }
 
-    // Handle API requests (/ccrelay/api/*)
+    // Handle API requests (/ccrelay/api/*) — Bearer validated above
     if (isApiRequest(path)) {
       handleApiRequest(req, res);
       return;
@@ -644,7 +661,7 @@ export class ProxyServer {
   private setCorsHeaders(res: http.ServerResponse): void {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key");
+    res.setHeader("Access-Control-Allow-Headers", corsExtraAllowedHeadersCsv());
   }
 
   /**

@@ -27,7 +27,7 @@ export function handleGetConfig(_req: http.IncomingMessage, res: http.ServerResp
   }
   const configManager = serverInstance.getConfig();
   try {
-    const raw = configManager.getConfigRaw();
+    const raw = configManager.getConfigRawForApi();
     sendJson(res, 200, raw);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

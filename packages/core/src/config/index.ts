@@ -4,9 +4,10 @@
  * Auto-initializes config file with defaults if not exists
  */
 
-import * as path from "path";
+import * as crypto from "crypto";
 import * as fs from "fs";
 import * as os from "os";
+import * as path from "path";
 import * as yaml from "js-yaml";
 import {
   RouterConfig,
@@ -42,6 +43,7 @@ server:
   port: 7575                    # Proxy server port
   host: "127.0.0.1"             # Bind address
   autoStart: true               # Auto-start server when extension loads
+  # apiBearerToken: (optional — auto-generated and written on first load if omitted)
 
 # ==================== Provider Configuration ====================
 providers:
@@ -380,6 +382,10 @@ export function resolveProviderKeyInMap(mapKeys: string[], requestedId: string):
   return null;
 }
 
+function generateApiBearerToken(): string {
+  return crypto.randomBytes(32).toString("base64url");
+}
+
 export class ConfigManager {
   private config: RouterConfig;
   private configPath: string;
@@ -398,7 +404,7 @@ export class ConfigManager {
     // Ensure config file exists with defaults
     this.ensureConfigFile();
 
-    // Load configuration
+    // Load configuration (ensures Bearer token persisted if missing)
     this.config = this.loadConfig();
 
     // Watch the YAML config file for external edits
@@ -445,6 +451,87 @@ export class ConfigManager {
     if (this.fileWatcher) {
       this.fileWatcher.close();
       this.fileWatcher = null;
+    }
+  }
+
+  /**
+   * Write server.apiBearerToken into config.yaml preserving other keys.
+   */
+  private writeServerBearerToDisk(token: string): void {
+    try {
+      const raw = fs.existsSync(this.configPath)
+        ? ((yaml.load(fs.readFileSync(this.configPath, "utf-8")) as Record<string, unknown>) ?? {})
+        : {};
+      const prevServer =
+        raw.server && typeof raw.server === "object" && !Array.isArray(raw.server)
+          ? { ...(raw.server as Record<string, unknown>) }
+          : {};
+      prevServer.apiBearerToken = token;
+      raw.server = prevServer;
+
+      const yamlContent = yaml.dump(raw, {
+        indent: 2,
+        lineWidth: -1,
+        noRefs: true,
+        quotingType: '"',
+        forceQuotes: false,
+      });
+      this.saving = true;
+      fs.writeFileSync(this.configPath, yamlContent, "utf-8");
+      this.saving = false;
+      console.warn("[ConfigManager] Wrote server.apiBearerToken after missing merge result");
+    } catch (err) {
+      this.saving = false;
+      console.error("[ConfigManager] writeServerBearerToDisk failed:", err);
+    }
+  }
+
+  /**
+   * If config.yaml lacks server.apiBearerToken, generate one and persist.
+   */
+  private ensureBearerTokenPersisted(): void {
+    if (!fs.existsSync(this.configPath)) {
+      return;
+    }
+    try {
+      const content = fs.readFileSync(this.configPath, "utf-8");
+      const raw = yaml.load(content) as Record<string, unknown> | null;
+      if (!raw || typeof raw !== "object") {
+        return;
+      }
+
+      let serverRaw = raw.server;
+      let serverObj: Record<string, unknown>;
+      if (serverRaw && typeof serverRaw === "object" && !Array.isArray(serverRaw)) {
+        serverObj = { ...(serverRaw as Record<string, unknown>) };
+      } else {
+        serverObj = {};
+        raw.server = serverObj;
+      }
+
+      const existing =
+        typeof serverObj.apiBearerToken === "string" ? serverObj.apiBearerToken.trim() : "";
+      if (existing.length > 0) {
+        return;
+      }
+
+      serverObj.apiBearerToken = generateApiBearerToken();
+      raw.server = serverObj;
+
+      const yamlContent = yaml.dump(raw, {
+        indent: 2,
+        lineWidth: -1,
+        noRefs: true,
+        quotingType: '"',
+        forceQuotes: false,
+      });
+      this.saving = true;
+      fs.writeFileSync(this.configPath, yamlContent, "utf-8");
+      this.saving = false;
+      console.log("[ConfigManager] Generated server.apiBearerToken and persisted to config.yaml");
+    } catch (err) {
+      this.saving = false;
+      console.error("[ConfigManager] ensureBearerTokenPersisted failed:", err);
     }
   }
 
@@ -505,6 +592,9 @@ export class ConfigManager {
    */
   private loadConfig(): RouterConfig {
     console.log(`[ConfigManager] Loading config from ${this.configPath}`);
+
+    // Persist API bearer if missing before reading merged config from disk
+    this.ensureBearerTokenPersisted();
 
     // Load from file
     let fileConfig: FileConfigInput = {};
@@ -743,10 +833,18 @@ export class ConfigManager {
 
     const routing = { forward: forwardRules, block: blockRules };
 
+    let apiBearerTok =
+      typeof merged.server?.apiBearerToken === "string" ? merged.server.apiBearerToken.trim() : "";
+    if (apiBearerTok.length === 0) {
+      apiBearerTok = generateApiBearerToken();
+      this.writeServerBearerToDisk(apiBearerTok);
+    }
+
     return {
       port: merged.server?.port || 7575,
       host: merged.server?.host || "127.0.0.1",
       autoStart: merged.server?.autoStart ?? true,
+      apiBearerToken: apiBearerTok,
       defaultProvider: merged.defaultProvider || "official",
       providers,
       routing,
@@ -823,6 +921,13 @@ export class ConfigManager {
       return available[0];
     }
     return "official";
+  }
+
+  /**
+   * Secret for authenticated /ccrelay/api reads (timing-safe comparisons use buffers).
+   */
+  getApiBearerToken(): string {
+    return this.config.apiBearerToken;
   }
 
   get port(): number {
@@ -1065,6 +1170,29 @@ export class ConfigManager {
       console.error("[ConfigManager] Failed to delete provider:", err);
       return false;
     }
+  }
+
+  /**
+   * Like getConfigRaw but redacts secrets for GET /ccrelay/api/config responses.
+   */
+  getConfigRawForApi(): Record<string, unknown> {
+    const raw = this.getConfigRaw();
+    const serverRaw = raw.server as Record<string, unknown> | undefined;
+    let serverClone: Record<string, unknown>;
+
+    if (serverRaw && typeof serverRaw === "object" && !Array.isArray(serverRaw)) {
+      serverClone = { ...serverRaw };
+      if ("apiBearerToken" in serverClone) {
+        serverClone.apiBearerToken = "<redacted>";
+      }
+    } else {
+      serverClone = {};
+    }
+
+    return {
+      ...raw,
+      server: serverClone,
+    };
   }
 
   /**

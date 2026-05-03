@@ -25,7 +25,24 @@ export type { LogEntry, LogsQuery };
 declare global {
   interface Window {
     CCRELAY_API_URL?: string;
+    /** Injected by VS Code / Cursor dashboard & log viewer webviews for /ccrelay/api Bearer auth */
+    CCRELAY_API_BEARER?: string;
   }
+}
+
+function buildDefaultHeaders(includeJsonBody: boolean): Record<string, string> {
+  const h: Record<string, string> = {};
+  if (includeJsonBody) {
+    h["Content-Type"] = "application/json";
+  }
+  const bearer =
+    typeof window !== "undefined" && typeof window.CCRELAY_API_BEARER === "string"
+      ? window.CCRELAY_API_BEARER.trim()
+      : "";
+  if (bearer.length > 0) {
+    h.Authorization = `Bearer ${bearer}`;
+  }
+  return h;
 }
 
 // Check for injected API URL (VSCode webview) or use relative path (dev server)
@@ -34,7 +51,7 @@ const API_BASE = window.CCRELAY_API_URL ? `${window.CCRELAY_API_URL}/ccrelay/api
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${endpoint}`, {
     headers: {
-      "Content-Type": "application/json",
+      ...buildDefaultHeaders(true),
       ...options?.headers,
     },
     ...options,
@@ -131,7 +148,7 @@ export const api = {
     const response = await fetch(`${API_BASE}/client-config/apply`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        ...buildDefaultHeaders(true),
       },
       body: JSON.stringify(body),
     });

@@ -71,6 +71,8 @@ export const ServerConfigSchema = z.object({
   port: z.number().int().positive().default(7575),
   host: z.string().default("127.0.0.1"),
   autoStart: z.boolean().default(true),
+  /** Local HTTP API Bearer; auto-written when omitted (see ConfigManager). */
+  apiBearerToken: z.string().optional(),
 });
 
 export type ServerConfigInput = z.infer<typeof ServerConfigSchema>;
@@ -250,6 +252,8 @@ export interface RouterConfig {
   port: number;
   host: string;
   autoStart: boolean;
+  /** Secret for Authorization: Bearer on /ccrelay/api/*. Never empty after loadConfig. */
+  apiBearerToken: string;
   defaultProvider: string;
   providers: Record<string, Provider>;
   routing: {

@@ -43,18 +43,19 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Initialize configuration manager (auto-creates config file if not exists)
   const configStart = Date.now();
-  configManager = new ConfigManager();
+  const cm = new ConfigManager();
+  configManager = cm;
   logger.info(
     `[Extension:${instanceId}] ConfigManager initialized in ${Date.now() - configStart}ms`
   );
 
   // Get server configuration
-  const port = configManager.port;
-  const host = configManager.host;
+  const port = cm.port;
+  const host = cm.host;
 
   const leaderElectionStart = Date.now();
   logger.info(`[Extension:${instanceId}] Leader election enabled`);
-  leaderElection = new LeaderElection(port, host);
+  leaderElection = new LeaderElection(port, host, () => cm.getApiBearerToken());
   logger.info(
     `[Extension:${instanceId}] LeaderElection initialized in ${Date.now() - leaderElectionStart}ms`
   );
@@ -74,6 +75,7 @@ export function activate(context: vscode.ExtensionContext) {
         leaderUrl: "",
         host: "127.0.0.1",
         port: 7575,
+        apiBearerToken: "",
       };
     }
     return {
@@ -81,6 +83,7 @@ export function activate(context: vscode.ExtensionContext) {
       leaderUrl: server.getLeaderUrl() ?? "",
       host: configManager.host,
       port: configManager.port,
+      apiBearerToken: configManager.getApiBearerToken(),
     };
   };
 
@@ -141,7 +144,14 @@ export function activate(context: vscode.ExtensionContext) {
     const portUi = configManager.port;
     const hostUi = configManager.host;
 
-    await LogViewerPanel.createOrShow(leaderUrl, role, hostUi, portUi, context.extensionUri);
+    await LogViewerPanel.createOrShow(
+      leaderUrl,
+      role,
+      hostUi,
+      portUi,
+      context.extensionUri,
+      configManager.getApiBearerToken()
+    );
   });
 
   context.subscriptions.push(

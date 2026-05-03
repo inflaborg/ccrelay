@@ -2,10 +2,12 @@
  * CCRelay desktop — Electron main process (system tray + shared core runtime)
  */
 
-import { Menu, app } from "electron";
+import { Menu, app, session } from "electron";
 import * as path from "path";
 import {
   Api,
+  CCRELAY_UI_HEADER_NAME,
+  CCRELAY_UI_HEADER_VALUE,
   ConfigManager,
   LeaderElection,
   Logger,
@@ -14,6 +16,29 @@ import {
 } from "@ccrelay/core";
 import { createTray } from "./tray";
 import { showDashboardWindow, dashboardWebUrl } from "./window";
+
+function registerLocalCcrelayRequestHeaders(configManager: ConfigManager): void {
+  const port = configManager.port;
+  const bindHost = configManager.host.trim();
+  const urls: string[] = [
+    `http://127.0.0.1:${port}/ccrelay/*`,
+    `http://localhost:${port}/ccrelay/*`,
+  ];
+  if (bindHost && bindHost !== "127.0.0.1" && bindHost !== "localhost") {
+    urls.push(`http://${bindHost}:${port}/ccrelay/*`);
+  }
+
+  session.defaultSession.webRequest.onBeforeSendHeaders({ urls }, (details, callback) => {
+    const requestHeaders: Record<string, string | string[]> = {
+      ...(details.requestHeaders as Record<string, string | string[]>),
+      [CCRELAY_UI_HEADER_NAME]: CCRELAY_UI_HEADER_VALUE,
+    };
+    if (details.url.includes("/ccrelay/api/")) {
+      requestHeaders.Authorization = `Bearer ${configManager.getApiBearerToken()}`;
+    }
+    callback({ requestHeaders });
+  });
+}
 
 function resolveWebDist(): string {
   if (app.isPackaged) {
@@ -47,8 +72,12 @@ void app.whenReady().then(async () => {
   setWebDistPath(resolveWebDist());
 
   const configManager = new ConfigManager();
-  const leaderElection = new LeaderElection(configManager.port, configManager.host);
+  const leaderElection = new LeaderElection(configManager.port, configManager.host, () =>
+    configManager.getApiBearerToken()
+  );
   const server = new ProxyServer(configManager, leaderElection);
+
+  registerLocalCcrelayRequestHeaders(configManager);
 
   app.on("second-instance", () => {
     try {
