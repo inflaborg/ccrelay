@@ -179,6 +179,26 @@ describe("synthesizeCustomModelsListBody", () => {
     expect(body.data.map(e => e.id)).toEqual(["gpt-5.4-mini"]);
   });
 
+  it("collapses custom list ids to the catch-all * mapping target then dedupes", () => {
+    const raw = synthesizeCustomModelsListBody({
+      clientSurface: "anthropic",
+      fullModelIds: ["gpt-5.4", "gpt-5.4-mini"],
+      targetUrl: "https://up.example/models",
+      provider: {
+        ...stubProvider,
+        modelMap: [{ pattern: "*", model: "gpt-5.4" }],
+      },
+    });
+    const body = JSON.parse(raw) as {
+      data: Array<{ id: string }>;
+      first_id: string;
+      last_id: string;
+    };
+    expect(body.data.map(e => e.id)).toEqual(["gpt-5.4"]);
+    expect(body.first_id).toBe("gpt-5.4");
+    expect(body.last_id).toBe("gpt-5.4");
+  });
+
   it("leaves ids that already match a forward pattern unchanged", () => {
     const raw = synthesizeCustomModelsListBody({
       clientSurface: "openai",

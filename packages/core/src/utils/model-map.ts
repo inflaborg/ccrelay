@@ -2,6 +2,7 @@
  * Model list display helpers: map upstream / wire ids to client-facing labels using modelMap / vlModelMap.
  */
 import type { ModelMapEntry, Provider } from "../types";
+import { matchModel } from "../server/request/modelMapping";
 
 export function providerHasConfigurableModelMap(provider: Provider): boolean {
   if (provider.modelMappingEnabled === false) {
@@ -54,9 +55,11 @@ function mapChains(provider: Provider): ModelMapEntry[][] {
  *
  * 1. If `wireId` equals some `entry.model` and `entry.pattern` is not degenerate (not e.g. "*"),
  *    return that pattern (upstream id → client rule).
- * 2. Else if `wireId` already matches a forward mapping rule (pattern match / exact pattern), leave it
+ * 2. Else if `wireId` matches a rule whose `pattern` is degenerate (only `*` / `?`), return that rule's
+ *    `model` (same forward target as {@link matchModel}; catch-all lists collapse before dedupe).
+ * 3. Else if `wireId` already matches a forward mapping rule (pattern match / exact pattern), leave it
  *    (already client-shaped; avoids bogus rewrites).
- * 3. Else return `wireId`.
+ * 4. Else return `wireId`.
  */
 export function clientFacingModelIdForModelsList(wireId: string, provider: Provider): string {
   if (provider.modelMappingEnabled === false) {
@@ -74,6 +77,13 @@ export function clientFacingModelIdForModelsList(wireId: string, provider: Provi
       ) {
         return e.pattern;
       }
+    }
+  }
+
+  for (const entries of chains) {
+    const hit = matchModel(wireId, entries);
+    if (hit && isDegenerateListPattern(hit.pattern)) {
+      return hit.targetModel;
     }
   }
 
