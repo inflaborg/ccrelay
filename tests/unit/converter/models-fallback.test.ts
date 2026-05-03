@@ -8,7 +8,17 @@ import {
   isAnthropicModelsListJson,
   parseModelsListLimitFromTargetUrl,
   synthesizeCustomModelsListBody,
+  rewriteModelsListPayloadInPlace,
 } from "@/converter/models-fallback";
+
+const stubProvider = {
+  id: "stub",
+  name: "stub",
+  baseUrl: "https://x.example",
+  mode: "passthrough" as const,
+  providerType: "openai_chat" as const,
+  headers: {},
+};
 
 describe("isModelsListUpstreamPath", () => {
   it("recognizes rewritten OpenAI /models paths (query stripped)", () => {
@@ -93,6 +103,7 @@ describe("synthesizeCustomModelsListBody", () => {
       clientSurface: "openai",
       fullModelIds: ids,
       targetUrl: "https://up.example/models",
+      provider: stubProvider,
     });
     const body = JSON.parse(raw) as { object: string; data: Array<{ id: string }> };
     expect(body.object).toBe("list");
@@ -104,6 +115,7 @@ describe("synthesizeCustomModelsListBody", () => {
       clientSurface: "openai",
       fullModelIds: ids,
       targetUrl: "https://up.example/models?limit=2",
+      provider: stubProvider,
     });
     const body = JSON.parse(raw) as { data: Array<{ id: string }> };
     expect(body.data.map(e => e.id)).toEqual(["a", "b"]);
@@ -114,6 +126,7 @@ describe("synthesizeCustomModelsListBody", () => {
       clientSurface: "anthropic",
       fullModelIds: ids,
       targetUrl: "https://up.example/v1/models?limit=2",
+      provider: stubProvider,
     });
     const body = JSON.parse(raw) as {
       data: Array<{ id: string }>;
@@ -132,8 +145,67 @@ describe("synthesizeCustomModelsListBody", () => {
       clientSurface: "anthropic",
       fullModelIds: ids,
       targetUrl: "https://up.example/models?limit=10",
+      provider: stubProvider,
     });
     const body = JSON.parse(raw) as { has_more: boolean };
     expect(body.has_more).toBe(false);
+  });
+
+  it("maps custom list ids through reverse modelMap targets to client patterns", () => {
+    const raw = synthesizeCustomModelsListBody({
+      clientSurface: "openai",
+      fullModelIds: ["upstream-real"],
+      targetUrl: "https://up.example/models",
+      provider: {
+        ...stubProvider,
+        modelMap: [{ pattern: "claude-opus-4-5", model: "upstream-real" }],
+      },
+    });
+    const body = JSON.parse(raw) as { data: Array<{ id: string }> };
+    expect(body.data.map(e => e.id)).toEqual(["claude-opus-4-5"]);
+  });
+
+  it("skips reverse map for custom list when modelMappingEnabled is false", () => {
+    const raw = synthesizeCustomModelsListBody({
+      clientSurface: "openai",
+      fullModelIds: ["upstream-real"],
+      targetUrl: "https://up.example/models",
+      provider: {
+        ...stubProvider,
+        modelMappingEnabled: false,
+        modelMap: [{ pattern: "claude-opus-4-5", model: "upstream-real" }],
+      },
+    });
+    const body = JSON.parse(raw) as { data: Array<{ id: string }> };
+    expect(body.data.map(e => e.id)).toEqual(["upstream-real"]);
+  });
+});
+
+describe("rewriteModelsListPayloadInPlace", () => {
+  it("rewrites OpenAI list ids from mapping targets", () => {
+    const parsed = {
+      object: "list",
+      data: [{ id: "glm-4", object: "model", created: 1, owned_by: "x" }],
+    } as unknown as Record<string, unknown>;
+    const changed = rewriteModelsListPayloadInPlace(parsed, {
+      ...stubProvider,
+      modelMap: [{ pattern: "claude-*", model: "glm-4" }],
+    });
+    expect(changed).toBe(true);
+    expect((parsed.data as Array<{ id: string }>)[0].id).toBe("claude-*");
+  });
+
+  it("does not reverse-map when modelMappingEnabled is false", () => {
+    const parsed = {
+      object: "list",
+      data: [{ id: "glm-4", object: "model", created: 1, owned_by: "x" }],
+    } as unknown as Record<string, unknown>;
+    const changed = rewriteModelsListPayloadInPlace(parsed, {
+      ...stubProvider,
+      modelMappingEnabled: false,
+      modelMap: [{ pattern: "claude-*", model: "glm-4" }],
+    });
+    expect(changed).toBe(false);
+    expect((parsed.data as Array<{ id: string }>)[0].id).toBe("glm-4");
   });
 });

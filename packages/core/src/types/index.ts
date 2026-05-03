@@ -76,6 +76,9 @@ export const ProviderConfigSchema = z.object({
   custom_models_list: z.array(z.string()).optional(),
   openaiCompat: OpenAICompatSchema.optional(),
   openai_compat: OpenAICompatSchema.optional(),
+  /** When false, `modelMap` / `vlModelMap` are ignored (request remap, list remap, response model). Default: enabled. */
+  modelMappingEnabled: z.boolean().optional(),
+  model_mapping_enabled: z.boolean().optional(),
 });
 
 export type ProviderConfigInput = z.infer<typeof ProviderConfigSchema>;
@@ -263,6 +266,10 @@ export interface Provider {
   authHeader?: string;
   modelMap?: ModelMapEntry[];
   vlModelMap?: ModelMapEntry[];
+  /**
+   * When false, configured {@link modelMap}/{@link vlModelMap} are not applied. Default is on (undefined = enabled).
+   */
+  modelMappingEnabled?: boolean;
   headers?: Record<string, string>;
   enabled?: boolean;
   /** When true, GET /models is served locally from {@link Provider.customModelsList} (no upstream). */
@@ -316,6 +323,7 @@ export interface ProviderInfo {
   baseUrl?: string;
   apiKey?: string;
   modelMap?: ModelMapEntry[];
+  modelMappingEnabled?: boolean;
   useCustomModelsList?: boolean;
   customModelsList?: string[];
   openaiCompat?: OpenAICompat;

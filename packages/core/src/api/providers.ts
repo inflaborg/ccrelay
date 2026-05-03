@@ -61,6 +61,7 @@ export function handleListProviders(
     enabled: p.enabled !== false,
     apiKey: maskApiKey(p.apiKey),
     modelMap: p.modelMap,
+    modelMappingEnabled: p.modelMappingEnabled !== false,
     useCustomModelsList: Boolean(p.useCustomModelsList),
     customModelsList: p.useCustomModelsList ? (p.customModelsList ?? []) : undefined,
     openaiCompat: p.openaiCompat,
@@ -120,6 +121,9 @@ export async function handleAddProvider(
       enabled: effectiveEnabled,
       modelMap: body.modelMap,
       vlModelMap: body.vlModelMap,
+      ...(body.modelMappingEnabled !== undefined
+        ? { modelMappingEnabled: body.modelMappingEnabled }
+        : {}),
       headers: body.headers,
       useCustomModelsList: body.useCustomModelsList === true,
       ...(body.useCustomModelsList === true
@@ -197,6 +201,9 @@ function buildDuplicateConfigFromProvider(source: Provider, name: string): Provi
     authHeader: source.authHeader,
     modelMap: source.modelMap,
     vlModelMap: source.vlModelMap,
+    ...(source.modelMappingEnabled !== undefined
+      ? { modelMappingEnabled: source.modelMappingEnabled }
+      : {}),
     headers: source.headers && Object.keys(source.headers).length > 0 ? source.headers : undefined,
     enabled: source.enabled,
   };
@@ -333,6 +340,8 @@ interface AddProviderRequest {
   enabled?: boolean;
   modelMap?: ModelMapEntry[];
   vlModelMap?: ModelMapEntry[];
+  /** When false, model maps are stored but not applied. Omit or true = enabled (default). */
+  modelMappingEnabled?: boolean;
   headers?: Record<string, string>;
   useCustomModelsList?: boolean;
   customModelsList?: string[];

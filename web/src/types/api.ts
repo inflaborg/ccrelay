@@ -16,6 +16,8 @@ export interface Provider {
   enabled: boolean;
   apiKey?: string;
   modelMap?: ModelMapEntry[];
+  /** When false, model maps are kept but not applied. Default true (omit = enabled). */
+  modelMappingEnabled?: boolean;
   useCustomModelsList?: boolean;
   customModelsList?: string[];
   /** Set `azure_openai` when the upstream is Azure OpenAI (Anthropic client → Chat Completions). */
@@ -61,6 +63,8 @@ export interface AddProviderRequest {
   authHeader?: string;
   modelMap?: ModelMapEntry[];
   vlModelMap?: ModelMapEntry[];
+  /** When false, configured maps are not applied. Default true. */
+  modelMappingEnabled?: boolean;
   headers?: Record<string, string>;
   useCustomModelsList?: boolean;
   customModelsList?: string[];

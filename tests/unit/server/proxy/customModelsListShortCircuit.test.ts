@@ -68,4 +68,29 @@ describe("ProxyExecutor custom models list short-circuit", () => {
     expect(parsed.data.map(e => e.id)).toEqual(["a", "b"]);
     expect(parsed.has_more).toBe(true);
   });
+
+  it("applies reverse modelMap to synthetic custom list ids", async () => {
+    const task: RequestTask = {
+      id: "c3",
+      clientId: "c3",
+      method: "GET",
+      targetUrl: "https://api.example.com/v1/models",
+      headers: {},
+      body: null,
+      provider: {
+        ...baseProvider,
+        modelMap: [{ pattern: "claude-sonnet", model: "a" }],
+      },
+      inboundPath: "/anthropic/v1/models",
+      requestPath: "/v1/models",
+      isOpenAIProvider: false,
+      clientSurface: "anthropic",
+      createdAt: Date.now(),
+    };
+    const db = { enabled: false } as unknown as LogDatabase;
+    const executor = new ProxyExecutor(new ResponseLogger(db));
+    const result = await executor.execute(task);
+    const parsed = JSON.parse(result.body as string) as { data: Array<{ id: string }> };
+    expect(parsed.data.map(e => e.id)).toEqual(["claude-sonnet", "b", "c"]);
+  });
 });

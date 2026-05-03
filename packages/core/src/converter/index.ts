@@ -43,6 +43,7 @@ export {
   buildOpenAIModelsListFromIds,
   openAiModelsPageToAnthropicModelsList,
   synthesizeCustomModelsListBody,
+  rewriteModelsListPayloadInPlace,
   type OpenAIModelsListResponse,
   type AnthropicModelsListResponse,
 } from "./models-fallback";

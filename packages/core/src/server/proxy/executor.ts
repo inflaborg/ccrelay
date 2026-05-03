@@ -9,6 +9,7 @@ import * as http from "http";
 import * as https from "https";
 import * as url from "url";
 import { ScopedLogger } from "../../utils/logger";
+import { providerHasConfigurableModelMap } from "../../utils/model-map";
 import {
   convertAnthropicResponseToOpenAI,
   convertChatCompletionToResponses,
@@ -21,6 +22,7 @@ import {
   isModelsListUpstreamPath,
   isOpenAIModelsListJson,
   synthesizeCustomModelsListBody,
+  rewriteModelsListPayloadInPlace,
   isOpenAIType,
   createStreamingState,
   processStreamingChunk,
@@ -152,6 +154,7 @@ export class ProxyExecutor {
         clientSurface: task.clientSurface,
         fullModelIds: ids,
         targetUrl,
+        provider,
       });
       const chunks = [Buffer.from(body, "utf-8")];
       const duration = Date.now() - synthStart;
@@ -1227,6 +1230,54 @@ export class ProxyExecutor {
           }
         } catch {
           /* parse failed — keep original */
+        }
+      }
+
+      if (
+        task.method === "GET" &&
+        isModelsListUpstreamPath(task.requestPath) &&
+        outStatus === 200 &&
+        ctx.responseChunks.length > 0
+      ) {
+        try {
+          const bodyStr = Buffer.concat(ctx.responseChunks).toString("utf-8");
+          const parsed = JSON.parse(bodyStr) as Record<string, unknown>;
+          if (rewriteModelsListPayloadInPlace(parsed, task.provider)) {
+            ctx.responseChunks = [Buffer.from(JSON.stringify(parsed), "utf-8")];
+            outHeaders["content-type"] = "application/json";
+            for (const k of Object.keys(outHeaders)) {
+              if (k.toLowerCase() === "content-length") {
+                delete outHeaders[k];
+              }
+            }
+            log.info(`[${clientId}] GET /models: reverse modelMap applied to list ids`);
+          }
+        } catch {
+          /* keep original */
+        }
+      }
+
+      if (
+        outStatus === 200 &&
+        task.originalModel &&
+        providerHasConfigurableModelMap(task.provider) &&
+        ctx.responseChunks.length > 0 &&
+        !(task.method === "GET" && isModelsListUpstreamPath(task.requestPath))
+      ) {
+        try {
+          const bodyStr = Buffer.concat(ctx.responseChunks).toString("utf-8");
+          const parsed = JSON.parse(bodyStr) as Record<string, unknown>;
+          if (typeof parsed.model === "string" && parsed.model !== task.originalModel) {
+            parsed.model = task.originalModel;
+            ctx.responseChunks = [Buffer.from(JSON.stringify(parsed), "utf-8")];
+            for (const k of Object.keys(outHeaders)) {
+              if (k.toLowerCase() === "content-length") {
+                delete outHeaders[k];
+              }
+            }
+          }
+        } catch {
+          /* not JSON */
         }
       }
 

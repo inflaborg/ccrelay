@@ -203,7 +203,13 @@ export class Router {
    * Note: This method is deprecated, use BodyProcessor.applyModelMapping instead
    */
   prepareBody(body: Buffer, provider: Provider): Buffer {
-    if (!body || body.length === 0 || !provider.modelMap || provider.modelMap.length === 0) {
+    if (!body || body.length === 0) {
+      return body;
+    }
+    if (provider.modelMappingEnabled === false) {
+      return body;
+    }
+    if (!provider.modelMap || provider.modelMap.length === 0) {
       return body;
     }
 

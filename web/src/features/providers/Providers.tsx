@@ -38,6 +38,7 @@ const DEFAULT_FORM: AddProviderRequest = {
   modelMap: undefined,
   vlModelMap: undefined,
   headers: undefined,
+  modelMappingEnabled: true,
   useCustomModelsList: false,
   customModelsList: undefined,
 };
@@ -177,6 +178,7 @@ export default function Providers() {
       modelMap,
       vlModelMap: undefined,
       headers: undefined,
+      modelMappingEnabled: provider.modelMappingEnabled !== false,
       useCustomModelsList: Boolean(provider.useCustomModelsList),
       customModelsList: provider.customModelsList,
       openaiCompat: provider.openaiCompat === "azure_openai" ? "azure_openai" : undefined,
@@ -390,6 +392,14 @@ export default function Providers() {
                           </span>
                         ) : null;
                       })()}
+                      {provider.modelMap?.length && provider.modelMappingEnabled === false ? (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] px-1.5 py-0.5 text-amber-700 dark:text-amber-400 border-amber-600/40"
+                        >
+                          Mapping off
+                        </Badge>
+                      ) : null}
                       {!provider.enabled && (
                         <Badge
                           variant="outline"
@@ -686,26 +696,45 @@ export default function Providers() {
               </div>
 
               {/* Model Map */}
-              <div className="space-y-1">
-                <label className="text-xs font-medium">Model Map (YAML)</label>
-                <textarea
-                  className={`w-full px-2 py-1 text-xs border rounded-md bg-background font-mono ${modelMapError ? "border-destructive" : ""}`}
-                  placeholder={`- pattern: "claude-*"\n  model: "custom-model"`}
-                  rows={6}
-                  value={modelMapText}
-                  onChange={e => {
-                    const text = e.target.value;
-                    setModelMapText(text);
-                    validateYamlField(
-                      text,
-                      setModelMapError,
-                      (v: ModelMapEntry[] | null) =>
-                        setFormData(prev => ({ ...prev, modelMap: v ?? undefined })),
-                      modelMapTimerRef
-                    );
-                  }}
-                />
-                {modelMapError && <p className="text-[10px] text-destructive">{modelMapError}</p>}
+              <div className="space-y-2 rounded-md border border-border/60 p-3">
+                <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="rounded border-input"
+                    checked={formData.modelMappingEnabled !== false}
+                    onChange={e => updateForm("modelMappingEnabled", e.target.checked)}
+                  />
+                  Enable model mapping
+                </label>
+                <p className="text-[10px] text-muted-foreground">
+                  When off, the YAML below is kept in config but not applied (requests, model lists,
+                  and response <code className="font-mono text-[10px]">model</code> stay
+                  unmapped).
+                </p>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Model Map (YAML)</label>
+                  <textarea
+                    className={`w-full px-2 py-1 text-xs border rounded-md bg-background font-mono ${modelMapError ? "border-destructive" : ""} ${formData.modelMappingEnabled === false ? "opacity-60 bg-muted/20" : ""}`}
+                    placeholder={`- pattern: "claude-*"\n  model: "custom-model"`}
+                    rows={6}
+                    readOnly={formData.modelMappingEnabled === false}
+                    value={modelMapText}
+                    onChange={e => {
+                      const text = e.target.value;
+                      setModelMapText(text);
+                      validateYamlField(
+                        text,
+                        setModelMapError,
+                        (v: ModelMapEntry[] | null) =>
+                          setFormData(prev => ({ ...prev, modelMap: v ?? undefined })),
+                        modelMapTimerRef
+                      );
+                    }}
+                  />
+                </div>
+                {modelMapError && formData.modelMappingEnabled !== false && (
+                  <p className="text-[10px] text-destructive">{modelMapError}</p>
+                )}
                 <p className="text-[10px] text-muted-foreground">
                   Optional. Leave empty to pass models through without remapping.
                 </p>
@@ -726,7 +755,7 @@ export default function Providers() {
                   !formData.id ||
                   !formData.name ||
                   !formData.baseUrl ||
-                  !!modelMapError
+                  (formData.modelMappingEnabled !== false && !!modelMapError)
                 }
               >
                 {addMutation.isPending ? (

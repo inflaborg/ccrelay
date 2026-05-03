@@ -66,7 +66,8 @@ providers:
   #   apiKey: "\${API_KEY}"      # Supports environment variables
   #   authHeader: "authorization"
   #   modelMap:
-  #     "claude-*": "custom-model"
+  #     - { pattern: "claude-*", model: "custom-model" }
+  #   model_mapping_enabled: false   # optional: keep maps in config but disable remap (default: true)
   #   enabled: true
 
 # Default provider ID
@@ -530,6 +531,8 @@ function parseProvider(id: string, config: ProviderConfigInput): Provider {
   const rawList = config.customModelsList ?? config.custom_models_list;
   const customModelsListNormalized = Array.isArray(rawList) ? rawList : undefined;
   const openaiCompat = config.openaiCompat ?? config.openai_compat;
+  const modelMappingExplicitlyDisabled =
+    config.modelMappingEnabled === false || config.model_mapping_enabled === false;
 
   return {
     id,
@@ -551,6 +554,7 @@ function parseProvider(id: string, config: ProviderConfigInput): Provider {
         }
       : {}),
     ...(openaiCompat !== undefined ? { openaiCompat } : {}),
+    ...(modelMappingExplicitlyDisabled ? { modelMappingEnabled: false } : {}),
   };
 }
 
@@ -1377,6 +1381,13 @@ export class ConfigManager {
         customModelsList: config.customModelsList,
         // eslint-disable-next-line @typescript-eslint/naming-convention -- YAML snake_case parity
         custom_models_list: config.custom_models_list,
+        ...(config.modelMappingEnabled !== undefined || config.model_mapping_enabled !== undefined
+          ? {
+              modelMappingEnabled: config.modelMappingEnabled,
+              // eslint-disable-next-line @typescript-eslint/naming-convention -- YAML snake_case parity
+              model_mapping_enabled: config.model_mapping_enabled,
+            }
+          : {}),
         ...(config.openaiCompat !== undefined
           ? {
               openaiCompat: config.openaiCompat,

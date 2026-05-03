@@ -98,6 +98,10 @@ export function applyModelMapping(body: Buffer, provider: Provider): Buffer {
     return body;
   }
 
+  if (provider.modelMappingEnabled === false) {
+    return body;
+  }
+
   const hasVlMap = provider.vlModelMap && provider.vlModelMap.length > 0;
   const hasRegularMap = provider.modelMap && provider.modelMap.length > 0;
 

@@ -21,6 +21,18 @@ import type { ApiSurface } from "../../types";
 
 const log = new ScopedLogger("BodyProcessor");
 
+function extractClientWireModel(rawBody: Buffer): string | undefined {
+  if (!rawBody || rawBody.length === 0) {
+    return undefined;
+  }
+  try {
+    const d = JSON.parse(rawBody.toString("utf-8")) as Record<string, unknown>;
+    return typeof d.model === "string" ? d.model : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function buildTargetUrl(baseUrl: string, path: string, query: string): string {
   const b = baseUrl.replace(/\/$/, "");
   const p = path.startsWith("/") ? path : `/${path}`;
@@ -81,7 +93,6 @@ export class BodyProcessor {
    * Process request body
    */
   process(rawBody: Buffer, routing: RoutingContext, databaseEnabled: boolean): BodyProcessResult {
-    let originalModel: string | undefined;
     let originalRequestBody: string | undefined;
     let requestBodyLog: string | undefined;
 
@@ -117,12 +128,13 @@ export class BodyProcessor {
       }
       return {
         body,
-        originalModel,
+        originalModel: undefined,
         originalRequestBody,
         requestBodyLog,
       };
     }
 
+    const clientWireModel = extractClientWireModel(rawBody);
     let body = applyModelMapping(rawBody, routing.provider);
 
     let responsesStreamRequested = false;
@@ -162,7 +174,6 @@ export class BodyProcessor {
       const result = this.convertResponsesToChatCompletionsOnly(body, routing);
       if (result) {
         body = result.body;
-        originalModel = result.originalModel;
         originalResponsesEcho = result.originalResponsesEcho;
         routing.targetPath = result.newPath;
         routing.targetUrl = buildTargetUrl(
@@ -178,7 +189,6 @@ export class BodyProcessor {
       const result = this.convertResponsesToAnthropicChain(body, routing);
       if (result) {
         body = result.body;
-        originalModel = result.originalModel;
         originalResponsesEcho = result.originalResponsesEcho;
         routing.targetPath = result.newPath;
         routing.targetUrl = buildTargetUrl(
@@ -194,7 +204,6 @@ export class BodyProcessor {
       const result = this.convertAnthropicToOpenAIRequest(body, routing);
       if (result) {
         body = result.body;
-        originalModel = result.originalModel;
         routing.targetPath = result.newPath;
         routing.targetUrl = buildTargetUrl(
           routing.provider.baseUrl,
@@ -209,7 +218,6 @@ export class BodyProcessor {
       const result = this.convertOpenAIToAnthropicRequest(body, routing);
       if (result) {
         body = result.body;
-        originalModel = result.originalModel;
         routing.targetPath = result.newPath;
         routing.targetUrl = buildTargetUrl(
           routing.provider.baseUrl,
@@ -232,7 +240,7 @@ export class BodyProcessor {
 
     return {
       body,
-      originalModel,
+      originalModel: clientWireModel,
       originalRequestBody,
       requestBodyLog,
       ...(responsesStreamRequested ? { responsesStreamRequested: true } : {}),
@@ -244,7 +252,7 @@ export class BodyProcessor {
   private convertAnthropicToOpenAIRequest(
     body: Buffer,
     routing: RoutingContext
-  ): { body: Buffer; newPath: string; originalModel: string | undefined } | null {
+  ): { body: Buffer; newPath: string } | null {
     try {
       const bodyStr = body.toString("utf-8");
       const anthropicRequest = JSON.parse(bodyStr) as Record<string, unknown>;
@@ -257,17 +265,9 @@ export class BodyProcessor {
         routing.targetPath,
         { openaiCompat }
       );
-      let originalModel: string | undefined;
-      try {
-        const originalData = JSON.parse(bodyStr) as Record<string, unknown>;
-        originalModel = originalData.model as string | undefined;
-      } catch {
-        // ignore
-      }
       return {
         body: Buffer.from(JSON.stringify(conversionResult.request), "utf-8"),
         newPath: conversionResult.newPath,
-        originalModel,
       };
     } catch (err) {
       log.error("[A->O Conversion] Failed to convert request", err);
@@ -281,7 +281,6 @@ export class BodyProcessor {
   ): {
     body: Buffer;
     newPath: string;
-    originalModel: string | undefined;
     originalResponsesEcho: ResponsesRequestEcho;
   } | null {
     try {
@@ -292,11 +291,9 @@ export class BodyProcessor {
       }
       const originalResponsesEcho = extractResponsesEcho(raw);
       const c = convertResponsesRequestToChatCompletions(raw, routing.targetPath);
-      const originalModel = typeof raw.model === "string" ? raw.model : undefined;
       return {
         body: Buffer.from(JSON.stringify(c.request), "utf-8"),
         newPath: c.newPath,
-        originalModel,
         originalResponsesEcho,
       };
     } catch (err) {
@@ -311,7 +308,6 @@ export class BodyProcessor {
   ): {
     body: Buffer;
     newPath: string;
-    originalModel: string | undefined;
     originalResponsesEcho: ResponsesRequestEcho;
   } | null {
     try {
@@ -323,11 +319,9 @@ export class BodyProcessor {
       const originalResponsesEcho = extractResponsesEcho(raw);
       const chat = convertResponsesRequestToChatCompletions(raw, routing.path);
       const c = convertOpenAIRequestToAnthropic(chat.request, chat.newPath);
-      const originalModel = typeof raw.model === "string" ? raw.model : undefined;
       return {
         body: Buffer.from(JSON.stringify(c.request), "utf-8"),
         newPath: c.newPath,
-        originalModel,
         originalResponsesEcho,
       };
     } catch (err) {
@@ -339,14 +333,13 @@ export class BodyProcessor {
   private convertOpenAIToAnthropicRequest(
     body: Buffer,
     routing: RoutingContext
-  ): { body: Buffer; newPath: string; originalModel: string | undefined } | null {
+  ): { body: Buffer; newPath: string } | null {
     try {
       const bodyStr = body.toString("utf-8");
       const oai = JSON.parse(bodyStr) as Record<string, unknown>;
       if (!isOpenAIChatCompletionsRequest(oai)) {
         return null;
       }
-      const originalModel = typeof oai.model === "string" ? oai.model : undefined;
       const c = convertOpenAIRequestToAnthropic(
         oai as unknown as Parameters<typeof convertOpenAIRequestToAnthropic>[0],
         routing.targetPath
@@ -354,7 +347,6 @@ export class BodyProcessor {
       return {
         body: Buffer.from(JSON.stringify(c.request), "utf-8"),
         newPath: c.newPath,
-        originalModel,
       };
     } catch (err) {
       log.error("[O->A Conversion] Failed to convert request", err);

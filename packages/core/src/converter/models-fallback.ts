@@ -4,7 +4,11 @@
 /* eslint-disable @typescript-eslint/naming-convention -- API wire uses snake_case */
 
 import * as url from "url";
-import type { ApiSurface } from "../types";
+import type { ApiSurface, Provider } from "../types";
+import {
+  providerHasConfigurableModelMap,
+  reverseMapMappedTargetToClientPattern,
+} from "../utils/model-map";
 
 export interface OpenAIModelsListResponse {
   object: "list";
@@ -109,17 +113,69 @@ export function parseModelsListLimitFromTargetUrl(targetUrl: string): number | u
 }
 
 /** Build minimal OpenAI `list` payload from model ids (custom models list synthesis). */
-export function buildOpenAIModelsListFromIds(modelIds: string[]): OpenAIModelsListResponse {
+export function buildOpenAIModelsListFromIds(
+  modelIds: string[],
+  provider?: Provider
+): OpenAIModelsListResponse {
   const now = Math.floor(Date.now() / 1000);
+  const ids =
+    provider && providerHasConfigurableModelMap(provider)
+      ? modelIds.map(id => reverseMapMappedTargetToClientPattern(id, provider))
+      : modelIds;
   return {
     object: "list",
-    data: modelIds.map(id => ({
+    data: ids.map(id => ({
       id,
       object: "model" as const,
       created: now,
       owned_by: "ccrelay",
     })),
   };
+}
+
+/**
+ * Rewrite model ids in an OpenAI or Anthropic models list JSON (mutates `parsed`).
+ * @returns Whether any id (or Anthropic display_name) was changed.
+ */
+export function rewriteModelsListPayloadInPlace(
+  parsed: Record<string, unknown>,
+  provider: Provider
+): boolean {
+  if (!providerHasConfigurableModelMap(provider)) {
+    return false;
+  }
+  let changed = false;
+  if (isOpenAIModelsListJson(parsed)) {
+    const data = parsed.data as Array<Record<string, unknown>>;
+    for (const row of data) {
+      if (typeof row.id === "string") {
+        const next = reverseMapMappedTargetToClientPattern(row.id, provider);
+        if (next !== row.id) {
+          row.id = next;
+          changed = true;
+        }
+      }
+    }
+  } else if (isAnthropicModelsListJson(parsed)) {
+    const data = parsed.data as Array<Record<string, unknown>>;
+    for (const row of data) {
+      if (typeof row.id === "string") {
+        const next = reverseMapMappedTargetToClientPattern(row.id, provider);
+        if (next !== row.id) {
+          row.id = next;
+          changed = true;
+        }
+      }
+      if (typeof row.display_name === "string") {
+        const next = reverseMapMappedTargetToClientPattern(row.display_name, provider);
+        if (next !== row.display_name) {
+          row.display_name = next;
+          changed = true;
+        }
+      }
+    }
+  }
+  return changed;
 }
 
 /** Like {@link convertOpenAIModelsToAnthropic}, but callers set `has_more` for pagination. */
@@ -139,12 +195,13 @@ export function synthesizeCustomModelsListBody(options: {
   clientSurface: ApiSurface;
   fullModelIds: string[];
   targetUrl: string;
+  provider: Provider;
 }): string {
   const limit = parseModelsListLimitFromTargetUrl(options.targetUrl);
   const full = options.fullModelIds;
   const pageIds = limit !== undefined ? full.slice(0, limit) : [...full];
   const hasMore = pageIds.length < full.length;
-  const openaiPage = buildOpenAIModelsListFromIds(pageIds);
+  const openaiPage = buildOpenAIModelsListFromIds(pageIds, options.provider);
 
   if (options.clientSurface === "anthropic") {
     return JSON.stringify(openAiModelsPageToAnthropicModelsList(openaiPage, hasMore));
