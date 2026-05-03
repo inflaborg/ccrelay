@@ -4,7 +4,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { SqliteCliDriver } from "@/database/drivers/sqlite-cli";
+import * as cp from "child_process";
+import { SqliteCliDriver, resolveSqlite3ExecutableFromEnv } from "@/database/drivers/sqlite-cli";
 
 // Mock vscode
 vi.mock("vscode", () => ({
@@ -23,6 +24,20 @@ vi.mock("child_process", () => ({
   spawn: vi.fn(),
   execSync: vi.fn().mockReturnValue("/usr/bin/sqlite3"),
 }));
+
+describe("resolveSqlite3ExecutableFromEnv", () => {
+  it("returns first non-empty line from PATH resolver output", () => {
+    vi.mocked(cp.execSync).mockReturnValueOnce("/opt/bin/sqlite3\n");
+    expect(resolveSqlite3ExecutableFromEnv()).toBe("/opt/bin/sqlite3");
+  });
+
+  it("returns null when resolver throws", () => {
+    vi.mocked(cp.execSync).mockImplementationOnce(() => {
+      throw new Error("not found");
+    });
+    expect(resolveSqlite3ExecutableFromEnv()).toBeNull();
+  });
+});
 
 describe("SqliteCliDriver", () => {
   let driver: SqliteCliDriver;

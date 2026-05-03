@@ -7,20 +7,28 @@
 
 import * as http from "http";
 import { z } from "zod";
-import type { ResponsesRequestEcho } from "../converter/responses-echo";
 
 export type ProviderMode = "passthrough" | "inject";
 
 export type ProviderType = "anthropic" | "openai" | "openai_chat";
 
-/**
- * Wire format to assume for GET /v1/models (no request body; cannot detect client protocol).
- * `auto` follows `providerType`.
- */
-export type ModelsListFormat = "auto" | "openai" | "anthropic";
-
 /** Inbound client wire format (Anthropic Messages vs OpenAI Chat Completions vs OpenAI Responses API, etc.) */
 export type ApiSurface = "anthropic" | "openai" | "openai_responses";
+
+/** Subset of OpenAI Responses request fields echoed back into `response.{...}` shells (synthesized JSON/SSE). */
+export interface ResponsesRequestEcho {
+  tools: unknown[];
+  tool_choice?: unknown;
+  parallel_tool_calls?: boolean;
+  reasoning?: { effort?: string | null; summary?: string | null };
+  text?: { format?: unknown };
+  instructions?: string | null;
+  metadata?: Record<string, unknown>;
+  store?: boolean;
+  previous_response_id?: string | null;
+  user?: string | null;
+  truncation?: string;
+}
 
 /**
  * Zod schemas for runtime type validation
@@ -32,7 +40,9 @@ export const ProviderModeSchema = z.enum(["passthrough", "inject"]);
 // Provider type enum schema
 export const ProviderTypeSchema = z.enum(["anthropic", "openai", "openai_chat"]);
 
-export const ModelsListFormatSchema = z.enum(["auto", "openai", "anthropic"]);
+/** Chat Completions wire quirks when bridging Anthropic clients to OpenAI-family upstreams */
+export const OpenAICompatSchema = z.enum(["default", "azure_openai"]);
+export type OpenAICompat = z.infer<typeof OpenAICompatSchema>;
 
 // Model map entry schema (pattern -> model mapping)
 export const ModelMapEntrySchema = z.object({
@@ -54,14 +64,21 @@ export const ProviderConfigSchema = z.object({
   api_key: z.string().optional(),
   authHeader: z.string().optional(),
   auth_header: z.string().optional(),
-  modelsListFormat: ModelsListFormatSchema.optional(),
-  models_list_format: ModelsListFormatSchema.optional(),
   modelMap: z.array(ModelMapEntrySchema).optional(),
   model_map: z.array(ModelMapEntrySchema).optional(),
   vlModelMap: z.array(ModelMapEntrySchema).optional(),
   vl_model_map: z.array(ModelMapEntrySchema).optional(),
   headers: z.record(z.string(), z.string()).optional(),
   enabled: z.boolean().optional(),
+  useCustomModelsList: z.boolean().optional(),
+  use_custom_models_list: z.boolean().optional(),
+  customModelsList: z.array(z.string()).optional(),
+  custom_models_list: z.array(z.string()).optional(),
+  openaiCompat: OpenAICompatSchema.optional(),
+  openai_compat: OpenAICompatSchema.optional(),
+  /** When false, `modelMap` / `vlModelMap` are ignored (request remap, list remap, response model). Default: enabled. */
+  modelMappingEnabled: z.boolean().optional(),
+  model_mapping_enabled: z.boolean().optional(),
 });
 
 export type ProviderConfigInput = z.infer<typeof ProviderConfigSchema>;
@@ -71,6 +88,8 @@ export const ServerConfigSchema = z.object({
   port: z.number().int().positive().default(7575),
   host: z.string().default("127.0.0.1"),
   autoStart: z.boolean().default(true),
+  /** Local HTTP API Bearer; auto-written when omitted (see ConfigManager). */
+  apiBearerToken: z.string().optional(),
 });
 
 export type ServerConfigInput = z.infer<typeof ServerConfigSchema>;
@@ -88,7 +107,10 @@ export type BlockPattern = z.infer<typeof BlockPatternSchema>;
 
 export const BlockConditionSchema = z
   .object({
-    kind: z.array(z.string()).optional(),
+    /** If set: rule applies only when current provider ID is in this list (allowlist). */
+    providers: z.array(z.string()).optional(),
+    /** If set: skip rule when current provider ID is in this list */
+    providerNot: z.array(z.string()).optional(),
   })
   .optional();
 
@@ -99,7 +121,7 @@ export const ForwardRuleSchema = z.object({
 
 export const BlockRuleSchema = z.object({
   path: z.string().min(1),
-  condition: BlockConditionSchema,
+  condition: BlockConditionSchema.optional(),
   response: z.string(),
   code: z.number().int().default(200),
 });
@@ -158,6 +180,8 @@ export type ConcurrencyConfigInput = z.infer<typeof ConcurrencyConfigSchema>;
 export const SqliteConfigSchema = z.object({
   type: z.literal("sqlite"),
   path: z.string().optional(),
+  /** Optional path to sqlite3 CLI; empty/not set resolves `sqlite3` from PATH only. */
+  sqlite3Executable: z.string().optional(),
 });
 
 export type SqliteConfigInput = z.infer<typeof SqliteConfigSchema>;
@@ -210,6 +234,8 @@ export type FileConfigInput = z.infer<typeof FileConfigSchema>;
 export interface SqliteDatabaseConfig {
   type: "sqlite";
   path?: string;
+  /** Optional absolute or relative path to the sqlite3 executable; omit to use PATH. */
+  sqlite3Executable?: string;
 }
 
 /**
@@ -238,18 +264,28 @@ export interface Provider {
   providerType: ProviderType;
   apiKey?: string;
   authHeader?: string;
-  /** GET /v1/models only: effective client wire; default `auto` matches providerType. */
-  modelsListFormat?: ModelsListFormat;
   modelMap?: ModelMapEntry[];
   vlModelMap?: ModelMapEntry[];
+  /**
+   * When false, configured {@link modelMap}/{@link vlModelMap} are not applied. Default is on (undefined = enabled).
+   */
+  modelMappingEnabled?: boolean;
   headers?: Record<string, string>;
   enabled?: boolean;
+  /** When true, GET /models is served locally from {@link Provider.customModelsList} (no upstream). */
+  useCustomModelsList?: boolean;
+  /** Model ids exposed when {@link Provider.useCustomModelsList} is true. */
+  customModelsList?: string[];
+  /** Anthropic→Chat Completions: use `azure_openai` to strip fields Azure rejects (e.g. `reasoning`). */
+  openaiCompat?: OpenAICompat;
 }
 
 export interface RouterConfig {
   port: number;
   host: string;
   autoStart: boolean;
+  /** Secret for Authorization: Bearer on /ccrelay/api/*. Never empty after loadConfig. */
+  apiBearerToken: string;
   defaultProvider: string;
   providers: Record<string, Provider>;
   routing: {
@@ -286,8 +322,11 @@ export interface ProviderInfo {
   enabled: boolean;
   baseUrl?: string;
   apiKey?: string;
-  modelsListFormat?: ModelsListFormat;
   modelMap?: ModelMapEntry[];
+  modelMappingEnabled?: boolean;
+  useCustomModelsList?: boolean;
+  customModelsList?: string[];
+  openaiCompat?: OpenAICompat;
 }
 
 export interface ProxyRequest {
@@ -504,6 +543,8 @@ export interface RequestTask {
   headers: Record<string, string>;
   body: Buffer | null;
   provider: Provider;
+  /** Original inbound URL path (before upstream rewrite); used for diagnostics. */
+  inboundPath: string;
   requestPath: string;
   requestBodyLog?: string;
   originalRequestBody?: string;

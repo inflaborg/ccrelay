@@ -64,7 +64,11 @@ export class MockProvider extends EventEmitter {
   private responseQueue: Array<{
     path: string;
     method: string;
-    response: MockResponse | SSEMockResponse | HangingResponse | ((req: http.IncomingMessage) => MockResponse);
+    response:
+      | MockResponse
+      | SSEMockResponse
+      | HangingResponse
+      | ((req: http.IncomingMessage) => MockResponse);
     isSSE?: boolean;
     isHanging?: boolean;
   }> = [];
@@ -135,15 +139,11 @@ export class MockProvider extends EventEmitter {
       });
 
       // Find matching response
-      const matched = this.responseQueue.find(
-        r => r.path === req.url && r.method === req.method
-      );
+      const matched = this.responseQueue.find(r => r.path === req.url && r.method === req.method);
 
       if (matched) {
         const responseData =
-          typeof matched.response === "function"
-            ? matched.response(req)
-            : matched.response;
+          typeof matched.response === "function" ? matched.response(req) : matched.response;
 
         if (matched.isHanging) {
           void this.handleHangingResponse(requestId, res, responseData as HangingResponse);
@@ -365,12 +365,7 @@ export class MockProvider extends EventEmitter {
     return this.mockResponse(path, "POST", response);
   }
 
-  onDelayed(
-    path: string,
-    method: string,
-    response: MockResponse,
-    delay: number
-  ): this {
+  onDelayed(path: string, method: string, response: MockResponse, delay: number): this {
     this.responseQueue.push({
       path,
       method,
@@ -451,7 +446,9 @@ export class MockProvider extends EventEmitter {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.removeListener("request:received", onReceived);
-        reject(new Error(`Timeout waiting for ${count} requests, got ${this.getReceivedRequestCount()}`));
+        reject(
+          new Error(`Timeout waiting for ${count} requests, got ${this.getReceivedRequestCount()}`)
+        );
       }, timeout);
 
       const onReceived = () => {
@@ -505,7 +502,11 @@ export class MockProvider extends EventEmitter {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.removeListener("response:sent", onSent);
-        reject(new Error(`Timeout waiting for all responses, ${this.getPendingRequests().length} still pending`));
+        reject(
+          new Error(
+            `Timeout waiting for all responses, ${this.getPendingRequests().length} still pending`
+          )
+        );
       }, timeout);
 
       const onSent = () => {
@@ -531,7 +532,11 @@ export class MockProvider extends EventEmitter {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.removeListener("response:sent", onSent);
-        reject(new Error(`Timeout waiting for ${count} responses, got ${this.getCompletedRequestCount()}`));
+        reject(
+          new Error(
+            `Timeout waiting for ${count} responses, got ${this.getCompletedRequestCount()}`
+          )
+        );
       }, timeout);
 
       const onSent = () => {

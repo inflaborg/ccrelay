@@ -363,7 +363,7 @@ describe("config: schema validation", () => {
     it("should accept string arrays for patterns", () => {
       const input = {
         routing: {
-          proxy: ["/v1/messages", "/messages"],
+          proxy: ["/v1/messages"],
           passthrough: ["/v1/users/*", "/v1/orgs/*"],
         },
       };
@@ -372,7 +372,7 @@ describe("config: schema validation", () => {
 
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.routing?.proxy).toEqual(["/v1/messages", "/messages"]);
+        expect(result.data.routing?.proxy).toEqual(["/v1/messages"]);
         expect(result.data.routing?.passthrough).toEqual(["/v1/users/*", "/v1/orgs/*"]);
       }
     });

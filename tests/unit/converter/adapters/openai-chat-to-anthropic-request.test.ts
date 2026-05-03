@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   convertOpenAIRequestToAnthropic,
   isOpenAIChatCompletionsRequest,
-} from "@/converter/openai-to-anthropic-request";
+} from "@/converter/adapters/openai-chat-to-anthropic-request";
 
 describe("convertOpenAIRequestToAnthropic", () => {
   it("maps /v1/chat/completions to /v1/messages", () => {

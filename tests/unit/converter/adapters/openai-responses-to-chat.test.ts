@@ -1,8 +1,11 @@
+/* eslint-disable @typescript-eslint/naming-convention */
 import { describe, it, expect } from "vitest";
 import {
   convertResponsesRequestToChatCompletions,
   isOpenAIResponsesRequest,
-} from "@/converter/responses-to-chat-completions";
+  extractResponsesEcho,
+  extractFunctionToolsForEcho,
+} from "@/converter/adapters/openai-responses-to-chat";
 
 describe("isOpenAIResponsesRequest", () => {
   it("is true for input string", () => {
@@ -29,6 +32,32 @@ describe("isOpenAIResponsesRequest", () => {
 });
 
 describe("convertResponsesRequestToChatCompletions", () => {
+  it("maps max_output_tokens to max_completion_tokens for gpt-5", () => {
+    const { request } = convertResponsesRequestToChatCompletions(
+      {
+        model: "gpt-5",
+        input: "hi",
+        max_output_tokens: 500,
+      },
+      "/v1/responses"
+    );
+    expect(request.max_completion_tokens).toBe(500);
+    expect(request.max_tokens).toBeUndefined();
+  });
+
+  it("maps max_output_tokens to max_tokens for gpt-4o", () => {
+    const { request } = convertResponsesRequestToChatCompletions(
+      {
+        model: "gpt-4o",
+        input: "hi",
+        max_output_tokens: 300,
+      },
+      "/v1/responses"
+    );
+    expect(request.max_tokens).toBe(300);
+    expect(request.max_completion_tokens).toBeUndefined();
+  });
+
   it("maps simple string input to user message", () => {
     const { request, newPath } = convertResponsesRequestToChatCompletions(
       { model: "gpt-4o", input: "Hello" },
@@ -51,7 +80,6 @@ describe("convertResponsesRequestToChatCompletions", () => {
   it("maps tool_choice 'required' to OpenAI 'required' for downstream O-to-A", () => {
     const { request } = convertResponsesRequestToChatCompletions(
       // OpenAI Responses API uses snake_case fields
-      // eslint-disable-next-line @typescript-eslint/naming-convention -- wire body
       { model: "m", input: "x", tool_choice: "required" },
       "/v1/responses"
     );
@@ -90,5 +118,51 @@ describe("convertResponsesRequestToChatCompletions", () => {
         },
       },
     ]);
+  });
+});
+
+describe("extractFunctionToolsForEcho", () => {
+  it("keeps top-level type=function tools and drops hosted tools", () => {
+    const raw = [
+      { type: "function", name: "my_tool", parameters: {} },
+      { type: "web_search" },
+      { type: "mcp", connector_id: "x" },
+    ];
+    expect(extractFunctionToolsForEcho(raw)).toHaveLength(1);
+    expect((extractFunctionToolsForEcho(raw)[0] as { name?: string }).name).toBe("my_tool");
+  });
+
+  it("expands namespace bundle inner function tools", () => {
+    const raw = [
+      {
+        type: "namespace",
+        tools: [{ type: "function", name: "inner_fn", parameters: { type: "object" } }],
+      },
+    ];
+    expect(extractFunctionToolsForEcho(raw)).toHaveLength(1);
+  });
+});
+
+describe("extractResponsesEcho", () => {
+  it("echoes reasoning, parallel_tool_calls, metadata, instructions", () => {
+    const echo = extractResponsesEcho({
+      model: "gpt-5",
+      tools: [{ type: "function", name: "x", parameters: {} }],
+      parallel_tool_calls: false,
+      reasoning: { effort: "low", summary: "auto" },
+      instructions: "be brief",
+      metadata: { foo: "bar" },
+      truncation: "auto",
+      store: false,
+      tool_choice: { type: "auto" },
+    });
+    expect(echo.tools).toHaveLength(1);
+    expect(echo.parallel_tool_calls).toBe(false);
+    expect(echo.reasoning).toEqual({ effort: "low", summary: "auto" });
+    expect(echo.instructions).toBe("be brief");
+    expect(echo.metadata).toEqual({ foo: "bar" });
+    expect(echo.truncation).toBe("auto");
+    expect(echo.store).toBe(false);
+    expect(echo.tool_choice).toEqual({ type: "auto" });
   });
 });

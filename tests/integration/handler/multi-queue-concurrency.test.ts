@@ -106,10 +106,7 @@ describe("Integration: Multi-Queue Concurrency", () => {
       );
 
       // Wait for all to complete
-      const [defaultResults, routeResults] = await Promise.all([
-        defaultPromises,
-        routePromises,
-      ]);
+      const [defaultResults, routeResults] = await Promise.all([defaultPromises, routePromises]);
 
       const totalTime = Date.now() - startTime;
 
@@ -175,7 +172,10 @@ describe("Integration: Multi-Queue Concurrency", () => {
         if (stats.default && stats.default.activeWorkers > peakDefaultWorkers) {
           peakDefaultWorkers = stats.default.activeWorkers;
         }
-        if (stats.routes["route-queue"] && stats.routes["route-queue"].activeWorkers > peakRouteWorkers) {
+        if (
+          stats.routes["route-queue"] &&
+          stats.routes["route-queue"].activeWorkers > peakRouteWorkers
+        ) {
           peakRouteWorkers = stats.routes["route-queue"].activeWorkers;
         }
       }, 50);
@@ -213,10 +213,7 @@ describe("Integration: Multi-Queue Concurrency", () => {
         )
       );
 
-      const [defaultResults, routeResults] = await Promise.all([
-        defaultPromises,
-        routePromises,
-      ]);
+      const [defaultResults, routeResults] = await Promise.all([defaultPromises, routePromises]);
 
       clearInterval(sampleInterval);
 
@@ -436,9 +433,7 @@ describe("Integration: Multi-Queue Concurrency", () => {
         expect(result.status).toBe(200);
       }
 
-      console.log(
-        `IT16-01: Default queue (${defaultTime}ms) not blocked by slow route queue`
-      );
+      console.log(`IT16-01: Default queue (${defaultTime}ms) not blocked by slow route queue`);
     });
 
     it("IT16-02: should track queue stats independently", async () => {

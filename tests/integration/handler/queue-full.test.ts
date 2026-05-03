@@ -67,16 +67,19 @@ describe("Integration: Queue Full", () => {
       const url = new URL(`${testServer.baseUrl}/v1/messages`);
 
       // Send first request (will be processed)
-      const req1 = http.request({
-        hostname: url.hostname,
-        port: url.port,
-        path: url.pathname,
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": "test-key",
+      const req1 = http.request(
+        {
+          hostname: url.hostname,
+          port: url.port,
+          path: url.pathname,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": "test-key",
+          },
         },
-      }, () => {});
+        () => {}
+      );
 
       // Suppress socket errors from abort
       req1.on("error", () => {});
@@ -88,16 +91,19 @@ describe("Integration: Queue Full", () => {
       await mockProvider.waitForRequests(1, 2000);
 
       // Send second request (will queue)
-      const req2 = http.request({
-        hostname: url.hostname,
-        port: url.port,
-        path: url.pathname,
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": "test-key",
+      const req2 = http.request(
+        {
+          hostname: url.hostname,
+          port: url.port,
+          path: url.pathname,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": "test-key",
+          },
         },
-      }, () => {});
+        () => {}
+      );
 
       // Suppress socket errors from abort
       req2.on("error", () => {});

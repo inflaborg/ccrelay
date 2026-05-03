@@ -38,7 +38,9 @@ const DEFAULT_FORM: AddProviderRequest = {
   modelMap: undefined,
   vlModelMap: undefined,
   headers: undefined,
-  modelsListFormat: "auto",
+  modelMappingEnabled: true,
+  useCustomModelsList: false,
+  customModelsList: undefined,
 };
 
 export default function Providers() {
@@ -55,6 +57,7 @@ export default function Providers() {
   // Raw text states for YAML fields (allow editing invalid YAML temporarily)
   const [modelMapText, setModelMapText] = useState("");
   const [modelMapError, setModelMapError] = useState<string | null>(null);
+  const [customModelsText, setCustomModelsText] = useState("");
 
   // Debounce timer for YAML validation
   const modelMapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -157,6 +160,7 @@ export default function Providers() {
     setFormData(DEFAULT_FORM);
     setModelMapText("");
     setModelMapError(null);
+    setCustomModelsText("");
     setShowAddModal(true);
   };
 
@@ -174,10 +178,18 @@ export default function Providers() {
       modelMap,
       vlModelMap: undefined,
       headers: undefined,
-      modelsListFormat: provider.modelsListFormat ?? "auto",
+      modelMappingEnabled: provider.modelMappingEnabled !== false,
+      useCustomModelsList: Boolean(provider.useCustomModelsList),
+      customModelsList: provider.customModelsList,
+      openaiCompat: provider.openaiCompat === "azure_openai" ? "azure_openai" : undefined,
     });
     setModelMapText(modelMap ? yaml.dump(modelMap, { indent: 2, lineWidth: -1 }) : "");
     setModelMapError(null);
+    setCustomModelsText(
+      provider.useCustomModelsList && provider.customModelsList?.length
+        ? provider.customModelsList.join("\n")
+        : ""
+    );
     setShowAddModal(true);
   };
 
@@ -187,6 +199,7 @@ export default function Providers() {
     setFormData(DEFAULT_FORM);
     setModelMapText("");
     setModelMapError(null);
+    setCustomModelsText("");
   };
 
   const openDuplicateModal = (provider: Provider) => {
@@ -225,7 +238,12 @@ export default function Providers() {
     }
     // When editing, use the provider we opened (ids stay in sync) and never send apiKey.
     const isOfficial = editingProvider?.id === "official" || formData.id === "official";
-    const dataToSubmit = editingProvider
+    const customLines = customModelsText
+      .split("\n")
+      .map(l => l.trim())
+      .filter(l => l.length > 0);
+
+    const payload = editingProvider
       ? {
           ...formData,
           id: editingProvider.id,
@@ -236,6 +254,12 @@ export default function Providers() {
           ...formData,
           enabled: isOfficial ? true : formData.enabled,
         };
+
+    const dataToSubmit: AddProviderRequest = {
+      ...payload,
+      useCustomModelsList: formData.useCustomModelsList === true,
+      customModelsList: formData.useCustomModelsList === true ? customLines : undefined,
+    };
     addMutation.mutate(dataToSubmit);
   };
 
@@ -368,6 +392,14 @@ export default function Providers() {
                           </span>
                         ) : null;
                       })()}
+                      {provider.modelMap?.length && provider.modelMappingEnabled === false ? (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] px-1.5 py-0.5 text-amber-700 dark:text-amber-400 border-amber-600/40"
+                        >
+                          Mapping off
+                        </Badge>
+                      ) : null}
                       {!provider.enabled && (
                         <Badge
                           variant="outline"
@@ -537,26 +569,6 @@ export default function Providers() {
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-medium">GET /v1/models wire</label>
-                <Select
-                  value={formData.modelsListFormat ?? "auto"}
-                  options={[
-                    { value: "auto", label: "Auto (match provider type)" },
-                    { value: "openai", label: "OpenAI list" },
-                    { value: "anthropic", label: "Anthropic list" },
-                  ]}
-                  onChange={v =>
-                    updateForm("modelsListFormat", v as "auto" | "openai" | "anthropic")
-                  }
-                  className="h-8 text-xs"
-                />
-                <p className="text-[10px] text-muted-foreground">
-                  No request body on this call; ccrelay cannot detect client protocol. OpenAI
-                  clients using an Anthropic upstream should choose OpenAI list.
-                </p>
-              </div>
-
               {/* Type and Mode row */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
@@ -568,9 +580,14 @@ export default function Providers() {
                       { value: "openai", label: "OpenAI (Full)" },
                       { value: "openai_chat", label: "OpenAI (Chat Only)" },
                     ]}
-                    onChange={v =>
-                      updateForm("providerType", v as "anthropic" | "openai" | "openai_chat")
-                    }
+                    onChange={v => {
+                      const t = v as "anthropic" | "openai" | "openai_chat";
+                      setFormData(prev => ({
+                        ...prev,
+                        providerType: t,
+                        ...(t === "anthropic" ? { openaiCompat: undefined } : {}),
+                      }));
+                    }}
                     className="h-8 text-xs"
                   />
                 </div>
@@ -587,6 +604,30 @@ export default function Providers() {
                   />
                 </div>
               </div>
+
+              {(formData.providerType === "openai" || formData.providerType === "openai_chat") && (
+                <div className="space-y-1">
+                  <label className="text-xs font-medium">Cross-protocol (Anthropic → Chat)</label>
+                  <Select
+                    value={formData.openaiCompat === "azure_openai" ? "azure_openai" : "standard"}
+                    options={[
+                      { value: "standard", label: "Standard" },
+                      { value: "azure_openai", label: "Azure OpenAI" },
+                    ]}
+                    onChange={v =>
+                      setFormData(prev => ({
+                        ...prev,
+                        openaiCompat: v === "azure_openai" ? "azure_openai" : undefined,
+                      }))
+                    }
+                    className="h-8 text-xs"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Choose Azure when the upstream rejects extra fields (for example{" "}
+                    <code className="font-mono text-[10px]">reasoning</code>).
+                  </p>
+                </div>
+              )}
 
               {/* API Key */}
               <div className="space-y-1">
@@ -623,27 +664,77 @@ export default function Providers() {
                 )}
               </div>
 
+              {/* Custom models list */}
+              <div className="space-y-2 rounded-md border border-border/60 p-3">
+                <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="rounded border-input"
+                    checked={formData.useCustomModelsList === true}
+                    onChange={e => updateForm("useCustomModelsList", e.target.checked)}
+                  />
+                  Use custom models list
+                </label>
+                <p className="text-[10px] text-muted-foreground">
+                  When enabled, GET /models is answered locally from this list (no upstream).
+                  Optional query <code className="font-mono text-[10px]">limit</code> truncates the
+                  returned page; Anthropic-shaped responses set{" "}
+                  <code className="font-mono text-[10px]">has_more</code> accordingly.
+                </p>
+                {formData.useCustomModelsList ? (
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium">Model ids (one per line)</label>
+                    <textarea
+                      className="w-full px-2 py-1 text-xs border rounded-md bg-background font-mono"
+                      placeholder={"claude-3-5-sonnet-20241022\ngpt-4"}
+                      rows={5}
+                      value={customModelsText}
+                      onChange={e => setCustomModelsText(e.target.value)}
+                    />
+                  </div>
+                ) : null}
+              </div>
+
               {/* Model Map */}
-              <div className="space-y-1">
-                <label className="text-xs font-medium">Model Map (YAML)</label>
-                <textarea
-                  className={`w-full px-2 py-1 text-xs border rounded-md bg-background font-mono ${modelMapError ? "border-destructive" : ""}`}
-                  placeholder={`- pattern: "claude-*"\n  model: "custom-model"`}
-                  rows={6}
-                  value={modelMapText}
-                  onChange={e => {
-                    const text = e.target.value;
-                    setModelMapText(text);
-                    validateYamlField(
-                      text,
-                      setModelMapError,
-                      (v: ModelMapEntry[] | null) =>
-                        setFormData(prev => ({ ...prev, modelMap: v ?? undefined })),
-                      modelMapTimerRef
-                    );
-                  }}
-                />
-                {modelMapError && <p className="text-[10px] text-destructive">{modelMapError}</p>}
+              <div className="space-y-2 rounded-md border border-border/60 p-3">
+                <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="rounded border-input"
+                    checked={formData.modelMappingEnabled !== false}
+                    onChange={e => updateForm("modelMappingEnabled", e.target.checked)}
+                  />
+                  Enable model mapping
+                </label>
+                <p className="text-[10px] text-muted-foreground">
+                  When off, the YAML below is kept in config but not applied (requests, model lists,
+                  and response <code className="font-mono text-[10px]">model</code> stay
+                  unmapped).
+                </p>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Model Map (YAML)</label>
+                  <textarea
+                    className={`w-full px-2 py-1 text-xs border rounded-md bg-background font-mono ${modelMapError ? "border-destructive" : ""} ${formData.modelMappingEnabled === false ? "opacity-60 bg-muted/20" : ""}`}
+                    placeholder={`- pattern: "claude-*"\n  model: "custom-model"`}
+                    rows={6}
+                    readOnly={formData.modelMappingEnabled === false}
+                    value={modelMapText}
+                    onChange={e => {
+                      const text = e.target.value;
+                      setModelMapText(text);
+                      validateYamlField(
+                        text,
+                        setModelMapError,
+                        (v: ModelMapEntry[] | null) =>
+                          setFormData(prev => ({ ...prev, modelMap: v ?? undefined })),
+                        modelMapTimerRef
+                      );
+                    }}
+                  />
+                </div>
+                {modelMapError && formData.modelMappingEnabled !== false && (
+                  <p className="text-[10px] text-destructive">{modelMapError}</p>
+                )}
                 <p className="text-[10px] text-muted-foreground">
                   Optional. Leave empty to pass models through without remapping.
                 </p>
@@ -664,7 +755,7 @@ export default function Providers() {
                   !formData.id ||
                   !formData.name ||
                   !formData.baseUrl ||
-                  !!modelMapError
+                  (formData.modelMappingEnabled !== false && !!modelMapError)
                 }
               >
                 {addMutation.isPending ? (

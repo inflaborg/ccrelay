@@ -51,7 +51,7 @@
 - **Model Mapping**: Automatically translates Claude model names to provider-specific models with wildcard support (e.g., `claude-*` → `glm-4.7`)
 - **Vision Model Mapping**: Separate model mapping for visual/multimodal requests (`vlModelMap`)
 - **OpenAI Format Conversion (LLM router)**: Accepts Anthropic, OpenAI Chat Completions, and OpenAI Responses (`/v1/responses`); converts when the inbound wire does not match the provider (Chat/Responses are hubbed through Chat Completions for cross-provider routing)
-- **Request Logging**: Optional SQLite/PostgreSQL request/response logging with Web UI viewer; SQLite paths use the system **`sqlite3` CLI**. If logging is enabled with SQLite but that binary is missing, the proxy keeps running **without** persisting logs (warning in logs) until you install SQLite [CLI](https://www.sqlite.org/download.html) or use PostgreSQL instead
+- **Request Logging**: Optional SQLite/PostgreSQL request/response logging with Web UI viewer; SQLite uses the **`sqlite3` CLI**. By default the binary is resolved from **`PATH`** only; optionally set **`logging.database.sqlite3_executable`** to an absolute path. If logging is enabled with SQLite but `sqlite3` cannot be resolved, the proxy keeps running **without** persisting logs (warning in logs) until you install SQLite [CLI](https://www.sqlite.org/download.html), fix `PATH`/config path, or use PostgreSQL instead
 - **Concurrency Control**: Built-in request queue and concurrency limits to prevent API overload
 - **Auto-start**: Automatically starts the proxy server when VSCode launches
 - **Client integrations**: Use the same proxy with **Claude Code**, **Claude Cowork** (Anthropic wire), and **Codex** (OpenAI wire + `~/.codex/config.toml`); see [Client integrations](#client-integrations)
@@ -132,7 +132,7 @@ Release builds are **not** Apple-notarized. After you unzip, the browser may mar
 
 Apps you build locally under `packages/desktop/dist/` usually have no quarantine, so they may open without these steps—see [TODO](#todo) for the long-term fix (signing + notarization).
 
-SQLite-backed **logging** still requires the **`sqlite3`** command-line binary on **`PATH`** (plus known fallbacks) when persistence is desired; otherwise the server runs with logging storage effectively off for that process—see core features above.
+SQLite-backed **logging** resolves **`sqlite3` from `PATH`** (or **`logging.database.sqlite3_executable`** when set); if it cannot be resolved, that process persists no logs though the proxy keeps running—see core features above.
 
 ---
 
@@ -176,12 +176,12 @@ Set environment variables for Claude Code in **`~/.claude/settings.json`** (an `
 
 ## Client integrations
 
-**Claude Code**, **Claude Cowork**, and **OpenAI Codex** are first-class target clients. CCRelay exposes an **Anthropic-compatible** API (`/v1/messages`, …) and an **OpenAI-compatible** API (`/v1/chat/completions`, `GET /v1/models`, `POST /v1/responses`, …) on the same port (default **7575**). Point them at the same host and port as in `~/.ccrelay/config.yaml` (default: `http://127.0.0.1:7575`).
+**Claude Code**, **Claude Cowork**, and **OpenAI Codex** are first-class target clients. CCRelay exposes **Anthropic-compatible** routes (e.g. `/v1/messages` and **`/anthropic/v1/...`** when using a dedicated base URL) and **OpenAI-compatible** routes (e.g. `/v1/chat/completions` and **`/openai/...`**) on the same port (default **7575**). For **Claude Code / Cowork**, set `ANTHROPIC_BASE_URL` to `http://127.0.0.1:7575/anthropic` (see below). For **Codex**, set `base_url` to `http://127.0.0.1:7575/openai`. Legacy root + `/v1/...` paths still work when pointed at `http://127.0.0.1:7575` directly.
 
 | Client | Wire | How to use CCRelay |
 |--------|------|--------------------|
 | **Claude Code** | Anthropic | Set `ANTHROPIC_BASE_URL` (and optional `ANTHROPIC_DEFAULT_*_MODEL` keys) in `~/.claude/settings.json` → `env` — see [Claude Code](#claude-code) |
-| **Claude Cowork** | Anthropic | Configure the app’s **API / Anthropic base URL** to the same CCRelay origin (e.g. `http://127.0.0.1:7575`) so traffic goes through the proxy |
+| **Claude Cowork** | Anthropic | Set the app’s **API / Anthropic base URL** to `http://127.0.0.1:7575/anthropic` (same host/port as CCRelay) |
 | **Codex** (OpenAI Codex CLI) | OpenAI | Register CCRelay as a **model provider** in `~/.codex/config.toml` (see example below) |
 
 ### Claude Code
@@ -194,7 +194,7 @@ Add an `env` object so every Claude Code session points at CCRelay. `ANTHROPIC_A
 {
   "env": {
     "ANTHROPIC_AUTH_TOKEN": "ccrelay_apikey_placehold_do_not_need_to_setup_here",
-    "ANTHROPIC_BASE_URL": "http://localhost:7575",
+    "ANTHROPIC_BASE_URL": "http://localhost:7575/anthropic",
     "API_TIMEOUT_MS": "3000000",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": 1
   }
@@ -211,7 +211,7 @@ Example `env` with optional default model names (same suggestions as the web UI)
 {
   "env": {
     "ANTHROPIC_AUTH_TOKEN": "ccrelay_apikey_placehold_do_not_need_to_setup_here",
-    "ANTHROPIC_BASE_URL": "http://localhost:7575",
+    "ANTHROPIC_BASE_URL": "http://localhost:7575/anthropic",
     "API_TIMEOUT_MS": "3000000",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": 1,
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-4-7",
@@ -221,12 +221,12 @@ Example `env` with optional default model names (same suggestions as the web UI)
 }
 ```
 
-`http://127.0.0.1:7575` and `http://localhost:7575` are interchangeable for a local CCRelay bind.
+`http://127.0.0.1:7575/anthropic` and `http://localhost:7575/anthropic` are interchangeable for a local CCRelay bind.
 
 **Optional (shell only, not persistent)** — quick test without editing `~/.claude/settings.json`:
 
 ```bash
-export ANTHROPIC_BASE_URL=http://127.0.0.1:7575
+export ANTHROPIC_BASE_URL=http://127.0.0.1:7575/anthropic
 claude
 ```
 
@@ -234,11 +234,11 @@ For day-to-day use, prefer the `~/.claude/settings.json` `env` block above.
 
 ### Claude Cowork
 
-Point **Claude Cowork** at the same **Anthropic base URL** as Claude Code: your CCRelay server root (e.g. `http://127.0.0.1:7575`), not the upstream provider URL. Switch models and backends in the CCRelay VSCode extension or `config.yaml` as usual.
+Point **Claude Cowork** at the same **`ANTHROPIC_BASE_URL` as Claude Code**: `http://127.0.0.1:7575/anthropic` (not the upstream provider URL). Switch models and backends in the CCRelay VSCode extension or `config.yaml` as usual.
 
 ### Codex (`~/.codex/config.toml`)
 
-**Codex** can use CCRelay by defining a custom provider whose `base_url` targets CCRelay’s **OpenAI-compatible** base path (`/v1` on the same host as the proxy).
+**Codex** can use CCRelay by defining a custom provider whose `base_url` targets CCRelay’s **`/openai`** path on the proxy (OpenAI-compatible entrypoint).
 
 Example (adjust `model` to one your current CCRelay provider maps, e.g. via `modelMap`):
 
@@ -249,10 +249,10 @@ model_provider = "ccrelay"
 
 [model_providers.ccrelay]
 name = "CCRelay"
-base_url = "http://localhost:7575/v1"
+base_url = "http://localhost:7575/openai"
 ```
 
-- **`base_url`** must include the `/v1` prefix so Codex calls `http://localhost:7575/v1/...` on the proxy.
+- **`base_url`** should be `http://<host>:<port>/openai` so Codex calls `http://localhost:7575/openai/chat/completions`, etc.
 - Ensure CCRelay is running (VSCode extension) and the selected provider in CCRelay matches the model routing you need.
 
 ---
@@ -325,13 +325,17 @@ vlModelMap:
 
 **Inbound API surfaces (paths)**
 
+OpenAI clients targeting ccrelay typically use **`http://127.0.0.1:<port>/openai`** (paths **`/openai/chat/completions`**, **`/openai/models`** — **not** **`/openai/v1/...`**) or **`http://127.0.0.1:<port>`** with legacy **`/v1/chat/completions`**, **`/v1/models`**, etc. **`resolveUpstreamPath`** turns each inbound into the **client wire canonical path** for that protocol (**OpenAI**: **`/models`**, **`/chat/completions`**, **`/responses`**; **Anthropic**: **`/v1/models`**, **`/v1/messages`**, …). **`Router.getTargetUrl`** is **naive concatenation**: **`baseUrl`** + that path (no `/v1` dedup); configure **`baseUrl`** to match your vendor. Cross-protocol upstream path alignment stays in **`BodyProcessor`** via [`paths.ts`](packages/core/src/converter/paths.ts).
+
 | Path | Method | Client format |
 |------|--------|----------------|
-| `/v1/messages`, `/messages` | POST | Anthropic Messages |
+| `/v1/messages`, `/anthropic/v1/messages` | POST | Anthropic Messages |
 | `/v1/messages/count_tokens` | POST | Anthropic |
 | `/v1/chat/completions` | POST | OpenAI Chat Completions |
 | `/v1/responses` | POST | OpenAI Responses API (create) |
-| `/v1/models` | GET | OpenAI models list |
+| `/v1/models` | GET | OpenAI models list (legacy; same protocol as `/openai/models`) |
+| `/openai/models` | GET | OpenAI models list |
+| `/anthropic/v1/models` | GET | Anthropic models list |
 
 `routing.forward` in `config.yaml` should include the paths you use (defaults include the rows above). Unmatched paths return 404.
 
@@ -341,6 +345,7 @@ vlModelMap:
 - Client **OpenAI** (chat) + provider `providerType: anthropic`: request O→A, response A→O.
 - Client **OpenAI Responses** + any provider: request is converted to Chat Completions, then to Anthropic if needed; response is converted back to the Responses JSON shape. Hosted-only tools (e.g. web search, MCP) are stripped in v1.
 - Same **family** on both sides (e.g. chat + `openai` provider): no format conversion (only model name mapping, etc.).
+- **GET models** (`/v1/models`, `/openai/models`, `/anthropic/v1/models`): the **entry path** fixes the client list shape (`/v1/models` = OpenAI-shaped). **`providerType`** determines the upstream’s expected wire. On **HTTP 200**, if entry and upstream differ, the bodies are translated when JSON matches minimal OpenAI (`object: list` + `data`) or Anthropic (`data` array) list shapes; otherwise the response passes through unchanged. **HTTP error responses are not synthesized**—the upstream status and body are returned (cross-protocol errors may still be wrapped into the entry family’s usual error envelope when status ≥ 400).
 
 **Limitations (first iteration)**
 
@@ -362,17 +367,7 @@ gemini:
       model: "gemini-2.5-pro"
 ```
 
-**GET /v1/models** (`modelsListFormat`, optional, default `auto`)
-
-There is no request body, so CCRelay cannot infer whether the client expects an OpenAI- or Anthropic-shaped list. Per provider, `modelsListFormat` controls the **inbound client surface** for this route and the **synthetic list** when the upstream returns an error:
-
-- **`auto`** (default): match `providerType`—same wire as the upstream for successful responses (no unnecessary conversion), and the corresponding list shape for fallback.
-- **`openai`**: treat the client as OpenAI (e.g. force OpenAI-shaped list when using an OpenAI HTTP client against an Anthropic upstream).
-- **`anthropic`**: treat the client as Anthropic.
-
-If you previously relied on OpenAI-shaped `/v1/models` against an Anthropic provider, set `modelsListFormat: openai` (or use the Web dashboard **GET /v1/models wire** field).
-
-`GET /v1/models` is proxied to the current provider; on upstream error, a minimal list is built from `modelMap` in the chosen format.
+**GET `/v1/models`** is a legacy **OpenAI-protocol** endpoint (use base URL without `/anthropic` prefix). Anthropic-shaped lists must use **`GET /anthropic/v1/models`** (base ending in `/anthropic`). Successful cross-family responses are converted as above; upstream errors are forwarded as-is (no fallback list).
 
 ### Web UI Dashboard
 
@@ -382,7 +377,7 @@ CCRelay has a built-in Web UI dashboard that provides:
 - **Client configuration** (optional): Set Claude Code’s `~/.claude/settings.json` `env` from the UI (e.g. `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN` placeholder) and, if needed, per-tier `ANTHROPIC_DEFAULT_*_MODEL` — see [Claude Code](#claude-code).
 - **Providers**: View and switch providers
 - **Logs**: Request/response log viewer (requires enabling log storage)
-- **Settings**: Manage all YAML config groups (Logging, Concurrency, Server, Routing) from the UI. Changes to concurrency and routing hot-reload; server and logging changes require a restart.
+- **Settings**: Manage all YAML config groups (Logging, Concurrency, Server, Routing); routing and concurrency hot-reload—server and logging need a restart. **Routing**: the **Routing and 404** note sits above the save row. **Save routing** is disabled when the editor matches disk (**Up to date**); **Unsaved changes** appears when the form is dirty. **Restore default routing** is on the same row, right-aligned—after the shared **AlertDialog** confirm it only updates the editor until you **Save routing**. **`GET /ccrelay/api/config`** includes **`routingDefaults`** (bundled forward/block) for that preview.
 
 **Client configuration** in the Web UI (same flows as the dashboard’s **Client configuration** / **Configure default models** actions):
 
@@ -432,7 +427,6 @@ CCRelay uses a YAML configuration file (`~/.ccrelay/config.yaml` by default). Th
 Each provider supports:
 - `name` - Display name
 - `baseUrl` - API base URL
-- `modelsListFormat` (optional) - `auto` | `openai` | `anthropic` — wire for `GET /v1/models` (default `auto` matches `providerType`)
 - `mode` - `passthrough` or `inject`
 - `providerType` - `anthropic` (default), `openai` (full passthrough), or `openai_chat` (Chat Completions only)
 - `apiKey` - API key (inject mode, supports `${ENV_VAR}` environment variables)
@@ -448,7 +442,7 @@ Each provider supports:
 |---------|---------|-------------|
 | `configVersion` | `"0.2.0"` | Config schema version. Legacy configs without this field are auto-migrated on load. |
 | `routing.forward` | `[{path, provider}, ...]` | Forward rules — first match wins. `provider: "auto"` = current active provider; or a specific provider ID (e.g. `"official"`). Unmatched paths return 404. |
-| `routing.block` | `[{path, response, code, condition?}, ...]` | Block rules — return custom response instead of forwarding. Checked before forward. Optional `condition.kind` (array of protocol names) restricts the block to specific client surfaces. |
+| `routing.block` | `[{path, response, code, condition?}, ...]` | Block rules — return custom response instead of forwarding. Checked before forward. Match is by path glob. Optional **`condition.providers`** (array of IDs) — rule applies **only when** the current provider is in this list; optional **`condition.providerNot`** — skip when current provider ID is **in** the list. |
 
 #### Concurrency Control
 
@@ -471,6 +465,7 @@ Each provider supports:
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `logging.database.path` | `""` | Database file path (empty = `~/.ccrelay/logs.db`) |
+| `logging.database.sqlite3_executable` | `""` | Path to **`sqlite3`** CLI (empty = resolve from **`PATH`** only) |
 
 **PostgreSQL Configuration:**
 | Setting | Default | Description |
@@ -555,15 +550,13 @@ routing:
       provider: "official"
 
   # Block rules: return custom response instead of forwarding.
-  # Checked before forward rules. condition.kind filters by client protocol.
-  # Omit condition to block all protocols.
+  # Checked before forward rules. Optional condition.providers limits to listed current-provider IDs;
+  # optional condition.providerNot skips when the current ID is listed.
   block:
     - path: "/api/event_logging/*"
       response: ""
       code: 200
     - path: "/v1/messages/count_tokens"
-      condition:
-        kind: ["openai", "openai_chat", "openai_responses"]
       response: '{"input_tokens": 0}'
       code: 200
 
@@ -601,6 +594,10 @@ logging:
 
 > **Note**: YAML config supports both `camelCase` and `snake_case` keys.
 
+#### Default merge behavior
+
+On startup and when the config file is reconciled, CCRelay merges the **bundled default template** with your `config.yaml`: **your values win** for any key you set, and **missing** scalars/nested objects are filled from defaults. Three list sections merge by **identity** instead of replacing the whole array: **`routing.forward`** (by **`path`**), **`routing.block`** (by path + normalized `condition`), and **`concurrency.routes`** (by regex **`pattern`**) — your rows stay **first**, and any **new** default rows for keys you don’t already have are **appended** (handy when defaults gain routes in a release). If you **omit** one of those lists entirely, you get the full bundled list; an explicit empty list **`[]`** means “none” (defaults are **not** appended). Library users can call **`mergeFileConfigWithDefaults`** from `@ccrelay/core` for the same rules.
+
 ---
 
 ## API Endpoints
@@ -615,6 +612,7 @@ The proxy server exposes management endpoints at `/ccrelay/`:
 | `/ccrelay/api/switch` | POST | Switch provider (JSON body) |
 | `/ccrelay/api/queue` | GET | Get queue statistics |
 | `/ccrelay/api/logs` | GET | Get request logs (when logging enabled) |
+| `/ccrelay/api/config` | GET, PATCH | **GET**: settings sections from YAML (`logging`, `concurrency`, `server`, `routing`) plus **`routingDefaults`** (bundled forward/block for the Routing **Restore default** preview). **PATCH**: JSON `{ "section": "<name>", "data": {…} }` merges into that section; routing/concurrency reload live; **`server`** / **`logging`** may need restart. |
 | `/ccrelay/ws` | WebSocket | Real-time sync for Followers |
 | `/ccrelay/` | GET | Web UI dashboard |
 

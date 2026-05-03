@@ -60,8 +60,11 @@ export function handleListProviders(
     active: p.id === currentId,
     enabled: p.enabled !== false,
     apiKey: maskApiKey(p.apiKey),
-    modelsListFormat: p.modelsListFormat,
     modelMap: p.modelMap,
+    modelMappingEnabled: p.modelMappingEnabled !== false,
+    useCustomModelsList: Boolean(p.useCustomModelsList),
+    customModelsList: p.useCustomModelsList ? (p.customModelsList ?? []) : undefined,
+    openaiCompat: p.openaiCompat,
   }));
 
   const response: ProvidersResponse = {
@@ -118,8 +121,15 @@ export async function handleAddProvider(
       enabled: effectiveEnabled,
       modelMap: body.modelMap,
       vlModelMap: body.vlModelMap,
+      ...(body.modelMappingEnabled !== undefined
+        ? { modelMappingEnabled: body.modelMappingEnabled }
+        : {}),
       headers: body.headers,
-      modelsListFormat: body.modelsListFormat,
+      useCustomModelsList: body.useCustomModelsList === true,
+      ...(body.useCustomModelsList === true
+        ? { customModelsList: body.customModelsList ?? [] }
+        : {}),
+      ...(body.openaiCompat !== undefined ? { openaiCompat: body.openaiCompat } : {}),
     };
 
     const success = configManager.addProvider(body.id, providerConfig);
@@ -182,19 +192,29 @@ export function handleDeleteProvider(
 }
 
 function buildDuplicateConfigFromProvider(source: Provider, name: string): ProviderConfigInput {
-  return {
+  const out: ProviderConfigInput = {
     name,
     baseUrl: source.baseUrl,
     mode: source.mode,
     providerType: source.providerType,
     apiKey: source.apiKey,
     authHeader: source.authHeader,
-    modelsListFormat: source.modelsListFormat,
     modelMap: source.modelMap,
     vlModelMap: source.vlModelMap,
+    ...(source.modelMappingEnabled !== undefined
+      ? { modelMappingEnabled: source.modelMappingEnabled }
+      : {}),
     headers: source.headers && Object.keys(source.headers).length > 0 ? source.headers : undefined,
     enabled: source.enabled,
   };
+  if (source.useCustomModelsList) {
+    out.useCustomModelsList = true;
+    out.customModelsList = [...(source.customModelsList ?? [])];
+  }
+  if (source.openaiCompat !== undefined) {
+    out.openaiCompat = source.openaiCompat;
+  }
+  return out;
 }
 
 /**
@@ -320,6 +340,10 @@ interface AddProviderRequest {
   enabled?: boolean;
   modelMap?: ModelMapEntry[];
   vlModelMap?: ModelMapEntry[];
+  /** When false, model maps are stored but not applied. Omit or true = enabled (default). */
+  modelMappingEnabled?: boolean;
   headers?: Record<string, string>;
-  modelsListFormat?: "auto" | "openai" | "anthropic";
+  useCustomModelsList?: boolean;
+  customModelsList?: string[];
+  openaiCompat?: "default" | "azure_openai";
 }

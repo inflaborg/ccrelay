@@ -89,7 +89,9 @@ describe("Integration: Timeout Handling", () => {
       );
 
       req1.on("error", () => {}); // Suppress socket errors
-      req1.write(JSON.stringify({ model: "claude-3-sonnet", messages: [{ role: "user", content: "first" }] }));
+      req1.write(
+        JSON.stringify({ model: "claude-3-sonnet", messages: [{ role: "user", content: "first" }] })
+      );
       req1.end();
 
       // Wait for first request to reach upstream
@@ -167,7 +169,9 @@ describe("Integration: Timeout Handling", () => {
       );
 
       req1.on("error", () => {});
-      req1.write(JSON.stringify({ model: "claude-3-sonnet", messages: [{ role: "user", content: "first" }] }));
+      req1.write(
+        JSON.stringify({ model: "claude-3-sonnet", messages: [{ role: "user", content: "first" }] })
+      );
       req1.end();
 
       // Wait for first request to reach upstream
@@ -295,7 +299,9 @@ describe("Integration: Timeout Handling", () => {
       );
 
       req1.on("error", () => {});
-      req1.write(JSON.stringify({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] }));
+      req1.write(
+        JSON.stringify({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] })
+      );
       req1.end();
 
       // Wait for request to reach upstream

@@ -41,7 +41,15 @@ export class TaskExecutor {
     const queueInfo = this.queueManager.getQueueForPath(routing.path);
 
     if (queueInfo) {
-      this.submitToQueue(task, queueInfo.queue, queueInfo.name, clientId, requestReceiveStart, bodyReceiveTime, responseWriter);
+      this.submitToQueue(
+        task,
+        queueInfo.queue,
+        queueInfo.name,
+        clientId,
+        requestReceiveStart,
+        bodyReceiveTime,
+        responseWriter
+      );
     } else {
       this.executeDirect(task, clientId, requestReceiveStart, responseWriter);
     }
@@ -63,6 +71,7 @@ export class TaskExecutor {
       headers: routing.headers,
       body: bodyResult.body,
       provider: routing.provider,
+      inboundPath: routing.path,
       requestPath: routing.targetPath,
       requestBodyLog: bodyResult.requestBodyLog,
       originalRequestBody: bodyResult.originalRequestBody,
@@ -84,11 +93,7 @@ export class TaskExecutor {
   /**
    * Insert pending log to database
    */
-  insertPendingLog(
-    routing: RoutingContext,
-    bodyResult: BodyProcessResult,
-    clientId: string
-  ): void {
+  insertPendingLog(routing: RoutingContext, bodyResult: BodyProcessResult, clientId: string): void {
     if (!this.database.enabled) {
       return;
     }
@@ -107,7 +112,7 @@ export class TaskExecutor {
       success: false,
       clientId,
       status: "pending",
-      routeType: (routing.isRouted ? "router" : "passthrough"),
+      routeType: routing.isRouted ? "router" : "passthrough",
     });
   }
 
@@ -116,7 +121,10 @@ export class TaskExecutor {
    */
   private submitToQueue(
     task: RequestTask,
-    targetQueue: { submit: (task: RequestTask) => Promise<ProxyResult>; cancelTask: (id: string, reason: string) => void },
+    targetQueue: {
+      submit: (task: RequestTask) => Promise<ProxyResult>;
+      cancelTask: (id: string, reason: string) => void;
+    },
     queueName: string,
     clientId: string,
     requestReceiveStart: number,

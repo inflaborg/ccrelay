@@ -2,12 +2,19 @@
  * @ccrelay/core — platform-independent CCRelay runtime (proxy server, config, APIs).
  */
 
-export { ConfigManager, expandEnvVarsInObject, sortProviderMapKeys } from "./config";
+export {
+  ConfigManager,
+  expandEnvVarsInObject,
+  sortProviderMapKeys,
+  getDefaultRoutingSettings,
+  mergeFileConfigWithDefaults,
+} from "./config";
 
 export { ProxyServer } from "./server/handler";
 export { LeaderElection } from "./server/leaderElection";
 export { Router } from "./server/router";
 export { setWebDistPath } from "./server/static";
+export { CCRELAY_UI_HEADER_NAME, CCRELAY_UI_HEADER_VALUE } from "./server/internalUiHeaders";
 
 export { Logger, ScopedLogger, LogLevel } from "./utils/logger";
 

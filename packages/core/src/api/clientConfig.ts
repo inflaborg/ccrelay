@@ -72,7 +72,7 @@ export interface ClientConfigGetResponse {
   claudeDefaultModels: ClaudeDefaultModels;
 }
 
-/** localhost / 127.0.0.1 / ::1 and matching port */
+/** localhost / 127.0.0.1 / ::1, matching port, and `/anthropic` prefix (Anthropic Messages API base_url) */
 export function isLocalProxyAnthropicBase(urlStr: string, port: number): boolean {
   const t = urlStr.trim();
   if (!t) {
@@ -92,9 +92,10 @@ export function isLocalProxyAnthropicBase(urlStr: string, port: number): boolean
   if (p !== port) {
     return false;
   }
-  return u.pathname === "" || u.pathname === "/";
+  return u.pathname === "/anthropic" || u.pathname === "/anthropic/";
 }
 
+/** localhost / 127.0.0.1 / ::1, matching port, and `/openai` prefix (Codex/OpenAI-compatible base_url) */
 export function isLocalProxyCodexBase(urlStr: string, port: number): boolean {
   const t = urlStr.trim();
   if (!t) {
@@ -114,14 +115,14 @@ export function isLocalProxyCodexBase(urlStr: string, port: number): boolean {
   if (p !== port) {
     return false;
   }
-  return u.pathname === "/v1" || u.pathname === "/v1/";
+  return u.pathname === "/openai" || u.pathname === "/openai/";
 }
 
 /* eslint-disable @typescript-eslint/naming-convention -- Claude Code settings.json env object keys */
 function buildClaudeDefaultEnv(port: number): Record<string, string | number> {
   return {
     ANTHROPIC_AUTH_TOKEN: "ccrelay_apikey_placehold_do_not_need_to_setup_here",
-    ANTHROPIC_BASE_URL: `http://127.0.0.1:${port}`,
+    ANTHROPIC_BASE_URL: `http://127.0.0.1:${port}/anthropic`,
     API_TIMEOUT_MS: "3000000",
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: 1,
   };
@@ -165,7 +166,7 @@ model_provider = "ccrelay"
 
 [model_providers.ccrelay]
 name = "CCRelay"
-base_url = "http://127.0.0.1:${port}/v1"
+base_url = "http://127.0.0.1:${port}/openai"
 `;
 }
 
@@ -282,8 +283,8 @@ export function handleGetClientConfig(_req: http.IncomingMessage, res: http.Serv
     return;
   }
   const port = serverInstance.getConfig().port;
-  const expectedAnthropicBase = `http://127.0.0.1:${port}`;
-  const expectedCodexBaseUrl = `http://127.0.0.1:${port}/v1`;
+  const expectedAnthropicBase = `http://127.0.0.1:${port}/anthropic`;
+  const expectedCodexBaseUrl = `http://127.0.0.1:${port}/openai`;
   const claudePath = CLAUDE_SETTINGS();
   const body: ClientConfigGetResponse = {
     expectedAnthropicBase,

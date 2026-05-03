@@ -9,8 +9,8 @@
 
 import { randomUUID } from "crypto";
 
-import type { ResponsesRequestEcho } from "./responses-echo";
-import { mergedResponseShellEcho } from "./responses-echo";
+import type { ResponsesRequestEcho } from "../../types";
+import { mergedResponseShellEcho } from "../adapters/openai-responses-to-chat";
 
 const SSE_TEXT_CHUNK = 64;
 

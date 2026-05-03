@@ -4,7 +4,6 @@
  */
 
 import type { ApiSurface, Provider } from "../../types";
-import { isOpenAIType } from "../../converter";
 
 function normalizePath(path: string): string {
   const noQuery = path.split("?")[0] || path;
@@ -12,26 +11,15 @@ function normalizePath(path: string): string {
 }
 
 /**
- * Effective inbound client surface, including provider-based resolution for GET /v1/models
- * (no request body to detect OpenAI vs Anthropic).
+ * Effective inbound client surface for logging / downstream use.
+ * Path-based (see `detectApiSurface`); unknown paths default to Anthropic for legacy behavior.
  */
 export function resolveInboundClientSurface(
   method: string,
   path: string,
-  provider: Provider
+  _provider: Provider
 ): ApiSurface {
-  const m = (method || "GET").toUpperCase();
-  const p = normalizePath(path);
-  if (m === "GET" && p === "/v1/models") {
-    const fmt = provider.modelsListFormat ?? "auto";
-    if (fmt === "openai") {
-      return "openai";
-    }
-    if (fmt === "anthropic") {
-      return "anthropic";
-    }
-    return isOpenAIType(provider.providerType) ? "openai" : "anthropic";
-  }
+  void _provider;
   return detectApiSurface(method, path) ?? "anthropic";
 }
 
@@ -52,10 +40,32 @@ export function detectApiSurface(method: string, path: string): ApiSurface | nul
   if (p === "/v1/responses" && m === "POST") {
     return "openai_responses";
   }
-  if ((p === "/v1/messages" || p === "/messages") && m === "POST") {
+  if (p === "/v1/messages" && m === "POST") {
     return "anthropic";
   }
   if (p === "/v1/messages/count_tokens" && m === "POST") {
+    return "anthropic";
+  }
+
+  // OpenAI-prefixed (base_url ends with .../openai)
+  if (p === "/openai/chat/completions" && m === "POST") {
+    return "openai";
+  }
+  if (p === "/openai/models" && m === "GET") {
+    return "openai";
+  }
+  if (p === "/openai/responses" && m === "POST") {
+    return "openai_responses";
+  }
+
+  // Anthropic-prefixed (base_url ends with .../anthropic)
+  if (p === "/anthropic/v1/messages" && m === "POST") {
+    return "anthropic";
+  }
+  if (p === "/anthropic/v1/models" && m === "GET") {
+    return "anthropic";
+  }
+  if (p === "/anthropic/v1/messages/count_tokens" && m === "POST") {
     return "anthropic";
   }
 

@@ -61,16 +61,19 @@ describe("Integration: Resource Leak Detection", () => {
 
       // Send first request using raw http so we can abort it later
       const url = new URL(`${testServer.baseUrl}/v1/messages`);
-      const req1 = http.request({
-        hostname: url.hostname,
-        port: url.port,
-        path: url.pathname,
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": "test-key",
+      const req1 = http.request(
+        {
+          hostname: url.hostname,
+          port: url.port,
+          path: url.pathname,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": "test-key",
+          },
         },
-      }, () => {});
+        () => {}
+      );
       req1.on("error", () => {}); // Ignore abort error
       req1.write(JSON.stringify({ model: "test1", messages: [] }));
       req1.end();
@@ -174,16 +177,19 @@ describe("Integration: Resource Leak Detection", () => {
 
       // Send request and abort
       const url = new URL(`${testServer.baseUrl}/v1/messages`);
-      const req = http.request({
-        hostname: url.hostname,
-        port: url.port,
-        path: url.pathname,
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": "test-key",
+      const req = http.request(
+        {
+          hostname: url.hostname,
+          port: url.port,
+          path: url.pathname,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": "test-key",
+          },
         },
-      }, () => {});
+        () => {}
+      );
 
       req.on("error", () => {});
       req.write(JSON.stringify({ model: "test", messages: [] }));
@@ -467,16 +473,19 @@ describe("Integration: Resource Leak Detection", () => {
 
       // Send first request using raw http so we can abort it later
       const url = new URL(`${testServer.baseUrl}/v1/messages`);
-      const req1 = http.request({
-        hostname: url.hostname,
-        port: url.port,
-        path: url.pathname,
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": "test-key",
+      const req1 = http.request(
+        {
+          hostname: url.hostname,
+          port: url.port,
+          path: url.pathname,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": "test-key",
+          },
         },
-      }, () => {});
+        () => {}
+      );
       req1.on("error", () => {}); // Ignore abort error
       req1.write(JSON.stringify({ model: "test-0", messages: [] }));
       req1.end();

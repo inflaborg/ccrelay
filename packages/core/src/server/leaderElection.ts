@@ -12,6 +12,7 @@
  */
 
 import * as http from "http";
+import { CCRELAY_UI_HEADER_NAME, CCRELAY_UI_HEADER_VALUE } from "./internalUiHeaders";
 import { ServerLock, getServerLock } from "./serverLock";
 import { ScopedLogger } from "../utils/logger";
 import {
@@ -79,10 +80,13 @@ export class LeaderElection {
   // Callbacks
   private onRoleChangeCallbacks: Set<RoleChangeCallback> = new Set();
 
-  constructor(port: number, host: string) {
+  private readonly getApiBearerToken: () => string;
+
+  constructor(port: number, host: string, getApiBearerToken: () => string) {
     this.instanceId = this.generateInstanceId();
     this.port = port;
     this.host = host;
+    this.getApiBearerToken = getApiBearerToken;
     this.serverLock = getServerLock();
   }
 
@@ -110,6 +114,7 @@ export class LeaderElection {
   private async probeExistingServer(): Promise<boolean> {
     const probeStart = Date.now();
     return new Promise(resolve => {
+      const bearer = this.getApiBearerToken();
       const req = http.request(
         {
           hostname: this.host,
@@ -117,6 +122,11 @@ export class LeaderElection {
           path: "/ccrelay/api/status",
           method: "GET",
           timeout: PROBE_TIMEOUT_MS,
+          headers: {
+            // eslint-disable-next-line @typescript-eslint/naming-convention -- HTTP request header casing
+            Authorization: `Bearer ${bearer}`,
+            [CCRELAY_UI_HEADER_NAME]: CCRELAY_UI_HEADER_VALUE,
+          },
         },
         res => {
           const duration = Date.now() - probeStart;

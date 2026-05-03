@@ -4,14 +4,19 @@
  *
  * Key design: Stateless conversion, no external storage required.
  * Tool_use IDs are preserved directly without mapping.
- *
- * Reference: claude-code-router/anthropic.transformer.ts
  */
 
 /* eslint-disable @typescript-eslint/naming-convention */
 // External API fields use snake_case (max_tokens, tool_choice, etc.)
 
-import type { MessageParam, ContentBlockParam } from "../types";
+import type { MessageParam, ContentBlockParam, OpenAICompat } from "../../types";
+import {
+  isGeminiOpenAiModel,
+  sanitizeAzureOpenAiChatRequest,
+  withOptionalGeminiThoughtSignature,
+} from "../rules/openai-chat-platform-transforms";
+import { assignOpenAiChatMaxOutput } from "../rules/openai-chat-model-rules";
+import { mapAnthropicWirePathToOpenAiUpstream } from "../paths";
 
 /**
  * Anthropic Messages API request format
@@ -66,6 +71,7 @@ export type AnthropicToolChoice =
 export interface OpenAIMessageRequest {
   model: string;
   max_tokens?: number;
+  max_completion_tokens?: number;
   messages: OpenAIMessage[];
   temperature?: number;
   top_p?: number;
@@ -165,18 +171,24 @@ export interface ConversionResult {
   newPath: string;
 }
 
+export interface ConvertRequestToOpenAIOptions {
+  /** When `azure_openai`, strip fields Azure Chat Completions rejects (e.g. `reasoning`). */
+  openaiCompat?: OpenAICompat;
+}
+
 /**
  * Convert Anthropic API request to OpenAI API format
  *
  * Design: Stateless conversion, preserves IDs without external storage.
- * Follows the message splitting pattern from claude-code-router:
+ * Message splitting:
  * - user messages with tool_result → split into separate tool messages
  * - assistant messages → join text, extract tool_calls & thinking
  * - system → supports both string and array forms
  */
 export function convertRequestToOpenAI(
   anthropic: AnthropicMessageRequest,
-  originalPath: string
+  originalPath: string,
+  options?: ConvertRequestToOpenAIOptions
 ): ConversionResult {
   const openai: OpenAIMessageRequest = {
     model: anthropic.model,
@@ -233,9 +245,9 @@ export function convertRequestToOpenAI(
     openai.stream = anthropic.stream;
   }
 
-  // max_tokens
+  // max output budget: max_tokens vs max_completion_tokens by model family
   if (anthropic.max_tokens) {
-    openai.max_tokens = anthropic.max_tokens;
+    assignOpenAiChatMaxOutput(openai, anthropic.max_tokens);
   }
 
   // tools - format conversion
@@ -256,29 +268,27 @@ export function convertRequestToOpenAI(
   // thinking -> reasoning (conditionally, based on target model)
   // Gemini's OpenAI-compatible API rejects unknown fields like "reasoning",
   // so only include it for providers that support it.
-  if (anthropic.thinking && !isGeminiModel(openai.model)) {
+  if (anthropic.thinking && !isGeminiOpenAiModel(openai.model)) {
     openai.reasoning = {
       effort: getThinkLevel(anthropic.thinking.budget_tokens),
       enabled: anthropic.thinking.type === "enabled",
     };
   }
 
-  // Convert path: /v1/messages -> /chat/completions
-  let newPath = originalPath;
-  if (originalPath === "/v1/messages" || originalPath === "/messages") {
-    newPath = "/chat/completions";
-  }
+  const newPath = mapAnthropicWirePathToOpenAiUpstream(originalPath, "POST");
+
+  const request =
+    options?.openaiCompat === "azure_openai" ? sanitizeAzureOpenAiChatRequest(openai) : openai;
 
   return {
-    request: openai,
+    request,
     originalPath,
     newPath,
   };
 }
 
 /**
- * Convert thinking budget_tokens to effort level string
- * Reference: claude-code-router getThinkLevel utility
+ * Convert thinking budget_tokens to effort level string for OpenAI-style reasoning.
  */
 function getThinkLevel(budgetTokens?: number): string {
   if (!budgetTokens) {
@@ -296,17 +306,9 @@ function getThinkLevel(budgetTokens?: number): string {
 }
 
 /**
- * Check if a model name is a Gemini model
- * Gemini's OpenAI-compatible API rejects unknown fields like "reasoning"
- */
-function isGeminiModel(model: string): boolean {
-  return model.toLowerCase().startsWith("gemini");
-}
-
-/**
  * Convert a single Anthropic message to one or more OpenAI messages.
  *
- * Key patterns (from claude-code-router reference):
+ * Key patterns:
  * - user message with tool_result blocks → each tool_result becomes a separate {role:"tool"} message
  * - user message with text/image blocks → single {role:"user"} message
  * - assistant message → joins text into string, extracts tool_calls, extracts thinking
@@ -419,7 +421,7 @@ function convertAssistantMessage(content: ContentBlockParam[], targetModel: stri
     content: "",
   };
 
-  const gemini = isGeminiModel(targetModel);
+  const gemini = isGeminiOpenAiModel(targetModel);
 
   // Extract thinking blocks (may be multiple; merge content, use last non-empty signature)
   let thoughtSignature: string | undefined;
@@ -458,25 +460,15 @@ function convertAssistantMessage(content: ContentBlockParam[], targetModel: stri
     assistantMessage.tool_calls = toolCallParts.map(tool => {
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- Type narrowing after filter
       const block = tool as Extract<ContentBlockParam, { type: "tool_use" }>;
-      const toolCall: OpenAIToolCall = {
+      const base: OpenAIToolCall = {
         id: block.id,
         type: "function" as const,
         function: {
           name: block.name,
           arguments: JSON.stringify(block.input || {}),
         },
-        // For Gemini: attach thought_signature in extra_content.google
-        ...(gemini && thoughtSignature
-          ? {
-              extra_content: {
-                google: {
-                  thought_signature: thoughtSignature,
-                },
-              },
-            }
-          : {}),
       };
-      return toolCall;
+      return withOptionalGeminiThoughtSignature(base, gemini, thoughtSignature);
     });
   }
 

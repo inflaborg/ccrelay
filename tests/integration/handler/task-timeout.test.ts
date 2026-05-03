@@ -95,19 +95,24 @@ describe("Integration: Task Timeout and Client Disconnect", () => {
 
       // Use raw HTTP for better control
       const url = new URL(`${testServer.baseUrl}/v1/messages`);
-      const req = http.request({
-        hostname: url.hostname,
-        port: url.port,
-        path: url.pathname,
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": "test-key",
+      const req = http.request(
+        {
+          hostname: url.hostname,
+          port: url.port,
+          path: url.pathname,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": "test-key",
+          },
         },
-      }, () => {});
+        () => {}
+      );
 
       req.on("error", () => {}); // Suppress socket errors
-      req.write(JSON.stringify({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] }));
+      req.write(
+        JSON.stringify({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }] })
+      );
       req.end();
 
       // Wait for request to reach upstream
@@ -153,19 +158,24 @@ describe("Integration: Task Timeout and Client Disconnect", () => {
 
       // First request - disconnect mid-stream
       const url = new URL(`${testServer.baseUrl}/v1/messages`);
-      const req1 = http.request({
-        hostname: url.hostname,
-        port: url.port,
-        path: url.pathname,
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": "test-key",
+      const req1 = http.request(
+        {
+          hostname: url.hostname,
+          port: url.port,
+          path: url.pathname,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": "test-key",
+          },
         },
-      }, () => {});
+        () => {}
+      );
 
       req1.on("error", () => {});
-      req1.write(JSON.stringify({ model: "claude-3-sonnet", messages: [{ role: "user", content: "first" }] }));
+      req1.write(
+        JSON.stringify({ model: "claude-3-sonnet", messages: [{ role: "user", content: "first" }] })
+      );
       req1.end();
 
       // Wait for request to reach upstream
@@ -227,19 +237,27 @@ describe("Integration: Task Timeout and Client Disconnect", () => {
       const requests: http.ClientRequest[] = [];
 
       for (let i = 0; i < 3; i++) {
-        const req = http.request({
-          hostname: url.hostname,
-          port: url.port,
-          path: url.pathname,
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": "test-key",
+        const req = http.request(
+          {
+            hostname: url.hostname,
+            port: url.port,
+            path: url.pathname,
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": "test-key",
+            },
           },
-        }, () => {});
+          () => {}
+        );
 
         req.on("error", () => {});
-        req.write(JSON.stringify({ model: "claude-3-sonnet", messages: [{ role: "user", content: String(i + 1) }] }));
+        req.write(
+          JSON.stringify({
+            model: "claude-3-sonnet",
+            messages: [{ role: "user", content: String(i + 1) }],
+          })
+        );
         req.end();
         requests.push(req);
       }

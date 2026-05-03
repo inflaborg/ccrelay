@@ -123,16 +123,19 @@ describe("Integration: Client Disconnect", () => {
 
       // First request using raw HTTP
       const url1 = new URL(`${testServer.baseUrl}/v1/messages`);
-      const req1 = http.request({
-        hostname: url1.hostname,
-        port: url1.port,
-        path: url1.pathname,
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": "test-key",
+      const req1 = http.request(
+        {
+          hostname: url1.hostname,
+          port: url1.port,
+          path: url1.pathname,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": "test-key",
+          },
         },
-      }, () => {});
+        () => {}
+      );
 
       // Suppress socket errors from abort
       req1.on("error", () => {});
@@ -198,17 +201,20 @@ describe("Integration: Client Disconnect", () => {
 
       // First request using raw HTTP
       const url1 = new URL(`${testServer.baseUrl}/v1/messages`);
-      const req1Promise = new Promise<void>((resolve) => {
-        const req1 = http.request({
-          hostname: url1.hostname,
-          port: url1.port,
-          path: url1.pathname,
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": "test-key",
+      const req1Promise = new Promise<void>(resolve => {
+        const req1 = http.request(
+          {
+            hostname: url1.hostname,
+            port: url1.port,
+            path: url1.pathname,
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": "test-key",
+            },
           },
-        }, () => resolve());
+          () => resolve()
+        );
 
         // Suppress socket errors
         req1.on("error", () => {});
@@ -225,17 +231,20 @@ describe("Integration: Client Disconnect", () => {
       expect(stats1.default?.activeWorkers).toBe(1);
 
       // Second request using raw HTTP (to have more control)
-      const req2Promise = new Promise<void>((resolve) => {
-        const req2 = http.request({
-          hostname: url1.hostname,
-          port: url1.port,
-          path: url1.pathname,
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": "test-key",
+      const req2Promise = new Promise<void>(resolve => {
+        const req2 = http.request(
+          {
+            hostname: url1.hostname,
+            port: url1.port,
+            path: url1.pathname,
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": "test-key",
+            },
           },
-        }, () => resolve());
+          () => resolve()
+        );
 
         req2.on("error", () => {});
         req2.write(JSON.stringify({ model: "second", messages: [] }));
@@ -288,16 +297,19 @@ describe("Integration: Client Disconnect", () => {
 
       // Make and abort multiple requests
       for (let i = 0; i < 3; i++) {
-        const req = http.request({
-          hostname: url.hostname,
-          port: url.port,
-          path: url.pathname,
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": "test-key",
+        const req = http.request(
+          {
+            hostname: url.hostname,
+            port: url.port,
+            path: url.pathname,
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": "test-key",
+            },
           },
-        }, () => {});
+          () => {}
+        );
 
         req.on("error", () => {});
         req.write(JSON.stringify({ model: `test-${i}`, messages: [] }));

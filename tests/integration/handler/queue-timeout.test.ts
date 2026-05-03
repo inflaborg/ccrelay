@@ -63,16 +63,19 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
 
       // First request occupies the worker for 10 seconds
       const url = new URL(`${testServer.baseUrl}/v1/messages`);
-      const req1 = http.request({
-        hostname: url.hostname,
-        port: url.port,
-        path: url.pathname,
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": "test-key",
+      const req1 = http.request(
+        {
+          hostname: url.hostname,
+          port: url.port,
+          path: url.pathname,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": "test-key",
+          },
         },
-      }, () => {});
+        () => {}
+      );
 
       req1.on("error", () => {});
       req1.write(JSON.stringify({ model: "first", messages: [] }));
@@ -129,16 +132,19 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
 
       // First request occupies worker
       const url = new URL(`${testServer.baseUrl}/v1/messages`);
-      const req1 = http.request({
-        hostname: url.hostname,
-        port: url.port,
-        path: url.pathname,
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": "test-key",
+      const req1 = http.request(
+        {
+          hostname: url.hostname,
+          port: url.port,
+          path: url.pathname,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": "test-key",
+          },
         },
-      }, () => {});
+        () => {}
+      );
 
       req1.on("error", () => {});
       req1.write(JSON.stringify({ model: "first", messages: [] }));
@@ -196,16 +202,19 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
 
       // First request occupies worker
       const url = new URL(`${testServer.baseUrl}/v1/messages`);
-      const req1 = http.request({
-        hostname: url.hostname,
-        port: url.port,
-        path: url.pathname,
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": "test-key",
+      const req1 = http.request(
+        {
+          hostname: url.hostname,
+          port: url.port,
+          path: url.pathname,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": "test-key",
+          },
         },
-      }, () => {});
+        () => {}
+      );
 
       req1.on("error", () => {});
       req1.write(JSON.stringify({ model: "first", messages: [] }));
@@ -275,16 +284,19 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
 
       // Use raw HTTP to control disconnect
       const url = new URL(`${testServer.baseUrl}/v1/messages`);
-      const req = http.request({
-        hostname: url.hostname,
-        port: url.port,
-        path: url.pathname,
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": "test-key",
+      const req = http.request(
+        {
+          hostname: url.hostname,
+          port: url.port,
+          path: url.pathname,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": "test-key",
+          },
         },
-      }, () => {});
+        () => {}
+      );
 
       req.on("error", () => {});
       req.write(JSON.stringify({ model: "test", messages: [] }));
@@ -332,16 +344,19 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
       });
 
       const url = new URL(`${testServer.baseUrl}/v1/messages`);
-      const req = http.request({
-        hostname: url.hostname,
-        port: url.port,
-        path: url.pathname,
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": "test-key",
+      const req = http.request(
+        {
+          hostname: url.hostname,
+          port: url.port,
+          path: url.pathname,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": "test-key",
+          },
         },
-      }, () => {});
+        () => {}
+      );
 
       req.on("error", () => {});
       req.write(JSON.stringify({ model: "test", messages: [] }));
@@ -393,16 +408,19 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
       const url = new URL(`${testServer.baseUrl}/v1/messages`);
 
       // First request occupies worker
-      const req1 = http.request({
-        hostname: url.hostname,
-        port: url.port,
-        path: url.pathname,
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": "test-key",
+      const req1 = http.request(
+        {
+          hostname: url.hostname,
+          port: url.port,
+          path: url.pathname,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": "test-key",
+          },
         },
-      }, () => {});
+        () => {}
+      );
       req1.on("error", () => {});
       req1.write(JSON.stringify({ model: "first", messages: [] }));
       req1.end();
@@ -467,16 +485,19 @@ describe("Integration: Queue Timeout and Task Cleanup", () => {
       const url = new URL(`${testServer.baseUrl}/v1/messages`);
 
       // First request
-      const req1 = http.request({
-        hostname: url.hostname,
-        port: url.port,
-        path: url.pathname,
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": "test-key",
+      const req1 = http.request(
+        {
+          hostname: url.hostname,
+          port: url.port,
+          path: url.pathname,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": "test-key",
+          },
         },
-      }, () => {});
+        () => {}
+      );
       req1.on("error", () => {});
       req1.write(JSON.stringify({ model: "first", messages: [] }));
       req1.end();

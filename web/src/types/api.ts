@@ -15,9 +15,13 @@ export interface Provider {
   active: boolean;
   enabled: boolean;
   apiKey?: string;
-  /** GET /v1/models wire when protocol cannot be detected (default: auto) */
-  modelsListFormat?: "auto" | "openai" | "anthropic";
   modelMap?: ModelMapEntry[];
+  /** When false, model maps are kept but not applied. Default true (omit = enabled). */
+  modelMappingEnabled?: boolean;
+  useCustomModelsList?: boolean;
+  customModelsList?: string[];
+  /** Set `azure_openai` when the upstream is Azure OpenAI (Anthropic client → Chat Completions). */
+  openaiCompat?: "default" | "azure_openai";
 }
 
 export interface ProvidersResponse {
@@ -59,8 +63,12 @@ export interface AddProviderRequest {
   authHeader?: string;
   modelMap?: ModelMapEntry[];
   vlModelMap?: ModelMapEntry[];
+  /** When false, configured maps are not applied. Default true. */
+  modelMappingEnabled?: boolean;
   headers?: Record<string, string>;
-  modelsListFormat?: "auto" | "openai" | "anthropic";
+  useCustomModelsList?: boolean;
+  customModelsList?: string[];
+  openaiCompat?: "default" | "azure_openai";
 }
 
 export interface AddProviderResponse {
@@ -211,6 +219,8 @@ export interface SettingsConfig {
   concurrency: ConcurrencySettings;
   server: ServerSettings;
   routing: RoutingSettings;
+  /** Bundled default forward/block (read-only preview + “restore defaults” in editor until Save). */
+  routingDefaults?: RoutingSettings;
 }
 
 export interface LoggingSettings {
@@ -218,6 +228,8 @@ export interface LoggingSettings {
   database?: {
     type: "sqlite" | "postgres";
     path?: string;
+    /** SQLite only: sqlite3 CLI path; omit or empty uses PATH */
+    sqlite3Executable?: string;
     host?: string;
     port?: number;
     name?: string;
@@ -246,9 +258,16 @@ export interface ServerSettings {
   autoStart: boolean;
 }
 
+export interface RoutingBlockRule {
+  path: string;
+  condition?: { providers?: string[]; providerNot?: string[] };
+  response: string;
+  code: number;
+}
+
 export interface RoutingSettings {
   forward: Array<{ path: string; provider: string }>;
-  block: Array<{ path: string; condition?: { kind?: string[] }; response: string; code: number }>;
+  block: RoutingBlockRule[];
 }
 
 export interface PatchConfigResponse {

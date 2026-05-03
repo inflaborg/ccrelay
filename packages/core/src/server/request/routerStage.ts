@@ -1,5 +1,16 @@
 /**
  * Router Stage - handles blocking check and routing resolution
+ *
+ * Derives the **client wire canonical path** (what the client protocol uses before cross-protocol remap):
+ *
+ * - **`/anthropic/...`** → strip `/anthropic` → Anthropic wire (`/v1/models`, `/v1/messages`, …).
+ * - **`/openai/...`** → strip `/openai` → OpenAI wire; if the remainder is **`/v1/models`** (GET) or
+ *   **`/v1/chat/completions` / `/v1/responses`** (POST), normalize to **`/models`**, **`/chat/completions`**,
+ *   **`/responses`** so custom forwards on unsupported shapes still get correct OpenAI-relative paths.
+ * - **Legacy relay root **`/v1/...`** (no prefix)** → normalize OpenAI-wire inbounds (**`/v1/models`**, …) to **`/models`**, **`/chat/completions`**,
+ *   **`/responses`** per method; Anthropic (**`/v1/messages`**, …) stays **`/v1/...`**.
+ *
+ * **`Router.getTargetUrl`** concatenates **`provider.baseUrl`** + path **without** deduplication (`/v1` is part of vendor config).
  */
 
 import type * as http from "http";
@@ -9,19 +20,57 @@ import type { ApiSurface, RoutingContext } from "./context";
 import { detectApiSurface, resolveInboundClientSurface } from "./apiSurfaceDetector";
 import { isOpenAIType } from "../../converter";
 
-/**
- * Internal path mapping: client entry point → upstream endpoint path.
- * Clients always use /v1/ prefixed paths; upstream providers may differ.
- * Anthropic paths (/v1/messages) are kept as-is since Anthropic uses the same prefix.
- */
-const UPSTREAM_PATH_MAP = new Map<string, string>([
-  ["/v1/chat/completions", "/chat/completions"],
-  ["/v1/responses", "/responses"],
-  ["/v1/models", "/models"],
-]);
+const INBOUND_PREFIX_OPENAI = "/openai/";
+const INBOUND_PREFIX_ANTHROPIC = "/anthropic/";
 
-function resolveUpstreamPath(clientPath: string): string {
-  return UPSTREAM_PATH_MAP.get(clientPath) ?? clientPath;
+function pathNoQuery(path: string): string {
+  const noQuery = path.split("?")[0] ?? path;
+  return noQuery.startsWith("/") ? noQuery : `/${noQuery}`;
+}
+
+/** Legacy `/v1/...` on relay root maps to OpenAI wire paths (method-specific). */
+function legacyV1ToOpenAiWireCanonical(method: string, path: string): string | null {
+  const m = (method || "GET").toUpperCase();
+  if (path === "/v1/models" && m === "GET") {
+    return "/models";
+  }
+  if (path === "/v1/chat/completions" && m === "POST") {
+    return "/chat/completions";
+  }
+  if (path === "/v1/responses" && m === "POST") {
+    return "/responses";
+  }
+  return null;
+}
+
+function stripAnthropicInboundPrefix(path: string): string | null {
+  if (!path.startsWith(INBOUND_PREFIX_ANTHROPIC)) {
+    return null;
+  }
+  return path.slice("/anthropic".length);
+}
+
+function stripOpenaiInboundPrefix(path: string): string {
+  return path.startsWith(INBOUND_PREFIX_OPENAI) ? path.slice("/openai".length) : path;
+}
+
+/**
+ * Client wire-relative path upstream (same as upstream path when protocol matches provider).
+ *
+ * `method` is required because legacy **`/v1/models`** vs **`/v1/messages`** are disambiguated by HTTP method.
+ */
+export function resolveUpstreamPath(method: string, clientPath: string): string {
+  const p = pathNoQuery(clientPath);
+  const anthropicStripped = stripAnthropicInboundPrefix(p);
+  if (anthropicStripped !== null) {
+    return anthropicStripped;
+  }
+
+  const afterOpenai = stripOpenaiInboundPrefix(p);
+  const hadOpenaiPrefix = afterOpenai !== p;
+  const candidate = hadOpenaiPrefix ? afterOpenai : p;
+  const normalized = legacyV1ToOpenAiWireCanonical(method, candidate);
+  return normalized ?? candidate;
 }
 
 /**
@@ -43,7 +92,7 @@ export class RouterStage {
     const clientSurface: ApiSurface = detectApiSurface(method, path) ?? "anthropic";
 
     // 1. Unified resolve: block → forward → not_found
-    const result = this.router.resolve(path, clientSurface);
+    const result = this.router.resolve(path);
 
     if (result.type === "block") {
       return {
@@ -82,7 +131,7 @@ export class RouterStage {
 
     // 3. Build target URL
     const targetQuery = typeof parsedUrl.search === "string" ? parsedUrl.search : "";
-    const targetPath = resolveUpstreamPath(path);
+    const targetPath = resolveUpstreamPath(method, path);
     let targetUrl = this.router.getTargetUrl(targetPath, provider);
     if (targetQuery) {
       targetUrl += targetQuery;

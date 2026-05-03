@@ -18,7 +18,12 @@ import {
   QueueStats,
 } from "../types";
 import { ScopedLogger } from "../utils/logger";
-import { getDatabase, LogDatabase } from "../database";
+import {
+  getDatabase,
+  LogDatabase,
+  setLogDatabaseDriverConfigResolver,
+  loggingDatabaseConfigToDriver,
+} from "../database";
 import { LeaderElection } from "./leaderElection";
 import { isStaticRequest, serveStatic } from "./static";
 import { isApiRequest, handleApiRequest } from "../api";
@@ -27,6 +32,13 @@ import { QueueManager } from "./queueManager";
 import { ResponseLogger } from "./responseLogger";
 import { RequestHandler } from "./request";
 import { WsBroadcaster, WsFollowerClient } from "./websocket";
+import {
+  hasRequiredUiGateHeader,
+  isBearerAuthorized,
+  sendHtmlUiGateBlocked,
+  sendJsonUnauthorized,
+  corsExtraAllowedHeadersCsv,
+} from "./httpAccessGate";
 
 export class ProxyServer {
   private server: http.Server | null = null;
@@ -64,6 +76,9 @@ export class ProxyServer {
   constructor(config: ConfigManager, leaderElection: LeaderElection | null = null) {
     this.config = config;
     this.router = new Router(config);
+    setLogDatabaseDriverConfigResolver(() =>
+      loggingDatabaseConfigToDriver(this.config.configValue.logging.database)
+    );
     this.database = getDatabase();
     this.leaderElection = leaderElection;
     this.instanceId = `Server-${process.pid}-${Math.random().toString(36).substring(2, 6)}`;
@@ -622,13 +637,23 @@ export class ProxyServer {
       return;
     }
 
-    // Serve static files (Web UI)
+    if (isApiRequest(path)) {
+      if (!isBearerAuthorized(req.headers, this.config.getApiBearerToken())) {
+        sendJsonUnauthorized(res);
+        return;
+      }
+    }
+
     if (isStaticRequest(path)) {
+      if (!hasRequiredUiGateHeader(req.headers)) {
+        sendHtmlUiGateBlocked(res);
+        return;
+      }
       serveStatic(req, res);
       return;
     }
 
-    // Handle API requests (/ccrelay/api/*)
+    // Handle API requests (/ccrelay/api/*) — Bearer validated above
     if (isApiRequest(path)) {
       handleApiRequest(req, res);
       return;
@@ -644,7 +669,7 @@ export class ProxyServer {
   private setCorsHeaders(res: http.ServerResponse): void {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key");
+    res.setHeader("Access-Control-Allow-Headers", corsExtraAllowedHeadersCsv());
   }
 
   /**

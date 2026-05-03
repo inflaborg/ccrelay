@@ -10,7 +10,6 @@ import type { DatabaseDriver, DatabaseDriverConfig } from "./types";
 import { createDriver } from "./factory";
 import { isSqliteCliUnavailableError } from "./drivers/sqlite-cli";
 
-// Re-export types
 export type {
   RequestLog,
   LogFilter,
@@ -206,15 +205,29 @@ export class LogDatabase {
 // Singleton instance
 let dbInstance: LogDatabase | null = null;
 
+/** When set before the first {@link getDatabase} call, configures driver from `logging.database`. */
+let logDatabaseDriverResolver:
+  | (() => import("./types").DatabaseDriverConfig | undefined)
+  | undefined;
+
+export function setLogDatabaseDriverConfigResolver(
+  fn: (() => import("./types").DatabaseDriverConfig | undefined) | undefined
+): void {
+  logDatabaseDriverResolver = fn;
+}
+
 /**
- * Get the database singleton (uses default SQLite config)
+ * Get the database singleton (uses default SQLite ~/.ccrelay/logs.db unless resolver was set).
  */
 export function getDatabase(): LogDatabase {
   if (!dbInstance) {
-    dbInstance = new LogDatabase();
+    const resolved = logDatabaseDriverResolver?.();
+    dbInstance = resolved !== undefined ? new LogDatabase(undefined, resolved) : new LogDatabase();
   }
   return dbInstance;
 }
+
+export { loggingDatabaseConfigToDriver } from "./logging-driver-config";
 
 /**
  * Initialize database with custom configuration

@@ -79,6 +79,7 @@ export interface DatabaseStats {
 export interface SqliteDriverConfig {
   readonly type: "sqlite";
   readonly path: string;
+  readonly sqlite3Executable?: string;
 }
 
 /**
