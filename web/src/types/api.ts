@@ -211,6 +211,8 @@ export interface SettingsConfig {
   concurrency: ConcurrencySettings;
   server: ServerSettings;
   routing: RoutingSettings;
+  /** Bundled default forward/block (read-only preview + “restore defaults” in editor until Save). */
+  routingDefaults?: RoutingSettings;
 }
 
 export interface LoggingSettings {
@@ -246,9 +248,16 @@ export interface ServerSettings {
   autoStart: boolean;
 }
 
+export interface RoutingBlockRule {
+  path: string;
+  condition?: { kind?: string[]; providerNot?: string[] };
+  response: string;
+  code: number;
+}
+
 export interface RoutingSettings {
   forward: Array<{ path: string; provider: string }>;
-  block: Array<{ path: string; condition?: { kind?: string[] }; response: string; code: number }>;
+  block: RoutingBlockRule[];
 }
 
 export interface PatchConfigResponse {

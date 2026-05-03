@@ -31,6 +31,11 @@ import type { ResponseLogger } from "../responseLogger";
 
 const log = new ScopedLogger("ProxyExecutor");
 
+function isModelsUpstreamPath(requestPath: string): boolean {
+  const p = requestPath.split("?")[0] ?? "";
+  return p === "/models" || p === "/v1/models";
+}
+
 /** Replace Content-Type and drop hop-by-hop / body-size headers for synthesized Responses API SSE. */
 function headersForResponsesSse(
   base: Record<string, string | string[]>
@@ -1128,11 +1133,7 @@ export class ProxyExecutor {
 
       let outStatus = status;
       const outHeaders: Record<string, string | string[]> = { ...responseHeaders };
-      if (
-        task.method === "GET" &&
-        (task.requestPath === "/models" || task.requestPath.split("?")[0] === "/models") &&
-        status >= 400
-      ) {
+      if (task.method === "GET" && isModelsUpstreamPath(task.requestPath) && status >= 400) {
         const fallback = buildModelsListFallback(task.provider);
         const j = JSON.stringify(fallback);
         const buf = Buffer.from(j, "utf-8");
@@ -1149,7 +1150,7 @@ export class ProxyExecutor {
       const upstreamWireFmt: ApiSurface = isOpenAIType(task.provider.providerType) ? "openai" : "anthropic";
       if (
         task.method === "GET" &&
-        (task.requestPath === "/models" || task.requestPath.split("?")[0] === "/models") &&
+        isModelsUpstreamPath(task.requestPath) &&
         outStatus === 200 &&
         task.clientSurface !== upstreamWireFmt &&
         ctx.responseChunks.length > 0

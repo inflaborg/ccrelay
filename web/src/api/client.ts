@@ -169,7 +169,8 @@ export const api = {
 
   patchConfig: (body: {
     section: string;
-    data: Record<string, unknown>;
+    data?: Record<string, unknown>;
+    resetRoutingDefaults?: boolean;
   }): Promise<PatchConfigResponse> =>
     fetchAPI<PatchConfigResponse>("/config", {
       method: "PATCH",

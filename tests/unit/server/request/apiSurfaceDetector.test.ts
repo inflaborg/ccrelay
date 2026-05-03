@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  detectApiSurface,
-  resolveInboundClientSurface,
-} from "@/server/request/apiSurfaceDetector";
+import { detectApiSurface, resolveInboundClientSurface } from "@/server/request/apiSurfaceDetector";
 import type { Provider } from "@/types";
 
 function p(partial: Partial<Provider> & Pick<Provider, "id" | "providerType">): Provider {
@@ -25,6 +22,18 @@ describe("detectApiSurface", () => {
     expect(detectApiSurface("GET", "/v1/models")).toBe("openai");
   });
 
+  it("detects OpenAI-prefixed endpoints", () => {
+    expect(detectApiSurface("POST", "/openai/chat/completions")).toBe("openai");
+    expect(detectApiSurface("GET", "/openai/models")).toBe("openai");
+    expect(detectApiSurface("POST", "/openai/responses")).toBe("openai_responses");
+  });
+
+  it("detects Anthropic-prefixed endpoints", () => {
+    expect(detectApiSurface("POST", "/anthropic/v1/messages")).toBe("anthropic");
+    expect(detectApiSurface("GET", "/anthropic/v1/models")).toBe("anthropic");
+    expect(detectApiSurface("POST", "/anthropic/v1/messages/count_tokens")).toBe("anthropic");
+  });
+
   it("detects Anthropic messages", () => {
     expect(detectApiSurface("POST", "/v1/messages")).toBe("anthropic");
     expect(detectApiSurface("POST", "/messages")).toBe("anthropic");
@@ -44,31 +53,39 @@ describe("detectApiSurface", () => {
 });
 
 describe("resolveInboundClientSurface", () => {
-  it("GET /v1/models: auto uses providerType", () => {
-    expect(resolveInboundClientSurface("GET", "/v1/models", p({ id: "a", providerType: "openai" }))).toBe(
-      "openai"
-    );
+  it("GET /v1/models is always openai (legacy)", () => {
+    expect(
+      resolveInboundClientSurface("GET", "/v1/models", p({ id: "a", providerType: "openai" }))
+    ).toBe("openai");
     expect(
       resolveInboundClientSurface("GET", "/v1/models", p({ id: "b", providerType: "anthropic" }))
-    ).toBe("anthropic");
-  });
-
-  it("GET /v1/models: explicit openai/anthropic overrides", () => {
+    ).toBe("openai");
     expect(
       resolveInboundClientSurface(
         "GET",
-        "/v1/models?x=1",
-        p({ id: "a", providerType: "anthropic", modelsListFormat: "openai" })
+        "/v1/models",
+        p({ id: "c", providerType: "anthropic", modelsListFormat: "anthropic" })
       )
     ).toBe("openai");
+  });
+
+  it("GET /anthropic/v1/models uses anthropic surface", () => {
     expect(
-      resolveInboundClientSurface("GET", "/v1/models", p({ id: "b", providerType: "openai", modelsListFormat: "anthropic" }))
+      resolveInboundClientSurface(
+        "GET",
+        "/anthropic/v1/models",
+        p({ id: "a", providerType: "openai" })
+      )
     ).toBe("anthropic");
   });
 
   it("other paths match detectApiSurface", () => {
     expect(
-      resolveInboundClientSurface("POST", "/v1/chat/completions", p({ id: "a", providerType: "anthropic" }))
+      resolveInboundClientSurface(
+        "POST",
+        "/v1/chat/completions",
+        p({ id: "a", providerType: "anthropic" })
+      )
     ).toBe("openai");
   });
 });

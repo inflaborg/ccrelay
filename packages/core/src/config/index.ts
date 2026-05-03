@@ -16,6 +16,9 @@ import {
   FileConfigSchema,
   type FileConfigInput,
   type ProviderConfigInput,
+  type RoutingConfigInput,
+  type RouteQueueConfigInput,
+  type ConcurrencyConfigInput,
   type ConcurrencyConfig,
   type Retry429Config,
   type DatabaseConfig,
@@ -85,14 +88,24 @@ routing:
       provider: "auto"
     - path: "/v1/messages/count_tokens"
       provider: "auto"
-    - path: "/v1/users/*"
-      provider: "official"
-    - path: "/v1/organizations/*"
-      provider: "official"
+    # OpenAI-prefixed — base URL e.g. http://127.0.0.1:7575/openai (SDK path rewritten upstream)
+    - path: "/openai/chat/completions"
+      provider: "auto"
+    - path: "/openai/responses"
+      provider: "auto"
+    - path: "/openai/models"
+      provider: "auto"
+    # Anthropic-prefixed — base URL e.g. http://127.0.0.1:7575/anthropic
+    - path: "/anthropic/v1/messages"
+      provider: "auto"
+    - path: "/anthropic/v1/models"
+      provider: "auto"
+    - path: "/anthropic/v1/messages/count_tokens"
+      provider: "auto"
 
   # Block rules: return custom response instead of forwarding.
-  # Checked before forward rules. condition.kind filters by client protocol.
-  # Omit condition to block all protocols.
+  # Checked before forward. condition.kind filters by client protocol.
+  # condition.providerNot: block unless current provider is in this list (skip rule when it matches).
   block:
     - path: "/api/event_logging/*"
       response: ""
@@ -101,6 +114,26 @@ routing:
       condition:
         kind: ["openai", "openai_chat", "openai_responses"]
       response: '{"input_tokens": 0}'
+      code: 200
+    - path: "/v1/users/*"
+      condition:
+        providerNot: ["official"]
+      response: ""
+      code: 200
+    - path: "/v1/organizations/*"
+      condition:
+        providerNot: ["official"]
+      response: ""
+      code: 200
+    - path: "/anthropic/v1/users/*"
+      condition:
+        providerNot: ["official"]
+      response: ""
+      code: 200
+    - path: "/anthropic/v1/organizations/*"
+      condition:
+        providerNot: ["official"]
+      response: ""
       code: 200
 
 # ==================== Concurrency Control ====================
@@ -152,6 +185,19 @@ logging:
 function getDefaultConfig(): FileConfigInput {
   const parsed = yaml.load(DEFAULT_CONFIG_YAML);
   return FileConfigSchema.parse(parsed);
+}
+
+/** Bundled forward + block rules from `DEFAULT_CONFIG_YAML` (Settings “restore routing defaults”). */
+export function getDefaultRoutingSettings(): {
+  forward: ForwardRule[];
+  block: BlockRule[];
+} {
+  const d = getDefaultConfig();
+  const r = d.routing;
+  return {
+    forward: [...(r?.forward ?? [])],
+    block: [...(r?.block ?? [])],
+  };
 }
 
 /**
@@ -217,7 +263,10 @@ export function expandEnvVarsInObject<T>(obj: T, options?: { isProvidersMap?: bo
 }
 
 /**
- * Deep merge two objects, with source overwriting target
+ * Deep merge two objects (plain nested objects only). Source overwrites target; arrays are atomic.
+ *
+ * Full config files use {@link mergeFileConfigWithDefaults} so list-shaped sections inherit new
+ * default rows without overwriting user-defined lists.
  */
 function deepMerge<T extends Record<string, unknown>>(target: T, source: Partial<T>): T {
   const result = { ...target };
@@ -241,6 +290,218 @@ function deepMerge<T extends Record<string, unknown>>(target: T, source: Partial
     }
   }
   return result;
+}
+
+function stableJsonForMergeKey(obj: unknown): string {
+  if (obj === null || obj === undefined) {
+    return "null";
+  }
+  if (typeof obj !== "object") {
+    return JSON.stringify(obj);
+  }
+  if (Array.isArray(obj)) {
+    return `[${obj.map(stableJsonForMergeKey).join(",")}]`;
+  }
+  const o = obj as Record<string, unknown>;
+  const keys = Object.keys(o).sort((a, b) => a.localeCompare(b));
+  return `{${keys.map(k => `${JSON.stringify(k)}:${stableJsonForMergeKey(o[k])}`).join(",")}}`;
+}
+
+function blockRuleMergeKey(rule: Pick<BlockRule, "path" | "condition">): string {
+  return `${rule.path}\0${stableJsonForMergeKey(rule.condition ?? null)}`;
+}
+
+function cloneRoutingInput(r: RoutingConfigInput): RoutingConfigInput {
+  return {
+    ...r,
+    ...(r.forward?.length ? { forward: r.forward.map(x => ({ ...x })) } : {}),
+    ...(r.block?.length ? { block: r.block.map(x => ({ ...x })) } : {}),
+  };
+}
+
+/**
+ * Keeps user's list order. When `userRules === undefined`, use defaults alone. When user lists an empty
+ * array, treat it as intentional (do not attach defaults).
+ */
+function mergeForwardRuleLists(
+  defaultRules: ForwardRule[],
+  userRules: ForwardRule[] | undefined
+): ForwardRule[] {
+  if (userRules === undefined) {
+    return defaultRules.map(r => ({ ...r }));
+  }
+  if (userRules.length === 0) {
+    return [];
+  }
+  const paths = new Set(userRules.map(r => r.path));
+  const out = userRules.map(r => ({ ...r }));
+  for (const r of defaultRules) {
+    if (!paths.has(r.path)) {
+      out.push({ ...r });
+    }
+  }
+  return out;
+}
+
+/** Same semantics as {@link mergeForwardRuleLists}: undefined = defaults; [] = intentional empty list. */
+function mergeBlockRuleLists(
+  defaultRules: BlockRule[],
+  userRules: BlockRule[] | undefined
+): BlockRule[] {
+  if (userRules === undefined) {
+    return defaultRules.map(r => ({ ...r }));
+  }
+  if (userRules.length === 0) {
+    return [];
+  }
+  const keys = new Set(userRules.map(blockRuleMergeKey));
+  const out = userRules.map(r => ({ ...r }));
+  for (const r of defaultRules) {
+    if (!keys.has(blockRuleMergeKey(r))) {
+      out.push({ ...r });
+    }
+  }
+  return out;
+}
+
+/** Discriminant: `pattern` (queue route). Undefined = inherit default routes; [] = explicit empty. */
+function mergeRouteQueueLists(
+  defaultRoutes: RouteQueueConfigInput[],
+  userRoutes: RouteQueueConfigInput[] | undefined
+): RouteQueueConfigInput[] | undefined {
+  if (userRoutes === undefined) {
+    if (defaultRoutes.length === 0) {
+      return undefined;
+    }
+    return defaultRoutes.map(r => ({ ...r }));
+  }
+  if (userRoutes.length === 0) {
+    return [];
+  }
+  const patterns = new Set(userRoutes.map(r => r.pattern));
+  const out = userRoutes.map(r => ({ ...r }));
+  for (const r of defaultRoutes) {
+    if (!patterns.has(r.pattern)) {
+      out.push({ ...r });
+    }
+  }
+  return out;
+}
+
+/** Default provider ids preserved; overlapping ids merge recursively. */
+function mergeProviderRecords(
+  defaults: Record<string, ProviderConfigInput>,
+  user: Record<string, ProviderConfigInput>
+): Record<string, ProviderConfigInput> {
+  const out: Record<string, ProviderConfigInput> = { ...defaults };
+  for (const id of Object.keys(user)) {
+    const d = defaults[id];
+    const u = user[id];
+    if (d && u) {
+      out[id] = deepMerge(
+        { ...(d as Record<string, unknown>) },
+        u as Partial<Record<string, unknown>>
+      ) as ProviderConfigInput;
+    } else {
+      out[id] = u;
+    }
+  }
+  return out;
+}
+
+function mergeRoutingInputs(
+  d: RoutingConfigInput | undefined,
+  f: RoutingConfigInput | undefined
+): RoutingConfigInput | undefined {
+  if (!f) {
+    return d ? cloneRoutingInput(d) : undefined;
+  }
+  if (!d) {
+    return cloneRoutingInput(f);
+  }
+  return {
+    forward: mergeForwardRuleLists(d.forward ?? [], f.forward),
+    block: mergeBlockRuleLists(d.block ?? [], f.block),
+    proxy: f.proxy,
+    passthrough: f.passthrough,
+    openaiBlock: f.openaiBlock,
+  };
+}
+
+function mergeConcurrencyInputs(
+  d: ConcurrencyConfigInput | undefined,
+  f: ConcurrencyConfigInput | undefined
+): ConcurrencyConfigInput | undefined {
+  if (!f) {
+    return d ? { ...d } : undefined;
+  }
+  if (!d) {
+    return { ...f };
+  }
+  const dr = d.routes;
+  const fr = f.routes;
+  const dRest = { ...d };
+  delete (dRest as Partial<ConcurrencyConfigInput> & Record<string, unknown>).routes;
+  const fRest = { ...f };
+  delete (fRest as Partial<ConcurrencyConfigInput> & Record<string, unknown>).routes;
+  const mergedRest = deepMerge(
+    dRest as Record<string, unknown>,
+    fRest as Partial<Record<string, unknown>>
+  ) as Omit<ConcurrencyConfigInput, "routes">;
+  const routes = mergeRouteQueueLists(dr ?? [], fr);
+  return { ...mergedRest, routes };
+}
+
+/**
+ * Merge bundled defaults with disk config: wherever the user omitted a scalar/object field, defaults
+ * apply; list sections (`routing.forward` / `routing.block` / `concurrency.routes`) keep user rows
+ * first and append default rows not already present (by `path` / block key / `pattern`). `undefined`
+ * list = use defaults; empty array = user explicitly chose no entries.
+ */
+export function mergeFileConfigWithDefaults(
+  defaults: FileConfigInput,
+  file: Partial<FileConfigInput>
+): FileConfigInput {
+  const routing = mergeRoutingInputs(defaults.routing, file.routing);
+
+  let providers: Record<string, ProviderConfigInput> | undefined;
+  if (!defaults.providers && !file.providers) {
+    providers = undefined;
+  } else if (!file.providers) {
+    providers = defaults.providers ? { ...defaults.providers } : undefined;
+  } else if (!defaults.providers) {
+    providers = { ...file.providers };
+  } else {
+    providers = mergeProviderRecords(defaults.providers, file.providers);
+  }
+
+  const merged: FileConfigInput = {
+    configVersion:
+      file.configVersion !== undefined && file.configVersion !== null
+        ? file.configVersion
+        : defaults.configVersion,
+    defaultProvider:
+      file.defaultProvider !== undefined ? file.defaultProvider : defaults.defaultProvider,
+    server:
+      (defaults.server ?? file.server)
+        ? (deepMerge(
+            (defaults.server ?? {}) as Record<string, unknown>,
+            (file.server ?? {}) as Record<string, unknown>
+          ) as unknown as FileConfigInput["server"])
+        : undefined,
+    providers,
+    routing,
+    concurrency: mergeConcurrencyInputs(defaults.concurrency, file.concurrency),
+    logging:
+      (defaults.logging ?? file.logging)
+        ? (deepMerge(
+            (defaults.logging ?? {}) as Record<string, unknown>,
+            (file.logging ?? {}) as Record<string, unknown>
+          ) as unknown as FileConfigInput["logging"])
+        : undefined,
+  };
+
+  return merged;
 }
 
 /**
@@ -560,7 +821,11 @@ export class ConfigManager {
 
       if (existingConfig && typeof existingConfig === "object") {
         const defaults = getDefaultConfig();
-        const merged = deepMerge(defaults, existingConfig as Partial<FileConfigInput>);
+        const parsedDisk = FileConfigSchema.safeParse(existingConfig);
+        const merged = mergeFileConfigWithDefaults(
+          defaults,
+          parsedDisk.success ? parsedDisk.data : existingConfig
+        );
 
         // Only rewrite if there are new fields added
         if (JSON.stringify(merged) !== JSON.stringify(existingConfig)) {
@@ -618,7 +883,7 @@ export class ConfigManager {
 
     // Merge with defaults
     const defaults = getDefaultConfig();
-    const merged = deepMerge(defaults, fileConfig);
+    const merged = mergeFileConfigWithDefaults(defaults, fileConfig);
 
     // Build providers map
     const providers: Record<string, Provider> = {};
@@ -750,7 +1015,7 @@ export class ConfigManager {
       blockRules = (rawRouting.block || []).map(
         (b: {
           path: string;
-          condition?: { kind?: string[] };
+          condition?: { kind?: string[]; providerNot?: string[] };
           response: string;
           code: number;
         }): BlockRule => ({
@@ -768,14 +1033,7 @@ export class ConfigManager {
         "/v1/models",
         "/v1/responses",
       ];
-      const passthrough: string[] = rawRouting.passthrough ?? [
-        "/v1/users/*",
-        "/v1/organizations/*",
-      ];
-      forwardRules = [
-        ...proxy.map((p: string) => ({ path: p, provider: "auto" })),
-        ...passthrough.map((p: string) => ({ path: p, provider: "official" })),
-      ];
+      forwardRules = [...proxy.map((p: string) => ({ path: p, provider: "auto" }))];
       const legacyBlock: BlockPattern[] = (rawRouting.block || []).map(
         (b: { path: string; response?: string; code?: number }): BlockPattern => ({
           path: b.path,
@@ -790,6 +1048,21 @@ export class ConfigManager {
           code: b.code ?? 200,
         })
       );
+      const defaultPassthroughGuard = ["/v1/users/*", "/v1/organizations/*"];
+      const passthroughRaw = rawRouting.passthrough;
+      let passthroughPaths: string[] = Array.isArray(passthroughRaw)
+        ? passthroughRaw.filter((x): x is string => typeof x === "string")
+        : defaultPassthroughGuard;
+      if (passthroughPaths.length === 0) {
+        passthroughPaths = defaultPassthroughGuard;
+      }
+      const legacyPassthroughGuard: BlockRule[] = passthroughPaths.map((globPath: string) => ({
+        path: globPath,
+        condition: { providerNot: ["official"] },
+        response: "",
+        code: 200,
+      }));
+
       blockRules = [
         ...legacyBlock.map((b: BlockPattern) => ({
           path: b.path,
@@ -802,7 +1075,24 @@ export class ConfigManager {
           response: b.response,
           code: b.code ?? 200,
         })),
+        ...legacyPassthroughGuard,
+        {
+          path: "/anthropic/v1/users/*",
+          condition: { providerNot: ["official"] },
+          response: "",
+          code: 200,
+        },
+        {
+          path: "/anthropic/v1/organizations/*",
+          condition: { providerNot: ["official"] },
+          response: "",
+          code: 200,
+        },
       ];
+
+      const defRt = getDefaultConfig().routing;
+      forwardRules = mergeForwardRuleLists(defRt?.forward ?? [], forwardRules);
+      blockRules = mergeBlockRuleLists(defRt?.block ?? [], blockRules);
 
       // Write migrated config back to disk with version stamp
       try {
@@ -1211,19 +1501,22 @@ export class ConfigManager {
   }
 
   /**
-   * Deep-merge `data` into `rawConfig[section]` and write the YAML back.
+   * Deep-merge `data` into `rawConfig[section]` and write the YAML back (`merge`: default true).
+   * When `merge` is false, `data` replaces the section entirely (used for routing reset).
    * Only the four settings sections are allowed.
    */
   updateConfigSection(
     section: "logging" | "concurrency" | "server" | "routing",
-    data: Record<string, unknown>
+    data: Record<string, unknown>,
+    options?: { merge?: boolean }
   ): { ok: boolean; error?: string } {
     try {
       const content = fs.readFileSync(this.configPath, "utf-8");
       const rawConfig = yaml.load(content) as Record<string, unknown>;
 
+      const merge = options?.merge !== false;
       const existing = (rawConfig[section] as Record<string, unknown>) ?? {};
-      rawConfig[section] = deepMerge(existing, data);
+      rawConfig[section] = merge ? deepMerge(existing, data) : data;
 
       const yamlContent = yaml.dump(rawConfig, {
         indent: 2,

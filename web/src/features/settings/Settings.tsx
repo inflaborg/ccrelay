@@ -1,15 +1,27 @@
-import { useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/utils";
 import { api } from "@/api/client";
 import type {
   LoggingSettings,
   ConcurrencySettings,
   ServerSettings,
   RoutingSettings,
+  RoutingBlockRule,
 } from "@/types/api";
 
 // ─── reusable small inputs ──────────────────────────────────────────────────
@@ -95,6 +107,20 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+function serializeRoutingForCompare(routing: RoutingSettings): string {
+  return JSON.stringify({
+    forward: routing.forward ?? [],
+    block: routing.block ?? [],
+  });
+}
+
+function cloneRouting(routing: RoutingSettings): RoutingSettings {
+  return structuredClone({
+    forward: routing.forward ?? [],
+    block: routing.block ?? [],
+  });
+}
+
 function SaveBar({
   mutation,
   onSave,
@@ -119,6 +145,51 @@ function SaveBar({
           Changes saved. A server restart is required for these settings to take effect.
         </p>
       )}
+      {mutation.isError && (
+        <p className="text-[10px] text-destructive">{(mutation.error as Error).message}</p>
+      )}
+    </div>
+  );
+}
+
+function RoutingSaveBar({
+  mutation,
+  onSave,
+  hasUnsavedChanges,
+  rightSlot,
+}: {
+  mutation: { isPending: boolean; isError: boolean; error: unknown };
+  onSave: () => void;
+  hasUnsavedChanges: boolean;
+  rightSlot?: ReactNode;
+}) {
+  const canSave = hasUnsavedChanges && !mutation.isPending;
+  return (
+    <div className="space-y-2 pt-2">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
+          <Button
+            size="sm"
+            className="h-7 text-xs min-w-[7rem]"
+            disabled={!canSave}
+            onClick={onSave}
+          >
+            {mutation.isPending ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : hasUnsavedChanges ? (
+              "Save routing"
+            ) : (
+              "Up to date"
+            )}
+          </Button>
+          {hasUnsavedChanges ? (
+            <span className="text-[10px] text-amber-600 dark:text-amber-500">Unsaved changes</span>
+          ) : (
+            <span className="text-[10px] text-muted-foreground">Matches saved config</span>
+          )}
+        </div>
+        {rightSlot != null ? <div className="flex shrink-0 items-center">{rightSlot}</div> : null}
+      </div>
       {mutation.isError && (
         <p className="text-[10px] text-destructive">{(mutation.error as Error).message}</p>
       )}
@@ -244,8 +315,10 @@ function ForwardRuleEditor({
         <Plus className="h-3 w-3" /> Add
       </Button>
       <p className="text-[10px] text-muted-foreground">
-        First match wins. <span className="font-mono">auto</span> = current active provider.
-        Unmatched paths return 404.
+        First match wins. <span className="font-mono">auto</span> = current active provider. See{" "}
+        <span className="font-semibold text-foreground/80">Routing and 404</span> below: paths with
+        no matching <span className="font-mono">forward</span> rule return{" "}
+        <span className="font-mono">404</span>.
       </p>
     </div>
   );
@@ -255,15 +328,13 @@ function BlockRuleEditor({
   items,
   onChange,
 }: {
-  items: Array<{ path: string; condition?: { kind?: string[] }; response: string; code: number }>;
-  onChange: (
-    v: Array<{ path: string; condition?: { kind?: string[] }; response: string; code: number }>
-  ) => void;
+  items: RoutingBlockRule[];
+  onChange: (v: RoutingBlockRule[]) => void;
 }) {
   return (
     <div className="space-y-1.5">
       {items.length > 0 && (
-        <div className="grid grid-cols-[1fr_120px_1fr_50px_28px] gap-1.5 text-[10px] text-muted-foreground px-0.5">
+        <div className="grid grid-cols-[1fr_120px_1fr_88px_28px] gap-1.5 text-[10px] text-muted-foreground px-0.5">
           <span>Path</span>
           <span>Kind filter</span>
           <span>Response</span>
@@ -272,67 +343,87 @@ function BlockRuleEditor({
         </div>
       )}
       {items.map((item, i) => (
-        <div key={i} className="grid grid-cols-[1fr_120px_1fr_50px_28px] gap-1.5">
-          <input
-            type="text"
-            className="h-7 px-2 text-xs border rounded-md bg-background font-mono"
-            value={item.path}
-            placeholder="/api/event_logging/*"
-            onChange={e => {
-              const n = [...items];
-              n[i] = { ...n[i], path: e.target.value };
-              onChange(n);
-            }}
-          />
-          <input
-            type="text"
-            className="h-7 px-2 text-[10px] border rounded-md bg-background font-mono"
-            value={item.condition?.kind?.join(", ") ?? ""}
-            placeholder="all"
-            title="Comma-separated: anthropic, openai, openai_chat, openai_responses"
-            onChange={e => {
-              const raw = e.target.value.trim();
-              const kind = raw
-                ? raw
-                    .split(",")
-                    .map(s => s.trim())
-                    .filter(Boolean)
-                : undefined;
-              const n = [...items];
-              n[i] = { ...n[i], condition: kind ? { kind } : undefined };
-              onChange(n);
-            }}
-          />
-          <input
-            type="text"
-            className="h-7 px-2 text-xs border rounded-md bg-background font-mono"
-            value={item.response}
-            placeholder='{"ok":true}'
-            onChange={e => {
-              const n = [...items];
-              n[i] = { ...n[i], response: e.target.value };
-              onChange(n);
-            }}
-          />
-          <input
-            type="number"
-            className="h-7 px-2 text-xs border rounded-md bg-background font-mono"
-            value={item.code}
-            onChange={e => {
-              const n = [...items];
-              n[i] = { ...n[i], code: Number(e.target.value) || 200 };
-              onChange(n);
-            }}
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-            onClick={() => onChange(items.filter((_, j) => j !== i))}
-          >
-            <Trash2 className="h-3 w-3" />
-          </Button>
+        <div key={i} className="space-y-0.5">
+          <div className="grid grid-cols-[1fr_120px_1fr_88px_28px] gap-1.5">
+            <input
+              type="text"
+              className="h-7 px-2 text-xs border rounded-md bg-background font-mono"
+              value={item.path}
+              placeholder="/api/event_logging/*"
+              onChange={e => {
+                const n = [...items];
+                n[i] = { ...n[i], path: e.target.value };
+                onChange(n);
+              }}
+            />
+            <input
+              type="text"
+              className="h-7 px-2 text-[10px] border rounded-md bg-background font-mono"
+              value={item.condition?.kind?.join(", ") ?? ""}
+              placeholder="all"
+              title="Comma-separated: anthropic, openai, openai_chat, openai_responses"
+              onChange={e => {
+                const raw = e.target.value.trim();
+                const kind = raw
+                  ? raw
+                      .split(",")
+                      .map(s => s.trim())
+                      .filter(Boolean)
+                  : undefined;
+                const n = [...items];
+                const prev = n[i].condition;
+                let nextCond: RoutingBlockRule["condition"];
+                if (kind && kind.length > 0) {
+                  nextCond = { ...prev, kind };
+                  if (prev?.providerNot?.length) {
+                    nextCond.providerNot = prev.providerNot;
+                  }
+                } else if (prev?.providerNot && prev.providerNot.length > 0) {
+                  nextCond = { providerNot: prev.providerNot };
+                } else {
+                  nextCond = undefined;
+                }
+                n[i] = { ...n[i], condition: nextCond };
+                onChange(n);
+              }}
+            />
+            <input
+              type="text"
+              className="h-7 px-2 text-xs border rounded-md bg-background font-mono"
+              value={item.response}
+              placeholder='{"ok":true}'
+              onChange={e => {
+                const n = [...items];
+                n[i] = { ...n[i], response: e.target.value };
+                onChange(n);
+              }}
+            />
+            <input
+              type="number"
+              className="h-7 px-2 text-xs border rounded-md bg-background font-mono"
+              value={item.code}
+              onChange={e => {
+                const n = [...items];
+                n[i] = { ...n[i], code: Number(e.target.value) || 200 };
+                onChange(n);
+              }}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+              onClick={() => onChange(items.filter((_, j) => j !== i))}
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </div>
+          {item.condition?.providerNot && item.condition.providerNot.length > 0 && (
+            <p className="text-[9px] text-muted-foreground font-mono pl-0.5">
+              providerNot: {item.condition.providerNot.join(", ")}{" "}
+              <span className="italic opacity-80">(edit in YAML)</span>
+            </p>
+          )}
         </div>
       ))}
       <Button
@@ -347,7 +438,8 @@ function BlockRuleEditor({
         <Plus className="h-3 w-3" /> Add
       </Button>
       <p className="text-[10px] text-muted-foreground">
-        Block is checked before forward. Leave kind empty to block all protocols. Kind values:{" "}
+        Block is checked before forward. Leave kind empty to block all protocols (unless limited by{" "}
+        <span className="font-mono">providerNot</span>). Kind values:{" "}
         <span className="font-mono">anthropic</span>, <span className="font-mono">openai</span>,{" "}
         <span className="font-mono">openai_chat</span>,{" "}
         <span className="font-mono">openai_responses</span>.
@@ -359,20 +451,31 @@ function BlockRuleEditor({
 // ─── Routing section ────────────────────────────────────────────────────────
 
 function RoutingSection({
-  data,
+  routing,
+  routingDefaults,
   providerOptions,
 }: {
-  data: RoutingSettings;
+  routing: RoutingSettings;
+  routingDefaults: RoutingSettings | undefined;
   providerOptions: Array<{ value: string; label: string }>;
 }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState(data);
+  const [form, setForm] = useState(() => cloneRouting(routing));
+  const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
+
+  const savedRouting = useMemo(() => cloneRouting(routing), [routing]);
+  const hasUnsavedChanges = useMemo(
+    () => serializeRoutingForCompare(form) !== serializeRoutingForCompare(savedRouting),
+    [form, savedRouting]
+  );
 
   const mutation = useMutation({
     mutationFn: (d: RoutingSettings) =>
       api.patchConfig({ section: "routing", data: d as unknown as Record<string, unknown> }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["config"] }),
   });
+
+  const defaultsAvailable = routingDefaults !== undefined;
 
   return (
     <Section title="Routing">
@@ -389,7 +492,68 @@ function RoutingSection({
           onChange={v => setForm(f => ({ ...f, block: v }))}
         />
       </Field>
-      <SaveBar mutation={mutation} onSave={() => mutation.mutate(form)} />
+      <div className="rounded-md border border-border/70 bg-muted/25 p-2.5 text-[11px] text-muted-foreground space-y-1.5 leading-snug">
+        <p className="text-foreground/90 font-medium text-xs">Routing and 404</p>
+        <p>
+          Rules are evaluated in order: matching <span className="font-mono">block</span> rules run
+          first (first match wins), then matching <span className="font-mono">forward</span> rules
+          (first match wins). Paths that never match any <span className="font-mono">forward</span>{" "}
+          rule return HTTP <strong className="text-foreground">404</strong>; there is no implicit
+          catch‑all fallback for unlisted paths.
+        </p>
+      </div>
+      <RoutingSaveBar
+        mutation={mutation}
+        onSave={() => mutation.mutate(form)}
+        hasUnsavedChanges={hasUnsavedChanges}
+        rightSlot={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs whitespace-nowrap"
+            disabled={!defaultsAvailable || mutation.isPending}
+            title={
+              defaultsAvailable
+                ? "Load bundled defaults into the editor (use Save to write config.yaml)"
+                : "Default routing template unavailable from server"
+            }
+            onClick={() => setRestoreConfirmOpen(true)}
+          >
+            Restore default routing
+          </Button>
+        }
+      />
+      <AlertDialog open={restoreConfirmOpen} onOpenChange={setRestoreConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Restore default routing?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This replaces the forward and block lists in the editor with CCRelay’s bundled
+              defaults. Nothing is written to disk until you click{" "}
+              <span className="font-semibold text-foreground">Save routing</span>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className={cn(
+                "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90",
+                "focus-visible:ring-ring"
+              )}
+              onClick={e => {
+                e.preventDefault();
+                if (routingDefaults) {
+                  setForm(cloneRouting(routingDefaults));
+                }
+                setRestoreConfirmOpen(false);
+              }}
+            >
+              Restore
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Section>
   );
 }
@@ -606,7 +770,11 @@ export default function Settings() {
           <ServerSection key={JSON.stringify(data.server)} data={data.server} />
           <RoutingSection
             key={JSON.stringify(data.routing)}
-            data={data.routing}
+            routing={{
+              forward: data.routing?.forward ?? [],
+              block: data.routing?.block ?? [],
+            }}
+            routingDefaults={data.routingDefaults}
             providerOptions={providerOptions}
           />
           <ConcurrencySection key={JSON.stringify(data.concurrency)} data={data.concurrency} />

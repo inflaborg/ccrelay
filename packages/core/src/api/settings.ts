@@ -6,6 +6,7 @@
 
 import * as http from "http";
 import type { ProxyServer } from "../server/handler";
+import { getDefaultRoutingSettings } from "../config";
 import { sendJson, parseJsonBody } from "./index";
 
 let serverInstance: ProxyServer | null = null;
@@ -18,7 +19,8 @@ const ALLOWED_SECTIONS = new Set(["logging", "concurrency", "server", "routing"]
 
 /**
  * GET /ccrelay/api/config
- * Returns the four settings sections from the YAML file (raw, no env-var expansion).
+ * Returns YAML settings sections (raw, no env-var expansion) plus `routingDefaults`:
+ * bundled forward/block for the Settings UI (“restore defaults” preview before Save).
  */
 export function handleGetConfig(_req: http.IncomingMessage, res: http.ServerResponse): void {
   if (!serverInstance) {
@@ -28,7 +30,11 @@ export function handleGetConfig(_req: http.IncomingMessage, res: http.ServerResp
   const configManager = serverInstance.getConfig();
   try {
     const raw = configManager.getConfigRawForApi();
-    sendJson(res, 200, raw);
+    const bundled = getDefaultRoutingSettings();
+    sendJson(res, 200, {
+      ...raw,
+      routingDefaults: { forward: bundled.forward, block: bundled.block },
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     sendJson(res, 500, { error: msg });
@@ -37,7 +43,9 @@ export function handleGetConfig(_req: http.IncomingMessage, res: http.ServerResp
 
 /**
  * PATCH /ccrelay/api/config
- * Body: { section: "logging"|"concurrency"|"server"|"routing", data: {...} }
+ * Body: `{ section, data }` to deep-merge into that section (except routing reset below).
+ * Use `{ section: "routing", resetRoutingDefaults: true }` to replace `forward` + `block` with
+ * bundled defaults (no `data` required).
  */
 export async function handlePatchConfig(
   req: http.IncomingMessage,
@@ -52,6 +60,7 @@ export async function handlePatchConfig(
     const body = await parseJsonBody<{
       section?: string;
       data?: Record<string, unknown>;
+      resetRoutingDefaults?: boolean;
     }>(req);
 
     const section = body.section;
@@ -62,12 +71,30 @@ export async function handlePatchConfig(
       });
       return;
     }
+
+    const configManager = serverInstance.getConfig();
+
+    if (section === "routing" && body.resetRoutingDefaults === true) {
+      const def = getDefaultRoutingSettings();
+      const routingPayload: Record<string, unknown> = {
+        forward: def.forward,
+        block: def.block,
+      };
+      const result = configManager.updateConfigSection("routing", routingPayload, { merge: false });
+
+      if (!result.ok) {
+        sendJson(res, 500, { status: "error", message: result.error });
+        return;
+      }
+      sendJson(res, 200, { status: "ok", restartRequired: false });
+      return;
+    }
+
     if (!body.data || typeof body.data !== "object") {
       sendJson(res, 400, { status: "error", message: "data is required" });
       return;
     }
 
-    const configManager = serverInstance.getConfig();
     const result = configManager.updateConfigSection(
       section as "logging" | "concurrency" | "server" | "routing",
       body.data

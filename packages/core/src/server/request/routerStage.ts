@@ -9,10 +9,12 @@ import type { ApiSurface, RoutingContext } from "./context";
 import { detectApiSurface, resolveInboundClientSurface } from "./apiSurfaceDetector";
 import { isOpenAIType } from "../../converter";
 
+const INBOUND_PREFIX_OPENAI = "/openai/";
+const INBOUND_PREFIX_ANTHROPIC = "/anthropic/";
+
 /**
- * Internal path mapping: client entry point → upstream endpoint path.
- * Clients always use /v1/ prefixed paths; upstream providers may differ.
- * Anthropic paths (/v1/messages) are kept as-is since Anthropic uses the same prefix.
+ * Legacy /v1/* mapping when upstream differs (OpenAI-style providers omit /v1/).
+ * After stripping /openai or /anthropic, the stripped path uses the same rewrites as legacy /v1/*.
  */
 const UPSTREAM_PATH_MAP = new Map<string, string>([
   ["/v1/chat/completions", "/chat/completions"],
@@ -21,7 +23,13 @@ const UPSTREAM_PATH_MAP = new Map<string, string>([
 ]);
 
 function resolveUpstreamPath(clientPath: string): string {
-  return UPSTREAM_PATH_MAP.get(clientPath) ?? clientPath;
+  let stripped = clientPath;
+  if (clientPath.startsWith(INBOUND_PREFIX_OPENAI)) {
+    stripped = clientPath.slice("/openai".length);
+  } else if (clientPath.startsWith(INBOUND_PREFIX_ANTHROPIC)) {
+    stripped = clientPath.slice("/anthropic".length);
+  }
+  return UPSTREAM_PATH_MAP.get(stripped) ?? stripped;
 }
 
 /**

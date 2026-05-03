@@ -88,7 +88,9 @@ export class Router {
 
   /**
    * Unified routing: block → forward → not_found.
-   * Block is checked first (with optional condition.kind filter on clientSurface).
+   * Block is checked first with optional filters:
+   * - condition.kind: block only when clientSurface is in list
+   * - condition.providerNot: block unless current provider is in list (skip rule if it is)
    * Forward matches first rule; provider="auto" uses current provider.
    * Unmatched paths return not_found (404).
    */
@@ -102,6 +104,12 @@ export class Router {
       }
       if (rule.condition?.kind && rule.condition.kind.length > 0) {
         if (!rule.condition.kind.includes(clientSurface)) {
+          continue;
+        }
+      }
+      if (rule.condition?.providerNot && rule.condition.providerNot.length > 0) {
+        const currentId = this.getCurrentProviderId();
+        if (rule.condition.providerNot.includes(currentId)) {
           continue;
         }
       }

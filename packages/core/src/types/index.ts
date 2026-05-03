@@ -14,8 +14,8 @@ export type ProviderMode = "passthrough" | "inject";
 export type ProviderType = "anthropic" | "openai" | "openai_chat";
 
 /**
- * Wire format to assume for GET /v1/models (no request body; cannot detect client protocol).
- * `auto` follows `providerType`.
+ * Wire format legacy hint for synthetic model lists (upstream errors).
+ * Legacy `GET /v1/models` inbound surface is fixed to OpenAI; use prefixed `/anthropic/v1/models` otherwise.
  */
 export type ModelsListFormat = "auto" | "openai" | "anthropic";
 
@@ -91,6 +91,8 @@ export type BlockPattern = z.infer<typeof BlockPatternSchema>;
 export const BlockConditionSchema = z
   .object({
     kind: z.array(z.string()).optional(),
+    /** If set: block applies only when current provider ID is NOT in this list */
+    providerNot: z.array(z.string()).optional(),
   })
   .optional();
 
@@ -101,7 +103,7 @@ export const ForwardRuleSchema = z.object({
 
 export const BlockRuleSchema = z.object({
   path: z.string().min(1),
-  condition: BlockConditionSchema,
+  condition: BlockConditionSchema.optional(),
   response: z.string(),
   code: z.number().int().default(200),
 });
@@ -240,7 +242,7 @@ export interface Provider {
   providerType: ProviderType;
   apiKey?: string;
   authHeader?: string;
-  /** GET /v1/models only: effective client wire; default `auto` matches providerType. */
+  /** Synthetic models list shape on upstream errors (`buildModelsListFallback`). Legacy `GET /v1/models` inbound client surface is fixed to OpenAI regardless of this field; use `GET /anthropic/v1/models` for Anthropic inbound lists. */
   modelsListFormat?: ModelsListFormat;
   modelMap?: ModelMapEntry[];
   vlModelMap?: ModelMapEntry[];
