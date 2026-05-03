@@ -1,45 +1,27 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 import { describe, it, expect } from "vitest";
-import {
-  convertChatCompletionToResponses,
-  formatOpenAIResponsesSse,
-} from "@/converter/chat-completions-to-responses";
-import type { OpenAIChatCompletionResponse } from "@/converter/openai-to-anthropic";
-import { extractResponsesEcho } from "@/converter/responses-echo";
+import { convertChatCompletionToResponses } from "@/converter/adapters/openai-chat-to-responses";
+import { formatOpenAIResponsesSse } from "@/converter/streaming/sse-formatters";
+import type { OpenAIChatCompletionResponse } from "@/converter/adapters/openai-chat-to-anthropic-response";
+import { extractResponsesEcho } from "@/converter/adapters/openai-responses-to-chat";
 
-describe("convertChatCompletionToResponses", () => {
-  it("produces response object and output for text", () => {
-    const chat: OpenAIChatCompletionResponse = {
-      id: "chatcmpl-x",
-      object: "chat.completion",
-      created: 1700000000,
-      model: "gpt-4o",
-      choices: [
-        {
-          index: 0,
-          message: { role: "assistant", content: "Hello" },
-          finish_reason: "stop",
-        },
-      ],
-      usage: {
-        prompt_tokens: 1,
-        completion_tokens: 2,
-        total_tokens: 3,
-      },
-    };
-    const r = convertChatCompletionToResponses(chat, "gpt-4o");
-    expect(r.object).toBe("response");
-    expect(r.model).toBe("gpt-4o");
-    expect(r.status).toBe("completed");
-    expect(r.id.startsWith("resp_")).toBe(true);
-    expect(r.usage).toEqual({
-      input_tokens: 1,
-      output_tokens: 2,
-      total_tokens: 3,
-    });
-    expect(Array.isArray(r.output)).toBe(true);
-  });
-});
+function parseSseDataEvents(sse: string): Array<Record<string, unknown>> {
+  const out: Array<Record<string, unknown>> = [];
+  for (const block of sse.split("\n\n")) {
+    const trimmed = block.trim();
+    if (!trimmed || trimmed === "data: [DONE]") {
+      continue;
+    }
+    const lines = trimmed.split("\n");
+    const dataLine = lines.find(l => l.startsWith("data: "));
+    if (!dataLine || dataLine.trim() === "data: [DONE]") {
+      continue;
+    }
+    const json = dataLine.slice("data: ".length).trimStart();
+    out.push(JSON.parse(json) as Record<string, unknown>);
+  }
+  return out;
+}
 
 describe("formatOpenAIResponsesSse", () => {
   it("emits text deltas, output item lifecycle, response.completed, and [DONE] for assistant text", () => {
@@ -48,35 +30,43 @@ describe("formatOpenAIResponsesSse", () => {
       object: "chat.completion",
       created: 1700000000,
       model: "m",
-      choices: [
-        { index: 0, message: { role: "assistant", content: "Hi" }, finish_reason: "stop" },
-      ],
+      choices: [{ index: 0, message: { role: "assistant", content: "Hi" }, finish_reason: "stop" }],
     };
     const r = convertChatCompletionToResponses(chat, "m");
     const sse = formatOpenAIResponsesSse(r);
     const events = parseSseDataEvents(sse);
-    expect(events.some(e => e.type === "response.created")).toBe(true);
-    expect(events.some(e => e.type === "response.in_progress")).toBe(true);
+    expect(events.some((e: Record<string, unknown>) => e.type === "response.created")).toBe(true);
+    expect(events.some((e: Record<string, unknown>) => e.type === "response.in_progress")).toBe(
+      true
+    );
     expect(
       events.some(
-        e =>
+        (e: Record<string, unknown>) =>
           e.type === "response.created" &&
           typeof e.response === "object" &&
           e.response !== null &&
           JSON.stringify(e.response).includes('"in_progress"')
       )
     ).toBe(true);
-    expect(events.some(e => e.type === "response.output_item.added")).toBe(true);
+    expect(
+      events.some((e: Record<string, unknown>) => e.type === "response.output_item.added")
+    ).toBe(true);
     expect(
       events.some(
-        e => e.type === "response.output_text.delta" && JSON.stringify(e).includes('"delta":"Hi"')
+        (e: Record<string, unknown>) =>
+          e.type === "response.output_text.delta" && JSON.stringify(e).includes('"delta":"Hi"')
       )
     ).toBe(true);
-    expect(events.some(e => e.type === "response.output_text.done")).toBe(true);
-    expect(events.some(e => e.type === "response.output_item.done")).toBe(true);
+    expect(
+      events.some((e: Record<string, unknown>) => e.type === "response.output_text.done")
+    ).toBe(true);
+    expect(
+      events.some((e: Record<string, unknown>) => e.type === "response.output_item.done")
+    ).toBe(true);
     expect(
       events.some(
-        e => e.type === "response.completed" && JSON.stringify(e).includes('"completed"')
+        (e: Record<string, unknown>) =>
+          e.type === "response.completed" && JSON.stringify(e).includes('"completed"')
       )
     ).toBe(true);
     expect(sse.trim().endsWith("data: [DONE]")).toBe(true);
@@ -120,9 +110,7 @@ describe("formatOpenAIResponsesSse", () => {
     expect(fcAdded.item?.arguments).toBe("");
 
     expect(
-      events.some(
-        (e: { type?: string }) => e.type === "response.function_call_arguments.delta"
-      )
+      events.some((e: { type?: string }) => e.type === "response.function_call_arguments.delta")
     ).toBe(true);
     const fcDone = events.find(
       (e: { type?: string }) => e.type === "response.function_call_arguments.done"
@@ -133,12 +121,10 @@ describe("formatOpenAIResponsesSse", () => {
       (e: { type?: string }) => e.type === "response.output_item.done"
     );
     expect(itemDones).toHaveLength(2);
-    expect(
-      (itemDones[1] as { item?: { type?: string; name?: string } }).item?.type
-    ).toBe("function_call");
-    expect(
-      (itemDones[1] as { item?: { name?: string } }).item?.name
-    ).toBe("get_weather");
+    expect((itemDones[1] as { item?: { type?: string; name?: string } }).item?.type).toBe(
+      "function_call"
+    );
+    expect((itemDones[1] as { item?: { name?: string } }).item?.name).toBe("get_weather");
   });
 
   it("emits function_call stream events for tool_call-only completion (not minimal two-line path)", () => {
@@ -172,14 +158,11 @@ describe("formatOpenAIResponsesSse", () => {
     expect(added).toHaveLength(1);
     expect((added[0] as { item?: { type?: string } }).item?.type).toBe("function_call");
     expect(
-      events.some(
-        (e: { type?: string }) => e.type === "response.function_call_arguments.done"
-      )
+      events.some((e: { type?: string }) => e.type === "response.function_call_arguments.done")
     ).toBe(true);
     expect(events.some((e: { type?: string }) => e.type === "response.output_text.delta")).toBe(
       false
     );
-    // Full stream: created + in_progress + per-item events + completed (not minimal two-event path).
     expect(events.length).toBeGreaterThan(3);
   });
 
@@ -199,7 +182,7 @@ describe("formatOpenAIResponsesSse", () => {
     const r = convertChatCompletionToResponses(chat, "m", echo);
     const sse = formatOpenAIResponsesSse(r);
     const events = parseSseDataEvents(sse);
-    const created = events.find(e => e.type === "response.created") as {
+    const created = events.find((e: Record<string, unknown>) => e.type === "response.created") as {
       response?: {
         tools?: unknown[];
         reasoning?: { effort?: string };
@@ -209,59 +192,11 @@ describe("formatOpenAIResponsesSse", () => {
     expect(created?.response?.tools).toHaveLength(1);
     expect(created?.response?.reasoning?.effort).toBe("low");
     expect(created?.response?.parallel_tool_calls).toBe(false);
-    const completed = events.find(e => e.type === "response.completed") as {
+    const completed = events.find(
+      (e: Record<string, unknown>) => e.type === "response.completed"
+    ) as {
       response?: { tools?: unknown[] };
     };
     expect(completed?.response?.tools).toHaveLength(1);
-  });
-});
-
-function parseSseDataEvents(sse: string): Array<Record<string, unknown>> {
-  const out: Array<Record<string, unknown>> = [];
-  for (const block of sse.split("\n\n")) {
-    const trimmed = block.trim();
-    if (!trimmed || trimmed === "data: [DONE]") {
-      continue;
-    }
-    const lines = trimmed.split("\n");
-    const dataLine = lines.find(l => l.startsWith("data: "));
-    if (!dataLine || dataLine.trim() === "data: [DONE]") {
-      continue;
-    }
-    const json = dataLine.slice("data: ".length).trimStart();
-    out.push(JSON.parse(json) as Record<string, unknown>);
-  }
-  return out;
-}
-
-describe("message content as array (provider multipart)", () => {
-  it("joins text parts into output_text for convertChatCompletionToResponses", () => {
-    const chat = {
-      id: "chatcmpl-x",
-      object: "chat.completion" as const,
-      created: 1700000000,
-      model: "m",
-      choices: [
-        {
-          index: 0,
-          message: {
-            role: "assistant" as const,
-            content: [
-              { type: "text" as const, text: "Hel" },
-              { type: "text" as const, text: "lo" },
-            ] as unknown as string,
-          },
-          finish_reason: "stop" as const,
-        },
-      ],
-    };
-    const r = convertChatCompletionToResponses(chat, "m");
-    const outMsg = r.output[0] as {
-      type: string;
-      content?: { type: string; text: string }[];
-    };
-    expect(outMsg.type).toBe("message");
-    const textPart = outMsg.content?.find(c => c.type === "output_text");
-    expect(textPart?.text).toBe("Hello");
   });
 });

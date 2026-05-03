@@ -1,6 +1,5 @@
 /**
- * API format converters
- * Exports converters for Anthropic <-> OpenAI API format translation
+ * API format converters: adapters (protocol conversion), rules (model/platform shaping), streaming (SSE).
  */
 
 export {
@@ -9,30 +8,30 @@ export {
   type OpenAIMessageRequest,
   type ConversionResult,
   type ConvertRequestToOpenAIOptions,
-} from "./anthropic-to-openai";
+} from "./adapters/anthropic-to-openai-chat-request";
 
 export {
   convertResponseToAnthropic,
   type OpenAIChatCompletionResponse,
   type AnthropicMessageResponse,
-} from "./openai-to-anthropic";
+} from "./adapters/openai-chat-to-anthropic-response";
 
 export {
   convertOpenAIRequestToAnthropic,
   isOpenAIChatCompletionsRequest,
-} from "./openai-to-anthropic-request";
+} from "./adapters/openai-chat-to-anthropic-request";
 
-export { isOpenAIChatCompletionsWirePath, isOpenAIType } from "./openaiPath";
+export { isOpenAIChatCompletionsWirePath, isOpenAIType } from "./paths";
 
 export {
   mapAnthropicWirePathToOpenAiUpstream,
   mapOpenAiWirePathToAnthropicUpstream,
-} from "./crossProtocolUpstreamPath";
+} from "./paths";
 
 export {
   convertAnthropicResponseToOpenAI,
   isAnthropicMessageResponse,
-} from "./anthropic-to-openai-response";
+} from "./adapters/anthropic-to-openai-chat-response";
 
 export {
   isModelsListUpstreamPath,
@@ -46,30 +45,45 @@ export {
   synthesizeCustomModelsListBody,
   type OpenAIModelsListResponse,
   type AnthropicModelsListResponse,
-} from "./modelsFallback";
+} from "./models-fallback";
 
 export {
   convertResponsesRequestToChatCompletions,
   isOpenAIResponsesRequest,
   type ResponsesToChatResult,
-} from "./responses-to-chat-completions";
+  extractResponsesEcho,
+  mergedResponseShellEcho,
+  extractFunctionToolsForEcho,
+} from "./adapters/openai-responses-to-chat";
+
+export type { ResponsesRequestEcho } from "../types";
 
 export {
   convertChatCompletionToResponses,
+  type OpenAIResponsesApiObject,
+} from "./adapters/openai-chat-to-responses";
+
+export {
   formatOpenAIResponsesSse,
   formatOpenAIChatCompletionsSse,
-  type OpenAIResponsesApiObject,
-} from "./chat-completions-to-responses";
+} from "./streaming/sse-formatters";
 
 export {
   createStreamingState,
   processStreamingChunk,
   createSseLineBuffer,
   type StreamingConversionState,
-} from "./chat-completions-streaming-to-responses";
+} from "./streaming/openai-chat-stream-to-responses";
 
 export {
-  extractResponsesEcho,
-  mergedResponseShellEcho,
-  type ResponsesRequestEcho,
-} from "./responses-echo";
+  assignOpenAiChatMaxOutput,
+  openaiChatUsesMaxCompletionTokens,
+  type OpenAiChatMaxOutputTarget,
+} from "./rules/openai-chat-model-rules";
+
+export {
+  resolveOpenAICompatForAnthropicToOpenAI,
+  sanitizeAzureOpenAiChatRequest,
+  isGeminiOpenAiModel,
+  withOptionalGeminiThoughtSignature,
+} from "./rules/openai-chat-platform-transforms";

@@ -11,13 +11,11 @@ import {
   extractResponsesEcho,
   isOpenAIChatCompletionsRequest,
   isOpenAIResponsesRequest,
-  type ResponsesRequestEcho,
-} from "../../converter";
-import { resolveOpenAICompatForAnthropicToOpenAI } from "../../converter/openai/compat";
-import {
+  resolveOpenAICompatForAnthropicToOpenAI,
   mapAnthropicWirePathToOpenAiUpstream,
   mapOpenAiWirePathToAnthropicUpstream,
-} from "../../converter/crossProtocolUpstreamPath";
+  type ResponsesRequestEcho,
+} from "../../converter";
 import { ScopedLogger } from "../../utils/logger";
 import type { ApiSurface } from "../../types";
 
@@ -64,7 +62,9 @@ function forceDisableStreamInBody(body: Buffer, label: string): Buffer {
     const data = JSON.parse(body.toString("utf-8")) as Record<string, unknown>;
     if (data.stream === true || data.stream === "true") {
       data.stream = false;
-      log.info(`[${label}] stream=true is not supported for cross-protocol conversion; forcing stream=false`);
+      log.info(
+        `[${label}] stream=true is not supported for cross-protocol conversion; forcing stream=false`
+      );
       return Buffer.from(JSON.stringify(data), "utf-8");
     }
   } catch {
@@ -80,11 +80,7 @@ export class BodyProcessor {
   /**
    * Process request body
    */
-  process(
-    rawBody: Buffer,
-    routing: RoutingContext,
-    databaseEnabled: boolean
-  ): BodyProcessResult {
+  process(rawBody: Buffer, routing: RoutingContext, databaseEnabled: boolean): BodyProcessResult {
     let originalModel: string | undefined;
     let originalRequestBody: string | undefined;
     let requestBodyLog: string | undefined;
@@ -133,7 +129,11 @@ export class BodyProcessor {
     let streamRequested = false;
     let originalResponsesEcho: ResponsesRequestEcho | undefined;
 
-    if (needsConversion && (clientSurface === "openai_responses" || clientSurface === "openai") && body.length > 0) {
+    if (
+      needsConversion &&
+      (clientSurface === "openai_responses" || clientSurface === "openai") &&
+      body.length > 0
+    ) {
       try {
         const d = JSON.parse(body.toString("utf-8")) as Record<string, unknown>;
         if (d.stream === true) {
@@ -150,8 +150,7 @@ export class BodyProcessor {
 
     if (needsConversion) {
       // Responses→Chat supports true SSE streaming; let the stream flag pass through.
-      const skipDisableStream =
-        clientSurface === "openai_responses" && upstreamWire === "openai";
+      const skipDisableStream = clientSurface === "openai_responses" && upstreamWire === "openai";
       if (!skipDisableStream) {
         body = forceDisableStreamInBody(body, `${clientSurface}->${upstreamWire}`);
       }
@@ -279,7 +278,12 @@ export class BodyProcessor {
   private convertResponsesToChatCompletionsOnly(
     body: Buffer,
     routing: RoutingContext
-  ): { body: Buffer; newPath: string; originalModel: string | undefined; originalResponsesEcho: ResponsesRequestEcho } | null {
+  ): {
+    body: Buffer;
+    newPath: string;
+    originalModel: string | undefined;
+    originalResponsesEcho: ResponsesRequestEcho;
+  } | null {
     try {
       const bodyStr = body.toString("utf-8");
       const raw = JSON.parse(bodyStr) as Record<string, unknown>;
@@ -287,10 +291,7 @@ export class BodyProcessor {
         return null;
       }
       const originalResponsesEcho = extractResponsesEcho(raw);
-      const c = convertResponsesRequestToChatCompletions(
-        raw,
-        routing.targetPath
-      );
+      const c = convertResponsesRequestToChatCompletions(raw, routing.targetPath);
       const originalModel = typeof raw.model === "string" ? raw.model : undefined;
       return {
         body: Buffer.from(JSON.stringify(c.request), "utf-8"),
@@ -307,7 +308,12 @@ export class BodyProcessor {
   private convertResponsesToAnthropicChain(
     body: Buffer,
     routing: RoutingContext
-  ): { body: Buffer; newPath: string; originalModel: string | undefined; originalResponsesEcho: ResponsesRequestEcho } | null {
+  ): {
+    body: Buffer;
+    newPath: string;
+    originalModel: string | undefined;
+    originalResponsesEcho: ResponsesRequestEcho;
+  } | null {
     try {
       const bodyStr = body.toString("utf-8");
       const raw = JSON.parse(bodyStr) as Record<string, unknown>;
@@ -315,14 +321,8 @@ export class BodyProcessor {
         return null;
       }
       const originalResponsesEcho = extractResponsesEcho(raw);
-      const chat = convertResponsesRequestToChatCompletions(
-        raw,
-        routing.path
-      );
-      const c = convertOpenAIRequestToAnthropic(
-        chat.request,
-        chat.newPath
-      );
+      const chat = convertResponsesRequestToChatCompletions(raw, routing.path);
+      const c = convertOpenAIRequestToAnthropic(chat.request, chat.newPath);
       const originalModel = typeof raw.model === "string" ? raw.model : undefined;
       return {
         body: Buffer.from(JSON.stringify(c.request), "utf-8"),

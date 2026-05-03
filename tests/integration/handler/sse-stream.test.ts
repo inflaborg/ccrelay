@@ -11,7 +11,12 @@ import { describe, it, expect, afterEach } from "vitest";
 import request from "supertest";
 import http from "http";
 import { MockConfig, MockProvider, TestServer } from "../fixtures";
-import { createTestProvider, createTestConcurrencyConfig, sleep, createSSEStreamChunks } from "../utils";
+import {
+  createTestProvider,
+  createTestConcurrencyConfig,
+  sleep,
+  createSSEStreamChunks,
+} from "../utils";
 
 describe("Integration: SSE Stream", () => {
   let testServer: TestServer;
@@ -55,7 +60,11 @@ describe("Integration: SSE Stream", () => {
         .post("/v1/messages")
         .set("x-api-key", "test-key")
         .set("Accept", "text/event-stream")
-        .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }], stream: true });
+        .send({
+          model: "claude-3-sonnet",
+          messages: [{ role: "user", content: "hi" }],
+          stream: true,
+        });
 
       expect(res.status).toBe(200);
       expect(res.headers["content-type"]).toContain("text/event-stream");
@@ -98,7 +107,11 @@ describe("Integration: SSE Stream", () => {
         .set("x-api-key", "test-key")
         .set("Accept", "text/event-stream")
         .buffer(false) // Don't buffer, stream mode
-        .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }], stream: true });
+        .send({
+          model: "claude-3-sonnet",
+          messages: [{ role: "user", content: "hi" }],
+          stream: true,
+        });
 
       // Wait for streaming to start
       await sleep(300);
@@ -188,7 +201,11 @@ describe("Integration: SSE Stream", () => {
         .post("/v1/messages")
         .set("x-api-key", "test-key")
         .set("Accept", "text/event-stream")
-        .send({ model: "claude-3-sonnet", messages: [{ role: "user", content: "hi" }], stream: true })
+        .send({
+          model: "claude-3-sonnet",
+          messages: [{ role: "user", content: "hi" }],
+          stream: true,
+        })
         .timeout(5000);
 
       // Should receive partial data
@@ -223,21 +240,26 @@ describe("Integration: SSE Stream", () => {
 
       // First request using raw HTTP to have control over timing
       const url = new URL(`${testServer.baseUrl}/v1/messages`);
-      const req1 = http.request({
-        hostname: url.hostname,
-        port: url.port,
-        path: url.pathname,
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": "test-key",
+      const req1 = http.request(
+        {
+          hostname: url.hostname,
+          port: url.port,
+          path: url.pathname,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": "test-key",
+          },
         },
-      }, () => {});
+        () => {}
+      );
 
       // Suppress socket errors from abort
       req1.on("error", () => {});
 
-      req1.write(JSON.stringify({ model: "claude-3-sonnet", messages: [{ role: "user", content: "first" }] }));
+      req1.write(
+        JSON.stringify({ model: "claude-3-sonnet", messages: [{ role: "user", content: "first" }] })
+      );
       req1.end();
 
       // Wait for first request to reach upstream
@@ -248,21 +270,29 @@ describe("Integration: SSE Stream", () => {
       expect(stats.default?.activeWorkers).toBeGreaterThanOrEqual(1);
 
       // Second request should queue
-      const req2 = http.request({
-        hostname: url.hostname,
-        port: url.port,
-        path: url.pathname,
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": "test-key",
+      const req2 = http.request(
+        {
+          hostname: url.hostname,
+          port: url.port,
+          path: url.pathname,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": "test-key",
+          },
         },
-      }, () => {});
+        () => {}
+      );
 
       // Suppress socket errors from abort
       req2.on("error", () => {});
 
-      req2.write(JSON.stringify({ model: "claude-3-sonnet", messages: [{ role: "user", content: "second" }] }));
+      req2.write(
+        JSON.stringify({
+          model: "claude-3-sonnet",
+          messages: [{ role: "user", content: "second" }],
+        })
+      );
       req2.end();
 
       await sleep(300);

@@ -14,7 +14,11 @@ function normalizePath(path: string): string {
  * Effective inbound client surface for logging / downstream use.
  * Path-based (see `detectApiSurface`); unknown paths default to Anthropic for legacy behavior.
  */
-export function resolveInboundClientSurface(method: string, path: string, _provider: Provider): ApiSurface {
+export function resolveInboundClientSurface(
+  method: string,
+  path: string,
+  _provider: Provider
+): ApiSurface {
   void _provider;
   return detectApiSurface(method, path) ?? "anthropic";
 }

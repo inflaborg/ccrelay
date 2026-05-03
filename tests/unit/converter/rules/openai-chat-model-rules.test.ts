@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   openaiChatUsesMaxCompletionTokens,
   assignOpenAiChatMaxOutput,
-} from "@/converter/openai/maxOutputTokens";
-import type { OpenAIMessageRequest } from "@/converter/anthropic-to-openai";
+} from "@/converter/rules/openai-chat-model-rules";
+import type { OpenAIMessageRequest } from "@/converter/adapters/anthropic-to-openai-chat-request";
 
 describe("openaiChatUsesMaxCompletionTokens", () => {
   it("is true for gpt-5 family", () => {

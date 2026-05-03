@@ -8,7 +8,7 @@ import {
   isAnthropicModelsListJson,
   parseModelsListLimitFromTargetUrl,
   synthesizeCustomModelsListBody,
-} from "@/converter/modelsFallback";
+} from "@/converter/models-fallback";
 
 describe("isModelsListUpstreamPath", () => {
   it("recognizes rewritten OpenAI /models paths (query stripped)", () => {

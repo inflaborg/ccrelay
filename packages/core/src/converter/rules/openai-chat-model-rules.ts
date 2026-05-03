@@ -1,12 +1,19 @@
 /**
- * Chat Completions: some OpenAI models reject max_tokens and require max_completion_tokens.
+ * OpenAI Chat Completions: model-dependent wire rules (official API semantics by model id).
+ * Extend this module as new model families need different fields or bounds.
  */
 
-import type { OpenAIMessageRequest } from "../anthropic-to-openai";
+/* eslint-disable @typescript-eslint/naming-convention -- OpenAI Chat Completions wire field names */
+
+/** Minimal body shape for max output field assignment */
+export interface OpenAiChatMaxOutputTarget {
+  model: string;
+  max_tokens?: number;
+  max_completion_tokens?: number;
+}
 
 /**
  * Models that expect completion budget under `max_completion_tokens` (not `max_tokens`).
- * Extend prefixes/patterns as new families ship.
  */
 export function openaiChatUsesMaxCompletionTokens(model: string): boolean {
   const m = model.trim().toLowerCase();
@@ -18,7 +25,7 @@ export function openaiChatUsesMaxCompletionTokens(model: string): boolean {
 }
 
 /** Set exactly one of max_tokens / max_completion_tokens on the outbound Chat Completions body. */
-export function assignOpenAiChatMaxOutput(openai: OpenAIMessageRequest, value: number): void {
+export function assignOpenAiChatMaxOutput(openai: OpenAiChatMaxOutputTarget, value: number): void {
   delete openai.max_tokens;
   delete openai.max_completion_tokens;
   if (openaiChatUsesMaxCompletionTokens(openai.model)) {

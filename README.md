@@ -325,7 +325,7 @@ vlModelMap:
 
 **Inbound API surfaces (paths)**
 
-OpenAI clients targeting ccrelay typically use **`http://127.0.0.1:<port>/openai`** (paths **`/openai/chat/completions`**, **`/openai/models`** — **not** **`/openai/v1/...`**) or **`http://127.0.0.1:<port>`** with legacy **`/v1/chat/completions`**, **`/v1/models`**, etc. **`resolveUpstreamPath`** turns each inbound into the **client wire canonical path** for that protocol (**OpenAI**: **`/models`**, **`/chat/completions`**, **`/responses`**; **Anthropic**: **`/v1/models`**, **`/v1/messages`**, …). **`Router.getTargetUrl`** is **naive concatenation**: **`baseUrl`** + that path (no `/v1` dedup); configure **`baseUrl`** to match your vendor. Cross-protocol upstream path alignment stays in **`BodyProcessor`** via [`crossProtocolUpstreamPath.ts`](packages/core/src/converter/crossProtocolUpstreamPath.ts).
+OpenAI clients targeting ccrelay typically use **`http://127.0.0.1:<port>/openai`** (paths **`/openai/chat/completions`**, **`/openai/models`** — **not** **`/openai/v1/...`**) or **`http://127.0.0.1:<port>`** with legacy **`/v1/chat/completions`**, **`/v1/models`**, etc. **`resolveUpstreamPath`** turns each inbound into the **client wire canonical path** for that protocol (**OpenAI**: **`/models`**, **`/chat/completions`**, **`/responses`**; **Anthropic**: **`/v1/models`**, **`/v1/messages`**, …). **`Router.getTargetUrl`** is **naive concatenation**: **`baseUrl`** + that path (no `/v1` dedup); configure **`baseUrl`** to match your vendor. Cross-protocol upstream path alignment stays in **`BodyProcessor`** via [`paths.ts`](packages/core/src/converter/paths.ts).
 
 | Path | Method | Client format |
 |------|--------|----------------|

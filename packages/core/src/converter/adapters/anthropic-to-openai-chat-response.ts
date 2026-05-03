@@ -10,8 +10,11 @@ import type {
   OpenAIChatCompletionResponse,
   OpenAIResponseMessage,
   OpenAIChoice,
-} from "./openai-to-anthropic";
-import type { AnthropicMessageResponse, AnthropicContentBlock } from "./openai-to-anthropic";
+} from "./openai-chat-to-anthropic-response";
+import type {
+  AnthropicMessageResponse,
+  AnthropicContentBlock,
+} from "./openai-chat-to-anthropic-response";
 
 /**
  * Non-streaming Anthropic `message` response to OpenAI chat.completion shape

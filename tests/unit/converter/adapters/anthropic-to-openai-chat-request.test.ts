@@ -1,5 +1,5 @@
 /**
- * Unit tests for converter/anthropic-to-openai.ts
+ * Unit tests for converter/adapters/anthropic-to-openai-chat-request.ts
  *
  * Product Requirements:
  * - Stateless conversion (no external storage for tool_use_id)
@@ -15,11 +15,11 @@ import { describe, it, expect } from "vitest";
 import {
   convertRequestToOpenAI,
   type AnthropicMessageRequest,
-} from "@/converter/anthropic-to-openai";
+} from "@/converter/adapters/anthropic-to-openai-chat-request";
 
 /* eslint-disable @typescript-eslint/naming-convention -- Testing API formats with snake_case */
 
-describe("converter: anthropic-to-openai", () => {
+describe("converter: anthropic-to-openai-chat-request", () => {
   const basePath = "/v1/messages";
 
   describe("request conversion - basic messages", () => {
@@ -58,8 +58,7 @@ describe("converter: anthropic-to-openai", () => {
       const request: AnthropicMessageRequest = {
         model: "claude-3-5-sonnet-20241022",
         max_tokens: 4096,
-        // @ts-expect-error -- intentionally testing with message without content
-        messages: [{ role: "user" }],
+        messages: [{ role: "user" }] as AnthropicMessageRequest["messages"],
         system: "You are a helpful assistant.",
       };
 
@@ -77,8 +76,7 @@ describe("converter: anthropic-to-openai", () => {
       const request: AnthropicMessageRequest = {
         model: "claude-3-5-sonnet-20241022",
         max_tokens: 4096,
-        // @ts-expect-error -- intentionally testing with message without content
-        messages: [{ role: "user" }],
+        messages: [{ role: "user" }] as AnthropicMessageRequest["messages"],
         system: [
           { type: "text", text: "System prompt 1", cache_control: { type: "static" } },
           { type: "text", text: "System prompt 2" },
@@ -428,11 +426,10 @@ describe("converter: anthropic-to-openai", () => {
     });
 
     it("should not include max_tokens when undefined", () => {
-      // @ts-expect-error -- intentionally testing with missing required field
-      const request: AnthropicMessageRequest = {
+      const request = {
         model: "claude-3-5-sonnet-20241022",
         messages: [],
-      };
+      } as unknown as AnthropicMessageRequest;
 
       const result = convertRequestToOpenAI(request, basePath);
 
@@ -799,11 +796,10 @@ describe("converter: anthropic-to-openai", () => {
           {
             role: "assistant",
             content: [
-              // @ts-expect-error -- testing with minimal thinking block (thinking property is optional in practice)
               {
                 type: "thinking",
                 signature: "abc123signature",
-              },
+              } as never,
               {
                 type: "tool_use",
                 id: "toolu_abc123",

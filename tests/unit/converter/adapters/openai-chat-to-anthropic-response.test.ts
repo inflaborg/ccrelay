@@ -1,5 +1,5 @@
 /**
- * Unit tests for converter/openai-to-anthropic.ts
+ * Unit tests for converter/adapters/openai-chat-to-anthropic-response.ts
  *
  * Product Requirements:
  * - Preserves original tool_call.id as tool_use.id (no ID generation)
@@ -13,11 +13,11 @@ import { describe, it, expect } from "vitest";
 import {
   convertResponseToAnthropic,
   type OpenAIChatCompletionResponse,
-} from "@/converter/openai-to-anthropic";
+} from "@/converter/adapters/openai-chat-to-anthropic-response";
 
 /* eslint-disable @typescript-eslint/naming-convention -- Testing API formats with snake_case */
 
-describe("converter: openai-to-anthropic", () => {
+describe("converter: openai-chat-to-anthropic-response", () => {
   const originalModel = "claude-3-5-sonnet-20241022";
 
   describe("response conversion - basic", () => {

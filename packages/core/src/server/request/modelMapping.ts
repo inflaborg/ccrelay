@@ -62,10 +62,7 @@ export function containsImageContent(data: unknown): boolean {
  * Match a model against a model map (supports exact match and wildcards)
  * Model map is now an array of { pattern, model } entries
  */
-export function matchModel(
-  model: string,
-  modelMap: ModelMapEntry[]
-): ModelMatchResult | null {
+export function matchModel(model: string, modelMap: ModelMapEntry[]): ModelMatchResult | null {
   for (const entry of modelMap) {
     const { pattern, model: targetModel } = entry;
 
@@ -77,9 +74,7 @@ export function matchModel(
     // Check for wildcard patterns
     if (pattern.includes("*")) {
       // Convert wildcard pattern to regex
-      const patternRegex = new RegExp(
-        "^" + pattern.replace(/\*/g, ".*").replace(/\?/g, ".") + "$"
-      );
+      const patternRegex = new RegExp("^" + pattern.replace(/\*/g, ".*").replace(/\?/g, ".") + "$");
       if (patternRegex.test(model)) {
         return { targetModel, pattern };
       }

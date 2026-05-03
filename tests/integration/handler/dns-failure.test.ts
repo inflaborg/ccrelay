@@ -131,7 +131,7 @@ describe("Integration: DNS/Network Failure", () => {
         concurrency: createTestConcurrencyConfig({
           maxWorkers: 1, // Only 1 worker to verify release
           maxQueueSize: 10,
-          requestTimeout: 0.30,
+          requestTimeout: 0.3,
         }),
       });
 

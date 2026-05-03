@@ -691,15 +691,13 @@ describe("ConcurrencyManager", () => {
     });
 
     it("CM013: should calculate avgWaitTime and avgProcessTime", async () => {
-      const executor = vi.fn().mockImplementation(
-        (): Promise<ProxyResult> => {
-          return new Promise(resolve => {
-            setTimeout(() => {
-              resolve({ statusCode: 200, duration: 50 } as ProxyResult);
-            }, 50);
-          });
-        }
-      );
+      const executor = vi.fn().mockImplementation((): Promise<ProxyResult> => {
+        return new Promise(resolve => {
+          setTimeout(() => {
+            resolve({ statusCode: 200, duration: 50 } as ProxyResult);
+          }, 50);
+        });
+      });
 
       manager = new ConcurrencyManager(config, executor);
 

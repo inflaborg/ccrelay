@@ -38,9 +38,7 @@ export class TestServer {
       this.concurrencyManager = new ConcurrencyManager(concurrencyConfig, task =>
         this.executeProxyRequest(task)
       );
-      this.log.info(
-        `ConcurrencyManager initialized: maxWorkers=${concurrencyConfig.maxWorkers}`
-      );
+      this.log.info(`ConcurrencyManager initialized: maxWorkers=${concurrencyConfig.maxWorkers}`);
     }
 
     // Initialize route-specific queues
@@ -178,10 +176,7 @@ export class TestServer {
   /**
    * Handle incoming HTTP request
    */
-  private async handleRequest(
-    req: http.IncomingMessage,
-    res: http.ServerResponse
-  ): Promise<void> {
+  private async handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     // Track active connections
     this.activeConnections.add(res);
     this.connectionCount++;
@@ -380,7 +375,7 @@ export class TestServer {
         clientRes.on("close", onClientDisconnect);
       }
 
-      const proxyReq = httpModule.request(options, (proxyRes) => {
+      const proxyReq = httpModule.request(options, proxyRes => {
         const statusCode = proxyRes.statusCode ?? 0;
         const responseHeaders = { ...proxyRes.headers } as Record<string, string | string[]>;
 

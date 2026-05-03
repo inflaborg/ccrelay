@@ -10,9 +10,10 @@ describe("loggingDatabaseConfigToDriver", () => {
 
   it("sqlite: uses default ~/.ccrelay/logs.db when path empty", () => {
     const expected = path.join(os.homedir(), ".ccrelay", "logs.db");
-    expect(
-      loggingDatabaseConfigToDriver({ type: "sqlite" })
-    ).toEqual({ type: "sqlite", path: expected });
+    expect(loggingDatabaseConfigToDriver({ type: "sqlite" })).toEqual({
+      type: "sqlite",
+      path: expected,
+    });
   });
 
   it("sqlite: expands tilde path and passes sqlite3Executable", () => {

@@ -173,7 +173,9 @@ export class PostgresDriver implements DatabaseDriver {
   }
 
   private async createSchema(): Promise<void> {
-    if (!this.pool) {return;}
+    if (!this.pool) {
+      return;
+    }
 
     const client = await this.pool.connect();
     try {
@@ -233,7 +235,9 @@ export class PostgresDriver implements DatabaseDriver {
    * Insert a log entry (immediate insert for PostgreSQL)
    */
   insertLog(log: RequestLog): void {
-    if (!this.isEnabled) {return;}
+    if (!this.isEnabled) {
+      return;
+    }
 
     this.insertLogAsync(log).catch(err => {
       this.log.error("[PostgresDriver] Failed to insert log:", err);
@@ -241,7 +245,9 @@ export class PostgresDriver implements DatabaseDriver {
   }
 
   private async insertLogAsync(log: RequestLog): Promise<void> {
-    if (!this.pool) {return;}
+    if (!this.pool) {
+      return;
+    }
 
     await this.pool.query(
       `INSERT INTO request_logs (
@@ -275,7 +281,9 @@ export class PostgresDriver implements DatabaseDriver {
    * Insert a log entry with "pending" status
    */
   insertLogPending(log: RequestLog): void {
-    if (!this.isEnabled) {return;}
+    if (!this.isEnabled) {
+      return;
+    }
 
     this.insertLogPendingAsync(log).catch(err => {
       this.log.error("[PostgresDriver] Failed to insert pending log:", err);
@@ -283,7 +291,9 @@ export class PostgresDriver implements DatabaseDriver {
   }
 
   private async insertLogPendingAsync(log: RequestLog): Promise<void> {
-    if (!this.pool) {return;}
+    if (!this.pool) {
+      return;
+    }
 
     await this.pool.query(
       `INSERT INTO request_logs (
@@ -325,11 +335,12 @@ export class PostgresDriver implements DatabaseDriver {
     errorMessage: string | undefined,
     originalResponseBody?: string
   ): void {
-    if (!this.isEnabled) {return;}
+    if (!this.isEnabled) {
+      return;
+    }
 
-    this.pool!
-      .query(
-        `UPDATE request_logs
+    this.pool!.query(
+      `UPDATE request_logs
          SET status_code = $1,
              response_body = $2,
              original_response_body = $3,
@@ -338,19 +349,18 @@ export class PostgresDriver implements DatabaseDriver {
              error_message = $6,
              status = 'completed'
          WHERE client_id = $7`,
-        [
-          statusCode,
-          encodeForStorage(responseBody),
-          encodeForStorage(originalResponseBody),
-          duration,
-          success,
-          encodeForStorage(errorMessage),
-          clientId,
-        ]
-      )
-      .catch(err => {
-        this.log.error("[PostgresDriver] Failed to update log:", err);
-      });
+      [
+        statusCode,
+        encodeForStorage(responseBody),
+        encodeForStorage(originalResponseBody),
+        duration,
+        success,
+        encodeForStorage(errorMessage),
+        clientId,
+      ]
+    ).catch(err => {
+      this.log.error("[PostgresDriver] Failed to update log:", err);
+    });
   }
 
   /**
@@ -363,7 +373,9 @@ export class PostgresDriver implements DatabaseDriver {
     duration: number,
     errorMessage: string | undefined
   ): void {
-    if (!this.pool) {return;}
+    if (!this.pool) {
+      return;
+    }
 
     this.pool
       .query(
@@ -392,7 +404,9 @@ export class PostgresDriver implements DatabaseDriver {
    * Batch insert logs
    */
   async writeBatch(logs: RequestLog[]): Promise<void> {
-    if (!this.pool || logs.length === 0) {return;}
+    if (!this.pool || logs.length === 0) {
+      return;
+    }
 
     const client: PoolClient = await this.pool.connect();
     try {
@@ -515,11 +529,15 @@ export class PostgresDriver implements DatabaseDriver {
    * Get a single log by ID
    */
   async getLogById(id: number): Promise<RequestLog | null> {
-    if (!this.pool) {return null;}
+    if (!this.pool) {
+      return null;
+    }
 
     const result = await this.pool.query("SELECT * FROM request_logs WHERE id = $1", [id]);
 
-    if (result.rows.length === 0) {return null;}
+    if (result.rows.length === 0) {
+      return null;
+    }
 
     return dbRowToLog(result.rows[0] as Record<string, unknown>);
   }
@@ -528,7 +546,9 @@ export class PostgresDriver implements DatabaseDriver {
    * Delete logs by IDs
    */
   async deleteLogs(ids: number[]): Promise<void> {
-    if (!this.pool || ids.length === 0) {return;}
+    if (!this.pool || ids.length === 0) {
+      return;
+    }
 
     const placeholders = ids.map((_, i) => `$${i + 1}`).join(",");
     await this.pool.query(`DELETE FROM request_logs WHERE id IN (${placeholders})`, ids);
@@ -538,7 +558,9 @@ export class PostgresDriver implements DatabaseDriver {
    * Clear all logs
    */
   async clearAllLogs(): Promise<void> {
-    if (!this.pool) {return;}
+    if (!this.pool) {
+      return;
+    }
     await this.pool.query("DELETE FROM request_logs");
   }
 
@@ -546,7 +568,9 @@ export class PostgresDriver implements DatabaseDriver {
    * Clean old logs
    */
   async cleanOldLogs(): Promise<void> {
-    if (!this.pool) {return;}
+    if (!this.pool) {
+      return;
+    }
 
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
     await this.pool.query("DELETE FROM request_logs WHERE timestamp < $1", [thirtyDaysAgo]);
@@ -569,7 +593,9 @@ export class PostgresDriver implements DatabaseDriver {
       };
     }
 
-    const totalResult = await this.pool.query<{ count: string }>("SELECT COUNT(*) as count FROM request_logs");
+    const totalResult = await this.pool.query<{ count: string }>(
+      "SELECT COUNT(*) as count FROM request_logs"
+    );
     const total = parseInt(totalResult.rows[0]?.count ?? "0", 10) || 0;
 
     const successResult = await this.pool.query<{ count: string }>(
@@ -582,7 +608,9 @@ export class PostgresDriver implements DatabaseDriver {
     );
     const errorCount = parseInt(errorResult.rows[0]?.count ?? "0", 10) || 0;
 
-    const avgResult = await this.pool.query<{ avg: string | null }>("SELECT AVG(duration) as avg FROM request_logs");
+    const avgResult = await this.pool.query<{ avg: string | null }>(
+      "SELECT AVG(duration) as avg FROM request_logs"
+    );
     const avgDuration = parseFloat(avgResult.rows[0]?.avg ?? "0") || 0;
 
     /* eslint-disable @typescript-eslint/naming-convention */

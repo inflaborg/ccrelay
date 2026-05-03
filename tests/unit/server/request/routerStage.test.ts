@@ -50,9 +50,7 @@ describe("resolveUpstreamPath", () => {
       expect(resolveUpstreamPath("GET", "/openai/v1/models")).toBe("/models");
     });
     it("POST /openai/v1/chat/completions -> /chat/completions", () => {
-      expect(resolveUpstreamPath("POST", "/openai/v1/chat/completions")).toBe(
-        "/chat/completions"
-      );
+      expect(resolveUpstreamPath("POST", "/openai/v1/chat/completions")).toBe("/chat/completions");
     });
   });
 });

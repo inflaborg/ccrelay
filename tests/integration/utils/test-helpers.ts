@@ -177,15 +177,9 @@ export function createSSEStreamChunks(
 /**
  * Assert that a response has the expected status code
  */
-export function assertStatus(
-  res: { status: number },
-  expected: number,
-  message?: string
-): void {
+export function assertStatus(res: { status: number }, expected: number, message?: string): void {
   if (res.status !== expected) {
-    throw new Error(
-      message ?? `Expected status ${expected}, got ${res.status}`
-    );
+    throw new Error(message ?? `Expected status ${expected}, got ${res.status}`);
   }
 }
 
@@ -201,9 +195,7 @@ export function assertErrorMatch(
   }
   const errorText = res.body.error ?? res.body.code ?? "";
   if (!pattern.test(errorText)) {
-    throw new Error(
-      `Error "${errorText}" does not match pattern ${pattern.toString()}`
-    );
+    throw new Error(`Error "${errorText}" does not match pattern ${pattern.toString()}`);
   }
 }
 
@@ -246,9 +238,7 @@ export async function waitForAll(
     const check = () => {
       void (async () => {
         try {
-          const results = await Promise.all(
-            conditions.map(c => Promise.resolve(c()))
-          );
+          const results = await Promise.all(conditions.map(c => Promise.resolve(c())));
           if (results.every(Boolean)) {
             resolve();
           } else if (Date.now() - start > timeout) {
@@ -275,7 +265,10 @@ export async function waitForAll(
  * Create a promise that resolves when an event is emitted
  */
 export function waitForEvent<T = unknown>(
-  emitter: { on: (event: string, listener: (data: T) => void) => void; removeListener: (event: string, listener: (data: T) => void) => void },
+  emitter: {
+    on: (event: string, listener: (data: T) => void) => void;
+    removeListener: (event: string, listener: (data: T) => void) => void;
+  },
   eventName: string,
   timeout = 10000
 ): Promise<T> {

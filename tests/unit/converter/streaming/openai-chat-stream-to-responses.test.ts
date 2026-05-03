@@ -4,8 +4,8 @@ import {
   createStreamingState,
   processStreamingChunk,
   createSseLineBuffer,
-} from "@/converter/chat-completions-streaming-to-responses";
-import { extractResponsesEcho } from "@/converter/responses-echo";
+} from "@/converter/streaming/openai-chat-stream-to-responses";
+import { extractResponsesEcho } from "@/converter/adapters/openai-responses-to-chat";
 
 function chunk(delta: Record<string, unknown>, finishReason?: string | null): string {
   return JSON.stringify({
@@ -145,7 +145,7 @@ describe("processStreamingChunk", () => {
     processStreamingChunk(state, chunk({ reasoning_content: "why" }));
     const events = processStreamingChunk(state, chunk({ content: "hi" }));
     const reasoningDoneEvent = events.find(
-      e =>
+      (e: string) =>
         e.includes('"type":"response.output_item.done"') &&
         e.includes(reasoningId) &&
         e.includes('"type":"reasoning"')
@@ -387,7 +387,7 @@ describe("processStreamingChunk", () => {
     });
 
     const doneEvents = processStreamingChunk(state, "[DONE]");
-    const completedEvent = doneEvents.find(e => e.includes("response.completed"));
+    const completedEvent = doneEvents.find((e: string) => e.includes("response.completed"));
     expect(completedEvent).toBeDefined();
     expect(completedEvent).toContain('"input_tokens":100');
     expect(completedEvent).toContain('"cached_tokens":17920');
@@ -409,7 +409,7 @@ describe("processStreamingChunk", () => {
     processStreamingChunk(state, usageChunk);
     expect(state.usage?.input_tokens).toBe(100);
     const doneEvents = processStreamingChunk(state, "[DONE]");
-    const completedEvent = doneEvents.find(e => e.includes("response.completed"));
+    const completedEvent = doneEvents.find((e: string) => e.includes("response.completed"));
     expect(completedEvent).toBeDefined();
     expect(completedEvent).toContain('"input_tokens":100');
   });
@@ -431,7 +431,7 @@ describe("processStreamingChunk", () => {
     allEvents.push(...processStreamingChunk(state, "[DONE]"));
 
     // Filter out [DONE] which has no sequence_number
-    const jsonEvents = allEvents.filter(e => !e.includes("[DONE]"));
+    const jsonEvents = allEvents.filter((e: string) => !e.includes("[DONE]"));
     for (let i = 0; i < jsonEvents.length; i++) {
       expect(jsonEvents[i]).toContain(`"sequence_number":${i}`);
     }
@@ -449,7 +449,7 @@ describe("processStreamingChunk", () => {
     const dataLine =
       block
         .split("\n")
-        .find(l => l.startsWith("data:"))
+        .find((l: string) => l.startsWith("data:"))
         ?.slice("data:".length)
         .trim() ?? "{}";
     const parsed = JSON.parse(dataLine) as {
@@ -464,14 +464,14 @@ describe("processStreamingChunk", () => {
 describe("createSseLineBuffer", () => {
   it("handles complete lines", () => {
     const lines: string[] = [];
-    const buf = createSseLineBuffer(line => lines.push(line));
+    const buf = createSseLineBuffer((line: string) => lines.push(line));
     buf.feed(Buffer.from("data: hello\n\ndata: world\n\n"));
     expect(lines).toEqual(["data: hello", "data: world"]);
   });
 
   it("handles split across chunks", () => {
     const lines: string[] = [];
-    const buf = createSseLineBuffer(line => lines.push(line));
+    const buf = createSseLineBuffer((line: string) => lines.push(line));
     buf.feed(Buffer.from("data: hel"));
     buf.feed(Buffer.from("lo\n\ndata: world\n\n"));
     expect(lines).toEqual(["data: hello", "data: world"]);
@@ -479,14 +479,14 @@ describe("createSseLineBuffer", () => {
 
   it("handles multiple lines in one chunk", () => {
     const lines: string[] = [];
-    const buf = createSseLineBuffer(line => lines.push(line));
+    const buf = createSseLineBuffer((line: string) => lines.push(line));
     buf.feed(Buffer.from("data: a\n\ndata: b\n\ndata: c\n\n"));
     expect(lines).toEqual(["data: a", "data: b", "data: c"]);
   });
 
   it("flushes remaining buffer", () => {
     const lines: string[] = [];
-    const buf = createSseLineBuffer(line => lines.push(line));
+    const buf = createSseLineBuffer((line: string) => lines.push(line));
     buf.feed(Buffer.from("data: partial"));
     expect(lines).toEqual([]);
     buf.flush();
@@ -495,7 +495,7 @@ describe("createSseLineBuffer", () => {
 
   it("skips empty lines", () => {
     const lines: string[] = [];
-    const buf = createSseLineBuffer(line => lines.push(line));
+    const buf = createSseLineBuffer((line: string) => lines.push(line));
     buf.feed(Buffer.from("\n\ndata: hello\n\n\n\ndata: world\n\n"));
     expect(lines).toEqual(["data: hello", "data: world"]);
   });

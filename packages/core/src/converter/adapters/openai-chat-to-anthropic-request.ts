@@ -5,7 +5,7 @@
 
 /* eslint-disable @typescript-eslint/naming-convention */
 
-import type { MessageParam, ContentBlockParam } from "../types";
+import type { MessageParam, ContentBlockParam } from "../../types";
 import type {
   AnthropicMessageRequest,
   AnthropicTool,
@@ -13,8 +13,8 @@ import type {
   OpenAIMessage,
   OpenAIMessageRequest,
   OpenAITool,
-} from "./anthropic-to-openai";
-import { mapOpenAiWirePathToAnthropicUpstream } from "./crossProtocolUpstreamPath";
+} from "./anthropic-to-openai-chat-request";
+import { mapOpenAiWirePathToAnthropicUpstream } from "../paths";
 
 export interface OpenAIToAnthropicRequestResult {
   request: AnthropicMessageRequest;

@@ -108,22 +108,19 @@ export function activate(context: vscode.ExtensionContext) {
     await stopServer();
   });
 
-  const openSettingsCommand = vscode.commands.registerCommand(
-    "ccrelay.openSettings",
-    async () => {
-      if (!configManager) {
-        return;
-      }
-      try {
-        const uri = vscode.Uri.file(configManager.getConfigPath());
-        const doc = await vscode.workspace.openTextDocument(uri);
-        await vscode.window.showTextDocument(doc);
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        vscode.window.showErrorMessage(`Could not open config file: ${msg}`);
-      }
+  const openSettingsCommand = vscode.commands.registerCommand("ccrelay.openSettings", async () => {
+    if (!configManager) {
+      return;
     }
-  );
+    try {
+      const uri = vscode.Uri.file(configManager.getConfigPath());
+      const doc = await vscode.workspace.openTextDocument(uri);
+      await vscode.window.showTextDocument(doc);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      vscode.window.showErrorMessage(`Could not open config file: ${msg}`);
+    }
+  });
 
   const showLogsCommand = vscode.commands.registerCommand("ccrelay.showLogs", () => {
     logger?.show();

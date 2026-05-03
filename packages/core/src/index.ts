@@ -14,10 +14,7 @@ export { ProxyServer } from "./server/handler";
 export { LeaderElection } from "./server/leaderElection";
 export { Router } from "./server/router";
 export { setWebDistPath } from "./server/static";
-export {
-  CCRELAY_UI_HEADER_NAME,
-  CCRELAY_UI_HEADER_VALUE,
-} from "./server/internalUiHeaders";
+export { CCRELAY_UI_HEADER_NAME, CCRELAY_UI_HEADER_VALUE } from "./server/internalUiHeaders";
 
 export { Logger, ScopedLogger, LogLevel } from "./utils/logger";
 

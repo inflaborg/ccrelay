@@ -11,11 +11,14 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 // External API fields use snake_case (max_tokens, tool_choice, etc.)
 
-import type { MessageParam, ContentBlockParam, OpenAICompat } from "../types";
-import { sanitizeAzureOpenAiChatRequest } from "./openai/azure";
-import { isGeminiOpenAiModel, withOptionalGeminiThoughtSignature } from "./openai/gemini";
-import { assignOpenAiChatMaxOutput } from "./openai/maxOutputTokens";
-import { mapAnthropicWirePathToOpenAiUpstream } from "./crossProtocolUpstreamPath";
+import type { MessageParam, ContentBlockParam, OpenAICompat } from "../../types";
+import {
+  isGeminiOpenAiModel,
+  sanitizeAzureOpenAiChatRequest,
+  withOptionalGeminiThoughtSignature,
+} from "../rules/openai-chat-platform-transforms";
+import { assignOpenAiChatMaxOutput } from "../rules/openai-chat-model-rules";
+import { mapAnthropicWirePathToOpenAiUpstream } from "../paths";
 
 /**
  * Anthropic Messages API request format

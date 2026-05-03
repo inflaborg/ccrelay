@@ -7,7 +7,6 @@
 
 import * as http from "http";
 import { z } from "zod";
-import type { ResponsesRequestEcho } from "../converter/responses-echo";
 
 export type ProviderMode = "passthrough" | "inject";
 
@@ -15,6 +14,21 @@ export type ProviderType = "anthropic" | "openai" | "openai_chat";
 
 /** Inbound client wire format (Anthropic Messages vs OpenAI Chat Completions vs OpenAI Responses API, etc.) */
 export type ApiSurface = "anthropic" | "openai" | "openai_responses";
+
+/** Subset of OpenAI Responses request fields echoed back into `response.{...}` shells (synthesized JSON/SSE). */
+export interface ResponsesRequestEcho {
+  tools: unknown[];
+  tool_choice?: unknown;
+  parallel_tool_calls?: boolean;
+  reasoning?: { effort?: string | null; summary?: string | null };
+  text?: { format?: unknown };
+  instructions?: string | null;
+  metadata?: Record<string, unknown>;
+  store?: boolean;
+  previous_response_id?: string | null;
+  user?: string | null;
+  truncation?: string;
+}
 
 /**
  * Zod schemas for runtime type validation

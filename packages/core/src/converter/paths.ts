@@ -1,10 +1,22 @@
 /**
- * Cross-protocol upstream path mapping (Anthropic wire vs OpenAI wire).
- * Shared by request processing and body converters so GET (no body) and POST use the same path
- * rules once `needsConversion` is true.
+ * Path utilities: OpenAI wire detection, provider type checks, and cross-protocol upstream path mapping.
  */
 
-import { isOpenAIChatCompletionsWirePath } from "./openaiPath";
+import type { ProviderType } from "../types";
+
+/**
+ * True if `originalPath` is a recognized OpenAI Chat Completions endpoint.
+ */
+export function isOpenAIChatCompletionsWirePath(originalPath: string): boolean {
+  return originalPath === "/chat/completions" || originalPath === "/v1/chat/completions";
+}
+
+/**
+ * True if the provider type is any OpenAI variant (full or chat-only).
+ */
+export function isOpenAIType(providerType: ProviderType): boolean {
+  return providerType === "openai" || providerType === "openai_chat";
+}
 
 function pathOnly(pathOrUrlPath: string): string {
   const bare = pathOrUrlPath.split("?")[0] || pathOrUrlPath;

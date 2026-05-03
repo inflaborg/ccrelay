@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveOpenAICompatForAnthropicToOpenAI } from "@/converter/openai/compat";
+import { resolveOpenAICompatForAnthropicToOpenAI } from "@/converter/rules/openai-chat-platform-transforms";
 import type { Provider } from "@/types";
 
 function p(

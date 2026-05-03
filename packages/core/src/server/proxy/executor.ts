@@ -25,9 +25,9 @@ import {
   createStreamingState,
   processStreamingChunk,
   createSseLineBuffer,
+  isAnthropicMessageResponse,
+  type OpenAIChatCompletionResponse,
 } from "../../converter";
-import { isAnthropicMessageResponse } from "../../converter/anthropic-to-openai-response";
-import type { OpenAIChatCompletionResponse } from "../../converter/openai-to-anthropic";
 import type { ApiSurface } from "../../types";
 import type { RequestTask, ProxyResult } from "../../types";
 import type { ResponseLogger } from "../responseLogger";

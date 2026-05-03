@@ -20,8 +20,7 @@ import type {
 } from "../types";
 
 /** Thrown when the `sqlite3` executable is absent; callers may degrade to disabled log storage. */
-export const SQLITE_CLI_NOT_FOUND_MESSAGE =
-  "sqlite3 CLI not found. Please install SQLite3.";
+export const SQLITE_CLI_NOT_FOUND_MESSAGE = "sqlite3 CLI not found. Please install SQLite3.";
 
 export function isSqliteCliUnavailableError(err: unknown): boolean {
   return err instanceof Error && err.message.includes("sqlite3 CLI not found");
@@ -46,7 +45,10 @@ export function resolveSqlite3ExecutableFromEnv(): string | null {
           shell: "/bin/sh",
         });
     const trimmed = result.trim();
-    const first = trimmed.split(/\r?\n/).find(line => line.trim().length > 0)?.trim();
+    const first = trimmed
+      .split(/\r?\n/)
+      .find(line => line.trim().length > 0)
+      ?.trim();
     return first ?? null;
   } catch {
     return null;

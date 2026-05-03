@@ -17,10 +17,7 @@ import {
   parseJsonBody,
   handleApiRequest,
 } from "@/api/index";
-import {
-  resetProxyServerForApi,
-  setProxyServerForApi,
-} from "@/api/serverRef";
+import { resetProxyServerForApi, setProxyServerForApi } from "@/api/serverRef";
 import type { ProxyServer } from "@/server/handler";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { EventEmitter } from "stream";
