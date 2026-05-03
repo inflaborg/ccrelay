@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Logging / SQLite CLI path**: optional `logging.database.sqlite3_executable` (Settings: **sqlite3 executable**) to point at the `sqlite3` binary; when blank, resolution uses **`PATH` only** (no hardcoded install directories). Persisted **`logging.database`** is now wired into the runtime log-database driver alongside the DB file path.
+
 - **Block `condition.providers`**: optional allowlist of provider IDs — block matches only when the current active provider is listed (YAML `routing.block[].condition.providers`). Compose with **`providerNot`** — both sides apply together when present. Routing settings **Block rules** add **Only when / Unless** pickers for saved IDs (excluding `"auto"`).
 
 - **Inbound URL prefixes**: clients can target **`/openai/...`** (OpenAI wire) and **`/anthropic/v1/...`** (Anthropic wire) on the same port. Upstream paths are rewritten by stripping the prefix, then applying the same legacy `/v1/chat/completions` → `/chat/completions`, `/v1/responses` → `/responses`, `/v1/models` → `/models` rules. Example bases: `http://127.0.0.1:7575/openai`, `http://127.0.0.1:7575/anthropic`.

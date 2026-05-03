@@ -27,7 +27,32 @@ export function isSqliteCliUnavailableError(err: unknown): boolean {
   return err instanceof Error && err.message.includes("sqlite3 CLI not found");
 }
 
-// Cleanup thresholds
+/** Resolve `sqlite3` on PATH only (no hardcoded install directories). */
+export function resolveSqlite3ExecutableFromEnv(): string | null {
+  try {
+    const isWin = process.platform === "win32";
+    const cmd = isWin ? "where sqlite3" : "command -v sqlite3";
+    const baseOpts = {
+      encoding: "utf-8" as const,
+      maxBuffer: 2048,
+    };
+    const result = isWin
+      ? execSync(cmd, {
+          ...baseOpts,
+          shell: process.env.ComSpec || "cmd.exe",
+        })
+      : execSync(cmd, {
+          ...baseOpts,
+          shell: "/bin/sh",
+        });
+    const trimmed = result.trim();
+    const first = trimmed.split(/\r?\n/).find(line => line.trim().length > 0)?.trim();
+    return first ?? null;
+  } catch {
+    return null;
+  }
+}
+
 const MAX_LOG_ROWS = 10000;
 const MAX_LOG_AGE_DAYS = 30;
 
@@ -1027,7 +1052,7 @@ export class SqliteCliDriver implements DatabaseDriver {
       fsSync.mkdirSync(dir, { recursive: true });
     }
 
-    this.sqlite3Path = this.findSqlite3();
+    this.sqlite3Path = this.resolveSqlite3ExecutablePath();
     if (!this.sqlite3Path) {
       throw new Error(SQLITE_CLI_NOT_FOUND_MESSAGE);
     }
@@ -1064,25 +1089,12 @@ export class SqliteCliDriver implements DatabaseDriver {
     }, 0);
   }
 
-  private findSqlite3(): string | null {
-    try {
-      const result = execSync("which sqlite3", { encoding: "utf-8" }).trim();
-      if (result) {
-        return result;
-      }
-    } catch {
-      // which may fail in sandboxed / packaged environments with limited PATH
+  private resolveSqlite3ExecutablePath(): string | null {
+    const custom = this.config.sqlite3Executable?.trim();
+    if (custom) {
+      return fsSync.existsSync(custom) ? custom : null;
     }
-    const fallbacks =
-      process.platform === "win32"
-        ? ["C:\\Windows\\System32\\sqlite3.exe"]
-        : ["/usr/bin/sqlite3", "/opt/homebrew/bin/sqlite3", "/usr/local/bin/sqlite3"];
-    for (const p of fallbacks) {
-      if (fsSync.existsSync(p)) {
-        return p;
-      }
-    }
-    return null;
+    return resolveSqlite3ExecutableFromEnv();
   }
 
   async close(): Promise<void> {

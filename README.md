@@ -51,7 +51,7 @@
 - **Model Mapping**: Automatically translates Claude model names to provider-specific models with wildcard support (e.g., `claude-*` → `glm-4.7`)
 - **Vision Model Mapping**: Separate model mapping for visual/multimodal requests (`vlModelMap`)
 - **OpenAI Format Conversion (LLM router)**: Accepts Anthropic, OpenAI Chat Completions, and OpenAI Responses (`/v1/responses`); converts when the inbound wire does not match the provider (Chat/Responses are hubbed through Chat Completions for cross-provider routing)
-- **Request Logging**: Optional SQLite/PostgreSQL request/response logging with Web UI viewer; SQLite paths use the system **`sqlite3` CLI**. If logging is enabled with SQLite but that binary is missing, the proxy keeps running **without** persisting logs (warning in logs) until you install SQLite [CLI](https://www.sqlite.org/download.html) or use PostgreSQL instead
+- **Request Logging**: Optional SQLite/PostgreSQL request/response logging with Web UI viewer; SQLite uses the **`sqlite3` CLI**. By default the binary is resolved from **`PATH`** only; optionally set **`logging.database.sqlite3_executable`** to an absolute path. If logging is enabled with SQLite but `sqlite3` cannot be resolved, the proxy keeps running **without** persisting logs (warning in logs) until you install SQLite [CLI](https://www.sqlite.org/download.html), fix `PATH`/config path, or use PostgreSQL instead
 - **Concurrency Control**: Built-in request queue and concurrency limits to prevent API overload
 - **Auto-start**: Automatically starts the proxy server when VSCode launches
 - **Client integrations**: Use the same proxy with **Claude Code**, **Claude Cowork** (Anthropic wire), and **Codex** (OpenAI wire + `~/.codex/config.toml`); see [Client integrations](#client-integrations)
@@ -132,7 +132,7 @@ Release builds are **not** Apple-notarized. After you unzip, the browser may mar
 
 Apps you build locally under `packages/desktop/dist/` usually have no quarantine, so they may open without these steps—see [TODO](#todo) for the long-term fix (signing + notarization).
 
-SQLite-backed **logging** still requires the **`sqlite3`** command-line binary on **`PATH`** (plus known fallbacks) when persistence is desired; otherwise the server runs with logging storage effectively off for that process—see core features above.
+SQLite-backed **logging** resolves **`sqlite3` from `PATH`** (or **`logging.database.sqlite3_executable`** when set); if it cannot be resolved, that process persists no logs though the proxy keeps running—see core features above.
 
 ---
 
@@ -471,6 +471,7 @@ Each provider supports:
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `logging.database.path` | `""` | Database file path (empty = `~/.ccrelay/logs.db`) |
+| `logging.database.sqlite3_executable` | `""` | Path to **`sqlite3`** CLI (empty = resolve from **`PATH`** only) |
 
 **PostgreSQL Configuration:**
 | Setting | Default | Description |

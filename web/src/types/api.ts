@@ -220,6 +220,8 @@ export interface LoggingSettings {
   database?: {
     type: "sqlite" | "postgres";
     path?: string;
+    /** SQLite only: sqlite3 CLI path; omit or empty uses PATH */
+    sqlite3Executable?: string;
     host?: string;
     port?: number;
     name?: string;

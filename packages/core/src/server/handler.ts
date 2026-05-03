@@ -18,7 +18,12 @@ import {
   QueueStats,
 } from "../types";
 import { ScopedLogger } from "../utils/logger";
-import { getDatabase, LogDatabase } from "../database";
+import {
+  getDatabase,
+  LogDatabase,
+  setLogDatabaseDriverConfigResolver,
+  loggingDatabaseConfigToDriver,
+} from "../database";
 import { LeaderElection } from "./leaderElection";
 import { isStaticRequest, serveStatic } from "./static";
 import { isApiRequest, handleApiRequest } from "../api";
@@ -71,6 +76,9 @@ export class ProxyServer {
   constructor(config: ConfigManager, leaderElection: LeaderElection | null = null) {
     this.config = config;
     this.router = new Router(config);
+    setLogDatabaseDriverConfigResolver(() =>
+      loggingDatabaseConfigToDriver(this.config.configValue.logging.database)
+    );
     this.database = getDatabase();
     this.leaderElection = leaderElection;
     this.instanceId = `Server-${process.pid}-${Math.random().toString(36).substring(2, 6)}`;

@@ -1091,13 +1091,35 @@ function LoggingSection({ data }: { data: LoggingSettings }) {
         />
       </Field>
       {db.type === "sqlite" ? (
-        <Field label="Database path">
-          <TextInput
-            value={db.path ?? ""}
-            onChange={v => setForm(f => ({ ...f, database: { ...db, path: v || undefined } }))}
-            placeholder="~/.ccrelay/logs.db (default)"
-          />
-        </Field>
+        <>
+          <Field label="Database path">
+            <TextInput
+              value={db.path ?? ""}
+              onChange={v =>
+                setForm(f => ({
+                  ...f,
+                  database: { ...db, path: v || undefined },
+                }))
+              }
+              placeholder="~/.ccrelay/logs.db (default)"
+            />
+          </Field>
+          <Field label="sqlite3 executable (optional)">
+            <TextInput
+              value={db.sqlite3Executable ?? ""}
+              onChange={v =>
+                setForm(f => ({
+                  ...f,
+                  database: {
+                    ...db,
+                    sqlite3Executable: v.trim() ? v.trim() : undefined,
+                  },
+                }))
+              }
+              placeholder="Blank = resolve from PATH"
+            />
+          </Field>
+        </>
       ) : (
         <div className="grid grid-cols-2 gap-3">
           <Field label="Host">

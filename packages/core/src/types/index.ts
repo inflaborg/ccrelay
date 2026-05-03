@@ -163,6 +163,8 @@ export type ConcurrencyConfigInput = z.infer<typeof ConcurrencyConfigSchema>;
 export const SqliteConfigSchema = z.object({
   type: z.literal("sqlite"),
   path: z.string().optional(),
+  /** Optional path to sqlite3 CLI; empty/not set resolves `sqlite3` from PATH only. */
+  sqlite3Executable: z.string().optional(),
 });
 
 export type SqliteConfigInput = z.infer<typeof SqliteConfigSchema>;
@@ -215,6 +217,8 @@ export type FileConfigInput = z.infer<typeof FileConfigSchema>;
 export interface SqliteDatabaseConfig {
   type: "sqlite";
   path?: string;
+  /** Optional absolute or relative path to the sqlite3 executable; omit to use PATH. */
+  sqlite3Executable?: string;
 }
 
 /**

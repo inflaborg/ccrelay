@@ -166,6 +166,8 @@ logging:
     type: "sqlite"              # sqlite | postgres
     # SQLite configuration (default)
     path: ""                    # Empty = ~/.ccrelay/logs.db
+    # Optional sqlite3 CLI path; empty = resolve from PATH only
+    # sqlite3_executable: ""
 
     # PostgreSQL configuration
     # type: "postgres"
@@ -979,9 +981,11 @@ export class ConfigManager {
           ssl: db.ssl ?? false,
         };
       } else {
+        const exe = typeof db.sqlite3Executable === "string" ? db.sqlite3Executable.trim() : "";
         database = {
           type: "sqlite",
           path: db.path || undefined,
+          ...(exe ? { sqlite3Executable: exe } : {}),
         };
       }
     }
