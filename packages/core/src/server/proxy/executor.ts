@@ -10,7 +10,6 @@ import * as https from "https";
 import * as url from "url";
 import { ScopedLogger } from "../../utils/logger";
 import {
-  buildModelsListFallback,
   convertAnthropicResponseToOpenAI,
   convertChatCompletionToResponses,
   formatOpenAIResponsesSse,
@@ -18,6 +17,9 @@ import {
   convertResponseToAnthropic,
   convertOpenAIModelsToAnthropic,
   convertAnthropicModelsToOpenAI,
+  isAnthropicModelsListJson,
+  isModelsListUpstreamPath,
+  isOpenAIModelsListJson,
   isOpenAIType,
   createStreamingState,
   processStreamingChunk,
@@ -30,11 +32,6 @@ import type { RequestTask, ProxyResult } from "../../types";
 import type { ResponseLogger } from "../responseLogger";
 
 const log = new ScopedLogger("ProxyExecutor");
-
-function isModelsUpstreamPath(requestPath: string): boolean {
-  const p = requestPath.split("?")[0] ?? "";
-  return p === "/models" || p === "/v1/models";
-}
 
 /** Replace Content-Type and drop hop-by-hop / body-size headers for synthesized Responses API SSE. */
 function headersForResponsesSse(
@@ -288,7 +285,12 @@ export class ProxyExecutor {
 
     const isJsonResponse = proxyRes.headers["content-type"]?.includes("application/json");
 
+    /** Do not route through chat completion / Responses JSON converters — use buffered handlers + GET /models list conversion. */
+    const skipStructuredChatJsonConverters =
+      task.method === "GET" && isModelsListUpstreamPath(task.requestPath);
+
     if (
+      !skipStructuredChatJsonConverters &&
       clientSurface === "openai_responses" &&
       upstreamWire === "openai" &&
       status === 200 &&
@@ -331,6 +333,7 @@ export class ProxyExecutor {
     }
 
     if (
+      !skipStructuredChatJsonConverters &&
       clientSurface === "openai_responses" &&
       upstreamWire === "anthropic" &&
       status === 200 &&
@@ -350,6 +353,7 @@ export class ProxyExecutor {
     }
 
     if (
+      !skipStructuredChatJsonConverters &&
       needsResponseConversion &&
       upstreamWire === "openai" &&
       status === 200 &&
@@ -369,6 +373,7 @@ export class ProxyExecutor {
     }
 
     if (
+      !skipStructuredChatJsonConverters &&
       needsResponseConversion &&
       upstreamWire === "anthropic" &&
       status === 200 &&
@@ -1133,60 +1138,52 @@ export class ProxyExecutor {
 
       let outStatus = status;
       const outHeaders: Record<string, string | string[]> = { ...responseHeaders };
-      if (task.method === "GET" && isModelsUpstreamPath(task.requestPath) && status >= 400) {
-        const fallback = buildModelsListFallback(task.provider);
-        const j = JSON.stringify(fallback);
-        const buf = Buffer.from(j, "utf-8");
-        ctx.responseChunks = [buf];
-        outStatus = 200;
-        outHeaders["content-type"] = "application/json";
-        if ("Content-Length" in outHeaders) {
-          delete outHeaders["Content-Length"];
-        }
-        log.info(`[${clientId}] GET /v1/models upstream returned ${status}; using config model list fallback`);
-      }
 
-      // Cross-protocol: convert /v1/models response format to match client's expected API surface
+      // GET /models: convert list shape only when entry path protocol differs from provider upstream wire
       const upstreamWireFmt: ApiSurface = isOpenAIType(task.provider.providerType) ? "openai" : "anthropic";
-      if (
+      const modelsCrossProtocolConversion =
         task.method === "GET" &&
-        isModelsUpstreamPath(task.requestPath) &&
+        isModelsListUpstreamPath(task.requestPath) &&
         outStatus === 200 &&
+        (task.clientSurface === "openai" || task.clientSurface === "anthropic") &&
         task.clientSurface !== upstreamWireFmt &&
-        ctx.responseChunks.length > 0
-      ) {
+        ctx.responseChunks.length > 0;
+      if (modelsCrossProtocolConversion) {
         try {
           const bodyStr = Buffer.concat(ctx.responseChunks).toString("utf-8");
           const parsed = JSON.parse(bodyStr) as Record<string, unknown>;
-          const clientWantsAnthropic = task.clientSurface === "anthropic";
-          const upstreamIsOpenAI =
-            Array.isArray(parsed.data) &&
-            (parsed.data as unknown[]).length > 0 &&
-            ((parsed.data as Record<string, unknown>[])[0] as { object?: string })?.object === "model";
-          const upstreamIsAnthropic =
-            Array.isArray(parsed.data) &&
-            (parsed.data as unknown[]).length > 0 &&
-            ((parsed.data as Record<string, unknown>[])[0] as { type?: string })?.type === "model";
+          const clientOpenaiUpstreamAnthropic =
+            task.clientSurface === "openai" && upstreamWireFmt === "anthropic";
+          const clientAnthropicUpstreamOpenai =
+            task.clientSurface === "anthropic" && upstreamWireFmt === "openai";
 
-          if (upstreamIsOpenAI && clientWantsAnthropic) {
+          if (clientAnthropicUpstreamOpenai && isOpenAIModelsListJson(parsed)) {
             const anthropicList = convertOpenAIModelsToAnthropic(
               parsed as unknown as Parameters<typeof convertOpenAIModelsToAnthropic>[0]
             );
-            const buf = Buffer.from(JSON.stringify(anthropicList), "utf-8");
-            ctx.responseChunks = [buf];
+            ctx.responseChunks = [Buffer.from(JSON.stringify(anthropicList), "utf-8")];
             outHeaders["content-type"] = "application/json";
-            log.info(`[${clientId}] GET /v1/models: converted OpenAI -> Anthropic format`);
-          } else if (upstreamIsAnthropic && !clientWantsAnthropic) {
+            if ("Content-Length" in outHeaders) {
+              delete outHeaders["Content-Length"];
+            }
+            log.info(
+              `[${clientId}] GET /models: entry anthropic vs OpenAI upstream; converted models list shape`
+            );
+          } else if (clientOpenaiUpstreamAnthropic && isAnthropicModelsListJson(parsed)) {
             const openaiList = convertAnthropicModelsToOpenAI(
               parsed as unknown as Parameters<typeof convertAnthropicModelsToOpenAI>[0]
             );
-            const buf = Buffer.from(JSON.stringify(openaiList), "utf-8");
-            ctx.responseChunks = [buf];
+            ctx.responseChunks = [Buffer.from(JSON.stringify(openaiList), "utf-8")];
             outHeaders["content-type"] = "application/json";
-            log.info(`[${clientId}] GET /v1/models: converted Anthropic -> OpenAI format`);
+            if ("Content-Length" in outHeaders) {
+              delete outHeaders["Content-Length"];
+            }
+            log.info(
+              `[${clientId}] GET /models: entry OpenAI vs Anthropic upstream; converted models list shape`
+            );
           }
         } catch {
-          // Parse failed; keep original response
+          /* parse failed — keep original */
         }
       }
 

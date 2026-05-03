@@ -1,78 +1,69 @@
+/* eslint-disable @typescript-eslint/naming-convention -- wire JSON uses snake_case */
 import { describe, it, expect } from "vitest";
 import {
-  buildModelsListFallback,
-  buildOpenAIModelsListFromProvider,
-  buildAnthropicModelsListFromProvider,
+  convertOpenAIModelsToAnthropic,
+  convertAnthropicModelsToOpenAI,
+  isModelsListUpstreamPath,
+  isOpenAIModelsListJson,
+  isAnthropicModelsListJson,
 } from "@/converter/modelsFallback";
-import type { Provider } from "@/types";
 
-function prov(over: Partial<Provider> & Pick<Provider, "id" | "providerType">): Provider {
-  return {
-    name: "n",
-    baseUrl: "https://x",
-    mode: "passthrough",
-    headers: {},
-    ...over,
-  };
-}
-
-describe("buildModelsListFallback", () => {
-  it("auto: openai provider -> OpenAI shape", () => {
-    const j = buildModelsListFallback(prov({ id: "x", providerType: "openai", modelsListFormat: "auto" }));
-    expect(j).toHaveProperty("object", "list");
-    expect(Array.isArray((j as { data: unknown[] }).data)).toBe(true);
-  });
-
-  it("auto: anthropic provider -> Anthropic shape", () => {
-    const j = buildModelsListFallback(prov({ id: "x", providerType: "anthropic", modelsListFormat: "auto" }));
-    expect(j).toHaveProperty("data");
-    expect(j).toHaveProperty("has_more", false);
-    expect((j as { data: { id: string }[] }).data[0]).toHaveProperty("type", "model");
-  });
-
-  it("explicit openai on anthropic-type provider", () => {
-    const j = buildModelsListFallback(
-      prov({ id: "x", providerType: "anthropic", modelsListFormat: "openai" })
-    );
-    expect(j).toHaveProperty("object", "list");
+describe("isModelsListUpstreamPath", () => {
+  it("recognizes rewritten OpenAI /models paths (query stripped)", () => {
+    expect(isModelsListUpstreamPath("/models")).toBe(true);
+    expect(isModelsListUpstreamPath("/v1/models")).toBe(true);
+    expect(isModelsListUpstreamPath("/models?limit=1")).toBe(true);
+    expect(isModelsListUpstreamPath("/chat/completions")).toBe(false);
   });
 });
 
-describe("buildOpenAIModelsListFromProvider", () => {
-  it("shows pattern and model ids", () => {
-    const j = buildOpenAIModelsListFromProvider(
-      prov({
-        id: "p",
-        providerType: "openai",
-        modelMap: [{ pattern: "*", model: "m1" }],
+describe("isOpenAIModelsListJson / isAnthropicModelsListJson", () => {
+  it("requires object list plus data array for OpenAI shape guard", () => {
+    expect(
+      isOpenAIModelsListJson({
+        object: "list",
+        data: [],
       })
-    );
-    expect(j.data[0].id).toBe("*");
-    expect(j.data[1].id).toBe("m1");
-    expect(j.data).toHaveLength(2);
+    ).toBe(true);
+    expect(isOpenAIModelsListJson({ data: [{ id: "x" }] })).toBe(false);
+    expect(isOpenAIModelsListJson({ object: "foo", data: [] })).toBe(false);
   });
 
-  it("deduplicates when pattern equals model", () => {
-    const j = buildOpenAIModelsListFromProvider(
-      prov({
-        id: "p",
-        providerType: "openai",
-        modelMap: [{ pattern: "gpt-4o", model: "gpt-4o" }],
-      })
-    );
-    expect(j.data).toHaveLength(1);
-    expect(j.data[0].id).toBe("gpt-4o");
+  it("requires data array for Anthropic minimal guard", () => {
+    expect(isAnthropicModelsListJson({ data: [] })).toBe(true);
+    expect(isAnthropicModelsListJson({})).toBe(false);
   });
 });
 
-describe("buildAnthropicModelsListFromProvider", () => {
-  it("includes pagination fields", () => {
-    const j = buildAnthropicModelsListFromProvider(
-      prov({ id: "p", providerType: "anthropic", modelMap: [{ pattern: "*", model: "claude-x" }] })
-    );
-    expect(j.first_id).toBe("*");
-    expect(j.last_id).toBe("claude-x");
-    expect(j.has_more).toBe(false);
-    expect(j.data).toHaveLength(2);
+describe("convertOpenAIModelsToAnthropic / convertAnthropicModelsToOpenAI", () => {
+  it("converts OpenAI list to Anthropic list", () => {
+    const a = convertOpenAIModelsToAnthropic({
+      object: "list",
+      data: [
+        {
+          id: "m",
+          object: "model",
+          created: 1,
+          owned_by: "x",
+        },
+      ],
+    });
+    expect(a.data[0].id).toBe("m");
+    expect(a.data[0].type).toBe("model");
+    expect(a.first_id).toBe("m");
+    expect(a.last_id).toBe("m");
+    expect(a.has_more).toBe(false);
+  });
+
+  it("converts Anthropic list to OpenAI list", () => {
+    const o = convertAnthropicModelsToOpenAI({
+      data: [{ id: "n", type: "model", display_name: "N" }],
+      first_id: "n",
+      has_more: false,
+      last_id: "n",
+    });
+    expect(o.object).toBe("list");
+    expect(o.data[0].id).toBe("n");
+    expect(o.data[0].object).toBe("model");
   });
 });

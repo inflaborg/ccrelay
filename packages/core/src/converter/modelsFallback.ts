@@ -1,10 +1,7 @@
 /**
- * Synthetic /v1/models list when upstream returns an error
+ * Cross-protocol conversion for GET /models list responses (OpenAI vs Anthropic wire).
  */
 /* eslint-disable @typescript-eslint/naming-convention -- API wire uses snake_case */
-
-import type { ModelsListFormat, Provider } from "../types";
-import { isOpenAIType } from "./openaiPath";
 
 export interface OpenAIModelsListResponse {
   object: "list";
@@ -33,117 +30,23 @@ export interface AnthropicModelsListResponse {
 }
 
 /**
- * Build a minimal OpenAI-style model list from provider.modelMap, or a placeholder
+ * Path segment for upstream models listing (pathname only).
+ * Matches OpenAI `/v1/models` (often rewritten to `/models` on wire) after prefix stripping.
  */
-export function buildOpenAIModelsListFromProvider(provider: Provider): OpenAIModelsListResponse {
-  const data: OpenAIModelEntry[] = [];
-  const now = Math.floor(Date.now() / 1000);
-  const seen = new Set<string>();
-
-  for (const entry of provider.modelMap ?? []) {
-    // Always show the pattern name (what clients should use)
-    if (!seen.has(entry.pattern)) {
-      seen.add(entry.pattern);
-      data.push({
-        id: entry.pattern,
-        object: "model",
-        created: now,
-        owned_by: "ccrelay",
-      });
-    }
-    // Also show the target model name if different
-    if (entry.pattern !== entry.model && !seen.has(entry.model)) {
-      seen.add(entry.model);
-      data.push({
-        id: entry.model,
-        object: "model",
-        created: now,
-        owned_by: "ccrelay",
-      });
-    }
-  }
-
-  if (data.length === 0) {
-    data.push({
-      id: "unknown",
-      object: "model",
-      created: now,
-      owned_by: provider.id,
-    });
-  }
-
-  return { object: "list", data };
+export function isModelsListUpstreamPath(path: string): boolean {
+  const p = path.split("?")[0] ?? "";
+  return p === "/models" || p === "/v1/models";
 }
 
-/**
- * Build a minimal Anthropic-style model list from provider.modelMap
- */
-export function buildAnthropicModelsListFromProvider(
-  provider: Provider
-): AnthropicModelsListResponse {
-  const data: AnthropicModelInfo[] = [];
-  const seen = new Set<string>();
-
-  for (const entry of provider.modelMap ?? []) {
-    // Always show the pattern name (what clients should use)
-    if (!seen.has(entry.pattern)) {
-      seen.add(entry.pattern);
-      data.push({
-        id: entry.pattern,
-        type: "model",
-        display_name: entry.pattern,
-      });
-    }
-    // Also show the target model name if different
-    if (entry.pattern !== entry.model && !seen.has(entry.model)) {
-      seen.add(entry.model);
-      data.push({
-        id: entry.model,
-        type: "model",
-        display_name: entry.model,
-      });
-    }
-  }
-
-  if (data.length === 0) {
-    const id = "unknown";
-    data.push({
-      id,
-      type: "model",
-      display_name: id,
-    });
-  }
-
-  const first = data[0].id;
-  const last = data[data.length - 1].id;
-
-  return {
-    data,
-    first_id: first,
-    has_more: false,
-    last_id: last,
-  };
+/** Minimal structural check before treating body as OpenAI models list. */
+export function isOpenAIModelsListJson(parsed: Record<string, unknown>): boolean {
+  return parsed.object === "list" && Array.isArray(parsed.data);
 }
 
-/**
- * Resolves which synthetic list to return from `GET /v1/models` error fallback
- */
-export function buildModelsListFallback(
-  provider: Provider
-): OpenAIModelsListResponse | AnthropicModelsListResponse {
-  const fmt: ModelsListFormat = provider.modelsListFormat ?? "auto";
-  if (fmt === "openai") {
-    return buildOpenAIModelsListFromProvider(provider);
-  }
-  if (fmt === "anthropic") {
-    return buildAnthropicModelsListFromProvider(provider);
-  }
-  return isOpenAIType(provider.providerType)
-    ? buildOpenAIModelsListFromProvider(provider)
-    : buildAnthropicModelsListFromProvider(provider);
+/** Minimal structural check before treating body as Anthropic models list. */
+export function isAnthropicModelsListJson(parsed: Record<string, unknown>): boolean {
+  return Array.isArray(parsed.data);
 }
-
-export { buildOpenAIModelsListFromProvider as buildModelsListFromProvider };
 
 /**
  * Convert an OpenAI-format models list response to Anthropic format

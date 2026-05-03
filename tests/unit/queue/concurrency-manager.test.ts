@@ -29,6 +29,7 @@ const createMockTask = (id: string, priority: number = 0): RequestTask => ({
     apiKey: "sk-test",
     providerType: "openai",
   },
+  inboundPath: "/v1/chat/completions",
   requestPath: "/v1/chat/completions",
   requestBodyLog: "",
   originalRequestBody: "",

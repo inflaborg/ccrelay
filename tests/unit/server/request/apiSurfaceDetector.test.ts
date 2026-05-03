@@ -8,7 +8,6 @@ function p(partial: Partial<Provider> & Pick<Provider, "id" | "providerType">): 
     baseUrl: "https://x",
     mode: "passthrough",
     headers: {},
-    modelsListFormat: "auto",
     ...partial,
   };
 }
@@ -36,7 +35,7 @@ describe("detectApiSurface", () => {
 
   it("detects Anthropic messages", () => {
     expect(detectApiSurface("POST", "/v1/messages")).toBe("anthropic");
-    expect(detectApiSurface("POST", "/messages")).toBe("anthropic");
+    expect(detectApiSurface("POST", "/messages")).toBeNull();
   });
 
   it("detects count_tokens", () => {
@@ -59,13 +58,6 @@ describe("resolveInboundClientSurface", () => {
     ).toBe("openai");
     expect(
       resolveInboundClientSurface("GET", "/v1/models", p({ id: "b", providerType: "anthropic" }))
-    ).toBe("openai");
-    expect(
-      resolveInboundClientSurface(
-        "GET",
-        "/v1/models",
-        p({ id: "c", providerType: "anthropic", modelsListFormat: "anthropic" })
-      )
     ).toBe("openai");
   });
 

@@ -24,15 +24,19 @@ export {
 export { isOpenAIChatCompletionsWirePath, isOpenAIType } from "./openaiPath";
 
 export {
+  mapAnthropicWirePathToOpenAiUpstream,
+  mapOpenAiWirePathToAnthropicUpstream,
+} from "./crossProtocolUpstreamPath";
+
+export {
   convertAnthropicResponseToOpenAI,
   isAnthropicMessageResponse,
 } from "./anthropic-to-openai-response";
 
 export {
-  buildModelsListFromProvider,
-  buildOpenAIModelsListFromProvider,
-  buildAnthropicModelsListFromProvider,
-  buildModelsListFallback,
+  isModelsListUpstreamPath,
+  isOpenAIModelsListJson,
+  isAnthropicModelsListJson,
   convertOpenAIModelsToAnthropic,
   convertAnthropicModelsToOpenAI,
   type OpenAIModelsListResponse,

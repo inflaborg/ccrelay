@@ -325,13 +325,17 @@ vlModelMap:
 
 **Inbound API surfaces (paths)**
 
+OpenAI clients targeting ccrelay typically use **`http://127.0.0.1:<port>/openai`** (paths such as `/openai/chat/completions` — no `/openai/v1/...` segment) or **`http://127.0.0.1:<port>/v1`** with paths `/v1/chat/completions`, etc.; the relay aligns the upstream path when your provider `baseUrl` already ends with `/v1`. When the **inbound wire does not match `providerType`** (cross-protocol), **`BodyProcessor`** aligns the **upstream path** for **GET models** and **POST `/v1/messages`** the same way as the request converters ([`crossProtocolUpstreamPath.ts`](packages/core/src/converter/crossProtocolUpstreamPath.ts)), not only when there is a JSON body.
+
 | Path | Method | Client format |
 |------|--------|----------------|
-| `/v1/messages`, `/messages` | POST | Anthropic Messages |
+| `/v1/messages`, `/anthropic/v1/messages` | POST | Anthropic Messages |
 | `/v1/messages/count_tokens` | POST | Anthropic |
 | `/v1/chat/completions` | POST | OpenAI Chat Completions |
 | `/v1/responses` | POST | OpenAI Responses API (create) |
-| `/v1/models` | GET | OpenAI models list |
+| `/v1/models` | GET | OpenAI models list (legacy; same protocol as `/openai/models`) |
+| `/openai/models` | GET | OpenAI models list |
+| `/anthropic/v1/models` | GET | Anthropic models list |
 
 `routing.forward` in `config.yaml` should include the paths you use (defaults include the rows above). Unmatched paths return 404.
 
@@ -341,6 +345,7 @@ vlModelMap:
 - Client **OpenAI** (chat) + provider `providerType: anthropic`: request O→A, response A→O.
 - Client **OpenAI Responses** + any provider: request is converted to Chat Completions, then to Anthropic if needed; response is converted back to the Responses JSON shape. Hosted-only tools (e.g. web search, MCP) are stripped in v1.
 - Same **family** on both sides (e.g. chat + `openai` provider): no format conversion (only model name mapping, etc.).
+- **GET models** (`/v1/models`, `/openai/models`, `/anthropic/v1/models`): the **entry path** fixes the client list shape (`/v1/models` = OpenAI-shaped). **`providerType`** determines the upstream’s expected wire. On **HTTP 200**, if entry and upstream differ, the bodies are translated when JSON matches minimal OpenAI (`object: list` + `data`) or Anthropic (`data` array) list shapes; otherwise the response passes through unchanged. **HTTP error responses are not synthesized**—the upstream status and body are returned (cross-protocol errors may still be wrapped into the entry family’s usual error envelope when status ≥ 400).
 
 **Limitations (first iteration)**
 
@@ -362,17 +367,7 @@ gemini:
       model: "gemini-2.5-pro"
 ```
 
-**GET /v1/models** (`modelsListFormat`, optional, default `auto`)
-
-There is no request body, so CCRelay cannot infer whether the client expects an OpenAI- or Anthropic-shaped list. Per provider, `modelsListFormat` controls the **inbound client surface** for this route and the **synthetic list** when the upstream returns an error:
-
-- **`auto`** (default): match `providerType`—same wire as the upstream for successful responses (no unnecessary conversion), and the corresponding list shape for fallback.
-- **`openai`**: treat the client as OpenAI (e.g. force OpenAI-shaped list when using an OpenAI HTTP client against an Anthropic upstream).
-- **`anthropic`**: treat the client as Anthropic.
-
-If you previously relied on OpenAI-shaped `/v1/models` against an Anthropic provider, set `modelsListFormat: openai` (or use the Web dashboard **GET /v1/models wire** field).
-
-`GET /v1/models` is proxied to the current provider; on upstream error, a minimal list is built from `modelMap` in the chosen format.
+**GET `/v1/models`** is a legacy **OpenAI-protocol** endpoint (use base URL without `/anthropic` prefix). Anthropic-shaped lists must use **`GET /anthropic/v1/models`** (base ending in `/anthropic`). Successful cross-family responses are converted as above; upstream errors are forwarded as-is (no fallback list).
 
 ### Web UI Dashboard
 
@@ -432,7 +427,6 @@ CCRelay uses a YAML configuration file (`~/.ccrelay/config.yaml` by default). Th
 Each provider supports:
 - `name` - Display name
 - `baseUrl` - API base URL
-- `modelsListFormat` (optional) - `auto` | `openai` | `anthropic` — wire for `GET /v1/models` (default `auto` matches `providerType`)
 - `mode` - `passthrough` or `inject`
 - `providerType` - `anthropic` (default), `openai` (full passthrough), or `openai_chat` (Chat Completions only)
 - `apiKey` - API key (inject mode, supports `${ENV_VAR}` environment variables)

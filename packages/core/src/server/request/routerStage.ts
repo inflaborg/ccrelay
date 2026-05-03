@@ -1,5 +1,18 @@
 /**
  * Router Stage - handles blocking check and routing resolution
+ *
+ * Derives upstream request paths from inbound HTTP paths:
+ *
+ * - **OpenAI (two supported ccrelay bases)**:
+ *   - `http://host/openai` → `/openai/chat/completions`, `/openai/models`, … (no extra `/v1` in path).
+ *   - `http://host/v1` → `/v1/chat/completions`, `/v1/models`, … (legacy host segment).
+ *   When `provider.baseUrl` already includes `/v1`, an inbound path that still starts
+ *   with `/v1/...` for these resources would join to `.../v1/v1/...`. For the three routes
+ *   below we collapse `/v1/<resource>` → `/<resource>`. Same collapse applies after stripping
+ *   `/openai` if an SDK emits `/openai/v1/...`.
+ *
+ * - **Anthropic**: `/anthropic/v1/messages`, `/anthropic/v1/models`, … strip `/anthropic` only;
+ *   upstream path keeps canonical `/v1/...`.
  */
 
 import type * as http from "http";
@@ -12,24 +25,35 @@ import { isOpenAIType } from "../../converter";
 const INBOUND_PREFIX_OPENAI = "/openai/";
 const INBOUND_PREFIX_ANTHROPIC = "/anthropic/";
 
-/**
- * Legacy /v1/* mapping when upstream differs (OpenAI-style providers omit /v1/).
- * After stripping /openai or /anthropic, the stripped path uses the same rewrites as legacy /v1/*.
- */
-const UPSTREAM_PATH_MAP = new Map<string, string>([
+/** Collapse inbound `/v1/<resource>` for OpenAI-wire paths when upstream `baseUrl` already ends with `/v1`. */
+const LEGACY_OPENAI_V1_PATH_COLLAPSE = new Map<string, string>([
   ["/v1/chat/completions", "/chat/completions"],
   ["/v1/responses", "/responses"],
   ["/v1/models", "/models"],
 ]);
 
-function resolveUpstreamPath(clientPath: string): string {
-  let stripped = clientPath;
-  if (clientPath.startsWith(INBOUND_PREFIX_OPENAI)) {
-    stripped = clientPath.slice("/openai".length);
-  } else if (clientPath.startsWith(INBOUND_PREFIX_ANTHROPIC)) {
-    stripped = clientPath.slice("/anthropic".length);
+function stripAnthropicInboundPrefix(path: string): string | null {
+  if (!path.startsWith(INBOUND_PREFIX_ANTHROPIC)) {
+    return null;
   }
-  return UPSTREAM_PATH_MAP.get(stripped) ?? stripped;
+  return path.slice("/anthropic".length);
+}
+
+function stripOpenaiInboundPrefix(path: string): string {
+  return path.startsWith(INBOUND_PREFIX_OPENAI) ? path.slice("/openai".length) : path;
+}
+
+function collapseDuplicateOpenAiV1Segment(pathAfterPrefixStrips: string): string {
+  return LEGACY_OPENAI_V1_PATH_COLLAPSE.get(pathAfterPrefixStrips) ?? pathAfterPrefixStrips;
+}
+
+export function resolveUpstreamPath(clientPath: string): string {
+  const anthropicStripped = stripAnthropicInboundPrefix(clientPath);
+  if (anthropicStripped !== null) {
+    return anthropicStripped;
+  }
+  const withoutOpenAiPrefix = stripOpenaiInboundPrefix(clientPath);
+  return collapseDuplicateOpenAiV1Segment(withoutOpenAiPrefix);
 }
 
 /**

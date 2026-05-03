@@ -60,7 +60,6 @@ export function handleListProviders(
     active: p.id === currentId,
     enabled: p.enabled !== false,
     apiKey: maskApiKey(p.apiKey),
-    modelsListFormat: p.modelsListFormat,
     modelMap: p.modelMap,
   }));
 
@@ -119,7 +118,6 @@ export async function handleAddProvider(
       modelMap: body.modelMap,
       vlModelMap: body.vlModelMap,
       headers: body.headers,
-      modelsListFormat: body.modelsListFormat,
     };
 
     const success = configManager.addProvider(body.id, providerConfig);
@@ -189,7 +187,6 @@ function buildDuplicateConfigFromProvider(source: Provider, name: string): Provi
     providerType: source.providerType,
     apiKey: source.apiKey,
     authHeader: source.authHeader,
-    modelsListFormat: source.modelsListFormat,
     modelMap: source.modelMap,
     vlModelMap: source.vlModelMap,
     headers: source.headers && Object.keys(source.headers).length > 0 ? source.headers : undefined,
@@ -321,5 +318,4 @@ interface AddProviderRequest {
   modelMap?: ModelMapEntry[];
   vlModelMap?: ModelMapEntry[];
   headers?: Record<string, string>;
-  modelsListFormat?: "auto" | "openai" | "anthropic";
 }

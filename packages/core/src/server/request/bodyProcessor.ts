@@ -13,6 +13,10 @@ import {
   isOpenAIResponsesRequest,
   type ResponsesRequestEcho,
 } from "../../converter";
+import {
+  mapAnthropicWirePathToOpenAiUpstream,
+  mapOpenAiWirePathToAnthropicUpstream,
+} from "../../converter/crossProtocolUpstreamPath";
 import { ScopedLogger } from "../../utils/logger";
 import type { ApiSurface } from "../../types";
 
@@ -22,6 +26,30 @@ function buildTargetUrl(baseUrl: string, path: string, query: string): string {
   const b = baseUrl.replace(/\/$/, "");
   const p = path.startsWith("/") ? path : `/${path}`;
   return `${b}${p}${query}`;
+}
+
+function applyCrossProtocolUpstreamPath(
+  routing: RoutingContext,
+  clientSurface: ApiSurface,
+  upstreamWire: ApiSurface,
+  needsConversion: boolean
+): void {
+  if (!needsConversion) {
+    return;
+  }
+  let next = routing.targetPath;
+  if (clientSurface === "anthropic" && upstreamWire === "openai") {
+    next = mapAnthropicWirePathToOpenAiUpstream(routing.targetPath, routing.method);
+  } else if (clientSurface === "openai" && upstreamWire === "anthropic") {
+    next = mapOpenAiWirePathToAnthropicUpstream(routing.targetPath, routing.method);
+  }
+  if (next !== routing.targetPath) {
+    routing.targetPath = next;
+    routing.targetUrl = buildTargetUrl(routing.provider.baseUrl, next, routing.targetQuery);
+    log.info(
+      `[CrossProtocolPath] ${routing.path} (${String(clientSurface)}->${String(upstreamWire)}) upstream path=${next} target="${routing.targetUrl}"`
+    );
+  }
 }
 
 /**
@@ -78,7 +106,9 @@ export class BodyProcessor {
           ? clientSurface !== "openai"
           : clientSurface !== "openai" && clientSurface !== "openai_responses";
 
-    // GET (e.g. /v1/models): no body conversion
+    applyCrossProtocolUpstreamPath(routing, clientSurface, upstreamWire, needsConversion);
+
+    // GET or no body: no JSON conversion; upstream path already aligned when needsConversion
     if (routing.method === "GET" || !rawBody || rawBody.length === 0) {
       const body = rawBody && rawBody.length > 0 ? rawBody : Buffer.alloc(0);
       if (databaseEnabled && body.length > 0) {

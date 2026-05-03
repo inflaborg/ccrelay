@@ -38,7 +38,6 @@ const DEFAULT_FORM: AddProviderRequest = {
   modelMap: undefined,
   vlModelMap: undefined,
   headers: undefined,
-  modelsListFormat: "auto",
 };
 
 export default function Providers() {
@@ -174,7 +173,6 @@ export default function Providers() {
       modelMap,
       vlModelMap: undefined,
       headers: undefined,
-      modelsListFormat: provider.modelsListFormat ?? "auto",
     });
     setModelMapText(modelMap ? yaml.dump(modelMap, { indent: 2, lineWidth: -1 }) : "");
     setModelMapError(null);
@@ -535,26 +533,6 @@ export default function Providers() {
                   value={formData.baseUrl}
                   onChange={e => updateForm("baseUrl", e.target.value)}
                 />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-medium">GET /v1/models wire</label>
-                <Select
-                  value={formData.modelsListFormat ?? "auto"}
-                  options={[
-                    { value: "auto", label: "Auto (match provider type)" },
-                    { value: "openai", label: "OpenAI list" },
-                    { value: "anthropic", label: "Anthropic list" },
-                  ]}
-                  onChange={v =>
-                    updateForm("modelsListFormat", v as "auto" | "openai" | "anthropic")
-                  }
-                  className="h-8 text-xs"
-                />
-                <p className="text-[10px] text-muted-foreground">
-                  No request body on this call; ccrelay cannot detect client protocol. OpenAI
-                  clients using an Anthropic upstream should choose OpenAI list.
-                </p>
               </div>
 
               {/* Type and Mode row */}

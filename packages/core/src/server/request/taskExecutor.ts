@@ -63,6 +63,7 @@ export class TaskExecutor {
       headers: routing.headers,
       body: bodyResult.body,
       provider: routing.provider,
+      inboundPath: routing.path,
       requestPath: routing.targetPath,
       requestBodyLog: bodyResult.requestBodyLog,
       originalRequestBody: bodyResult.originalRequestBody,

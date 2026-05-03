@@ -14,7 +14,7 @@ import type {
   OpenAIMessageRequest,
   OpenAITool,
 } from "./anthropic-to-openai";
-import { isOpenAIChatCompletionsWirePath } from "./openaiPath";
+import { mapOpenAiWirePathToAnthropicUpstream } from "./crossProtocolUpstreamPath";
 
 export interface OpenAIToAnthropicRequestResult {
   request: AnthropicMessageRequest;
@@ -73,10 +73,7 @@ export function convertOpenAIRequestToAnthropic(
     };
   }
 
-  let newPath = originalPath;
-  if (isOpenAIChatCompletionsWirePath(originalPath)) {
-    newPath = "/v1/messages";
-  }
+  const newPath = mapOpenAiWirePathToAnthropicUpstream(originalPath, "POST");
 
   return {
     request: out,

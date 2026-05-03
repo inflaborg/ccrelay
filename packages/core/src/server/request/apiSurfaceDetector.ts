@@ -12,15 +12,10 @@ function normalizePath(path: string): string {
 
 /**
  * Effective inbound client surface for logging / downstream use.
- * GET /v1/models is fixed to OpenAI (legacy); prefixed GET /anthropic/v1/models is anthropic via detectApiSurface.
+ * Path-based (see `detectApiSurface`); unknown paths default to Anthropic for legacy behavior.
  */
 export function resolveInboundClientSurface(method: string, path: string, _provider: Provider): ApiSurface {
   void _provider;
-  const m = (method || "GET").toUpperCase();
-  const p = normalizePath(path);
-  if (m === "GET" && p === "/v1/models") {
-    return "openai";
-  }
   return detectApiSurface(method, path) ?? "anthropic";
 }
 
@@ -41,7 +36,7 @@ export function detectApiSurface(method: string, path: string): ApiSurface | nul
   if (p === "/v1/responses" && m === "POST") {
     return "openai_responses";
   }
-  if ((p === "/v1/messages" || p === "/messages") && m === "POST") {
+  if (p === "/v1/messages" && m === "POST") {
     return "anthropic";
   }
   if (p === "/v1/messages/count_tokens" && m === "POST") {

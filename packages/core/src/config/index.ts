@@ -525,7 +525,6 @@ function parseProvider(id: string, config: ProviderConfigInput): Provider {
   const modelMap = config.modelMap || config.model_map;
   const vlModelMap = config.vlModelMap || config.vl_model_map;
   const providerType = config.providerType || config.provider_type || "anthropic";
-  const modelsListFormat = config.modelsListFormat || config.models_list_format || "auto";
 
   return {
     id,
@@ -535,7 +534,6 @@ function parseProvider(id: string, config: ProviderConfigInput): Provider {
     providerType,
     apiKey,
     authHeader: authHeader || "authorization",
-    modelsListFormat,
     modelMap: modelMap && modelMap.length > 0 ? modelMap : undefined,
     vlModelMap: vlModelMap && vlModelMap.length > 0 ? vlModelMap : undefined,
     headers: config.headers ?? {},
@@ -906,7 +904,6 @@ export class ConfigManager {
         baseUrl: "https://api.anthropic.com",
         mode: "passthrough",
         providerType: "anthropic",
-        modelsListFormat: "auto",
         headers: {},
         enabled: true,
       };
@@ -1362,9 +1359,6 @@ export class ConfigManager {
         vl_model_map: config.vl_model_map,
         headers: config.headers,
         enabled: id === "official" ? true : (config.enabled ?? true),
-        modelsListFormat: config.modelsListFormat,
-        // eslint-disable-next-line @typescript-eslint/naming-convention
-        models_list_format: config.models_list_format,
       };
 
       rawConfig.providers = sortProviderMapKeys(providers);

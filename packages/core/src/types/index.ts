@@ -13,12 +13,6 @@ export type ProviderMode = "passthrough" | "inject";
 
 export type ProviderType = "anthropic" | "openai" | "openai_chat";
 
-/**
- * Wire format legacy hint for synthetic model lists (upstream errors).
- * Legacy `GET /v1/models` inbound surface is fixed to OpenAI; use prefixed `/anthropic/v1/models` otherwise.
- */
-export type ModelsListFormat = "auto" | "openai" | "anthropic";
-
 /** Inbound client wire format (Anthropic Messages vs OpenAI Chat Completions vs OpenAI Responses API, etc.) */
 export type ApiSurface = "anthropic" | "openai" | "openai_responses";
 
@@ -31,8 +25,6 @@ export const ProviderModeSchema = z.enum(["passthrough", "inject"]);
 
 // Provider type enum schema
 export const ProviderTypeSchema = z.enum(["anthropic", "openai", "openai_chat"]);
-
-export const ModelsListFormatSchema = z.enum(["auto", "openai", "anthropic"]);
 
 // Model map entry schema (pattern -> model mapping)
 export const ModelMapEntrySchema = z.object({
@@ -54,8 +46,6 @@ export const ProviderConfigSchema = z.object({
   api_key: z.string().optional(),
   authHeader: z.string().optional(),
   auth_header: z.string().optional(),
-  modelsListFormat: ModelsListFormatSchema.optional(),
-  models_list_format: ModelsListFormatSchema.optional(),
   modelMap: z.array(ModelMapEntrySchema).optional(),
   model_map: z.array(ModelMapEntrySchema).optional(),
   vlModelMap: z.array(ModelMapEntrySchema).optional(),
@@ -247,8 +237,6 @@ export interface Provider {
   providerType: ProviderType;
   apiKey?: string;
   authHeader?: string;
-  /** Synthetic models list shape on upstream errors (`buildModelsListFallback`). Legacy `GET /v1/models` inbound client surface is fixed to OpenAI regardless of this field; use `GET /anthropic/v1/models` for Anthropic inbound lists. */
-  modelsListFormat?: ModelsListFormat;
   modelMap?: ModelMapEntry[];
   vlModelMap?: ModelMapEntry[];
   headers?: Record<string, string>;
@@ -297,7 +285,6 @@ export interface ProviderInfo {
   enabled: boolean;
   baseUrl?: string;
   apiKey?: string;
-  modelsListFormat?: ModelsListFormat;
   modelMap?: ModelMapEntry[];
 }
 
@@ -515,6 +502,8 @@ export interface RequestTask {
   headers: Record<string, string>;
   body: Buffer | null;
   provider: Provider;
+  /** Original inbound URL path (before upstream rewrite); used for diagnostics. */
+  inboundPath: string;
   requestPath: string;
   requestBodyLog?: string;
   originalRequestBody?: string;
