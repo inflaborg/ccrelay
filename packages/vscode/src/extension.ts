@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as path from "path";
 import {
   Api,
   BUILD_HASH,
@@ -8,6 +9,7 @@ import {
   LeaderElection,
   Logger,
   ProxyServer,
+  setWebDistPath,
 } from "@ccrelay/core";
 import { StatusBarManager } from "./vscode/statusBar";
 import { LogViewerPanel } from "./vscode/logViewer";
@@ -33,6 +35,11 @@ export function activate(context: vscode.ExtensionContext) {
   logger.info(
     `[Extension:${instanceId}] Build version=${BUILD_VERSION} buildHash=${BUILD_HASH} gitHash=${GIT_HASH}`
   );
+
+  // Serve /ccrelay/* SPA from packaged web assets (matches webview Dashboard / LogViewer roots)
+  const webDistDir = path.join(context.extensionUri.fsPath, "out", "web");
+  setWebDistPath(webDistDir);
+  logger.info(`[Extension:${instanceId}] Web UI HTTP static root: ${webDistDir}`);
 
   // Initialize configuration manager (auto-creates config file if not exists)
   const configStart = Date.now();

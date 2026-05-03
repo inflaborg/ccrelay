@@ -63,7 +63,8 @@ export function isStaticRequest(reqPath: string): boolean {
     reqPath === "/ccrelay" ||
     reqPath === "/ccrelay/" ||
     reqPath.startsWith("/ccrelay/assets") ||
-    reqPath.startsWith("/ccrelay/index.html")
+    reqPath.startsWith("/ccrelay/index.html") ||
+    reqPath === "/ccrelay/favicon.svg"
   );
 }
 
