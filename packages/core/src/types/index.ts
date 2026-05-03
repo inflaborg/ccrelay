@@ -90,8 +90,9 @@ export type BlockPattern = z.infer<typeof BlockPatternSchema>;
 
 export const BlockConditionSchema = z
   .object({
-    kind: z.array(z.string()).optional(),
-    /** If set: block applies only when current provider ID is NOT in this list */
+    /** If set: rule applies only when current provider ID is in this list (allowlist). */
+    providers: z.array(z.string()).optional(),
+    /** If set: skip rule when current provider ID is in this list */
     providerNot: z.array(z.string()).optional(),
   })
   .optional();

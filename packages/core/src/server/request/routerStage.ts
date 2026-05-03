@@ -51,7 +51,7 @@ export class RouterStage {
     const clientSurface: ApiSurface = detectApiSurface(method, path) ?? "anthropic";
 
     // 1. Unified resolve: block → forward → not_found
-    const result = this.router.resolve(path, clientSurface);
+    const result = this.router.resolve(path);
 
     if (result.type === "block") {
       return {

@@ -250,7 +250,7 @@ export interface ServerSettings {
 
 export interface RoutingBlockRule {
   path: string;
-  condition?: { kind?: string[]; providerNot?: string[] };
+  condition?: { providers?: string[]; providerNot?: string[] };
   response: string;
   code: number;
 }

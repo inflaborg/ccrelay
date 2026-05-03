@@ -104,15 +104,13 @@ routing:
       provider: "auto"
 
   # Block rules: return custom response instead of forwarding.
-  # Checked before forward. condition.kind filters by client protocol.
-  # condition.providerNot: block unless current provider is in this list (skip rule when it matches).
+  # Checked before forward. Optional condition.providers: rule applies only when current provider id is in the list (allowlist).
+  # Optional condition.providerNot: skip when current id is in the list.
   block:
     - path: "/api/event_logging/*"
       response: ""
       code: 200
     - path: "/v1/messages/count_tokens"
-      condition:
-        kind: ["openai", "openai_chat", "openai_responses"]
       response: '{"input_tokens": 0}'
       code: 200
     - path: "/v1/users/*"
@@ -1012,13 +1010,8 @@ export class ConfigManager {
         path: f.path,
         provider: f.provider,
       }));
-      blockRules = (rawRouting.block || []).map(
-        (b: {
-          path: string;
-          condition?: { kind?: string[]; providerNot?: string[] };
-          response: string;
-          code: number;
-        }): BlockRule => ({
+      blockRules = (rawRouting.block ?? []).map(
+        (b): BlockRule => ({
           path: b.path,
           condition: b.condition,
           response: b.response,
@@ -1071,7 +1064,6 @@ export class ConfigManager {
         })),
         ...legacyOpenaiBlock.map((b: BlockPattern) => ({
           path: b.path,
-          condition: { kind: ["openai", "openai_chat", "openai_responses"] },
           response: b.response,
           code: b.code ?? 200,
         })),

@@ -46,13 +46,13 @@ describe("Router.resolve providerNot", () => {
 
   it("blocks /v1/users/* when current provider is not official", () => {
     const router = makeRouter("other", [userBlock], [pingForward]);
-    const r = router.resolve("/v1/users/abc", "anthropic");
+    const r = router.resolve("/v1/users/abc");
     expect(r.type).toBe("block");
   });
 
   it("skips providerNot block when current provider is official", () => {
     const router = makeRouter("official", [userBlock], [pingForward]);
-    const r = router.resolve("/v1/users/abc", "anthropic");
+    const r = router.resolve("/v1/users/abc");
     expect(r.type).toBe("not_found");
   });
 
@@ -64,8 +64,33 @@ describe("Router.resolve providerNot", () => {
       code: 200,
     };
     const router = makeRouter("other", [blk], []);
-    expect(router.resolve("/anthropic/v1/organizations/x", "anthropic").type).toBe("block");
+    expect(router.resolve("/anthropic/v1/organizations/x").type).toBe("block");
     const allowed = makeRouter("official", [blk], []);
-    expect(allowed.resolve("/anthropic/v1/organizations/x", "anthropic").type).toBe("not_found");
+    expect(allowed.resolve("/anthropic/v1/organizations/x").type).toBe("not_found");
+  });
+});
+
+describe("Router.resolve providers allowlist", () => {
+  it("hits block only when current id is listed in condition.providers", () => {
+    const blk: BlockRule = {
+      path: "/mirror/*",
+      condition: { providers: ["official"] },
+      response: "stale",
+      code: 418,
+    };
+    expect(makeRouter("official", [blk], []).resolve("/mirror/x").type).toBe("block");
+    expect(makeRouter("other", [blk], []).resolve("/mirror/x").type).toBe("not_found");
+  });
+
+  it("honors providers allowlist plus providerNot (both gates)", () => {
+    const blk: BlockRule = {
+      path: "/x/*",
+      condition: { providers: ["official", "other"], providerNot: ["official"] },
+      response: "",
+      code: 200,
+    };
+    expect(makeRouter("official", [blk], []).resolve("/x/1").type).toBe("not_found");
+    expect(makeRouter("other", [blk], []).resolve("/x/1").type).toBe("block");
+    expect(makeRouter("third", [blk], []).resolve("/x/1").type).toBe("not_found");
   });
 });

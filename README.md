@@ -448,7 +448,7 @@ Each provider supports:
 |---------|---------|-------------|
 | `configVersion` | `"0.2.0"` | Config schema version. Legacy configs without this field are auto-migrated on load. |
 | `routing.forward` | `[{path, provider}, ...]` | Forward rules — first match wins. `provider: "auto"` = current active provider; or a specific provider ID (e.g. `"official"`). Unmatched paths return 404. |
-| `routing.block` | `[{path, response, code, condition?}, ...]` | Block rules — return custom response instead of forwarding. Checked before forward. Optional `condition.kind` (array of protocol names) restricts the block to specific client surfaces. Optional `condition.providerNot` — rule applies only when the **current** provider ID is **not** in the list. |
+| `routing.block` | `[{path, response, code, condition?}, ...]` | Block rules — return custom response instead of forwarding. Checked before forward. Match is by path glob. Optional **`condition.providers`** (array of IDs) — rule applies **only when** the current provider is in this list; optional **`condition.providerNot`** — skip when current provider ID is **in** the list. |
 
 #### Concurrency Control
 
@@ -555,15 +555,13 @@ routing:
       provider: "official"
 
   # Block rules: return custom response instead of forwarding.
-  # Checked before forward rules. condition.kind filters by client protocol.
-  # Omit condition to block all protocols.
+  # Checked before forward rules. Optional condition.providers limits to listed current-provider IDs;
+  # optional condition.providerNot skips when the current ID is listed.
   block:
     - path: "/api/event_logging/*"
       response: ""
       code: 200
     - path: "/v1/messages/count_tokens"
-      condition:
-        kind: ["openai", "openai_chat", "openai_responses"]
       response: '{"input_tokens": 0}'
       code: 200
 

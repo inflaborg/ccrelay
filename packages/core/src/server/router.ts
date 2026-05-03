@@ -2,7 +2,7 @@
  * Request routing logic for CCRelay
  */
 
-import { Provider, type ApiSurface } from "../types";
+import type { Provider } from "../types";
 import { ConfigManager } from "../config";
 import { minimatch } from "../utils/helpers";
 
@@ -88,13 +88,13 @@ export class Router {
 
   /**
    * Unified routing: block → forward → not_found.
-   * Block is checked first with optional filters:
-   * - condition.kind: block only when clientSurface is in list
-   * - condition.providerNot: block unless current provider is in list (skip rule if it is)
+   * Block uses path glob plus optional filters on current provider id:
+   * - condition.providers: when non-empty, require current id to be listed (skip otherwise).
+   * - condition.providerNot: skip when current id is listed.
    * Forward matches first rule; provider="auto" uses current provider.
    * Unmatched paths return not_found (404).
    */
-  resolve(path: string, clientSurface: ApiSurface): RouteResult {
+  resolve(path: string): RouteResult {
     const normalizedPath = path.startsWith("/") ? path : `/${path}`;
 
     // 1. Block rules (first match wins)
@@ -102,14 +102,15 @@ export class Router {
       if (!minimatch(normalizedPath, rule.path)) {
         continue;
       }
-      if (rule.condition?.kind && rule.condition.kind.length > 0) {
-        if (!rule.condition.kind.includes(clientSurface)) {
+      const currentId = this.getCurrentProviderId();
+      const cond = rule.condition;
+      if (cond?.providers && cond.providers.length > 0) {
+        if (!cond.providers.includes(currentId)) {
           continue;
         }
       }
-      if (rule.condition?.providerNot && rule.condition.providerNot.length > 0) {
-        const currentId = this.getCurrentProviderId();
-        if (rule.condition.providerNot.includes(currentId)) {
+      if (cond?.providerNot && cond.providerNot.length > 0) {
+        if (cond.providerNot.includes(currentId)) {
           continue;
         }
       }
