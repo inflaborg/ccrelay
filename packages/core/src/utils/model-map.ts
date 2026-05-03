@@ -1,5 +1,5 @@
 /**
- * Reverse modelMap / vlModelMap: upstream id -> configured client pattern (for responses and model lists).
+ * Model list display helpers: map upstream / wire ids to client-facing labels using modelMap / vlModelMap.
  */
 import type { ModelMapEntry, Provider } from "../types";
 
@@ -13,17 +13,32 @@ export function providerHasConfigurableModelMap(provider: Provider): boolean {
   );
 }
 
-/**
- * If `upstreamModel` is a mapping target (`entry.model`), return `entry.pattern`.
- * Checks `modelMap` first, then `vlModelMap`. Otherwise returns `upstreamModel` unchanged.
- */
-export function reverseMapMappedTargetToClientPattern(
-  upstreamModel: string,
-  provider: Provider
-): string {
-  if (provider.modelMappingEnabled === false) {
-    return upstreamModel;
+/** Patterns that are only wildcards are unusable as a stable list id (e.g. "*" → every string matches forward). */
+function isDegenerateListPattern(pattern: string): boolean {
+  const t = pattern.trim();
+  if (t.length === 0) {
+    return true;
   }
+  return /^[\*\?]+$/.test(t);
+}
+
+function modelMatchesForwardRule(model: string, modelMap: ModelMapEntry[]): boolean {
+  for (const entry of modelMap) {
+    const { pattern } = entry;
+    if (pattern === model) {
+      return true;
+    }
+    if (pattern.includes("*") || pattern.includes("?")) {
+      const patternRegex = new RegExp("^" + pattern.replace(/\*/g, ".*").replace(/\?/g, ".") + "$");
+      if (patternRegex.test(model)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function mapChains(provider: Provider): ModelMapEntry[][] {
   const lists: ModelMapEntry[][] = [];
   if (provider.modelMap?.length) {
     lists.push(provider.modelMap);
@@ -31,12 +46,50 @@ export function reverseMapMappedTargetToClientPattern(
   if (provider.vlModelMap?.length) {
     lists.push(provider.vlModelMap);
   }
-  for (const entries of lists) {
+  return lists;
+}
+
+/**
+ * Map a models-list wire id to the label clients should see, when model mapping is enabled.
+ *
+ * 1. If `wireId` equals some `entry.model` and `entry.pattern` is not degenerate (not e.g. "*"),
+ *    return that pattern (upstream id → client rule).
+ * 2. Else if `wireId` already matches a forward mapping rule (pattern match / exact pattern), leave it
+ *    (already client-shaped; avoids bogus rewrites).
+ * 3. Else return `wireId`.
+ */
+export function clientFacingModelIdForModelsList(wireId: string, provider: Provider): string {
+  if (provider.modelMappingEnabled === false) {
+    return wireId;
+  }
+
+  const chains = mapChains(provider);
+
+  for (const entries of chains) {
     for (const e of entries) {
-      if (e.model === upstreamModel) {
+      if (
+        e.model === wireId &&
+        typeof e.pattern === "string" &&
+        !isDegenerateListPattern(e.pattern)
+      ) {
         return e.pattern;
       }
     }
   }
-  return upstreamModel;
+
+  for (const entries of chains) {
+    if (modelMatchesForwardRule(wireId, entries)) {
+      return wireId;
+    }
+  }
+
+  return wireId;
+}
+
+/** @deprecated Use {@link clientFacingModelIdForModelsList} — same behavior. */
+export function reverseMapMappedTargetToClientPattern(
+  upstreamModel: string,
+  provider: Provider
+): string {
+  return clientFacingModelIdForModelsList(upstreamModel, provider);
 }

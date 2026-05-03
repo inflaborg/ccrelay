@@ -7,8 +7,52 @@ import * as url from "url";
 import type { ApiSurface, Provider } from "../types";
 import {
   providerHasConfigurableModelMap,
-  reverseMapMappedTargetToClientPattern,
+  clientFacingModelIdForModelsList,
 } from "../utils/model-map";
+
+/**
+ * Drop duplicate `id` rows (first wins, order preserved). Mutates `data` in place.
+ * Rows without a string `id` are kept (never deduped against each other).
+ */
+function dedupeModelsListDataRowsInPlace(data: Array<Record<string, unknown>>): boolean {
+  const seen = new Set<string>();
+  const out: Array<Record<string, unknown>> = [];
+  let removed = false;
+  for (const row of data) {
+    if (typeof row.id !== "string") {
+      out.push(row);
+      continue;
+    }
+    if (seen.has(row.id)) {
+      removed = true;
+      continue;
+    }
+    seen.add(row.id);
+    out.push(row);
+  }
+  if (!removed) {
+    return false;
+  }
+  data.length = 0;
+  for (const r of out) {
+    data.push(r);
+  }
+  return true;
+}
+
+/** Dedupe duplicate ids after mapping (stable, first wins). */
+function dedupeMappedIdsPreserveOrder(ids: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of ids) {
+    if (seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
 
 export interface OpenAIModelsListResponse {
   object: "list";
@@ -120,11 +164,12 @@ export function buildOpenAIModelsListFromIds(
   const now = Math.floor(Date.now() / 1000);
   const ids =
     provider && providerHasConfigurableModelMap(provider)
-      ? modelIds.map(id => reverseMapMappedTargetToClientPattern(id, provider))
+      ? modelIds.map(id => clientFacingModelIdForModelsList(id, provider))
       : modelIds;
+  const uniqueIds = dedupeMappedIdsPreserveOrder(ids);
   return {
     object: "list",
-    data: ids.map(id => ({
+    data: uniqueIds.map(id => ({
       id,
       object: "model" as const,
       created: now,
@@ -149,29 +194,43 @@ export function rewriteModelsListPayloadInPlace(
     const data = parsed.data as Array<Record<string, unknown>>;
     for (const row of data) {
       if (typeof row.id === "string") {
-        const next = reverseMapMappedTargetToClientPattern(row.id, provider);
+        const next = clientFacingModelIdForModelsList(row.id, provider);
         if (next !== row.id) {
           row.id = next;
           changed = true;
         }
       }
     }
+    if (dedupeModelsListDataRowsInPlace(data)) {
+      changed = true;
+    }
   } else if (isAnthropicModelsListJson(parsed)) {
     const data = parsed.data as Array<Record<string, unknown>>;
     for (const row of data) {
-      if (typeof row.id === "string") {
-        const next = reverseMapMappedTargetToClientPattern(row.id, provider);
-        if (next !== row.id) {
-          row.id = next;
-          changed = true;
-        }
+      if (typeof row.id !== "string") {
+        continue;
       }
-      if (typeof row.display_name === "string") {
-        const next = reverseMapMappedTargetToClientPattern(row.display_name, provider);
-        if (next !== row.display_name) {
+      const origId = row.id;
+      const next = clientFacingModelIdForModelsList(origId, provider);
+      if (next !== origId) {
+        row.id = next;
+        if (typeof row.display_name === "string" && row.display_name === origId) {
           row.display_name = next;
-          changed = true;
         }
+        changed = true;
+      }
+    }
+    if (dedupeModelsListDataRowsInPlace(data)) {
+      changed = true;
+    }
+    if (changed && Array.isArray(data) && data.length > 0) {
+      const first = data[0]?.id;
+      const last = data[data.length - 1]?.id;
+      if (typeof first === "string") {
+        parsed.first_id = first;
+      }
+      if (typeof last === "string") {
+        parsed.last_id = last;
       }
     }
   }
