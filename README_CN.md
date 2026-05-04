@@ -56,6 +56,8 @@
 - **自动启动**: VSCode 启动时自动启动代理服务器
 - **客户端对接**: 可与 **Claude Code**、**Claude Cowork**（Anthropic 协议）和 **Codex**（OpenAI 协议 + `~/.codex/config.toml`）配合使用，详见[客户端对接](#客户端对接)
 - **可选桌面托盘（Electron）**: 可使用独立 Electron 应用运行 CCRelay，无需打开 VS Code；与扩展共用 `~/.ccrelay` 配置与 Leader 选举；托盘「打开控制台」在当前应用窗口内通过 **HTTP** 加载 `/ccrelay/` 界面（详见[桌面托盘应用](#桌面托盘应用electron)）
+- **国际化（i18n）**: Web UI 支持英文和中文。语言存储在 `config.yaml`（`server.locale`），在 Electron 和 VS Code webview 环境间保持一致。首次访问未配置语言时弹出语言选择窗口
+- **Provider 导入/导出**: 支持多选 Provider 并导出为 JSON 文件；导入按 Provider ID 合并——已存在的 ID 覆盖更新，不存在的新增，不会删除原有 Provider
 
 ---
 
@@ -374,8 +376,8 @@ CCRelay 内置 Web UI 管理界面，提供：
 
 - **Dashboard**: 服务器状态、当前提供商、请求统计
 - **Client configuration**（可选）：在面板中设置 Claude Code 的 `~/.claude/settings.json` 内 `env`（如 `ANTHROPIC_BASE_URL`、`ANTHROPIC_AUTH_TOKEN` 占位）以及可选的分档 `ANTHROPIC_DEFAULT_*_MODEL`；详见上文 [Claude Code](#claude-code)。
-- **Providers**: 查看和切换提供商
-- **Logs**: 请求/响应日志查看器（需启用日志存储）
+- **Providers**: 查看、切换和管理提供商。支持多选并 **导出** 为 JSON 文件；**导入** 按 Provider ID 合并（已存在覆盖，新增不删）。`official` 提供商不可选中导出。
+- **Logs**: 请求/响应日志查看器（需启用日志存储）。未启用日志时，日志 Tab 自动隐藏。
 - **Settings**: 在 UI 中管理所有 YAML 配置项（日志、并发、服务器、路由）。并发和路由变更即时生效；服务器和日志变更需重启。**路由**：**Routing and 404** 说明在保存行上方；**Save routing** 与磁盘一致时禁用（**Up to date**），有未保存修改时显示 **Unsaved changes**；**Restore default routing** 与保存按钮同一行靠右，经与其他面板一致的 **AlertDialog** 确认后仅更新编辑器中的列表，需再点 **Save routing** 才写入 `config.yaml`。**`GET /ccrelay/api/config`** 响应含 **`routingDefaults`**（内置 forward/block 模板）供恢复默认预览。
 
 面板上 **Client configuration** 与 **Configure default models**（与下图一致）：
@@ -609,6 +611,8 @@ logging:
 | `/ccrelay/api/providers` | GET | 列出所有可用提供商 |
 | `/ccrelay/api/switch/{id}` | GET | 切换到指定提供商 |
 | `/ccrelay/api/switch` | POST | 切换提供商（JSON body） |
+| `/ccrelay/api/providers/export` | POST | 按 ID 导出提供商（JSON body `{ ids }`），返回包含 API Key 的完整配置 |
+| `/ccrelay/api/providers/import` | POST | 导入提供商（JSON body `{ providers }`），按 ID 合并——已存在覆盖，新增不删 |
 | `/ccrelay/api/queue` | GET | 获取队列统计 |
 | `/ccrelay/api/logs` | GET | 获取请求日志（启用日志时） |
 | `/ccrelay/api/config` | GET、PATCH | **GET**：从 YAML 读取四类设置（`logging`、`concurrency`、`server`、`routing`）及 **`routingDefaults`**（内置 forward/block，供路由「恢复默认」预览）。**PATCH**：JSON `{ "section": "<名称>", "data": {…} }` 合并写入该节；路由/并发即时生效；**`server`** / **`logging`** 可能需要重启代理。 |

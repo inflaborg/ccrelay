@@ -101,6 +101,17 @@ export interface ReloadConfigResponse {
   providersCount?: number;
 }
 
+export interface ExportProvidersResponse {
+  providers: AddProviderRequest[];
+}
+
+export interface ImportProvidersResponse {
+  status: "ok" | "error";
+  imported: number;
+  ids: string[];
+  message?: string;
+}
+
 export type RequestStatus = "pending" | "completed";
 export type RouteType = "block" | "passthrough" | "router";
 

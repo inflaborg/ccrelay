@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **i18n (internationalization)**: Web UI supports English and Chinese. On first visit (no `server.locale` configured), a language selection modal is shown. Language preference is persisted to `config.yaml` (`server.locale`) and shared across Electron and VS Code webview environments. Settings page includes a language switcher.
+
+- **Provider import / export**: Providers page supports multi-select (checkbox on each card, `official` excluded). Selected providers can be exported as a JSON file. Import merges by provider ID — existing IDs are overwritten, new IDs are added, no providers are deleted.
+
+- **Desktop dashboard on startup**: the Electron tray app now opens the main dashboard window automatically on launch.
+
 - **Logging / SQLite CLI path**: optional `logging.database.sqlite3_executable` (Settings: **sqlite3 executable**) to point at the `sqlite3` binary; when blank, resolution uses **`PATH` only** (no hardcoded install directories). Persisted **`logging.database`** is now wired into the runtime log-database driver alongside the DB file path.
 
 - **Block `condition.providers`**: optional allowlist of provider IDs — block matches only when the current active provider is listed (YAML `routing.block[].condition.providers`). Compose with **`providerNot`** — both sides apply together when present. Routing settings **Block rules** add **Only when / Unless** pickers for saved IDs (excluding `"auto"`).

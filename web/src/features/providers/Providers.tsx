@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Copy, Loader2, Plus, RotateCw, X } from "lucide-react";
+import { Check, Copy, Loader2, Plus, RotateCw, X, Upload, Download, CheckSquare, MinusSquare } from "lucide-react";
 import * as yaml from "js-yaml";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,6 +60,9 @@ export default function Providers() {
   const [modelMapText, setModelMapText] = useState("");
   const [modelMapError, setModelMapError] = useState<string | null>(null);
   const [customModelsText, setCustomModelsText] = useState("");
+  // Multi-select state for export
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Debounce timer for YAML validation
   const modelMapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -282,6 +285,59 @@ export default function Providers() {
     reloadMutation.mutate();
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const cancelSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  const handleExport = async () => {
+    if (selectedIds.size === 0) return;
+    try {
+      const result = await api.exportProviders([...selectedIds]);
+      const blob = new Blob([JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), providers: result.providers }, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "ccrelay-providers.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // export failed silently
+    }
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      const providersToImport = Array.isArray(data.providers) ? data.providers : Array.isArray(data) ? data : [];
+      if (providersToImport.length === 0) return;
+      await api.importProviders(providersToImport);
+      queryClient.invalidateQueries({ queryKey: ["providers"] });
+    } catch {
+      // import failed silently
+    }
+    // Reset file input so the same file can be selected again
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const updateForm = (
     key: keyof AddProviderRequest,
     value: string | boolean | Record<string, string> | ModelMapEntry[] | undefined
@@ -308,29 +364,73 @@ export default function Providers() {
     return a.id.localeCompare(b.id, "en", { sensitivity: "base", numeric: true });
   });
 
+  const selectableProviders = providers.filter(p => p.id !== "official");
+  const isSelectMode = selectedIds.size > 0;
+  const isAllSelected = selectedIds.size === selectableProviders.length && selectableProviders.length > 0;
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(selectableProviders.map(p => p.id)));
+    }
+  };
+
   return (
     <div className="space-y-3">
       {/* Header with actions */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-base font-semibold tracking-tight">{t("providers.title")}</h2>
+          <h2 className="text-base font-semibold tracking-tight">
+            {isSelectMode ? t("providers.selectedCount", { count: selectedIds.size }) : t("providers.title")}
+          </h2>
           <p className="text-xs text-muted-foreground">{t("providers.subtitle")}</p>
         </div>
         <div className="flex items-center gap-1">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 w-7 p-0"
-            onClick={handleReload}
-            disabled={reloadMutation.isPending}
-            title={t("providers.reloadConfig")}
-          >
-            <RotateCw className={`h-3.5 w-3.5 ${reloadMutation.isPending ? "animate-spin" : ""}`} />
-          </Button>
-          <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={openAddModal}>
-            <Plus className="h-3 w-3" />
-            {t("providers.add")}
-          </Button>
+          {isSelectMode ? (
+            <>
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => void handleExport()}>
+                <Download className="h-3 w-3" />
+                {t("providers.export")} ({selectedIds.size})
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={toggleSelectAll}>
+                {isAllSelected ? <MinusSquare className="h-3 w-3" /> : <CheckSquare className="h-3 w-3" />}
+                {t("providers.selectAll")}
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={cancelSelection}>
+                <X className="h-3 w-3" />
+                {t("providers.cancelSelection")}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 p-0"
+                onClick={handleReload}
+                disabled={reloadMutation.isPending}
+                title={t("providers.reloadConfig")}
+              >
+                <RotateCw className={`h-3.5 w-3.5 ${reloadMutation.isPending ? "animate-spin" : ""}`} />
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json"
+                className="hidden"
+                onChange={e => void handleImportFile(e)}
+              />
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={handleImportClick}>
+                <Upload className="h-3 w-3" />
+                {t("providers.import")}
+              </Button>
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={openAddModal}>
+                <Plus className="h-3 w-3" />
+                {t("providers.add")}
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -376,11 +476,25 @@ export default function Providers() {
               ]}
             >
               <Card
-                className={`p-0 h-full border ${provider.active ? "border-primary shadow-[inset_0_0_0_1px_var(--color-primary),0_0_0_2px_var(--color-primary)] dark:shadow-[inset_0_0_0_1px_var(--color-primary),0_0_0_2px_var(--color-primary)]" : "border-border"} ${!provider.enabled ? "opacity-50" : ""}`}
+                className={`p-0 h-full border group ${provider.active ? "border-primary shadow-[inset_0_0_0_1px_var(--color-primary),0_0_0_2px_var(--color-primary)] dark:shadow-[inset_0_0_0_1px_var(--color-primary),0_0_0_2px_var(--color-primary)]" : selectedIds.has(provider.id) ? "border-primary ring-1 ring-primary" : "border-border"} ${!provider.enabled ? "opacity-50" : ""}`}
               >
                 <CardHeader className="p-3 pb-1">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm truncate mr-1">{provider.name}</CardTitle>
+                    {provider.id !== "official" ? (
+                      <button
+                        type="button"
+                        className={`h-3.5 w-3.5 rounded-[3px] border flex-shrink-0 flex items-center justify-center transition-opacity cursor-pointer ${selectedIds.has(provider.id) ? "opacity-100 bg-primary border-primary text-primary-foreground" : isSelectMode ? "opacity-100 bg-background border-border text-muted-foreground" : "opacity-0 group-hover:opacity-100 bg-background border-border text-muted-foreground hover:border-primary"}`}
+                        onClick={e => {
+                          e.stopPropagation();
+                          toggleSelect(provider.id);
+                        }}
+                      >
+                        {selectedIds.has(provider.id) && <Check className="h-2.5 w-2.5" />}
+                      </button>
+                    ) : (
+                      <span className="w-3.5 flex-shrink-0" />
+                    )}
+                    <CardTitle className="text-sm truncate mx-1.5 flex-1 min-w-0">{provider.name}</CardTitle>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                       {(() => {
                         const proto = PROVIDER_PROTOCOL_LABEL[provider.providerType];

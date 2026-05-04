@@ -196,7 +196,12 @@
       "idPlaceholder": "例如 my-provider_copy",
       "idHelp": "仅限字母、数字、下划线和连字符。如果该 ID 已存在，请求将失败；请先删除或重命名另一项。",
       "action": "复制"
-    }
+    },
+    "import": "导入",
+    "export": "导出",
+    "selectAll": "全选",
+    "cancelSelection": "取消",
+    "selectedCount": "已选 {{count}} 项"
   },
   "logs": {
     "title": "请求日志",

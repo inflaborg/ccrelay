@@ -13,6 +13,8 @@ import type {
   DuplicateProviderResponse,
   DeleteProviderResponse,
   ReloadConfigResponse,
+  ExportProvidersResponse,
+  ImportProvidersResponse,
   ClientConfigGetResponse,
   SettingsConfig,
   PatchConfigResponse,
@@ -95,6 +97,18 @@ export const api = {
   deleteProvider: (id: string): Promise<DeleteProviderResponse> =>
     fetchAPI<DeleteProviderResponse>(`/providers/${encodeURIComponent(id)}`, {
       method: "DELETE",
+    }),
+
+  exportProviders: (ids: string[]): Promise<ExportProvidersResponse> =>
+    fetchAPI<ExportProvidersResponse>("/providers/export", {
+      method: "POST",
+      body: JSON.stringify({ ids }),
+    }),
+
+  importProviders: (providers: AddProviderRequest[]): Promise<ImportProvidersResponse> =>
+    fetchAPI<ImportProvidersResponse>("/providers/import", {
+      method: "POST",
+      body: JSON.stringify({ providers }),
     }),
 
   reloadConfig: (): Promise<ReloadConfigResponse> =>

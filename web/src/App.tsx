@@ -48,6 +48,7 @@ function App() {
   const [activeTab, setActiveTab] = useHashTab("dashboard");
   const [version, setVersion] = useState<string | null>(null);
   const [showLangModal, setShowLangModal] = useState(false);
+  const [loggingEnabled, setLoggingEnabled] = useState(true);
 
   useEffect(() => {
     api
@@ -60,20 +61,31 @@ function App() {
     const vsLocale = window.CCRELAY_LOCALE;
     if (vsLocale) {
       void i18n.changeLanguage(vsLocale);
-      return;
     }
     api
       .getConfig()
       .then(cfg => {
-        const locale = cfg.server?.locale as string | undefined;
-        if (locale) {
-          void i18n.changeLanguage(locale);
-        } else {
-          setShowLangModal(true);
+        if (!vsLocale) {
+          const locale = cfg.server?.locale as string | undefined;
+          if (locale) {
+            void i18n.changeLanguage(locale);
+          } else {
+            setShowLangModal(true);
+          }
         }
+        setLoggingEnabled(cfg.logging?.enabled ?? false);
       })
-      .catch(() => setShowLangModal(true));
+      .catch(() => {
+        if (!vsLocale) setShowLangModal(true);
+      });
   }, [i18n]);
+
+  // Redirect away from logs tab if logging is disabled
+  useEffect(() => {
+    if (!loggingEnabled && activeTab === "logs") {
+      setActiveTab("dashboard");
+    }
+  }, [loggingEnabled, activeTab, setActiveTab]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
@@ -109,17 +121,19 @@ function App() {
                   <Activity className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">{t("nav.providers")}</span>
                 </button>
-                <button
-                  className={`flex-1 sm:flex-none h-8 sm:h-10 px-2 sm:px-4 text-[11px] sm:text-xs sm:min-w-[80px] flex items-center justify-center gap-1.5 rounded-md sm:rounded-none transition-all duration-200 ${
-                    activeTab === "logs"
-                      ? "bg-background sm:bg-primary text-foreground sm:text-primary-foreground shadow-sm sm:shadow-none"
-                      : "text-muted-foreground sm:text-foreground hover:text-foreground sm:hover:bg-primary/15"
-                  }`}
-                  onClick={() => setActiveTab("logs")}
-                >
-                  <Database className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">{t("nav.logs")}</span>
-                </button>
+                {loggingEnabled && (
+                  <button
+                    className={`flex-1 sm:flex-none h-8 sm:h-10 px-2 sm:px-4 text-[11px] sm:text-xs sm:min-w-[80px] flex items-center justify-center gap-1.5 rounded-md sm:rounded-none transition-all duration-200 ${
+                      activeTab === "logs"
+                        ? "bg-background sm:bg-primary text-foreground sm:text-primary-foreground shadow-sm sm:shadow-none"
+                        : "text-muted-foreground sm:text-foreground hover:text-foreground sm:hover:bg-primary/15"
+                    }`}
+                    onClick={() => setActiveTab("logs")}
+                  >
+                    <Database className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">{t("nav.logs")}</span>
+                  </button>
+                )}
                 <button
                   className={`flex-1 sm:flex-none h-8 sm:h-10 px-2 sm:px-4 text-[11px] sm:text-xs sm:min-w-[80px] flex items-center justify-center gap-1.5 rounded-md sm:rounded-none transition-all duration-200 ${
                     activeTab === "settings"

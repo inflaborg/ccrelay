@@ -56,6 +56,8 @@
 - **Auto-start**: Automatically starts the proxy server when VSCode launches
 - **Client integrations**: Use the same proxy with **Claude Code**, **Claude Cowork** (Anthropic wire), and **Codex** (OpenAI wire + `~/.codex/config.toml`); see [Client integrations](#client-integrations)
 - **Optional desktop tray app (Electron)**: Run CCRelay without VS Code via the bundled Electron app — same YAML config (`~/.ccrelay`) and leader election as the extension; tray menu opens the `/ccrelay/` dashboard in an in-app HTTP window ([details](#desktop-tray-application-electron))
+- **Internationalization (i18n)**: Web UI supports English and Chinese. Language is stored in `config.yaml` (`server.locale`) for consistency across Electron and VS Code webviews. First visit shows a language selection modal if not yet configured
+- **Provider import / export**: Multi-select providers and export as JSON; import merges by provider ID (overwrite existing, add new, never delete)
 
 ---
 
@@ -377,8 +379,8 @@ CCRelay has a built-in Web UI dashboard that provides:
 
 - **Dashboard**: Server status, current provider, request statistics
 - **Client configuration** (optional): Set Claude Code’s `~/.claude/settings.json` `env` from the UI (e.g. `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN` placeholder) and, if needed, per-tier `ANTHROPIC_DEFAULT_*_MODEL` — see [Claude Code](#claude-code).
-- **Providers**: View and switch providers
-- **Logs**: Request/response log viewer (requires enabling log storage)
+- **Providers**: View, switch, and manage providers. Multi-select with checkboxes to **export** selected providers as JSON; **import** merges by provider ID (overwrite existing, add new, never delete). The `official` provider cannot be selected for export.
+- **Logs**: Request/response log viewer (requires enabling log storage). The Logs tab is hidden when logging is disabled.
 - **Settings**: Manage all YAML config groups (Logging, Concurrency, Server, Routing); routing and concurrency hot-reload—server and logging need a restart. **Routing**: the **Routing and 404** note sits above the save row. **Save routing** is disabled when the editor matches disk (**Up to date**); **Unsaved changes** appears when the form is dirty. **Restore default routing** is on the same row, right-aligned—after the shared **AlertDialog** confirm it only updates the editor until you **Save routing**. **`GET /ccrelay/api/config`** includes **`routingDefaults`** (bundled forward/block) for that preview.
 
 **Client configuration** in the Web UI (same flows as the dashboard’s **Client configuration** / **Configure default models** actions):
@@ -612,6 +614,8 @@ The proxy server exposes management endpoints at `/ccrelay/`:
 | `/ccrelay/api/providers` | GET | List all available providers |
 | `/ccrelay/api/switch/{id}` | GET | Switch to a provider by ID |
 | `/ccrelay/api/switch` | POST | Switch provider (JSON body) |
+| `/ccrelay/api/providers/export` | POST | Export providers by ID (JSON body `{ ids }`), returns full configs including API keys |
+| `/ccrelay/api/providers/import` | POST | Import providers (JSON body `{ providers }`), merge by ID — overwrite existing, add new |
 | `/ccrelay/api/queue` | GET | Get queue statistics |
 | `/ccrelay/api/logs` | GET | Get request logs (when logging enabled) |
 | `/ccrelay/api/config` | GET, PATCH | **GET**: settings sections from YAML (`logging`, `concurrency`, `server`, `routing`) plus **`routingDefaults`** (bundled forward/block for the Routing **Restore default** preview). **PATCH**: JSON `{ "section": "<name>", "data": {…} }` merges into that section; routing/concurrency reload live; **`server`** / **`logging`** may need restart. |

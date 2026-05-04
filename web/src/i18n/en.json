@@ -196,7 +196,12 @@
       "idPlaceholder": "e.g. my-provider_copy",
       "idHelp": "Only alphanumeric, underscore, and hyphen. If that key already exists, the request will fail; remove or rename the other entry first.",
       "action": "Duplicate"
-    }
+    },
+    "import": "Import",
+    "export": "Export",
+    "selectAll": "Select All",
+    "cancelSelection": "Cancel",
+    "selectedCount": "{{count}} selected"
   },
   "logs": {
     "title": "Request Logs",

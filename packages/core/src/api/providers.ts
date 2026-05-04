@@ -347,3 +347,119 @@ interface AddProviderRequest {
   customModelsList?: string[];
   openaiCompat?: "default" | "azure_openai";
 }
+
+/**
+ * Handle POST /ccrelay/api/providers/export
+ * Returns full provider configs (including unmasked apiKey) for the given ids.
+ */
+export async function handleExportProviders(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  _params: Record<string, string>
+): Promise<void> {
+  if (!serverInstance) {
+    sendJson(res, 503, { error: "Server not initialized" });
+    return;
+  }
+
+  try {
+    const body = await parseJsonBody<{ ids?: string[] }>(req);
+    const ids = (body.ids ?? []).filter(id => id !== "official");
+
+    if (ids.length === 0) {
+      sendJson(res, 400, { status: "error", message: "No provider ids provided" });
+      return;
+    }
+
+    const configManager = serverInstance.getConfig();
+    const providers = ids
+      .map(id => configManager.getProvider(id))
+      .filter((p): p is NonNullable<typeof p> => p !== undefined)
+      .map(p => ({
+        id: p.id,
+        name: p.name,
+        baseUrl: p.baseUrl,
+        providerType: p.providerType,
+        mode: p.mode,
+        apiKey: p.apiKey,
+        authHeader: p.authHeader,
+        enabled: p.enabled,
+        modelMap: p.modelMap,
+        vlModelMap: p.vlModelMap,
+        modelMappingEnabled: p.modelMappingEnabled,
+        headers: p.headers,
+        useCustomModelsList: p.useCustomModelsList,
+        customModelsList: p.customModelsList,
+        openaiCompat: p.openaiCompat,
+      }));
+
+    sendJson(res, 200, { providers });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    sendJson(res, 500, { status: "error", message });
+  }
+}
+
+/**
+ * Handle POST /ccrelay/api/providers/import
+ * Merges providers into config: same id overwrites, new id adds. Never deletes.
+ */
+export async function handleImportProviders(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  _params: Record<string, string>
+): Promise<void> {
+  if (!serverInstance) {
+    sendJson(res, 503, { error: "Server not initialized" });
+    return;
+  }
+
+  try {
+    const body = await parseJsonBody<{ providers?: AddProviderRequest[] }>(req);
+    const providers = body.providers;
+
+    if (!Array.isArray(providers) || providers.length === 0) {
+      sendJson(res, 400, { status: "error", message: "No providers to import" });
+      return;
+    }
+
+    const configManager = serverInstance.getConfig();
+    const imported: string[] = [];
+
+    for (const p of providers) {
+      if (!p.id || !p.name || !p.baseUrl || !p.providerType || !p.mode) {
+        continue;
+      }
+      if (p.id === "official") {
+        continue;
+      }
+      const providerConfig: ProviderConfigInput = {
+        name: p.name,
+        baseUrl: p.baseUrl,
+        mode: p.mode,
+        providerType: p.providerType,
+        apiKey: p.apiKey,
+        authHeader: p.authHeader,
+        enabled: p.enabled ?? true,
+        modelMap: p.modelMap,
+        vlModelMap: p.vlModelMap,
+        ...(p.modelMappingEnabled !== undefined
+          ? { modelMappingEnabled: p.modelMappingEnabled }
+          : {}),
+        headers: p.headers,
+        useCustomModelsList: p.useCustomModelsList === true,
+        ...(p.useCustomModelsList === true ? { customModelsList: p.customModelsList ?? [] } : {}),
+        ...(p.openaiCompat !== undefined ? { openaiCompat: p.openaiCompat } : {}),
+      };
+      const success = configManager.addProvider(p.id, providerConfig);
+      if (success) {
+        imported.push(p.id);
+      }
+    }
+
+    sendJson(res, 200, { status: "ok", imported: imported.length, ids: imported });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    sendJson(res, 500, { status: "error", message });
+  }
+}
