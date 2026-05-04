@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-04
+
+Major refresh: unified routing, Electron desktop tray, web i18n, config hot-reload / WebSocket sync, `providerType` split (`openai` vs `openai_chat`), inbound `/openai` and `/anthropic` URL prefixes, and broad cross-protocol fixes. **Packaging:** `npm run package:beta` builds `0.2.0-beta.<build>`; `npm run package:release` strips `-beta…` for a final `0.2.0` build (root `package.json`).
+
 ### Added
 
 - **i18n (internationalization)**: Web UI supports English and Chinese. On first visit (no `server.locale` configured), a language selection modal is shown. Language preference is persisted to `config.yaml` (`server.locale`) and shared across Electron and VS Code webview environments. Settings page includes a language switcher.
@@ -70,6 +74,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Database worker client**: restarts the worker thread automatically with exponential backoff after an unexpected exit; outer RPC timeout is slightly longer than the CLI driver command timeout; read APIs (`queryLogs`, `getLogById`, `getStats`) degrade to empty or null results on transient failures instead of always surfacing errors to callers.
 - **SQLite CLI IPC logging**: INFO for subprocess spawn, sentinel handshake, and channel close; WARN for recoverable faults (health check failure, unexpected exit, channel faults/timeouts, rebuild); ERROR for spawn errors (`proc` `"error"`), restart failure, and max-restart exhaustion.
 
+- **Converters**: `parseFunctionArguments` simplified (removed unreachable branch); tool message `content` serialization uses a shared helper; Anthropic → OpenAI request conversion no longer deep-clones messages or keeps an unreachable post-`user`/`assistant` fallback in `convertMessage`.
+
 ### Removed
 
 - **Temporary `ModelsDebug` WARN** in `ProxyExecutor` buffered GET models handling (verbose upstream body logging).
@@ -104,12 +110,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Delete active provider**: deleting the currently active provider now automatically switches to the default provider instead of leaving a stale `currentProviderId` that caused incorrect status bar display.
 - **Streaming task lifecycle (queue mode)**: `streamCompleted` on `RequestTask` / `ProxyResult` and updated `TaskExecutor` / `ResponseWriter` handling avoid spurious `Marked as cancelled`, “client disconnected, skipping response”, and unnecessary upstream aborts after a successful streamed response when the client closes the socket post-`[DONE]`.
 
-## [0.2.0] - 2026-04-26 (pre-release)
-
-This is the **0.2.0** development line until a stable release is tagged. **Packaging:** `npm run package:beta` rewrites the version to `0.2.0-beta.<build>` and runs `package`; `npm run package:release` strips a `-beta…` suffix for a `0.2.0` build, then `package` (see root `package.json` scripts).
-
-### Fixed
-
 - **Web dashboard in browser-backed editors (e.g. code-server)**: sidebar and log-viewer webviews no longer hardcode `http://127.0.0.1:<port>` for API calls, which in a browser targets the user’s local machine. The extension resolves the ccrelay HTTP base with `vscode.env.asExternalUri` so requests use the workbench port proxy (e.g. code-server’s `/proxy/<port>`) and hit the ccrelay server on the same host as the extension. On resolution failure, falls back to the previous local URL. **Follower** mode still uses the leader origin only.
 - **Converters (cross-protocol)**
   - Anthropic `tool_choice` with `type: "any"` now maps to OpenAI `"required"` (matches “must use a tool”), not `"auto"`.
@@ -117,10 +117,6 @@ This is the **0.2.0** development line until a stable release is tagged. **Packa
   - Anthropic `stop_reason: "stop_sequence"` maps to OpenAI `finish_reason: "stop"` (not `"content_filter"`). OpenAI `finish_reason: "content_filter"` maps to Anthropic `stop_reason: "end_turn"` (not `"stop_sequence"`).
   - Anthropic → OpenAI user images: incomplete `base64` sources (missing `media_type` or `data`) yield an empty `image_url` URL instead of `data:undefined;base64,...`.
   - OpenAI → Anthropic requests: when system messages mix plain string and array `content`, string parts are merged into the Anthropic `system` block list instead of being dropped.
-
-### Changed
-
-- **Converters**: `parseFunctionArguments` simplified (removed unreachable branch); tool message `content` serialization uses a shared helper; Anthropic → OpenAI request conversion no longer deep-clones messages or keeps an unreachable post-`user`/`assistant` fallback in `convertMessage`.
 
 ## [0.1.6] - 2026-04-26
 
