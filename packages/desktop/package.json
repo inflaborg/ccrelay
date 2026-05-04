@@ -11,7 +11,9 @@
     "start": "electron .",
     "pack": "electron-builder",
     "pack:mac": "electron-builder --mac",
-    "pack:win": "electron-builder --win"
+    "pack:mac:all": "electron-builder --mac --x64 --arm64",
+    "pack:win": "electron-builder --win",
+    "pack:win:all": "electron-builder --win --x64 --arm64"
   },
   "dependencies": {
     "@ccrelay/core": "*"
@@ -58,24 +60,12 @@
       "category": "public.app-category.developer-tools",
       "identity": null,
       "target": [
-        {
-          "target": "zip",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
+        "zip"
       ]
     },
     "win": {
       "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
+        "nsis"
       ]
     },
     "nsis": {
