@@ -1,0 +1,398 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "refresh": "Refresh",
+    "na": "N/A",
+    "upToDate": "Up to date",
+    "apply": "Apply",
+    "delete": "Delete"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "providers": "Providers",
+    "logs": "Logs",
+    "settings": "Settings"
+  },
+  "app": {
+    "footer": {
+      "project": "Project CCRelay"
+    }
+  },
+  "language": {
+    "title": "Choose Language",
+    "description": "Select your preferred language for the interface.",
+    "en": "English",
+    "zh": "中文"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "subtitle": "Monitor your CCRelay server status and performance",
+    "serverStatus": {
+      "title": "Server Status",
+      "running": "Running",
+      "stopped": "Stopped"
+    },
+    "currentProvider": {
+      "title": "Current Provider",
+      "none": "None"
+    },
+    "totalRequests": {
+      "title": "Total Requests",
+      "success": "success",
+      "errors": "errors"
+    },
+    "performance": {
+      "title": "Performance",
+      "avgResponseTime": "Average Response Time",
+      "successRate": "Success Rate",
+      "providersUsed": "Providers Used"
+    }
+  },
+  "clientConfig": {
+    "title": "Client configuration",
+    "description": "Check Claude Code ({{claudePath}}) and Codex ({{codexPath}}) configs point to this CCRelay instance (port {{port}}).",
+    "status": {
+      "ok": "OK",
+      "notSet": "Not set",
+      "otherHost": "Other host",
+      "invalidFile": "Invalid file"
+    },
+    "claudeCode": {
+      "name": "Claude Code",
+      "envVarLabel": "ANTHROPIC_BASE_URL:",
+      "expected": "Expected:",
+      "optionalModels": {
+        "title": "Optional default model names",
+        "description": "(CCRelay modelMap is usually enough. Set these only if you want Claude Code to request specific ids.)",
+        "notSet": "Not set in settings.json.",
+        "suggested": "Suggested:"
+      },
+      "configureModels": "Configure default models",
+      "upToDate": "Up to date",
+      "apply": "Apply CCRelay settings"
+    },
+    "codex": {
+      "name": "Codex",
+      "expected": "Expected:",
+      "model": {
+        "label": "Model",
+        "description": "(written to model in config.toml)",
+        "notSet": "Not set.",
+        "default": "Default:"
+      },
+      "configureModel": "Configure model",
+      "upToDate": "Up to date",
+      "apply": "Apply CCRelay template"
+    },
+    "dialog": {
+      "overwrite": {
+        "title": "Overwrite Claude Code settings?",
+        "invalidJson": "Invalid JSON will be replaced by a new object with the merged env block.",
+        "action": "Overwrite"
+      },
+      "replaceCodex": {
+        "title": "Replace Codex config?"
+      }
+    },
+    "codexModelModal": {
+      "title": "Codex model",
+      "description": "Written to model in ~/.codex/config.toml. Leave empty to use the default.",
+      "label": "Model",
+      "saveAndApply": "Save & Apply"
+    },
+    "modelsModal": {
+      "title": "Claude Code default model names",
+      "description": "Written to env.ANTHROPIC_DEFAULT_*_MODEL in settings.json. Leave blank and save to remove a key. Empty all three to rely only on CCRelay mapping.",
+      "opus": "Opus",
+      "sonnet": "Sonnet",
+      "haiku": "Haiku",
+      "useDefaults": "Use suggested defaults",
+      "clearFields": "Clear fields",
+      "removeAll": "Remove all from file"
+    }
+  },
+  "providers": {
+    "title": "Providers",
+    "subtitle": "Manage and switch between AI API providers",
+    "reloadConfig": "Reload config",
+    "add": "Add",
+    "protocol": {
+      "anthropic": "Anthropic",
+      "openai": "OpenAI",
+      "openaiChat": "OpenAI Chat"
+    },
+    "contextMenu": {
+      "use": "Use",
+      "edit": "Edit",
+      "duplicate": "Duplicate",
+      "delete": "Delete"
+    },
+    "badge": {
+      "mappingOff": "Mapping off",
+      "disabled": "Disabled",
+      "active": "Active"
+    },
+    "card": {
+      "id": "ID",
+      "mode": "Mode",
+      "baseUrl": "Base URL"
+    },
+    "emptyState": "No providers configured. Click \"Add\" to create one.",
+    "modal": {
+      "editTitle": "Edit Provider",
+      "addTitle": "Add Provider",
+      "providerId": "Provider ID",
+      "providerIdHelp": "Unique identifier (alphanumeric, underscore, hyphen)",
+      "enabled": "Enabled",
+      "alwaysOn": "(always on)",
+      "alwaysOnTooltip": "The official provider must stay enabled.",
+      "name": "Name",
+      "baseUrl": "API Base URL",
+      "type": "Type",
+      "typeOpenaiFull": "OpenAI (Full)",
+      "typeOpenaiChatOnly": "OpenAI (Chat Only)",
+      "modePassthrough": "Passthrough",
+      "modeInject": "Inject",
+      "crossProtocol": "Cross-protocol (Anthropic -> Chat)",
+      "crossProtocolStandard": "Standard",
+      "crossProtocolAzure": "Azure OpenAI",
+      "crossProtocolHelp": "Choose Azure when the upstream rejects extra fields (for example reasoning).",
+      "apiKey": "API Key",
+      "apiKeyNotSet": "(not set)",
+      "apiKeyHelpEdit": "API Key cannot be modified. To change, delete and recreate the provider.",
+      "apiKeyHelpAdd": "Supports ${ENV_VAR} syntax. Cannot be modified after creation.",
+      "useCustomModelsList": "Use custom models list",
+      "customModelsListHelp": "When enabled, GET /models is answered locally from this list (no upstream). Optional query limit truncates the returned page; Anthropic-shaped responses set has_more accordingly.",
+      "modelIds": "Model ids (one per line)",
+      "enableModelMapping": "Enable model mapping",
+      "modelMappingHelp": "When off, the YAML below is kept in config but not applied (requests, model lists, and response model stay unmapped).",
+      "modelMap": "Model Map (YAML)",
+      "modelMapHelp": "Optional. Leave empty to pass models through without remapping.",
+      "submitAdd": "Add Provider"
+    },
+    "validation": {
+      "mustBeYamlArray": "Must be a YAML array",
+      "patternModelRequired": "Each entry must have 'pattern' and 'model' fields",
+      "invalidYaml": "Invalid YAML format"
+    },
+    "placeholder": {
+      "id": "e.g., my_provider",
+      "name": "e.g., My Custom Provider",
+      "baseUrl": "e.g., https://api.example.com",
+      "apiKey": "e.g., ${API_KEY} or sk-..."
+    },
+    "deleteDialog": {
+      "title": "Delete provider?",
+      "thisProvider": "this provider",
+      "cannotUndo": "This cannot be undone.",
+      "action": "Delete"
+    },
+    "duplicateModal": {
+      "title": "Duplicate provider",
+      "name": "Name",
+      "namePlaceholder": "Display name for the new provider",
+      "newId": "New provider ID",
+      "idPlaceholder": "e.g. my-provider_copy",
+      "idHelp": "Only alphanumeric, underscore, and hyphen. If that key already exists, the request will fail; remove or rename the other entry first.",
+      "action": "Duplicate"
+    }
+  },
+  "logs": {
+    "title": "Request Logs",
+    "subtitle": "View and analyze API request logs",
+    "clearAll": "Clear All",
+    "filter": {
+      "allProviders": "All Providers",
+      "allMethods": "All Methods",
+      "pathPlaceholder": "Filter path...",
+      "errorsOnly": "Errors only",
+      "logCount": "logs"
+    },
+    "table": {
+      "header": {
+        "id": "ID",
+        "method": "Method",
+        "type": "Type",
+        "model": "Model",
+        "path": "Path",
+        "provider": "Provider",
+        "status": "Status",
+        "duration": "Duration",
+        "time": "Time"
+      },
+      "routeType": {
+        "block": "Block",
+        "pass": "Pass",
+        "route": "Route"
+      },
+      "status": {
+        "pending": "Pending",
+        "ok": "OK",
+        "err": "Err"
+      }
+    },
+    "emptyMessage": "No logs found. Make sure log storage is enabled.",
+    "detail": {
+      "title": "Log Details",
+      "id": "ID:",
+      "method": "Method",
+      "status": "Status",
+      "provider": "Provider",
+      "duration": "Duration",
+      "time": "Time",
+      "path": "Path",
+      "targetUrl": "Target URL",
+      "error": "Error",
+      "statusOk": "OK",
+      "statusErr": "Err",
+      "loadError": "Failed to load log details",
+      "requestBody": "Request Body",
+      "responseBody": "Response Body",
+      "tab": {
+        "analysis": "Analysis",
+        "tools": "Tools",
+        "converted": "Converted",
+        "original": "Original",
+        "raw": "Raw"
+      },
+      "chars": "chars",
+      "copy": "Copy",
+      "copied": "Copied"
+    },
+    "analysis": {
+      "system": "System",
+      "user": "User",
+      "assistant": "Assistant",
+      "imageAttached": "[Image Attached]",
+      "toolUse": "Tool Use:",
+      "toolResult": "Tool Result",
+      "noContent": "No parseable content found.",
+      "parseFailed": "Failed to parse content into markdown."
+    },
+    "clearDialog": {
+      "title": "Clear All Logs",
+      "description": "Are you sure you want to clear all logs? This action cannot be undone.",
+      "clearing": "Clearing...",
+      "action": "Clear All"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Manage server, routing, concurrency, and logging configuration.",
+    "saved": "Saved",
+    "restartRequired": "Changes saved. A server restart is required for these settings to take effect.",
+    "loadError": "Failed to load settings.",
+    "server": {
+      "title": "Server",
+      "port": "Port",
+      "host": "Host",
+      "autoStart": "Auto-start server on extension activation",
+      "language": "Language"
+    },
+    "routing": {
+      "title": "Routing",
+      "forwardRules": "Forward rules",
+      "blockRules": "Block rules",
+      "column": {
+        "path": "Path",
+        "provider": "Provider",
+        "response": "Response",
+        "code": "Code",
+        "condition": "Condition"
+      },
+      "addRule": "Add rule",
+      "add": "Add",
+      "evaluationOrder": "Evaluation order",
+      "autoLiteral": "auto",
+      "routingAnd404": "Routing and 404",
+      "saveRouting": "Save routing",
+      "unsavedChanges": "Unsaved changes",
+      "matchesConfig": "Matches saved config",
+      "group": {
+        "anthropicMessages": "Anthropic . Messages API",
+        "anthropicMessagesHint": "/v1/messages, /v1/messages/count_tokens, /anthropic/v1/messages",
+        "openaiChat": "OpenAI . Chat Completions",
+        "openaiChatHint": "/v1/chat/completions, /openai/chat/completions",
+        "openaiResponses": "OpenAI . Responses API",
+        "openaiResponsesHint": "/v1/responses, /openai/responses",
+        "openaiModels": "OpenAI . Models list",
+        "openaiModelsHint": "/v1/models, /openai/models",
+        "anthropicModels": "Anthropic . Models list",
+        "anthropicModelsHint": "/anthropic/v1/models",
+        "custom": "Custom paths",
+        "customHint": "Any other patterns; rows from Add appear here until they match a group above."
+      },
+      "placeholder": {
+        "forwardPath": "/my/custom/route",
+        "blockPath": "/api/event_logging/*",
+        "blockResponse": "{\"ok\":true}"
+      },
+      "blockCondition": {
+        "anyProvider": "Any provider",
+        "noConditionHint": "No provider condition — click to add Only when / Unless lists",
+        "only": "Only:",
+        "unless": "Unless:",
+        "onlyWhenLabel": "Only-when providers",
+        "onlyWhen": "Only when current provider is",
+        "onlyWhenYaml": "(YAML condition.providers)",
+        "clearUnless": "Clear all entries under \"Unless...\" below to edit this section.",
+        "noProvidersLoaded": "No providers loaded",
+        "allSelected": "All providers selected",
+        "addProviderId": "Add provider ID...",
+        "unlessLabel": "Unless providers",
+        "unlessYaml": "(YAML condition.providerNot)",
+        "clearOnlyWhen": "Clear all entries under \"Only when...\" above to edit this section."
+      },
+      "blockConditionModal": {
+        "title": "Block condition (provider)",
+        "description": "Pick one mode at a time: set Only-when to restrict to specific providers, or set Unless to exclude specific providers. They are mutually exclusive — filling one disables the other."
+      },
+      "helpBox": {
+        "title": "Routing and 404",
+        "description": "Rules are evaluated in order. The first match wins. Provider \"auto\" means use the current default provider. Unmatched paths fall through to the proxy and may return 404 if no provider handles them."
+      },
+      "restore": "Restore default routing",
+      "restoreTooltipEnabled": "Load bundled defaults into the editor (use Save to write config.yaml)",
+      "restoreTooltipDisabled": "Default routing template unavailable from server",
+      "restoreDialog": {
+        "title": "Restore default routing?",
+        "description": "This replaces the forward and block lists in the editor with CCRelay's bundled defaults. Nothing is written to disk until you click Save routing.",
+        "action": "Restore"
+      }
+    },
+    "concurrency": {
+      "title": "Concurrency",
+      "enable": "Enable concurrency manager",
+      "maxWorkers": "Max workers",
+      "maxQueueSize": "Max queue size",
+      "requestTimeout": "Request timeout (s)",
+      "retry429": {
+        "title": "Retry on 429",
+        "enable": "Enable 429 retry",
+        "maxRetries": "Max retries",
+        "delay": "Delay (ms)"
+      },
+      "routeOverrides": "{{count}} per-route override(s) configured. Edit in YAML for now."
+    },
+    "logging": {
+      "title": "Logging",
+      "enable": "Enable request log storage",
+      "databaseType": "Database type",
+      "databasePath": "Database path",
+      "databasePathPlaceholder": "~/.ccrelay/logs.db (default)",
+      "sqlite3Executable": "sqlite3 executable (optional)",
+      "sqlite3ExecutablePlaceholder": "Blank = resolve from PATH",
+      "host": "Host",
+      "port": "Port",
+      "databaseName": "Database name",
+      "user": "User",
+      "password": "Password",
+      "passwordPlaceholder": "${POSTGRES_PASSWORD}",
+      "ssl": "SSL"
+    },
+    "providerOption": {
+      "auto": "auto (current)"
+    }
+  }
+}

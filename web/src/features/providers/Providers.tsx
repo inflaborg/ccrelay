@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useRef, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Check, Copy, Loader2, Plus, RotateCw, X } from "lucide-react";
 import * as yaml from "js-yaml";
 import { Button } from "@/components/ui/button";
@@ -21,9 +22,9 @@ import { api } from "@/api/client";
 import type { AddProviderRequest, Provider, ModelMapEntry } from "@/types/api";
 
 const PROVIDER_PROTOCOL_LABEL: Record<string, { label: string; className: string }> = {
-  anthropic: { label: "Anthropic", className: "bg-indigo-500 text-white" },
-  openai: { label: "OpenAI", className: "bg-emerald-600 text-white" },
-  openai_chat: { label: "OpenAI Chat", className: "bg-teal-500 text-white" },
+  anthropic: { label: "providers.protocol.anthropic", className: "bg-indigo-500 text-white" },
+  openai: { label: "providers.protocol.openai", className: "bg-emerald-600 text-white" },
+  openai_chat: { label: "providers.protocol.openaiChat", className: "bg-teal-500 text-white" },
 };
 
 const DEFAULT_FORM: AddProviderRequest = {
@@ -44,6 +45,7 @@ const DEFAULT_FORM: AddProviderRequest = {
 };
 
 export default function Providers() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [showAddModal, setShowAddModal] = useState(false);
   const [formData, setFormData] = useState<AddProviderRequest>(DEFAULT_FORM);
@@ -85,23 +87,23 @@ export default function Providers() {
           const parsed = yaml.load(text);
           // Must be an array of { pattern, model } objects
           if (!Array.isArray(parsed)) {
-            setError("Must be a YAML array");
+            setError(t("providers.validation.mustBeYamlArray"));
             return;
           }
           for (const entry of parsed) {
             if (typeof entry !== "object" || !entry.pattern || !entry.model) {
-              setError("Each entry must have 'pattern' and 'model' fields");
+              setError(t("providers.validation.patternModelRequired"));
               return;
             }
           }
           setError(null);
           updateFormField(parsed as ModelMapEntry[]);
         } catch {
-          setError("Invalid YAML format");
+          setError(t("providers.validation.invalidYaml"));
         }
       }, 500);
     },
-    []
+    [t]
   );
 
   const { data: providersData, isLoading } = useQuery({
@@ -311,10 +313,8 @@ export default function Providers() {
       {/* Header with actions */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-base font-semibold tracking-tight">Providers</h2>
-          <p className="text-xs text-muted-foreground">
-            Manage and switch between AI API providers
-          </p>
+          <h2 className="text-base font-semibold tracking-tight">{t("providers.title")}</h2>
+          <p className="text-xs text-muted-foreground">{t("providers.subtitle")}</p>
         </div>
         <div className="flex items-center gap-1">
           <Button
@@ -323,13 +323,13 @@ export default function Providers() {
             className="h-7 w-7 p-0"
             onClick={handleReload}
             disabled={reloadMutation.isPending}
-            title="Reload config"
+            title={t("providers.reloadConfig")}
           >
             <RotateCw className={`h-3.5 w-3.5 ${reloadMutation.isPending ? "animate-spin" : ""}`} />
           </Button>
           <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={openAddModal}>
             <Plus className="h-3 w-3" />
-            Add
+            {t("providers.add")}
           </Button>
         </div>
       </div>
@@ -355,20 +355,20 @@ export default function Providers() {
               key={provider.id}
               menuItems={[
                 {
-                  label: "Use",
+                  label: t("providers.contextMenu.use"),
                   onClick: () => handleSwitch(provider.id),
                   show: !provider.active && provider.enabled,
                 },
                 {
-                  label: "Edit",
+                  label: t("providers.contextMenu.edit"),
                   onClick: () => openEditModal(provider),
                 },
                 {
-                  label: "Duplicate",
+                  label: t("providers.contextMenu.duplicate"),
                   onClick: () => openDuplicateModal(provider),
                 },
                 {
-                  label: "Delete",
+                  label: t("providers.contextMenu.delete"),
                   onClick: () => requestDelete(provider),
                   destructive: true,
                   show: provider.id !== "official",
@@ -388,7 +388,7 @@ export default function Providers() {
                           <span
                             className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${proto.className}`}
                           >
-                            {proto.label}
+                            {t(proto.label)}
                           </span>
                         ) : null;
                       })()}
@@ -397,7 +397,7 @@ export default function Providers() {
                           variant="outline"
                           className="text-[10px] px-1.5 py-0.5 text-amber-700 dark:text-amber-400 border-amber-600/40"
                         >
-                          Mapping off
+                          {t("providers.badge.mappingOff")}
                         </Badge>
                       ) : null}
                       {!provider.enabled && (
@@ -405,13 +405,13 @@ export default function Providers() {
                           variant="outline"
                           className="text-[10px] px-1.5 py-0.5 text-muted-foreground"
                         >
-                          Disabled
+                          {t("providers.badge.disabled")}
                         </Badge>
                       )}
                       {provider.active && (
                         <span className="inline-flex items-center gap-0.5 rounded-md bg-primary/10 text-primary px-1.5 py-0.5 text-[10px] font-semibold">
                           <Check className="h-3 w-3" />
-                          Active
+                          {t("providers.badge.active")}
                         </span>
                       )}
                     </div>
@@ -419,18 +419,18 @@ export default function Providers() {
                 </CardHeader>
                 <CardContent className="p-3 pt-0 space-y-1">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">ID</span>
+                    <span className="text-muted-foreground">{t("providers.card.id")}:</span>
                     <span className="font-mono text-[10px]">{provider.id}</span>
                   </div>
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Mode</span>
+                    <span className="text-muted-foreground">{t("providers.card.mode")}:</span>
                     <Badge variant="outline" className="text-[10px] px-1 py-0">
                       {provider.mode}
                     </Badge>
                   </div>
                   {provider.baseUrl && (
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">Base URL</span>
+                      <span className="text-muted-foreground">{t("providers.card.baseUrl")}:</span>
                       <span className="font-mono text-[10px] truncate max-w-[140px]">
                         {provider.baseUrl}
                       </span>
@@ -468,7 +468,7 @@ export default function Providers() {
       {providers.length === 0 && !isLoading && (
         <Card className="p-0">
           <CardContent className="p-6 text-center text-xs text-muted-foreground">
-            No providers configured. Click "Add" to create one.
+            {t("providers.emptyState")}
           </CardContent>
         </Card>
       )}
@@ -484,7 +484,7 @@ export default function Providers() {
             <CardHeader className="border-b p-3 flex-shrink-0">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm">
-                  {editingProvider ? "Edit Provider" : "Add Provider"}
+                  {editingProvider ? t("providers.modal.editTitle") : t("providers.modal.addTitle")}
                 </CardTitle>
                 <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={closeModal}>
                   <X className="h-4 w-4" />
@@ -498,18 +498,18 @@ export default function Providers() {
               <div className="grid grid-cols-[1fr_auto] gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-medium">
-                    Provider ID <span className="text-destructive">*</span>
+                    {t("providers.modal.providerId")} <span className="text-destructive">*</span>
                   </label>
                   <input
                     type="text"
                     className="w-full h-8 px-2 text-xs border rounded-md bg-background disabled:opacity-50"
-                    placeholder="e.g., my_provider"
+                    placeholder={t("providers.placeholder.id")}
                     value={editingProvider != null ? editingProvider.id : formData.id}
                     onChange={e => updateForm("id", e.target.value.replace(/[^A-Za-z0-9_-]/g, ""))}
                     disabled={editingProvider != null}
                   />
                   <p className="text-[10px] text-muted-foreground">
-                    Unique identifier (alphanumeric, underscore, hyphen)
+                    {t("providers.modal.providerIdHelp")}
                   </p>
                 </div>
                 <div className="pt-[26px]">
@@ -527,14 +527,14 @@ export default function Providers() {
                       onChange={e => updateForm("enabled", e.target.checked)}
                     />
                     <label htmlFor="enabled" className="text-xs whitespace-nowrap">
-                      Enabled
+                      {t("providers.modal.enabled")}
                     </label>
                     {(editingProvider?.id === "official" || formData.id === "official") && (
                       <span
                         className="text-[10px] text-muted-foreground"
-                        title="The official provider must stay enabled."
+                        title={t("providers.modal.alwaysOnTooltip")}
                       >
-                        (always on)
+                        {t("providers.modal.alwaysOn")}
                       </span>
                     )}
                   </div>
@@ -544,12 +544,12 @@ export default function Providers() {
               {/* Name */}
               <div className="space-y-1">
                 <label className="text-xs font-medium">
-                  Name <span className="text-destructive">*</span>
+                  {t("providers.modal.name")} <span className="text-destructive">*</span>
                 </label>
                 <input
                   type="text"
                   className="w-full h-8 px-2 text-xs border rounded-md bg-background"
-                  placeholder="e.g., My Custom Provider"
+                  placeholder={t("providers.placeholder.name")}
                   value={formData.name}
                   onChange={e => updateForm("name", e.target.value)}
                 />
@@ -558,12 +558,12 @@ export default function Providers() {
               {/* Base URL */}
               <div className="space-y-1">
                 <label className="text-xs font-medium">
-                  API Base URL <span className="text-destructive">*</span>
+                  {t("providers.modal.baseUrl")} <span className="text-destructive">*</span>
                 </label>
                 <input
                   type="text"
                   className="w-full h-8 px-2 text-xs border rounded-md bg-background"
-                  placeholder="e.g., https://api.example.com"
+                  placeholder={t("providers.placeholder.baseUrl")}
                   value={formData.baseUrl}
                   onChange={e => updateForm("baseUrl", e.target.value)}
                 />
@@ -572,13 +572,13 @@ export default function Providers() {
               {/* Type and Mode row */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-xs font-medium">Type</label>
+                  <label className="text-xs font-medium">{t("providers.modal.type")}</label>
                   <Select
                     value={formData.providerType}
                     options={[
-                      { value: "anthropic", label: "Anthropic" },
-                      { value: "openai", label: "OpenAI (Full)" },
-                      { value: "openai_chat", label: "OpenAI (Chat Only)" },
+                      { value: "anthropic", label: t("providers.protocol.anthropic") },
+                      { value: "openai", label: t("providers.modal.typeOpenaiFull") },
+                      { value: "openai_chat", label: t("providers.modal.typeOpenaiChatOnly") },
                     ]}
                     onChange={v => {
                       const t = v as "anthropic" | "openai" | "openai_chat";
@@ -592,12 +592,12 @@ export default function Providers() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-medium">Mode</label>
+                  <label className="text-xs font-medium">{t("providers.card.mode")}</label>
                   <Select
                     value={formData.mode}
                     options={[
-                      { value: "passthrough", label: "Passthrough" },
-                      { value: "inject", label: "Inject" },
+                      { value: "passthrough", label: t("providers.modal.modePassthrough") },
+                      { value: "inject", label: t("providers.modal.modeInject") },
                     ]}
                     onChange={v => updateForm("mode", v as "passthrough" | "inject")}
                     className="h-8 text-xs"
@@ -607,12 +607,14 @@ export default function Providers() {
 
               {(formData.providerType === "openai" || formData.providerType === "openai_chat") && (
                 <div className="space-y-1">
-                  <label className="text-xs font-medium">Cross-protocol (Anthropic → Chat)</label>
+                  <label className="text-xs font-medium">
+                    {t("providers.modal.crossProtocol")}
+                  </label>
                   <Select
                     value={formData.openaiCompat === "azure_openai" ? "azure_openai" : "standard"}
                     options={[
-                      { value: "standard", label: "Standard" },
-                      { value: "azure_openai", label: "Azure OpenAI" },
+                      { value: "standard", label: t("providers.modal.crossProtocolStandard") },
+                      { value: "azure_openai", label: t("providers.modal.crossProtocolAzure") },
                     ]}
                     onChange={v =>
                       setFormData(prev => ({
@@ -623,15 +625,14 @@ export default function Providers() {
                     className="h-8 text-xs"
                   />
                   <p className="text-[10px] text-muted-foreground">
-                    Choose Azure when the upstream rejects extra fields (for example{" "}
-                    <code className="font-mono text-[10px]">reasoning</code>).
+                    {t("providers.modal.crossProtocolHelp")}
                   </p>
                 </div>
               )}
 
               {/* API Key */}
               <div className="space-y-1">
-                <label className="text-xs font-medium">API Key</label>
+                <label className="text-xs font-medium">{t("providers.modal.apiKey")}</label>
                 {editingProvider ? (
                   <>
                     <input
@@ -640,12 +641,12 @@ export default function Providers() {
                       value={
                         formData.apiKey
                           ? `${formData.apiKey.slice(0, 4)}************${formData.apiKey.slice(-4)}`
-                          : "(not set)"
+                          : t("providers.modal.apiKeyNotSet")
                       }
                       disabled
                     />
                     <p className="text-[10px] text-muted-foreground">
-                      API Key cannot be modified. To change, delete and recreate the provider.
+                      {t("providers.modal.apiKeyHelpEdit")}
                     </p>
                   </>
                 ) : (
@@ -653,12 +654,12 @@ export default function Providers() {
                     <input
                       type="password"
                       className="w-full h-8 px-2 text-xs border rounded-md bg-background"
-                      placeholder="e.g., ${API_KEY} or sk-..."
+                      placeholder={t("providers.placeholder.apiKey")}
                       value={formData.apiKey || ""}
                       onChange={e => updateForm("apiKey", e.target.value)}
                     />
                     <p className="text-[10px] text-muted-foreground">
-                      Supports ${"{"}ENV_VAR{"}"} syntax. Cannot be modified after creation.
+                      {t("providers.modal.apiKeyHelpAdd")}
                     </p>
                   </>
                 )}
@@ -673,17 +674,14 @@ export default function Providers() {
                     checked={formData.useCustomModelsList === true}
                     onChange={e => updateForm("useCustomModelsList", e.target.checked)}
                   />
-                  Use custom models list
+                  {t("providers.modal.useCustomModelsList")}
                 </label>
                 <p className="text-[10px] text-muted-foreground">
-                  When enabled, GET /models is answered locally from this list (no upstream).
-                  Optional query <code className="font-mono text-[10px]">limit</code> truncates the
-                  returned page; Anthropic-shaped responses set{" "}
-                  <code className="font-mono text-[10px]">has_more</code> accordingly.
+                  {t("providers.modal.customModelsListHelp")}
                 </p>
                 {formData.useCustomModelsList ? (
                   <div className="space-y-1">
-                    <label className="text-xs font-medium">Model ids (one per line)</label>
+                    <label className="text-xs font-medium">{t("providers.modal.modelIds")}</label>
                     <textarea
                       className="w-full px-2 py-1 text-xs border rounded-md bg-background font-mono"
                       placeholder={"claude-3-5-sonnet-20241022\ngpt-4"}
@@ -704,15 +702,15 @@ export default function Providers() {
                     checked={formData.modelMappingEnabled !== false}
                     onChange={e => updateForm("modelMappingEnabled", e.target.checked)}
                   />
-                  Enable model mapping
+                  {t("providers.modal.enableModelMapping")}
                 </label>
                 <p className="text-[10px] text-muted-foreground">
-                  When off, the YAML below is kept in config but not applied (requests, model lists,
-                  and response <code className="font-mono text-[10px]">model</code> stay
-                  unmapped).
+                  {t("providers.modal.modelMappingHelp")}
                 </p>
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground">Model Map (YAML)</label>
+                  <label className="text-xs font-medium text-muted-foreground">
+                    {t("providers.modal.modelMap")}
+                  </label>
                   <textarea
                     className={`w-full px-2 py-1 text-xs border rounded-md bg-background font-mono ${modelMapError ? "border-destructive" : ""} ${formData.modelMappingEnabled === false ? "opacity-60 bg-muted/20" : ""}`}
                     placeholder={`- pattern: "claude-*"\n  model: "custom-model"`}
@@ -736,7 +734,7 @@ export default function Providers() {
                   <p className="text-[10px] text-destructive">{modelMapError}</p>
                 )}
                 <p className="text-[10px] text-muted-foreground">
-                  Optional. Leave empty to pass models through without remapping.
+                  {t("providers.modal.modelMapHelp")}
                 </p>
               </div>
             </CardContent>
@@ -744,7 +742,7 @@ export default function Providers() {
             {/* Modal Footer */}
             <div className="border-t p-3 flex-shrink-0 flex justify-end gap-2">
               <Button size="sm" variant="outline" className="h-7 text-xs" onClick={closeModal}>
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 size="sm"
@@ -761,9 +759,9 @@ export default function Providers() {
                 {addMutation.isPending ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
                 ) : editingProvider ? (
-                  "Save"
+                  t("common.save")
                 ) : (
-                  "Add Provider"
+                  t("providers.modal.submitAdd")
                 )}
               </Button>
             </div>
@@ -782,23 +780,22 @@ export default function Providers() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete provider?</AlertDialogTitle>
+            <AlertDialogTitle>{t("providers.deleteDialog.title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete{" "}
-              <span className="font-semibold text-foreground">
-                {pendingDeleteProvider?.name ?? "this provider"}
-              </span>
+              {t("providers.deleteDialog.description", {
+                name: pendingDeleteProvider?.name || t("providers.deleteDialog.thisProvider"),
+              })}
               {pendingDeleteProvider?.id ? (
                 <>
                   {" "}
                   (<span className="font-mono">{pendingDeleteProvider.id}</span>)
                 </>
               ) : null}
-              ? This cannot be undone.
+              {t("providers.deleteDialog.cannotUndo")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={e => {
@@ -806,7 +803,11 @@ export default function Providers() {
                 confirmDelete();
               }}
             >
-              {deleteMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Delete"}
+              {deleteMutation.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                t("common.delete")
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -820,7 +821,7 @@ export default function Providers() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Copy className="h-4 w-4 text-muted-foreground" />
-                  <CardTitle className="text-sm">Duplicate provider</CardTitle>
+                  <CardTitle className="text-sm">{t("providers.duplicateModal.title")}</CardTitle>
                 </div>
                 <Button
                   variant="ghost"
@@ -832,36 +833,34 @@ export default function Providers() {
                 </Button>
               </div>
               <p className="text-[10px] text-muted-foreground font-normal pt-1">
-                From <span className="font-mono">{duplicateSource.id}</span> — all settings and the
-                stored API key are copied.
+                {t("providers.duplicateModal.description", { sourceId: duplicateSource.id })}
               </p>
             </CardHeader>
             <CardContent className="p-4 space-y-3">
               <div className="space-y-1">
                 <label className="text-xs font-medium">
-                  Name <span className="text-destructive">*</span>
+                  {t("providers.duplicateModal.name")} <span className="text-destructive">*</span>
                 </label>
                 <input
                   type="text"
                   className="w-full h-8 px-2 text-xs border rounded-md bg-background"
                   value={dupName}
                   onChange={e => setDupName(e.target.value)}
-                  placeholder="Display name for the new provider"
+                  placeholder={t("providers.duplicateModal.namePlaceholder")}
                   autoFocus
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-medium">New provider ID</label>
+                <label className="text-xs font-medium">{t("providers.duplicateModal.newId")}</label>
                 <input
                   type="text"
                   className="w-full h-8 px-2 text-xs border rounded-md bg-background font-mono"
                   value={dupNewId}
                   onChange={e => setDupNewId(e.target.value)}
-                  placeholder="e.g. my-provider_copy"
+                  placeholder={t("providers.duplicateModal.idPlaceholder")}
                 />
                 <p className="text-[10px] text-muted-foreground">
-                  Only alphanumeric, underscore, and hyphen. If that key already exists, the request
-                  will fail; remove or rename the other entry first.
+                  {t("providers.duplicateModal.idHelp")}
                 </p>
               </div>
             </CardContent>
@@ -872,7 +871,7 @@ export default function Providers() {
                 className="h-7 text-xs"
                 onClick={closeDuplicateModal}
               >
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 size="sm"
@@ -888,7 +887,7 @@ export default function Providers() {
                 {duplicateMutation.isPending ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
                 ) : (
-                  "Duplicate"
+                  t("providers.duplicateModal.action")
                 )}
               </Button>
             </div>

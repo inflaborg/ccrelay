@@ -27,6 +27,8 @@ declare global {
     CCRELAY_API_URL?: string;
     /** Injected by VS Code / Cursor dashboard & log viewer webviews for /ccrelay/api Bearer auth */
     CCRELAY_API_BEARER?: string;
+    /** Injected by VS Code webviews from backend config.server.locale */
+    CCRELAY_LOCALE?: string;
   }
 }
 

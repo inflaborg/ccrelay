@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileCode2, Loader2, SlidersHorizontal, Terminal, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,30 +19,30 @@ import { api } from "@/api/client";
 import { CLAUDE_CODE_DEFAULT_MODELS, CODEX_DEFAULT_MODEL } from "@/constants/claudeCodeDefaults";
 import type { ClientConfigItem, ClientConfigItemStatus } from "@/types/api";
 
-function statusBadge(status: ClientConfigItemStatus) {
+function statusBadge(status: ClientConfigItemStatus, t: (key: string) => string) {
   switch (status) {
     case "ok":
       return (
         <Badge variant="success" className="text-[10px] px-1.5 py-0">
-          OK
+          {t("clientConfig.status.ok")}
         </Badge>
       );
     case "missing":
       return (
         <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-          Not set
+          {t("clientConfig.status.notSet")}
         </Badge>
       );
     case "wrong_target":
       return (
         <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
-          Other host
+          {t("clientConfig.status.otherHost")}
         </Badge>
       );
     case "invalid":
       return (
         <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
-          Invalid file
+          {t("clientConfig.status.invalidFile")}
         </Badge>
       );
     default:
@@ -54,6 +55,7 @@ function needsOverwriteBeforeApply(item: ClientConfigItem): boolean {
 }
 
 export default function ClientConfigStatus() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingTarget, setPendingTarget] = useState<"claudeCode" | "codex" | null>(null);
@@ -159,12 +161,14 @@ export default function ClientConfigStatus() {
         <CardHeader className="p-3 pb-2">
           <CardTitle className="text-xs font-medium flex items-center gap-2">
             <Terminal className="h-3.5 w-3.5 text-muted-foreground" />
-            Client configuration
+            {t("clientConfig.title")}
           </CardTitle>
           <p className="text-[10px] text-muted-foreground font-normal pt-0.5">
-            Check Claude Code (<span className="font-mono">~/.claude/settings.json</span>) and Codex
-            (<span className="font-mono">~/.codex/config.toml</span>) for CCRelay on port{" "}
-            {data?.port ?? "—"}.
+            {t("clientConfig.description", {
+              port: data?.port ?? "—",
+              claudePath: "~/.claude/settings.json",
+              codexPath: "~/.codex/config.toml",
+            })}
           </p>
         </CardHeader>
         <CardContent className="p-3 pt-0 space-y-2">
@@ -177,15 +181,17 @@ export default function ClientConfigStatus() {
                   <FileCode2 className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-medium">Claude Code</span>
-                      {data?.claudeCode && statusBadge(data.claudeCode.status)}
+                      <span className="text-xs font-medium">
+                        {t("clientConfig.claudeCode.name")}
+                      </span>
+                      {data?.claudeCode && statusBadge(data.claudeCode.status, t)}
                     </div>
                     <p className="text-[10px] text-muted-foreground font-mono truncate mt-0.5">
                       {data?.claudeCode.filePath}
                     </p>
                     {data?.claudeCode.currentValue && (
                       <p className="text-[10px] text-muted-foreground truncate">
-                        ANTHROPIC_BASE_URL: {data.claudeCode.currentValue}
+                        {t("clientConfig.claudeCode.envVarLabel")}: {data.claudeCode.currentValue}
                       </p>
                     )}
                     {data?.claudeCode.message && data.claudeCode.status !== "ok" && (
@@ -194,16 +200,15 @@ export default function ClientConfigStatus() {
                       </p>
                     )}
                     <p className="text-[10px] text-muted-foreground mt-0.5">
-                      Expected:{" "}
+                      {t("clientConfig.claudeCode.expected")}{" "}
                       <span className="font-mono">{data?.expectedAnthropicBase ?? "—"}</span>
                     </p>
                     <div className="mt-2 pt-2 border-t border-border/50 space-y-1.5">
                       <p className="text-[10px] text-muted-foreground">
                         <span className="font-medium text-foreground/90">
-                          Optional default model names
+                          {t("clientConfig.claudeCode.optionalModels.title")}
                         </span>{" "}
-                        (CCRelay <span className="font-mono">modelMap</span> is usually enough. Set
-                        these only if you want Claude Code to request specific ids.)
+                        {t("clientConfig.claudeCode.optionalModels.description")}
                       </p>
                       {data?.claudeDefaultModels &&
                       (data.claudeDefaultModels.opus ||
@@ -216,7 +221,10 @@ export default function ClientConfigStatus() {
                         </p>
                       ) : (
                         <p className="text-[10px] text-muted-foreground">
-                          <span className="italic">Not set in settings.json.</span> Suggested:{" "}
+                          <span className="italic">
+                            {t("clientConfig.claudeCode.optionalModels.notSet")}
+                          </span>{" "}
+                          {t("clientConfig.claudeCode.optionalModels.suggested")}{" "}
                           <span className="font-mono text-foreground/80">
                             {CLAUDE_CODE_DEFAULT_MODELS.opus} · {CLAUDE_CODE_DEFAULT_MODELS.sonnet}{" "}
                             · {CLAUDE_CODE_DEFAULT_MODELS.haiku}
@@ -239,7 +247,7 @@ export default function ClientConfigStatus() {
                           }}
                         >
                           <SlidersHorizontal className="h-3 w-3" />
-                          Configure default models
+                          {t("clientConfig.claudeCode.configureModels")}
                         </Button>
                       </div>
                     </div>
@@ -260,9 +268,9 @@ export default function ClientConfigStatus() {
                     {applyMutation.isPending && applyingTo === "claudeCode" ? (
                       <Loader2 className="h-3 w-3 animate-spin" />
                     ) : data?.claudeCode.status === "ok" ? (
-                      "Up to date"
+                      t("clientConfig.claudeCode.upToDate")
                     ) : (
-                      "Apply CCRelay settings"
+                      t("clientConfig.claudeCode.apply")
                     )}
                   </Button>
                 </div>
@@ -273,8 +281,8 @@ export default function ClientConfigStatus() {
                   <FileCode2 className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-medium">Codex</span>
-                      {data?.codex && statusBadge(data.codex.status)}
+                      <span className="text-xs font-medium">{t("clientConfig.codex.name")}</span>
+                      {data?.codex && statusBadge(data.codex.status, t)}
                     </div>
                     <p className="text-[10px] text-muted-foreground font-mono truncate mt-0.5">
                       {data?.codex.filePath}
@@ -290,13 +298,15 @@ export default function ClientConfigStatus() {
                       </p>
                     )}
                     <p className="text-[10px] text-muted-foreground mt-0.5">
-                      Expected:{" "}
+                      {t("clientConfig.codex.expected")}{" "}
                       <span className="font-mono">{data?.expectedCodexBaseUrl ?? "—"}</span>
                     </p>
                     <div className="mt-2 pt-2 border-t border-border/50 space-y-1.5">
                       <p className="text-[10px] text-muted-foreground">
-                        <span className="font-medium text-foreground/90">Model</span> (written to{" "}
-                        <span className="font-mono">model</span> in config.toml)
+                        <span className="font-medium text-foreground/90">
+                          {t("clientConfig.codex.model.label")}
+                        </span>{" "}
+                        {t("clientConfig.codex.model.description")}
                       </p>
                       {data?.codex?.model ? (
                         <p className="text-[10px] font-mono text-foreground/80">
@@ -304,7 +314,8 @@ export default function ClientConfigStatus() {
                         </p>
                       ) : (
                         <p className="text-[10px] text-muted-foreground">
-                          <span className="italic">Not set.</span> Default:{" "}
+                          <span className="italic">{t("clientConfig.codex.model.notSet")}</span>{" "}
+                          {t("clientConfig.codex.model.default")}{" "}
                           <span className="font-mono text-foreground/80">
                             {CODEX_DEFAULT_MODEL}
                           </span>
@@ -324,7 +335,7 @@ export default function ClientConfigStatus() {
                           }}
                         >
                           <SlidersHorizontal className="h-3 w-3" />
-                          Configure model
+                          {t("clientConfig.codex.configureModel")}
                         </Button>
                       </div>
                     </div>
@@ -346,9 +357,9 @@ export default function ClientConfigStatus() {
                     {applyMutation.isPending && applyingTo === "codex" ? (
                       <Loader2 className="h-3 w-3 animate-spin" />
                     ) : data?.codex.status === "ok" ? (
-                      "Up to date"
+                      t("clientConfig.codex.upToDate")
                     ) : (
-                      "Apply CCRelay template"
+                      t("clientConfig.codex.apply")
                     )}
                   </Button>
                 </div>
@@ -377,8 +388,8 @@ export default function ClientConfigStatus() {
           <AlertDialogHeader>
             <AlertDialogTitle>
               {pendingTarget === "codex"
-                ? "Replace Codex config?"
-                : "Overwrite Claude Code settings?"}
+                ? t("clientConfig.dialog.replaceCodex.title")
+                : t("clientConfig.dialog.overwrite.title")}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {pendingTarget === "codex" ? (
@@ -397,21 +408,25 @@ export default function ClientConfigStatus() {
                   <span className="font-mono">ANTHROPIC_BASE_URL</span> →{" "}
                   {data?.expectedAnthropicBase ?? "this server"}).
                   {pendingItem?.status === "invalid" && (
-                    <> Invalid JSON will be replaced by a new object with the merged env block.</>
+                    <> {t("clientConfig.dialog.overwrite.invalidJson")}</>
                   )}
                 </>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={e => {
                 e.preventDefault();
                 onConfirmOverwrite();
               }}
             >
-              {applyMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Overwrite"}
+              {applyMutation.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                t("clientConfig.dialog.overwrite.action")
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -422,7 +437,7 @@ export default function ClientConfigStatus() {
           <Card className="w-full max-w-[360px] flex flex-col">
             <CardHeader className="border-b p-3 flex-shrink-0">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm">Codex model</CardTitle>
+                <CardTitle className="text-sm">{t("clientConfig.codexModelModal.title")}</CardTitle>
                 <Button
                   type="button"
                   variant="ghost"
@@ -434,14 +449,14 @@ export default function ClientConfigStatus() {
                 </Button>
               </div>
               <p className="text-[10px] text-muted-foreground font-normal pt-1">
-                Written to <span className="font-mono">model</span> in{" "}
-                <span className="font-mono">~/.codex/config.toml</span>. Leave empty to use the
-                default.
+                {t("clientConfig.codexModelModal.description")}
               </p>
             </CardHeader>
             <CardContent className="p-4 space-y-2">
               <div className="space-y-1">
-                <label className="text-xs font-medium">Model</label>
+                <label className="text-xs font-medium">
+                  {t("clientConfig.codexModelModal.label")}
+                </label>
                 <input
                   type="text"
                   className="w-full h-8 px-2 text-xs border rounded-md bg-background font-mono"
@@ -505,9 +520,9 @@ export default function ClientConfigStatus() {
                 {applyMutation.isPending || codexModelPatchMutation.isPending ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
                 ) : codexModalMode === "configure" ? (
-                  "Save"
+                  t("common.save")
                 ) : (
-                  "Save & Apply"
+                  t("clientConfig.codexModelModal.saveAndApply")
                 )}
               </Button>
             </div>
@@ -520,7 +535,7 @@ export default function ClientConfigStatus() {
           <Card className="w-full max-w-[420px] flex flex-col">
             <CardHeader className="border-b p-3 flex-shrink-0">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm">Claude Code default model names</CardTitle>
+                <CardTitle className="text-sm">{t("clientConfig.modelsModal.title")}</CardTitle>
                 <Button
                   type="button"
                   variant="ghost"
@@ -532,14 +547,12 @@ export default function ClientConfigStatus() {
                 </Button>
               </div>
               <p className="text-[10px] text-muted-foreground font-normal pt-1">
-                Written to <span className="font-mono">env.ANTHROPIC_DEFAULT_*_MODEL</span> in
-                settings.json. Leave blank and save to remove a key. Empty all three to rely only on
-                CCRelay mapping.
+                {t("clientConfig.modelsModal.description")}
               </p>
             </CardHeader>
             <CardContent className="p-4 space-y-2">
               <div className="space-y-1">
-                <label className="text-xs font-medium">Opus</label>
+                <label className="text-xs font-medium">{t("clientConfig.modelsModal.opus")}</label>
                 <input
                   type="text"
                   className="w-full h-8 px-2 text-xs border rounded-md bg-background font-mono"
@@ -549,7 +562,9 @@ export default function ClientConfigStatus() {
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-medium">Sonnet</label>
+                <label className="text-xs font-medium">
+                  {t("clientConfig.modelsModal.sonnet")}
+                </label>
                 <input
                   type="text"
                   className="w-full h-8 px-2 text-xs border rounded-md bg-background font-mono"
@@ -559,7 +574,7 @@ export default function ClientConfigStatus() {
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-medium">Haiku</label>
+                <label className="text-xs font-medium">{t("clientConfig.modelsModal.haiku")}</label>
                 <input
                   type="text"
                   className="w-full h-8 px-2 text-xs border rounded-md bg-background font-mono"
@@ -587,7 +602,7 @@ export default function ClientConfigStatus() {
                   setHaiku(CLAUDE_CODE_DEFAULT_MODELS.haiku);
                 }}
               >
-                Use suggested defaults
+                {t("clientConfig.modelsModal.useDefaults")}
               </Button>
               <Button
                 type="button"
@@ -601,7 +616,7 @@ export default function ClientConfigStatus() {
                 }}
                 disabled={modelsMutation.isPending}
               >
-                Clear fields
+                {t("clientConfig.modelsModal.clearFields")}
               </Button>
               <Button
                 type="button"
@@ -611,7 +626,7 @@ export default function ClientConfigStatus() {
                 disabled={modelsMutation.isPending}
                 onClick={() => modelsMutation.mutate({ opus: "", sonnet: "", haiku: "" })}
               >
-                Remove all from file
+                {t("clientConfig.modelsModal.removeAll")}
               </Button>
               <Button
                 type="button"
@@ -620,7 +635,11 @@ export default function ClientConfigStatus() {
                 disabled={modelsMutation.isPending}
                 onClick={() => modelsMutation.mutate({ opus, sonnet, haiku })}
               >
-                {modelsMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+                {modelsMutation.isPending ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  t("common.save")
+                )}
               </Button>
             </div>
           </Card>

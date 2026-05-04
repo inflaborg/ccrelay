@@ -90,6 +90,8 @@ export const ServerConfigSchema = z.object({
   autoStart: z.boolean().default(true),
   /** Local HTTP API Bearer; auto-written when omitted (see ConfigManager). */
   apiBearerToken: z.string().optional(),
+  /** UI language locale; undefined means not yet chosen (triggers language modal). */
+  locale: z.enum(["en", "zh"]).optional(),
 });
 
 export type ServerConfigInput = z.infer<typeof ServerConfigSchema>;
@@ -298,6 +300,8 @@ export interface RouterConfig {
     enabled: boolean;
     database?: DatabaseConfig;
   };
+  /** UI language locale; undefined means not yet chosen. */
+  locale?: "en" | "zh";
 }
 
 export interface RouterStatus {

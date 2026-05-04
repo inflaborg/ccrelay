@@ -16,6 +16,7 @@ export class DashboardWebviewProvider implements vscode.WebviewViewProvider {
       host?: string;
       port?: number;
       apiBearerToken: string;
+      locale?: string;
     }
   ) {}
 
@@ -36,14 +37,15 @@ export class DashboardWebviewProvider implements vscode.WebviewViewProvider {
 
   public async updateWebview(): Promise<void> {
     if (this._view) {
-      const { leaderUrl, role, host, port, apiBearerToken } = this._getConfig();
+      const { leaderUrl, role, host, port, apiBearerToken, locale } = this._getConfig();
       this._view.webview.html = await this.getWebviewContent(
         this._view.webview,
         leaderUrl,
         role,
         host,
         port,
-        apiBearerToken
+        apiBearerToken,
+        locale
       );
     }
   }
@@ -54,7 +56,8 @@ export class DashboardWebviewProvider implements vscode.WebviewViewProvider {
     role: string,
     host?: string,
     port?: number,
-    apiBearerToken?: string
+    apiBearerToken?: string,
+    locale?: string
   ): Promise<string> {
     const webDistPath = path.join(this._extensionUri.fsPath, "out", "web");
 
@@ -120,6 +123,7 @@ export class DashboardWebviewProvider implements vscode.WebviewViewProvider {
     window.CCRELAY_ROLE = "${role}";
     window.CCRELAY_LEADER_URL = "${leaderUrl || ""}";
     window.CCRELAY_API_BEARER = ${JSON.stringify(apiBearerToken ?? "")};
+    window.CCRELAY_LOCALE = ${JSON.stringify(locale || "")};
   </script>
 </head>
 <body>

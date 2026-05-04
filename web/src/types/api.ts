@@ -256,6 +256,7 @@ export interface ServerSettings {
   port: number;
   host: string;
   autoStart: boolean;
+  locale?: string;
 }
 
 export interface RoutingBlockRule {

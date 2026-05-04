@@ -76,6 +76,7 @@ export function activate(context: vscode.ExtensionContext) {
         host: "127.0.0.1",
         port: 7575,
         apiBearerToken: "",
+        locale: undefined as string | undefined,
       };
     }
     return {
@@ -84,6 +85,7 @@ export function activate(context: vscode.ExtensionContext) {
       host: configManager.host,
       port: configManager.port,
       apiBearerToken: configManager.getApiBearerToken(),
+      locale: configManager.locale,
     };
   };
 
@@ -147,7 +149,8 @@ export function activate(context: vscode.ExtensionContext) {
       hostUi,
       portUi,
       context.extensionUri,
-      configManager.getApiBearerToken()
+      configManager.getApiBearerToken(),
+      configManager.locale
     );
   });
 
