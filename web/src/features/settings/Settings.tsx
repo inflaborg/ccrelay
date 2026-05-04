@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ListFilter, Loader2, Plus, Trash2, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -222,19 +223,25 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 // ─── Server section ─────────────────────────────────────────────────────────
 
 function ServerSection({ data }: { data: ServerSettings }) {
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const [form, setForm] = useState(data);
 
   const mutation = useMutation({
-    mutationFn: (d: ServerSettings) =>
-      api.patchConfig({ section: "server", data: d as unknown as Record<string, unknown> }),
+    mutationFn: (d: Record<string, unknown>) => api.patchConfig({ section: "server", data: d }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["config"] }),
   });
 
+  const handleLocaleChange = (locale: string) => {
+    setForm(f => ({ ...f, locale }));
+    void i18n.changeLanguage(locale);
+    mutation.mutate({ ...form, locale });
+  };
+
   return (
-    <Section title="Server">
+    <Section title={t("settings.server.title")}>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Port">
+        <Field label={t("settings.server.port")}>
           <NumberInput
             value={form.port ?? 7575}
             onChange={v => setForm(f => ({ ...f, port: v }))}
@@ -242,7 +249,7 @@ function ServerSection({ data }: { data: ServerSettings }) {
             max={65535}
           />
         </Field>
-        <Field label="Host">
+        <Field label={t("settings.server.host")}>
           <TextInput
             value={form.host ?? "127.0.0.1"}
             onChange={v => setForm(f => ({ ...f, host: v }))}
@@ -253,9 +260,25 @@ function ServerSection({ data }: { data: ServerSettings }) {
       <Toggle
         checked={form.autoStart ?? true}
         onChange={v => setForm(f => ({ ...f, autoStart: v }))}
-        label="Auto-start server on extension activation"
+        label={t("settings.server.autoStart")}
       />
-      <SaveBar mutation={mutation} onSave={() => mutation.mutate(form)} restartRequired />
+      <Field label={t("settings.server.language")}>
+        <Select
+          value={form.locale || ""}
+          options={[
+            { value: "", label: t("common.na") },
+            { value: "en", label: t("language.en") },
+            { value: "zh", label: t("language.zh") },
+          ]}
+          onChange={handleLocaleChange}
+          className="h-8 text-xs"
+        />
+      </Field>
+      <SaveBar
+        mutation={mutation}
+        onSave={() => mutation.mutate(form as unknown as Record<string, unknown>)}
+        restartRequired
+      />
     </Section>
   );
 }
@@ -1172,6 +1195,7 @@ function LoggingSection({ data }: { data: LoggingSettings }) {
 // ─── main component ─────────────────────────────────────────────────────────
 
 export default function Settings() {
+  const { t } = useTranslation();
   const { data, isLoading } = useQuery({
     queryKey: ["config"],
     queryFn: () => api.getConfig(),
@@ -1193,10 +1217,8 @@ export default function Settings() {
   return (
     <div className="space-y-3">
       <div>
-        <h2 className="text-base font-semibold tracking-tight">Settings</h2>
-        <p className="text-xs text-muted-foreground">
-          Manage server, routing, concurrency, and logging configuration.
-        </p>
+        <h2 className="text-base font-semibold tracking-tight">{t("settings.title")}</h2>
+        <p className="text-xs text-muted-foreground">{t("settings.subtitle")}</p>
       </div>
 
       {isLoading ? (
@@ -1223,7 +1245,7 @@ export default function Settings() {
       ) : (
         <Card className="p-0">
           <CardContent className="p-6 text-center text-xs text-muted-foreground">
-            Failed to load settings.
+            {t("settings.loadError")}
           </CardContent>
         </Card>
       )}

@@ -4,16 +4,18 @@
   "private": true,
   "description": "CCRelay desktop tray app",
   "license": "MIT",
+  "author": "inflab <https://github.com/inflaborg>",
+  "packageManager": "npm@10.9.4",
   "main": "out/main.js",
   "scripts": {
     "compile": "tsc --noEmit -p tsconfig.json",
     "build": "node ../../scripts/esbuild.desktop.mjs",
     "start": "electron .",
-    "pack": "electron-builder",
-    "pack:mac": "electron-builder --mac",
-    "pack:mac:all": "electron-builder --mac --x64 --arm64",
-    "pack:win": "electron-builder --win",
-    "pack:win:all": "electron-builder --win --x64 --arm64"
+    "pack": "electron-builder --publish never",
+    "pack:mac": "electron-builder --mac --publish never",
+    "pack:mac:all": "electron-builder --mac --x64 --arm64 --publish never",
+    "pack:win": "electron-builder --win --publish never",
+    "pack:win:all": "electron-builder --win --x64 --arm64 --publish never"
   },
   "dependencies": {
     "@ccrelay/core": "*"
@@ -25,7 +27,7 @@
     "typescript": "^5.0.4"
   },
   "build": {
-    "appId": "com.inflab.ccrelay",
+    "appId": "org.inflab.ccrelay",
     "productName": "CCRelay",
     "artifactName": "${productName}-${version}-${platform}-${arch}.${ext}",
     "directories": {

@@ -22,7 +22,6 @@ import {
   isModelsListUpstreamPath,
   isOpenAIModelsListJson,
   synthesizeCustomModelsListBody,
-  rewriteModelsListPayloadInPlace,
   isOpenAIType,
   createStreamingState,
   processStreamingChunk,
@@ -1230,30 +1229,6 @@ export class ProxyExecutor {
           }
         } catch {
           /* parse failed — keep original */
-        }
-      }
-
-      if (
-        task.method === "GET" &&
-        isModelsListUpstreamPath(task.requestPath) &&
-        outStatus === 200 &&
-        ctx.responseChunks.length > 0
-      ) {
-        try {
-          const bodyStr = Buffer.concat(ctx.responseChunks).toString("utf-8");
-          const parsed = JSON.parse(bodyStr) as Record<string, unknown>;
-          if (rewriteModelsListPayloadInPlace(parsed, task.provider)) {
-            ctx.responseChunks = [Buffer.from(JSON.stringify(parsed), "utf-8")];
-            outHeaders["content-type"] = "application/json";
-            for (const k of Object.keys(outHeaders)) {
-              if (k.toLowerCase() === "content-length") {
-                delete outHeaders[k];
-              }
-            }
-            log.info(`[${clientId}] GET /models: reverse modelMap applied to list ids`);
-          }
-        } catch {
-          /* keep original */
         }
       }
 

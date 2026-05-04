@@ -1,0 +1,403 @@
+{
+  "common": {
+    "cancel": "取消",
+    "save": "保存",
+    "refresh": "刷新",
+    "na": "无",
+    "upToDate": "已是最新",
+    "apply": "应用",
+    "delete": "删除"
+  },
+  "nav": {
+    "dashboard": "仪表盘",
+    "providers": "提供商",
+    "logs": "日志",
+    "settings": "设置"
+  },
+  "app": {
+    "footer": {
+      "project": "CCRelay 项目组"
+    }
+  },
+  "language": {
+    "title": "选择语言",
+    "description": "请选择界面语言。",
+    "en": "English",
+    "zh": "中文"
+  },
+  "dashboard": {
+    "title": "仪表盘",
+    "subtitle": "监控 CCRelay 服务器状态与性能",
+    "serverStatus": {
+      "title": "服务器状态",
+      "running": "运行中",
+      "stopped": "已停止"
+    },
+    "currentProvider": {
+      "title": "当前提供商",
+      "none": "无"
+    },
+    "totalRequests": {
+      "title": "请求总数",
+      "success": "成功",
+      "errors": "错误"
+    },
+    "performance": {
+      "title": "性能",
+      "avgResponseTime": "平均响应时间",
+      "successRate": "成功率",
+      "providersUsed": "使用提供商数"
+    }
+  },
+  "clientConfig": {
+    "title": "客户端配置",
+    "description": "检查 Claude Code（{{claudePath}}）和 Codex（{{codexPath}}）配置是否指向此 CCRelay 实例（端口 {{port}}）。",
+    "status": {
+      "ok": "正常",
+      "notSet": "未设置",
+      "otherHost": "其他地址",
+      "invalidFile": "文件无效"
+    },
+    "claudeCode": {
+      "name": "Claude Code",
+      "envVarLabel": "ANTHROPIC_BASE_URL:",
+      "expected": "期望值:",
+      "optionalModels": {
+        "title": "可选默认模型名称",
+        "description": "（CCRelay 的 modelMap 通常已足够。仅在需要 Claude Code 请求特定模型 ID 时设置。）",
+        "notSet": "未在 settings.json 中设置。",
+        "suggested": "建议："
+      },
+      "configureModels": "配置默认模型",
+      "upToDate": "已是最新",
+      "apply": "应用 CCRelay 设置"
+    },
+    "codex": {
+      "name": "Codex",
+      "expected": "期望值:",
+      "model": {
+        "label": "模型",
+        "description": "（写入 config.toml 中的 model 字段）",
+        "notSet": "未设置。",
+        "default": "默认："
+      },
+      "configureModel": "配置模型",
+      "upToDate": "已是最新",
+      "apply": "应用 CCRelay 模板"
+    },
+    "dialog": {
+      "overwrite": {
+        "title": "覆盖 Claude Code 设置？",
+        "invalidJson": "无效的 JSON 将被替换为包含合并后 env 块的新对象。",
+        "action": "覆盖"
+      },
+      "replaceCodex": {
+        "title": "替换 Codex 配置？"
+      }
+    },
+    "codexModelModal": {
+      "title": "Codex 模型",
+      "description": "写入 ~/.codex/config.toml 中的 model 字段。留空则使用默认值。",
+      "label": "模型",
+      "saveAndApply": "保存并应用"
+    },
+    "modelsModal": {
+      "title": "Claude Code 默认模型名称",
+      "description": "写入 settings.json 中的 env.ANTHROPIC_DEFAULT_*_MODEL。留空并保存可删除对应键。三个都清空则完全依赖 CCRelay 映射。",
+      "opus": "Opus",
+      "sonnet": "Sonnet",
+      "haiku": "Haiku",
+      "useDefaults": "使用建议默认值",
+      "clearFields": "清空字段",
+      "removeAll": "从文件中移除全部"
+    }
+  },
+  "providers": {
+    "title": "提供商",
+    "subtitle": "管理并在 AI API 提供商之间切换",
+    "reloadConfig": "重新加载配置",
+    "add": "添加",
+    "protocol": {
+      "anthropic": "Anthropic",
+      "openai": "OpenAI",
+      "openaiChat": "OpenAI Chat"
+    },
+    "contextMenu": {
+      "use": "使用",
+      "edit": "编辑",
+      "duplicate": "复制",
+      "delete": "删除"
+    },
+    "badge": {
+      "mappingOff": "映射已关",
+      "disabled": "已禁用",
+      "active": "当前使用"
+    },
+    "card": {
+      "id": "ID",
+      "mode": "模式",
+      "baseUrl": "基础 URL"
+    },
+    "emptyState": "尚未配置提供商。点击「添加」创建一个。",
+    "modal": {
+      "editTitle": "编辑提供商",
+      "addTitle": "添加提供商",
+      "providerId": "提供商 ID",
+      "providerIdHelp": "唯一标识符（字母、数字、下划线、连字符）",
+      "enabled": "启用",
+      "alwaysOn": "（始终启用）",
+      "alwaysOnTooltip": "官方提供商必须保持启用状态。",
+      "name": "名称",
+      "baseUrl": "API 基础 URL",
+      "type": "类型",
+      "typeOpenaiFull": "OpenAI（完整）",
+      "typeOpenaiChatOnly": "OpenAI（仅 Chat）",
+      "modePassthrough": "透传",
+      "modeInject": "注入",
+      "crossProtocol": "跨协议（Anthropic -> Chat）",
+      "crossProtocolStandard": "标准",
+      "crossProtocolAzure": "Azure OpenAI",
+      "crossProtocolHelp": "当上游拒绝额外字段（如推理参数）时选择 Azure。",
+      "apiKey": "API 密钥",
+      "apiKeyNotSet": "（未设置）",
+      "apiKeyHelpEdit": "API 密钥无法修改。如需更改，请删除后重新创建提供商。",
+      "apiKeyHelpAdd": "支持 ${ENV_VAR} 语法。创建后无法修改。",
+      "useCustomModelsList": "使用自定义模型列表",
+      "customModelsListHelp": "启用后，GET /models 将从此列表本地响应（不请求上游）。可选的查询限制会截断返回页；Anthropic 格式的响应会相应设置 has_more。",
+      "modelIds": "模型 ID（每行一个）",
+      "enableModelMapping": "启用模型映射",
+      "modelMappingHelp": "关闭后，下方 YAML 仍保留在配置中但不会应用（请求、模型列表和响应模型均不映射）。",
+      "modelMap": "模型映射（YAML）",
+      "modelMapHelp": "可选。留空则透传模型名称不做重映射。",
+      "submitAdd": "添加提供商"
+    },
+    "validation": {
+      "mustBeYamlArray": "必须是 YAML 数组",
+      "patternModelRequired": "每项必须包含 'pattern' 和 'model' 字段",
+      "invalidYaml": "无效的 YAML 格式"
+    },
+    "placeholder": {
+      "id": "例如 my_provider",
+      "name": "例如 My Custom Provider",
+      "baseUrl": "例如 https://api.example.com",
+      "apiKey": "例如 ${API_KEY} 或 sk-..."
+    },
+    "deleteDialog": {
+      "title": "删除提供商？",
+      "thisProvider": "此提供商",
+      "cannotUndo": "此操作无法撤销。",
+      "action": "删除"
+    },
+    "duplicateModal": {
+      "title": "复制提供商",
+      "name": "名称",
+      "namePlaceholder": "新提供商的显示名称",
+      "newId": "新提供商 ID",
+      "idPlaceholder": "例如 my-provider_copy",
+      "idHelp": "仅限字母、数字、下划线和连字符。如果该 ID 已存在，请求将失败；请先删除或重命名另一项。",
+      "action": "复制"
+    },
+    "import": "导入",
+    "export": "导出",
+    "selectAll": "全选",
+    "cancelSelection": "取消",
+    "selectedCount": "已选 {{count}} 项"
+  },
+  "logs": {
+    "title": "请求日志",
+    "subtitle": "查看和分析 API 请求日志",
+    "clearAll": "清空全部",
+    "filter": {
+      "allProviders": "所有提供商",
+      "allMethods": "所有方法",
+      "pathPlaceholder": "筛选路径...",
+      "errorsOnly": "仅错误",
+      "logCount": "条日志"
+    },
+    "table": {
+      "header": {
+        "id": "ID",
+        "method": "方法",
+        "type": "类型",
+        "model": "模型",
+        "path": "路径",
+        "provider": "提供商",
+        "status": "状态",
+        "duration": "耗时",
+        "time": "时间"
+      },
+      "routeType": {
+        "block": "拦截",
+        "pass": "透传",
+        "route": "路由"
+      },
+      "status": {
+        "pending": "等待中",
+        "ok": "成功",
+        "err": "错误"
+      }
+    },
+    "emptyMessage": "未找到日志。请确认日志存储已启用。",
+    "detail": {
+      "title": "日志详情",
+      "id": "ID：",
+      "method": "方法",
+      "status": "状态",
+      "provider": "提供商",
+      "duration": "耗时",
+      "time": "时间",
+      "path": "路径",
+      "targetUrl": "目标 URL",
+      "error": "错误",
+      "statusOk": "成功",
+      "statusErr": "错误",
+      "loadError": "加载日志详情失败",
+      "requestBody": "请求体",
+      "responseBody": "响应体",
+      "tab": {
+        "analysis": "分析",
+        "tools": "工具",
+        "converted": "转换后",
+        "original": "原始",
+        "raw": "原始"
+      },
+      "chars": "字符",
+      "copy": "复制",
+      "copied": "已复制"
+    },
+    "analysis": {
+      "system": "系统",
+      "user": "用户",
+      "assistant": "助手",
+      "imageAttached": "[图片]",
+      "toolUse": "工具调用：",
+      "toolResult": "工具结果",
+      "noContent": "未找到可解析的内容。",
+      "parseFailed": "解析内容为 Markdown 失败。"
+    },
+    "clearDialog": {
+      "title": "清空所有日志",
+      "description": "确定要清空所有日志吗？此操作无法撤销。",
+      "clearing": "清空中...",
+      "action": "清空全部"
+    }
+  },
+  "settings": {
+    "title": "设置",
+    "subtitle": "管理服务器、路由、并发和日志配置。",
+    "saved": "已保存",
+    "restartRequired": "已保存。需要重启服务器才能使这些设置生效。",
+    "loadError": "加载设置失败。",
+    "server": {
+      "title": "服务器",
+      "port": "端口",
+      "host": "主机",
+      "autoStart": "扩展激活时自动启动服务器",
+      "language": "语言"
+    },
+    "routing": {
+      "title": "路由",
+      "forwardRules": "转发规则",
+      "blockRules": "拦截规则",
+      "column": {
+        "path": "路径",
+        "provider": "提供商",
+        "response": "响应",
+        "code": "状态码",
+        "condition": "条件"
+      },
+      "addRule": "添加规则",
+      "add": "添加",
+      "evaluationOrder": "匹配顺序",
+      "autoLiteral": "auto",
+      "routingAnd404": "路由与 404",
+      "saveRouting": "保存路由",
+      "unsavedChanges": "有未保存的更改",
+      "matchesConfig": "与已保存配置一致",
+      "group": {
+        "anthropicMessages": "Anthropic . Messages API",
+        "anthropicMessagesHint": "/v1/messages, /v1/messages/count_tokens, /anthropic/v1/messages",
+        "openaiChat": "OpenAI . Chat Completions",
+        "openaiChatHint": "/v1/chat/completions, /openai/chat/completions",
+        "openaiResponses": "OpenAI . Responses API",
+        "openaiResponsesHint": "/v1/responses, /openai/responses",
+        "openaiModels": "OpenAI . 模型列表",
+        "openaiModelsHint": "/v1/models, /openai/models",
+        "anthropicModels": "Anthropic . 模型列表",
+        "anthropicModelsHint": "/anthropic/v1/models",
+        "custom": "自定义路径",
+        "customHint": "其他模式；通过「添加」创建的行会出现在此处，直到匹配到上方的分组。"
+      },
+      "placeholder": {
+        "forwardPath": "/my/custom/route",
+        "blockPath": "/api/event_logging/*",
+        "blockResponse": "{\"ok\":true}"
+      },
+      "blockCondition": {
+        "anyProvider": "任意提供商",
+        "noConditionHint": "无提供商条件 — 点击添加「仅当」/「除非」列表",
+        "only": "仅当：",
+        "unless": "除非：",
+        "onlyWhenLabel": "仅当提供商",
+        "onlyWhen": "仅当当前提供商为",
+        "onlyWhenYaml": "（YAML condition.providers）",
+        "clearUnless": "清空下方「除非…」的所有条目后才能编辑此部分。",
+        "noProvidersLoaded": "未加载提供商",
+        "allSelected": "已选择所有提供商",
+        "addProviderId": "添加提供商 ID...",
+        "unlessLabel": "排除提供商",
+        "unlessYaml": "（YAML condition.providerNot）",
+        "clearOnlyWhen": "清空上方「仅当…」的所有条目后才能编辑此部分。"
+      },
+      "blockConditionModal": {
+        "title": "拦截条件（提供商）",
+        "description": "每次只能使用一种模式：设置「仅当」以限制为特定提供商，或设置「除非」以排除特定提供商。两者互斥 — 填写一个会禁用另一个。"
+      },
+      "helpBox": {
+        "title": "路由与 404",
+        "description": "规则按顺序匹配，首个匹配生效。提供商为「auto」时表示使用当前默认提供商。未匹配的路径将透传到代理，如果没有提供商处理则可能返回 404。"
+      },
+      "restore": "恢复默认路由",
+      "restoreTooltipEnabled": "将内置默认值加载到编辑器中（使用「保存」写入 config.yaml）",
+      "restoreTooltipDisabled": "服务器不可用的默认路由模板",
+      "restoreDialog": {
+        "title": "恢复默认路由？",
+        "description": "这会将编辑器中的转发和拦截列表替换为 CCRelay 的内置默认值。在点击「保存路由」之前不会写入磁盘。",
+        "action": "恢复"
+      }
+    },
+    "concurrency": {
+      "title": "并发",
+      "enable": "启用并发管理器",
+      "maxWorkers": "最大并发数",
+      "maxQueueSize": "最大队列长度",
+      "requestTimeout": "请求超时（秒）",
+      "retry429": {
+        "title": "429 重试",
+        "enable": "启用 429 重试",
+        "maxRetries": "最大重试次数",
+        "delay": "延迟（毫秒）"
+      },
+      "routeOverrides": "已配置 {{count}} 个路由覆盖。暂时请在 YAML 中编辑。"
+    },
+    "logging": {
+      "title": "日志",
+      "enable": "启用请求日志存储",
+      "databaseType": "数据库类型",
+      "databasePath": "数据库路径",
+      "databasePathPlaceholder": "~/.ccrelay/logs.db（默认）",
+      "sqlite3Executable": "sqlite3 可执行文件（可选）",
+      "sqlite3ExecutablePlaceholder": "留空则从 PATH 解析",
+      "host": "主机",
+      "port": "端口",
+      "databaseName": "数据库名称",
+      "user": "用户名",
+      "password": "密码",
+      "passwordPlaceholder": "${POSTGRES_PASSWORD}",
+      "ssl": "SSL"
+    },
+    "providerOption": {
+      "auto": "auto（当前）"
+    }
+  }
+}

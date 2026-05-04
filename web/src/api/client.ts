@@ -13,6 +13,8 @@ import type {
   DuplicateProviderResponse,
   DeleteProviderResponse,
   ReloadConfigResponse,
+  ExportProvidersResponse,
+  ImportProvidersResponse,
   ClientConfigGetResponse,
   SettingsConfig,
   PatchConfigResponse,
@@ -27,6 +29,8 @@ declare global {
     CCRELAY_API_URL?: string;
     /** Injected by VS Code / Cursor dashboard & log viewer webviews for /ccrelay/api Bearer auth */
     CCRELAY_API_BEARER?: string;
+    /** Injected by VS Code webviews from backend config.server.locale */
+    CCRELAY_LOCALE?: string;
   }
 }
 
@@ -93,6 +97,18 @@ export const api = {
   deleteProvider: (id: string): Promise<DeleteProviderResponse> =>
     fetchAPI<DeleteProviderResponse>(`/providers/${encodeURIComponent(id)}`, {
       method: "DELETE",
+    }),
+
+  exportProviders: (ids: string[]): Promise<ExportProvidersResponse> =>
+    fetchAPI<ExportProvidersResponse>("/providers/export", {
+      method: "POST",
+      body: JSON.stringify({ ids }),
+    }),
+
+  importProviders: (providers: AddProviderRequest[]): Promise<ImportProvidersResponse> =>
+    fetchAPI<ImportProvidersResponse>("/providers/import", {
+      method: "POST",
+      body: JSON.stringify({ providers }),
     }),
 
   reloadConfig: (): Promise<ReloadConfigResponse> =>

@@ -233,7 +233,7 @@ jobs:
         run: npm run desktop:build
 
       - name: Pack desktop (${{ matrix.platform }} ${{ matrix.arch }})
-        run: npx electron-builder --${{ matrix.platform }} --${{ matrix.arch }}
+        run: npx electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never
         working-directory: packages/desktop
 
       - name: Upload desktop artifact

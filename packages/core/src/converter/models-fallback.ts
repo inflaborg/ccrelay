@@ -5,43 +5,9 @@
 
 import * as url from "url";
 import type { ApiSurface, Provider } from "../types";
-import {
-  providerHasConfigurableModelMap,
-  clientFacingModelIdForModelsList,
-} from "../utils/model-map";
 
-/**
- * Drop duplicate `id` rows (first wins, order preserved). Mutates `data` in place.
- * Rows without a string `id` are kept (never deduped against each other).
- */
-function dedupeModelsListDataRowsInPlace(data: Array<Record<string, unknown>>): boolean {
-  const seen = new Set<string>();
-  const out: Array<Record<string, unknown>> = [];
-  let removed = false;
-  for (const row of data) {
-    if (typeof row.id !== "string") {
-      out.push(row);
-      continue;
-    }
-    if (seen.has(row.id)) {
-      removed = true;
-      continue;
-    }
-    seen.add(row.id);
-    out.push(row);
-  }
-  if (!removed) {
-    return false;
-  }
-  data.length = 0;
-  for (const r of out) {
-    data.push(r);
-  }
-  return true;
-}
-
-/** Dedupe duplicate ids after mapping (stable, first wins). */
-function dedupeMappedIdsPreserveOrder(ids: string[]): string[] {
+/** Dedupe duplicate ids (stable, first wins). */
+function dedupeIdsPreserveOrder(ids: string[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const id of ids) {
@@ -157,16 +123,9 @@ export function parseModelsListLimitFromTargetUrl(targetUrl: string): number | u
 }
 
 /** Build minimal OpenAI `list` payload from model ids (custom models list synthesis). */
-export function buildOpenAIModelsListFromIds(
-  modelIds: string[],
-  provider?: Provider
-): OpenAIModelsListResponse {
+export function buildOpenAIModelsListFromIds(modelIds: string[]): OpenAIModelsListResponse {
   const now = Math.floor(Date.now() / 1000);
-  const ids =
-    provider && providerHasConfigurableModelMap(provider)
-      ? modelIds.map(id => clientFacingModelIdForModelsList(id, provider))
-      : modelIds;
-  const uniqueIds = dedupeMappedIdsPreserveOrder(ids);
+  const uniqueIds = dedupeIdsPreserveOrder(modelIds);
   return {
     object: "list",
     data: uniqueIds.map(id => ({
@@ -176,65 +135,6 @@ export function buildOpenAIModelsListFromIds(
       owned_by: "ccrelay",
     })),
   };
-}
-
-/**
- * Rewrite model ids in an OpenAI or Anthropic models list JSON (mutates `parsed`).
- * @returns Whether any id (or Anthropic display_name) was changed.
- */
-export function rewriteModelsListPayloadInPlace(
-  parsed: Record<string, unknown>,
-  provider: Provider
-): boolean {
-  if (!providerHasConfigurableModelMap(provider)) {
-    return false;
-  }
-  let changed = false;
-  if (isOpenAIModelsListJson(parsed)) {
-    const data = parsed.data as Array<Record<string, unknown>>;
-    for (const row of data) {
-      if (typeof row.id === "string") {
-        const next = clientFacingModelIdForModelsList(row.id, provider);
-        if (next !== row.id) {
-          row.id = next;
-          changed = true;
-        }
-      }
-    }
-    if (dedupeModelsListDataRowsInPlace(data)) {
-      changed = true;
-    }
-  } else if (isAnthropicModelsListJson(parsed)) {
-    const data = parsed.data as Array<Record<string, unknown>>;
-    for (const row of data) {
-      if (typeof row.id !== "string") {
-        continue;
-      }
-      const origId = row.id;
-      const next = clientFacingModelIdForModelsList(origId, provider);
-      if (next !== origId) {
-        row.id = next;
-        if (typeof row.display_name === "string" && row.display_name === origId) {
-          row.display_name = next;
-        }
-        changed = true;
-      }
-    }
-    if (dedupeModelsListDataRowsInPlace(data)) {
-      changed = true;
-    }
-    if (changed && Array.isArray(data) && data.length > 0) {
-      const first = data[0]?.id;
-      const last = data[data.length - 1]?.id;
-      if (typeof first === "string") {
-        parsed.first_id = first;
-      }
-      if (typeof last === "string") {
-        parsed.last_id = last;
-      }
-    }
-  }
-  return changed;
 }
 
 /** Like {@link convertOpenAIModelsToAnthropic}, but callers set `has_more` for pagination. */
@@ -260,7 +160,7 @@ export function synthesizeCustomModelsListBody(options: {
   const full = options.fullModelIds;
   const pageIds = limit !== undefined ? full.slice(0, limit) : [...full];
   const hasMore = pageIds.length < full.length;
-  const openaiPage = buildOpenAIModelsListFromIds(pageIds, options.provider);
+  const openaiPage = buildOpenAIModelsListFromIds(pageIds);
 
   if (options.clientSurface === "anthropic") {
     return JSON.stringify(openAiModelsPageToAnthropicModelsList(openaiPage, hasMore));

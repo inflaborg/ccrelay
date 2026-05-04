@@ -99,4 +99,5 @@ void app.whenReady().then(async () => {
   }
 
   createTray(server, configManager);
+  showDashboardWindow(dashboardWebUrl(server, configManager));
 });

@@ -828,38 +828,56 @@ export class ConfigManager {
       return;
     }
 
-    // File exists, merge with defaults for missing fields
+    // File exists — only back-fill keys that are completely absent (e.g. new version fields).
+    // Never overwrite user values; the disk file is the source of truth.
     try {
       const content = fs.readFileSync(this.configPath, "utf-8");
-      const existingConfig = yaml.load(content);
+      const existingConfig = yaml.load(content) as Record<string, unknown> | null;
 
-      if (existingConfig && typeof existingConfig === "object") {
-        const defaults = getDefaultConfig();
-        const parsedDisk = FileConfigSchema.safeParse(existingConfig);
-        const merged = mergeFileConfigWithDefaults(
-          defaults,
-          parsedDisk.success ? parsedDisk.data : existingConfig
-        );
+      if (!existingConfig || typeof existingConfig !== "object") {
+        return;
+      }
 
-        // Only rewrite if there are new fields added
-        if (JSON.stringify(merged) !== JSON.stringify(existingConfig)) {
-          console.log(`[ConfigManager] Merging new default fields into ${this.configPath}`);
-          try {
-            const yamlContent = yaml.dump(merged, {
-              indent: 2,
-              lineWidth: -1,
-              noRefs: true,
-              quotingType: '"',
-              forceQuotes: false,
-            });
-            this.saving = true;
-            fs.writeFileSync(this.configPath, yamlContent, "utf-8");
-            this.saving = false;
-          } catch (writeErr) {
-            this.saving = false;
-            console.error("[ConfigManager] Failed to write merged config:", writeErr);
+      const defaults = yaml.load(DEFAULT_CONFIG_YAML) as Record<string, unknown>;
+      let changed = false;
+
+      for (const key of Object.keys(defaults)) {
+        if (!(key in existingConfig)) {
+          // Top-level key missing entirely — copy from defaults
+          existingConfig[key] = defaults[key];
+          changed = true;
+        } else if (
+          typeof defaults[key] === "object" &&
+          defaults[key] !== null &&
+          !Array.isArray(defaults[key]) &&
+          typeof existingConfig[key] === "object" &&
+          existingConfig[key] !== null &&
+          !Array.isArray(existingConfig[key])
+        ) {
+          // Both are objects — only add sub-keys that are missing
+          const defObj = defaults[key] as Record<string, unknown>;
+          const existObj = existingConfig[key] as Record<string, unknown>;
+          for (const subKey of Object.keys(defObj)) {
+            if (!(subKey in existObj)) {
+              existObj[subKey] = defObj[subKey];
+              changed = true;
+            }
           }
         }
+      }
+
+      if (changed) {
+        console.log(`[ConfigManager] Back-filled missing fields in ${this.configPath}`);
+        const yamlContent = yaml.dump(existingConfig, {
+          indent: 2,
+          lineWidth: -1,
+          noRefs: true,
+          quotingType: '"',
+          forceQuotes: false,
+        });
+        this.saving = true;
+        fs.writeFileSync(this.configPath, yamlContent, "utf-8");
+        this.saving = false;
       }
     } catch (err) {
       console.error(`[ConfigManager] Error reading config file:`, err);
@@ -1153,6 +1171,7 @@ export class ConfigManager {
         enabled: merged.logging?.enabled ?? false,
         database,
       },
+      locale: merged.server?.locale,
     };
   }
 
@@ -1239,6 +1258,10 @@ export class ConfigManager {
 
   get autoStart(): boolean {
     return this.config.autoStart;
+  }
+
+  get locale(): string | undefined {
+    return this.config.locale;
   }
 
   get routing() {

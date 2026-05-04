@@ -14,6 +14,8 @@ import {
   handleAddProvider,
   handleDuplicateProvider,
   handleDeleteProvider,
+  handleExportProviders,
+  handleImportProviders,
   handleReloadConfig,
   setServer as setProvidersServer,
 } from "./providers";
@@ -139,6 +141,28 @@ export function handleApiRequest(req: http.IncomingMessage, res: http.ServerResp
     return true;
   }
 
+  // Check for POST /ccrelay/api/providers/export
+  if (reqPath === "/ccrelay/api/providers/export" && method === "POST") {
+    handleExportProviders(req, res, {}).catch(err => {
+      log.error("Error handling POST /providers/export", err);
+      if (!res.headersSent) {
+        sendJson(res, 500, { error: "Internal server error" });
+      }
+    });
+    return true;
+  }
+
+  // Check for POST /ccrelay/api/providers/import
+  if (reqPath === "/ccrelay/api/providers/import" && method === "POST") {
+    handleImportProviders(req, res, {}).catch(err => {
+      log.error("Error handling POST /providers/import", err);
+      if (!res.headersSent) {
+        sendJson(res, 500, { error: "Internal server error" });
+      }
+    });
+    return true;
+  }
+
   // Check for POST /ccrelay/api/providers (add provider)
   if (reqPath === "/ccrelay/api/providers" && method === "POST") {
     handleAddProvider(req, res, {}).catch(err => {
@@ -256,6 +280,8 @@ export {
   handleAddProvider,
   handleDuplicateProvider,
   handleDeleteProvider,
+  handleExportProviders,
+  handleImportProviders,
   handleReloadConfig,
   handleSwitchProvider,
   handleLogs,

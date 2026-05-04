@@ -69,7 +69,7 @@ describe("ProxyExecutor custom models list short-circuit", () => {
     expect(parsed.has_more).toBe(true);
   });
 
-  it("applies reverse modelMap to synthetic custom list ids", async () => {
+  it("does not rewrite synthetic custom list ids through modelMap", async () => {
     const task: RequestTask = {
       id: "c3",
       clientId: "c3",
@@ -91,6 +91,6 @@ describe("ProxyExecutor custom models list short-circuit", () => {
     const executor = new ProxyExecutor(new ResponseLogger(db));
     const result = await executor.execute(task);
     const parsed = JSON.parse(result.body as string) as { data: Array<{ id: string }> };
-    expect(parsed.data.map(e => e.id)).toEqual(["claude-sonnet", "b", "c"]);
+    expect(parsed.data.map(e => e.id)).toEqual(["a", "b", "c"]);
   });
 });

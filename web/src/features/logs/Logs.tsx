@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { formatDistanceToNow } from "date-fns";
 import {
   ChevronRight,
@@ -232,6 +233,7 @@ function TabButton({ active, onClick, children }: TabButtonProps) {
 }
 
 export default function Logs() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<Record<string, unknown>>({});
   const [selectedLogId, setSelectedLogId] = useState<number | null>(null);
@@ -500,7 +502,7 @@ export default function Logs() {
   const columns: InfiniteTableColumn<LogEntry>[] = [
     {
       id: "id",
-      header: "ID",
+      header: t("logs.table.header.id"),
       cell: log => <span className="text-[11px] text-muted-foreground text-center">{log.id}</span>,
       className: "text-center",
       headerClassName: "text-center",
@@ -508,7 +510,7 @@ export default function Logs() {
     },
     {
       id: "method",
-      header: "Method",
+      header: t("logs.table.header.method"),
       cell: log => (
         <Badge variant="outline" className="font-mono text-[11px] px-1 py-0">
           {log.method}
@@ -518,23 +520,23 @@ export default function Logs() {
     },
     {
       id: "routeType",
-      header: "Type",
+      header: t("logs.table.header.type"),
       cell: log => {
         if (!log.routeType) return <span className="text-[11px] text-muted-foreground">-</span>;
         const typeMap = {
           block: (
             <span className="text-[11px] px-1.5 py-0 rounded bg-orange-500/10 text-orange-600">
-              Block
+              {t("logs.table.routeType.block")}
             </span>
           ),
           passthrough: (
             <span className="text-[11px] px-1.5 py-0 rounded bg-muted text-muted-foreground">
-              Pass
+              {t("logs.table.routeType.pass")}
             </span>
           ),
           router: (
             <span className="text-[11px] px-1.5 py-0 rounded bg-sky-500/10 text-sky-600">
-              Route
+              {t("logs.table.routeType.route")}
             </span>
           ),
         };
@@ -544,7 +546,7 @@ export default function Logs() {
     },
     {
       id: "model",
-      header: "Model",
+      header: t("logs.table.header.model"),
       cell: log => (
         <span className="font-mono text-[11px] block truncate" title={log.model}>
           {log.model || "-"}
@@ -556,7 +558,7 @@ export default function Logs() {
     },
     {
       id: "path",
-      header: "Path",
+      header: t("logs.table.header.path"),
       cell: log => (
         <span className="font-mono text-[11px] block truncate" title={log.path}>
           {log.path}
@@ -568,19 +570,19 @@ export default function Logs() {
     },
     {
       id: "provider",
-      header: "Provider",
+      header: t("logs.table.header.provider"),
       cell: log => <span className="text-[11px]">{log.providerName}</span>,
       width: 100,
     },
     {
       id: "status",
-      header: "Status",
+      header: t("logs.table.header.status"),
       cell: log => {
         const isPending = log.status === "pending";
         if (isPending) {
           return (
             <Badge variant="secondary" className="text-[11px] px-1.5 py-0 animate-pulse">
-              Pending
+              {t("logs.table.status.pending")}
             </Badge>
           );
         }
@@ -603,7 +605,7 @@ export default function Logs() {
         // No status code
         return (
           <Badge variant={log.success ? "success" : "outline"} className="text-[11px] px-1.5 py-0">
-            {log.success ? "OK" : "Err"}
+            {log.success ? t("logs.table.status.ok") : t("logs.table.status.err")}
           </Badge>
         );
       },
@@ -611,7 +613,7 @@ export default function Logs() {
     },
     {
       id: "duration",
-      header: "Duration",
+      header: t("logs.table.header.duration"),
       cell: log => <span className="text-[11px]">{log.duration}ms</span>,
       className: "hidden sm:table-cell",
       headerClassName: "hidden sm:table-cell",
@@ -619,7 +621,7 @@ export default function Logs() {
     },
     {
       id: "time",
-      header: "Time",
+      header: t("logs.table.header.time"),
       cell: log => (
         <span className="text-[11px] text-muted-foreground">
           {formatDistanceToNow(new Date(log.timestamp), { addSuffix: true })}
@@ -641,8 +643,8 @@ export default function Logs() {
       <div className="flex-shrink-0 space-y-2">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-base font-semibold tracking-tight">Request Logs</h2>
-            <p className="text-xs text-muted-foreground">View and analyze API request logs</p>
+            <h2 className="text-base font-semibold tracking-tight">{t("logs.title")}</h2>
+            <p className="text-xs text-muted-foreground">{t("logs.subtitle")}</p>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -653,7 +655,7 @@ export default function Logs() {
               disabled={clearLogsMutation.isPending}
             >
               <Trash2 className="h-3 w-3 mr-1" />
-              Clear All
+              {t("logs.clearAll")}
             </Button>
             <Button
               variant="outline"
@@ -666,7 +668,7 @@ export default function Logs() {
               }}
             >
               <RefreshCw className="h-3 w-3 mr-1" />
-              Refresh
+              {t("common.refresh")}
             </Button>
           </div>
         </div>
@@ -676,7 +678,7 @@ export default function Logs() {
           <Select
             value={(filter.providerId as string) || ""}
             options={[
-              { value: "", label: "All Providers" },
+              { value: "", label: t("logs.filter.allProviders") },
               ...providers.map(p => ({ value: p, label: p })),
             ]}
             onChange={value => handleFilterChange("providerId", value || undefined)}
@@ -685,7 +687,7 @@ export default function Logs() {
           <Select
             value={(filter.method as string) || ""}
             options={[
-              { value: "", label: "All Methods" },
+              { value: "", label: t("logs.filter.allMethods") },
               { value: "GET", label: "GET" },
               { value: "POST", label: "POST" },
               { value: "PUT", label: "PUT" },
@@ -695,7 +697,7 @@ export default function Logs() {
             className="h-7 w-auto min-w-[80px]"
           />
           <Input
-            placeholder="Filter path..."
+            placeholder={t("logs.filter.pathPlaceholder")}
             value={(filter.pathPattern as string) || ""}
             onChange={e => handleFilterChange("pathPattern", e.target.value || undefined)}
             className="h-7 w-auto max-w-[140px]"
@@ -707,9 +709,9 @@ export default function Logs() {
               onChange={e => handleFilterChange("hasError", e.target.checked ? true : undefined)}
               className="rounded h-3 w-3"
             />
-            Errors only
+            {t("logs.filter.errorsOnly")}
           </label>
-          <span className="ml-auto text-muted-foreground">{totalCount} logs</span>
+          <span className="ml-auto text-muted-foreground">{`${totalCount} ${t("logs.filter.logCount")}`}</span>
         </div>
       </div>
 
@@ -724,7 +726,7 @@ export default function Logs() {
           onLoadMore={loadMore}
           keyExtractor={log => log.id}
           onRowClick={log => setSelectedLogId(log.id)}
-          emptyMessage="No logs found. Make sure log storage is enabled."
+          emptyMessage={t("logs.emptyMessage")}
           height="100%"
         />
       </div>
@@ -736,8 +738,10 @@ export default function Logs() {
             <CardHeader className="border-b p-3 flex-shrink-0">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-semibold">Log Details</h3>
-                  <p className="text-xs text-muted-foreground">ID: {selectedLogId}</p>
+                  <h3 className="text-sm font-semibold">{t("logs.detail.title")}</h3>
+                  <p className="text-xs text-muted-foreground">
+                    {t("logs.detail.id")} {selectedLogId}
+                  </p>
                 </div>
                 <Button
                   variant="ghost"
@@ -759,30 +763,33 @@ export default function Logs() {
                   {/* Metadata - Compact single row */}
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs border-b pb-3">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-muted-foreground">Method</span>
+                      <span className="text-muted-foreground">{t("logs.detail.method")}</span>
                       <Badge variant="outline" className="font-mono text-[11px] px-1.5 py-0">
                         {selectedLog.method}
                       </Badge>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-muted-foreground">Status</span>
+                      <span className="text-muted-foreground">{t("logs.detail.status")}</span>
                       <Badge
                         variant={selectedLog.success ? "success" : "destructive"}
                         className="text-[11px] px-1.5 py-0"
                       >
-                        {selectedLog.statusCode || (selectedLog.success ? "OK" : "Err")}
+                        {selectedLog.statusCode ||
+                          (selectedLog.success
+                            ? t("logs.detail.statusOk")
+                            : t("logs.detail.statusErr"))}
                       </Badge>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-muted-foreground">Provider</span>
+                      <span className="text-muted-foreground">{t("logs.detail.provider")}</span>
                       <span className="font-medium">{selectedLog.providerName}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-muted-foreground">Duration</span>
+                      <span className="text-muted-foreground">{t("logs.detail.duration")}</span>
                       <span className="font-medium font-mono">{selectedLog.duration}ms</span>
                     </div>
                     <div className="flex items-center gap-1.5 min-w-[120px]">
-                      <span className="text-muted-foreground">Time</span>
+                      <span className="text-muted-foreground">{t("logs.detail.time")}</span>
                       <span className="font-medium text-[11px] text-muted-foreground">
                         {new Date(selectedLog.timestamp).toLocaleString()}
                       </span>
@@ -791,7 +798,7 @@ export default function Logs() {
 
                   {/* Path - Full width */}
                   <div className="text-xs">
-                    <span className="text-muted-foreground">Path</span>
+                    <span className="text-muted-foreground">{t("logs.detail.path")}</span>
                     <p className="font-medium font-mono text-[11px] break-all mt-0.5">
                       {selectedLog.path}
                     </p>
@@ -799,7 +806,7 @@ export default function Logs() {
 
                   {selectedLog.targetUrl && (
                     <div className="text-xs">
-                      <span className="text-muted-foreground">Target URL</span>
+                      <span className="text-muted-foreground">{t("logs.detail.targetUrl")}</span>
                       <p className="font-medium font-mono text-[11px] break-all mt-0.5">
                         {selectedLog.targetUrl}
                       </p>
@@ -808,7 +815,7 @@ export default function Logs() {
 
                   {selectedLog.errorMessage && (
                     <div className="text-xs">
-                      <span className="text-muted-foreground">Error</span>
+                      <span className="text-muted-foreground">{t("logs.detail.error")}</span>
                       <p className="font-medium text-destructive text-[11px] mt-0.5">
                         {selectedLog.errorMessage}
                       </p>
@@ -828,7 +835,7 @@ export default function Logs() {
                             ) : (
                               <ChevronDown className="h-3.5 w-3.5" />
                             )}
-                            Request Body
+                            {t("logs.detail.requestBody")}
                           </h4>
                           {selectedLog.originalRequestBody && !requestBodyCollapsed && (
                             <div className="flex items-center -mb-2 ml-2">
@@ -836,27 +843,27 @@ export default function Logs() {
                                 active={requestTab === "analysis"}
                                 onClick={() => setRequestTab("analysis")}
                               >
-                                Analysis
+                                {t("logs.detail.tab.analysis")}
                               </TabButton>
                               {parsedToolsMarkdown && (
                                 <TabButton
                                   active={requestTab === "tools"}
                                   onClick={() => setRequestTab("tools")}
                                 >
-                                  Tools
+                                  {t("logs.detail.tab.tools")}
                                 </TabButton>
                               )}
                               <TabButton
                                 active={requestTab === "converted"}
                                 onClick={() => setRequestTab("converted")}
                               >
-                                Converted
+                                {t("logs.detail.tab.converted")}
                               </TabButton>
                               <TabButton
                                 active={requestTab === "original"}
                                 onClick={() => setRequestTab("original")}
                               >
-                                Original
+                                {t("logs.detail.tab.original")}
                               </TabButton>
                             </div>
                           )}
@@ -866,21 +873,21 @@ export default function Logs() {
                                 active={requestTab === "analysis"}
                                 onClick={() => setRequestTab("analysis")}
                               >
-                                Analysis
+                                {t("logs.detail.tab.analysis")}
                               </TabButton>
                               {parsedToolsMarkdown && (
                                 <TabButton
                                   active={requestTab === "tools"}
                                   onClick={() => setRequestTab("tools")}
                                 >
-                                  Tools
+                                  {t("logs.detail.tab.tools")}
                                 </TabButton>
                               )}
                               <TabButton
                                 active={requestTab === "converted"}
                                 onClick={() => setRequestTab("converted")}
                               >
-                                Raw
+                                {t("logs.detail.tab.raw")}
                               </TabButton>
                             </div>
                           )}
@@ -893,7 +900,7 @@ export default function Logs() {
                                 : selectedLog.requestBody
                               ).length
                             }{" "}
-                            chars
+                            {t("logs.detail.chars")}
                           </span>
                           <Button
                             variant="ghost"
@@ -919,12 +926,12 @@ export default function Logs() {
                             {copiedSection === "request" ? (
                               <>
                                 <Check className="h-3 w-3 mr-1" />
-                                Copied
+                                {t("logs.detail.copied")}
                               </>
                             ) : (
                               <>
                                 <Copy className="h-3 w-3 mr-1" />
-                                Copy
+                                {t("logs.detail.copy")}
                               </>
                             )}
                           </Button>
@@ -963,7 +970,7 @@ export default function Logs() {
                             ) : (
                               <ChevronDown className="h-3.5 w-3.5" />
                             )}
-                            Response Body
+                            {t("logs.detail.responseBody")}
                           </h4>
                           {selectedLog.originalResponseBody &&
                             !responseBodyCollapsed &&
@@ -973,19 +980,19 @@ export default function Logs() {
                                   active={responseTab === "analysis"}
                                   onClick={() => setResponseTab("analysis")}
                                 >
-                                  Analysis
+                                  {t("logs.detail.tab.analysis")}
                                 </TabButton>
                                 <TabButton
                                   active={responseTab === "converted"}
                                   onClick={() => setResponseTab("converted")}
                                 >
-                                  Converted
+                                  {t("logs.detail.tab.converted")}
                                 </TabButton>
                                 <TabButton
                                   active={responseTab === "original"}
                                   onClick={() => setResponseTab("original")}
                                 >
-                                  Original
+                                  {t("logs.detail.tab.original")}
                                 </TabButton>
                               </div>
                             )}
@@ -997,13 +1004,13 @@ export default function Logs() {
                                   active={responseTab === "analysis"}
                                   onClick={() => setResponseTab("analysis")}
                                 >
-                                  Analysis
+                                  {t("logs.detail.tab.analysis")}
                                 </TabButton>
                                 <TabButton
                                   active={responseTab === "converted"}
                                   onClick={() => setResponseTab("converted")}
                                 >
-                                  Raw
+                                  {t("logs.detail.tab.raw")}
                                 </TabButton>
                               </div>
                             )}
@@ -1016,7 +1023,7 @@ export default function Logs() {
                                 : selectedLog.responseBody
                               ).length
                             }{" "}
-                            chars
+                            {t("logs.detail.chars")}
                           </span>
                           <Button
                             variant="ghost"
@@ -1040,12 +1047,12 @@ export default function Logs() {
                             {copiedSection === "response" ? (
                               <>
                                 <Check className="h-3 w-3 mr-1" />
-                                Copied
+                                {t("logs.detail.copied")}
                               </>
                             ) : (
                               <>
                                 <Copy className="h-3 w-3 mr-1" />
-                                Copy
+                                {t("logs.detail.copy")}
                               </>
                             )}
                           </Button>
@@ -1071,7 +1078,7 @@ export default function Logs() {
                 </>
               ) : (
                 <div className="text-center py-8 text-xs text-muted-foreground">
-                  Failed to load log details
+                  {t("logs.detail.loadError")}
                 </div>
               )}
             </CardContent>
@@ -1083,23 +1090,23 @@ export default function Logs() {
       <AlertDialog open={showClearDialog} onOpenChange={setShowClearDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Clear All Logs</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to clear all logs? This action cannot be undone.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{t("logs.clearDialog.title")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("logs.clearDialog.description")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={clearLogsMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={clearLogsMutation.isPending}>
+              {t("common.cancel")}
+            </AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmClear} disabled={clearLogsMutation.isPending}>
               {clearLogsMutation.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Clearing...
+                  {t("logs.clearDialog.clearing")}
                 </>
               ) : (
                 <>
                   <Trash2 className="h-4 w-4 mr-2" />
-                  Clear All
+                  {t("logs.clearDialog.action")}
                 </>
               )}
             </AlertDialogAction>

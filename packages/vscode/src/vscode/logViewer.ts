@@ -21,7 +21,8 @@ export class LogViewerPanel {
     host?: string,
     port?: number,
     extensionUri?: vscode.Uri,
-    apiBearerToken?: string
+    apiBearerToken?: string,
+    locale?: string
   ): Promise<void> {
     const column = vscode.window.activeTextEditor
       ? vscode.window.activeTextEditor.viewColumn
@@ -38,7 +39,7 @@ export class LogViewerPanel {
     if (currentPanel) {
       currentPanel.panel.reveal(column);
       // Update webview content with new state
-      await currentPanel.updateState(leaderUrl, role, host, port, apiBearerToken);
+      await currentPanel.updateState(leaderUrl, role, host, port, apiBearerToken, locale);
       return;
     }
 
@@ -58,7 +59,7 @@ export class LogViewerPanel {
     );
 
     const instance = new LogViewerPanel(panel, extUri);
-    await instance.loadWebview(leaderUrl, role, host, port, apiBearerToken);
+    await instance.loadWebview(leaderUrl, role, host, port, apiBearerToken, locale);
     currentPanel = instance;
   }
 
@@ -73,14 +74,16 @@ export class LogViewerPanel {
     role: string,
     host?: string,
     port?: number,
-    apiBearerToken?: string
+    apiBearerToken?: string,
+    locale?: string
   ): Promise<void> {
     this.panel.webview.html = await this.getWebviewContent(
       leaderUrl,
       role,
       host,
       port,
-      apiBearerToken
+      apiBearerToken,
+      locale
     );
   }
 
@@ -89,14 +92,16 @@ export class LogViewerPanel {
     role: string,
     host?: string,
     port?: number,
-    apiBearerToken?: string
+    apiBearerToken?: string,
+    locale?: string
   ): Promise<void> {
     this.panel.webview.html = await this.getWebviewContent(
       leaderUrl,
       role,
       host,
       port,
-      apiBearerToken
+      apiBearerToken,
+      locale
     );
   }
 
@@ -105,7 +110,8 @@ export class LogViewerPanel {
     role: string,
     host?: string,
     port?: number,
-    apiBearerToken?: string
+    apiBearerToken?: string,
+    locale?: string
   ): Promise<string> {
     const webview = this.panel.webview;
     const webDistPath = path.join(this.extensionUri.fsPath, "out", "web");
@@ -166,6 +172,7 @@ export class LogViewerPanel {
     window.CCRELAY_ROLE = "${role}";
     window.CCRELAY_LEADER_URL = "${leaderUrl || ""}";
     window.CCRELAY_API_BEARER = ${JSON.stringify(apiBearerToken ?? "")};
+    window.CCRELAY_LOCALE = ${JSON.stringify(locale || "")};
   </script>
 </head>
 <body>
