@@ -206,9 +206,17 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.configure.outputs.desktop_matrix) }}
     runs-on: ${{ matrix.os }}
+    env:
+      ELECTRON_CACHE: ${{ github.workspace }}/.electron-cache
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Cache Electron downloads
+        uses: actions/cache@v4
+        with:
+          path: .electron-cache
+          key: electron-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('package-lock.json', 'packages/desktop/package.json') }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
