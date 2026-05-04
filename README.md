@@ -319,6 +319,8 @@ vlModelMap:
     model: "vision-model"
 ```
 
+**Models list**: `modelMap` does not rewrite **`GET /models`** responses. Upstream list ids and **`customModelsList`** entries are returned to clients as-is; mapping applies only to request bodies (`model`).
+
 ### OpenAI Format Conversion (LLM router)
 
 > 📋 **Feature Note**: CCRelay can accept **Anthropic**, **OpenAI Chat Completions**, and **OpenAI Responses** (`/v1/responses`) entry points. Conversion is applied when the inbound wire format does not match the provider’s `providerType` (Chat/Responses are both mapped via a Chat Completions hub when talking to OpenAI-compatible or Anthropic upstreams). When client and upstream are the same family, traffic is passed through (aside from `modelMap` and auth).

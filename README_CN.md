@@ -317,6 +317,8 @@ vlModelMap:
     model: "vision-model"
 ```
 
+**模型列表**：`modelMap` **不会**改写 **`GET /models`** 的响应；上游返回的 id 与 **`customModelsList`** 中配置的字符串会原样返回客户端；映射仅作用于请求体中的 **`model`**。
+
 ### OpenAI 格式转换（LLM 路由）
 
 > 📋 **功能说明**: CCRelay 可同时接受 **Anthropic**、**OpenAI Chat Completions** 与 **OpenAI Responses**（`/v1/responses`）等端点。入站为 Responses 时会经 Chat Completions 形态与上游对接；仅当与 provider 所需 wire 不一致时做转换，一致时**透传**（仍会做 `modelMap`、鉴权等）。

@@ -40,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Model map and GET /models**: `modelMap` / `vlModelMap` apply only to outbound request bodies (`model` field). Successful **`GET /models`** responses (upstream and **`useCustomModelsList`**) are no longer rewritten to client-facing pattern ids. Removed **`rewriteModelsListPayloadInPlace`** from the converter API.
+
 - **Cross-protocol upstream paths**: shared rules in [`packages/core/src/converter/paths.ts`](packages/core/src/converter/paths.ts); [`BodyProcessor`](packages/core/src/server/request/bodyProcessor.ts) applies them whenever `needsConversion`, **before** GET/empty-body return, so **`GET /anthropic/v1/models` → OpenAI upstream `GET /models`** (and symmetric OpenAI-models → Anthropic). [`convertRequestToOpenAI`](packages/core/src/converter/adapters/anthropic-to-openai-chat-request.ts) / [`convertOpenAIRequestToAnthropic`](packages/core/src/converter/adapters/openai-chat-to-anthropic-request.ts) use the same helpers for POST path segments.
 
 - **Upstream path resolution**: [`packages/core/src/server/request/routerStage.ts`](packages/core/src/server/request/routerStage.ts) documents and structures OpenAI inbound bases (`/openai/…` recommended vs legacy host `/v1/…`) and Anthropic prefix-only stripping; runtime path behavior is unchanged.
