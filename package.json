@@ -3,6 +3,7 @@
   "name": "ccrelay-monorepo",
   "version": "0.2.0",
   "license": "MIT",
+  "packageManager": "npm@10.9.4",
   "repository": {
     "type": "git",
     "url": "https://github.com/inflaborg/ccrelay.git"
