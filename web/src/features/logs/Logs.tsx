@@ -547,14 +547,28 @@ export default function Logs() {
     {
       id: "model",
       header: t("logs.table.header.model"),
-      cell: log => (
-        <span className="font-mono text-[11px] block truncate" title={log.model}>
-          {log.model || "-"}
-        </span>
-      ),
+      cell: log => {
+        const hasMapping = log.mappedModel && log.mappedModel !== log.model;
+        const title = hasMapping
+          ? `${log.model} → ${log.mappedModel}`
+          : log.model || "";
+        return (
+          <span className="font-mono text-[11px] block truncate" title={title}>
+            {hasMapping ? (
+              <>
+                <span>{log.model}</span>
+                <span className="text-muted-foreground"> → </span>
+                <span>{log.mappedModel}</span>
+              </>
+            ) : (
+              log.model || "-"
+            )}
+          </span>
+        );
+      },
       className: "hidden sm:table-cell",
       headerClassName: "hidden sm:table-cell",
-      width: 120,
+      width: 160,
     },
     {
       id: "path",

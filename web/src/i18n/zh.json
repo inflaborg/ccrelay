@@ -219,7 +219,7 @@
         "id": "ID",
         "method": "方法",
         "type": "类型",
-        "model": "模型",
+        "model": "模型 → 映射",
         "path": "路径",
         "provider": "提供商",
         "status": "状态",

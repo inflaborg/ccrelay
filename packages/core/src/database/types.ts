@@ -33,6 +33,7 @@ export interface RequestLog {
   success: boolean;
   errorMessage?: string;
   model?: string;
+  mappedModel?: string;
   clientId?: string;
   status?: RequestStatus;
   routeType?: RouteType;

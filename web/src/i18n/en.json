@@ -219,7 +219,7 @@
         "id": "ID",
         "method": "Method",
         "type": "Type",
-        "model": "Model",
+        "model": "Model → Mapped",
         "path": "Path",
         "provider": "Provider",
         "status": "Status",

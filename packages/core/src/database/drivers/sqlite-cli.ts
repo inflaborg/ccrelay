@@ -218,6 +218,24 @@ function dbRowToLogWithoutBody(row: Record<string, unknown>): RequestLog {
     log.errorMessage = decodeFromStorage(log.errorMessage);
   }
 
+  // Extract original model (what the client sent) from original_request_body
+  const rawOriginalBody = row.original_request_body as string | undefined;
+  if (rawOriginalBody) {
+    const originalBody = decodeFromStorage(rawOriginalBody);
+    if (originalBody) {
+      try {
+        const parsed = JSON.parse(originalBody) as { model?: string; data?: { model?: string } };
+        const model = parsed.model || parsed.data?.model;
+        if (model && typeof model === "string") {
+          log.model = model;
+        }
+      } catch {
+        // Ignore parse errors
+      }
+    }
+  }
+
+  // Extract mapped model (what was sent upstream) from request_body
   const rawRequestBody = row.request_body as string | undefined;
   if (rawRequestBody) {
     const requestBody = decodeFromStorage(rawRequestBody);
@@ -226,7 +244,11 @@ function dbRowToLogWithoutBody(row: Record<string, unknown>): RequestLog {
         const parsed = JSON.parse(requestBody) as { model?: string; data?: { model?: string } };
         const model = parsed.model || parsed.data?.model;
         if (model && typeof model === "string") {
-          log.model = model;
+          log.mappedModel = model;
+          // Fallback: if original_request_body had no model, use request_body as model
+          if (!log.model) {
+            log.model = model;
+          }
         }
       } catch {
         // Ignore parse errors
@@ -245,9 +267,64 @@ function dbRowToLogWithoutBody(row: Record<string, unknown>): RequestLog {
 }
 
 /**
+ * Shared helper: populate model/mappedModel from stored bodies
+ */
+function extractModelsFromBodies(
+  row: Record<string, unknown>
+): Pick<RequestLog, "model" | "mappedModel"> {
+  const result: Pick<RequestLog, "model" | "mappedModel"> = {};
+
+  const rawOriginalBody = row.original_request_body as string | undefined;
+  if (rawOriginalBody) {
+    const originalBody = decodeFromStorage(rawOriginalBody);
+    if (originalBody) {
+      try {
+        const parsed = JSON.parse(originalBody) as { model?: string; data?: { model?: string } };
+        const model = parsed.model || parsed.data?.model;
+        if (model && typeof model === "string") {
+          result.model = model;
+        }
+      } catch {
+        // Ignore parse errors
+      }
+    }
+  }
+
+  const rawRequestBody = row.request_body as string | undefined;
+  if (rawRequestBody) {
+    const requestBody = decodeFromStorage(rawRequestBody);
+    if (requestBody) {
+      try {
+        const parsed = JSON.parse(requestBody) as { model?: string; data?: { model?: string } };
+        const model = parsed.model || parsed.data?.model;
+        if (model && typeof model === "string") {
+          result.mappedModel = model;
+          if (!result.model) {
+            result.model = model;
+          }
+        }
+      } catch {
+        // Ignore parse errors
+      }
+    }
+  }
+
+  if (!result.model) {
+    const path = (row.path as string) || "";
+    const pathModelMatch = path.match(/\/models\/([^\/\?]+)/);
+    if (pathModelMatch) {
+      result.model = pathModelMatch[1];
+    }
+  }
+
+  return result;
+}
+
+/**
  * Convert database row to RequestLog (with body fields for detail view)
  */
 function dbRowToLog(row: Record<string, unknown>): RequestLog {
+  const models = extractModelsFromBodies(row);
   return {
     id: row.id as number,
     timestamp: row.timestamp as number,
@@ -267,6 +344,7 @@ function dbRowToLog(row: Record<string, unknown>): RequestLog {
     clientId: row.client_id as string | undefined,
     status: row.status as RequestLog["status"],
     routeType: row.route_type as RequestLog["routeType"],
+    ...models,
   };
 }
 
