@@ -170,8 +170,9 @@ function buildInsertSql(
     sql: `INSERT INTO request_logs (
       timestamp, provider_id, provider_name, method, path, target_url,
       request_body, response_body, original_request_body, original_response_body,
-      status_code, duration, success, error_message, client_id, status, route_type
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      status_code, duration, success, error_message, client_id, status, route_type,
+      input_tokens, output_tokens, cache_tokens, ttfb
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: [
       log.timestamp,
       log.providerId,
@@ -190,6 +191,10 @@ function buildInsertSql(
       log.clientId ?? null,
       status,
       log.routeType ?? null,
+      log.inputTokens ?? null,
+      log.outputTokens ?? null,
+      log.cacheTokens ?? null,
+      log.ttfb ?? null,
     ],
   };
 }
@@ -227,6 +232,10 @@ function dbRowToLogWithoutBody(row: Record<string, unknown>): RequestLog {
     clientId: row.client_id as string | undefined,
     status: row.status as RequestLog["status"],
     routeType: row.route_type as RequestLog["routeType"],
+    inputTokens: row.input_tokens as number | undefined,
+    outputTokens: row.output_tokens as number | undefined,
+    cacheTokens: row.cache_tokens as number | undefined,
+    ttfb: row.ttfb as number | undefined,
   };
 
   if (log.errorMessage) {
@@ -332,6 +341,10 @@ function dbRowToLog(row: Record<string, unknown>): RequestLog {
     clientId: row.client_id as string | undefined,
     status: row.status as RequestLog["status"],
     routeType: row.route_type as RequestLog["routeType"],
+    inputTokens: row.input_tokens as number | undefined,
+    outputTokens: row.output_tokens as number | undefined,
+    cacheTokens: row.cache_tokens as number | undefined,
+    ttfb: row.ttfb as number | undefined,
     ...models,
   };
 }
@@ -1204,7 +1217,11 @@ export class SqliteCliDriver implements DatabaseDriver {
         error_message TEXT,
         client_id TEXT,
         status TEXT DEFAULT 'completed',
-        route_type TEXT
+        route_type TEXT,
+        input_tokens INTEGER,
+        output_tokens INTEGER,
+        cache_tokens INTEGER,
+        ttfb INTEGER
       )
     `);
 
@@ -1241,6 +1258,13 @@ export class SqliteCliDriver implements DatabaseDriver {
           sql: "ALTER TABLE request_logs ADD COLUMN status TEXT DEFAULT 'completed'",
         },
         { column: "route_type", sql: "ALTER TABLE request_logs ADD COLUMN route_type TEXT" },
+        { column: "input_tokens", sql: "ALTER TABLE request_logs ADD COLUMN input_tokens INTEGER" },
+        {
+          column: "output_tokens",
+          sql: "ALTER TABLE request_logs ADD COLUMN output_tokens INTEGER",
+        },
+        { column: "cache_tokens", sql: "ALTER TABLE request_logs ADD COLUMN cache_tokens INTEGER" },
+        { column: "ttfb", sql: "ALTER TABLE request_logs ADD COLUMN ttfb INTEGER" },
       ];
 
       for (const migration of migrations) {
@@ -1280,7 +1304,11 @@ export class SqliteCliDriver implements DatabaseDriver {
     duration: number,
     success: boolean,
     errorMessage: string | undefined,
-    originalResponseBody?: string
+    originalResponseBody?: string,
+    inputTokens?: number,
+    outputTokens?: number,
+    cacheTokens?: number,
+    ttfb?: number
   ): void {
     if (!this.isEnabled || !this.writeConn?.started) {
       return;
@@ -1295,7 +1323,11 @@ export class SqliteCliDriver implements DatabaseDriver {
            duration = ?,
            success = ?,
            error_message = ?,
-           status = 'completed'
+           status = 'completed',
+           input_tokens = ?,
+           output_tokens = ?,
+           cache_tokens = ?,
+           ttfb = ?
        WHERE client_id = ?`,
         [
           statusCode,
@@ -1304,6 +1336,10 @@ export class SqliteCliDriver implements DatabaseDriver {
           duration,
           success ? 1 : 0,
           encodeForStorage(errorMessage),
+          inputTokens ?? null,
+          outputTokens ?? null,
+          cacheTokens ?? null,
+          ttfb ?? null,
           clientId,
         ]
       )
@@ -1451,6 +1487,7 @@ export class SqliteCliDriver implements DatabaseDriver {
       `SELECT id, timestamp, provider_id, provider_name, method, path,
               status_code, duration, success, error_message, client_id,
               status, route_type,
+              input_tokens, output_tokens, cache_tokens, ttfb,
               SUBSTR(request_body, 1, 500) as request_body,
               SUBSTR(original_request_body, 1, 500) as original_request_body
        FROM request_logs ${whereClause} ORDER BY timestamp DESC LIMIT ? OFFSET ?`,

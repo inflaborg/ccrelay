@@ -74,6 +74,10 @@ function dbRowToLogWithoutBody(row: Record<string, unknown>): RequestLog {
     clientId: row.client_id as string | undefined,
     status: row.status as RequestLog["status"],
     routeType: row.route_type as RequestLog["routeType"],
+    inputTokens: row.input_tokens as number | undefined,
+    outputTokens: row.output_tokens as number | undefined,
+    cacheTokens: row.cache_tokens as number | undefined,
+    ttfb: row.ttfb as number | undefined,
   };
 
   if (log.errorMessage) {
@@ -179,6 +183,10 @@ function dbRowToLog(row: Record<string, unknown>): RequestLog {
     clientId: row.client_id as string | undefined,
     status: row.status as RequestLog["status"],
     routeType: row.route_type as RequestLog["routeType"],
+    inputTokens: row.input_tokens as number | undefined,
+    outputTokens: row.output_tokens as number | undefined,
+    cacheTokens: row.cache_tokens as number | undefined,
+    ttfb: row.ttfb as number | undefined,
     ...models,
   };
 }
@@ -263,9 +271,50 @@ export class PostgresDriver implements DatabaseDriver {
           error_message TEXT,
           client_id TEXT,
           status TEXT DEFAULT 'completed',
-          route_type TEXT
+          route_type TEXT,
+          input_tokens INTEGER,
+          output_tokens INTEGER,
+          cache_tokens INTEGER,
+          ttfb INTEGER
         )
       `);
+
+      // Run migrations for existing databases
+      const migrations = [
+        {
+          column: "input_tokens",
+          sql: "ALTER TABLE request_logs ADD COLUMN input_tokens INTEGER",
+        },
+        {
+          column: "output_tokens",
+          sql: "ALTER TABLE request_logs ADD COLUMN output_tokens INTEGER",
+        },
+        {
+          column: "cache_tokens",
+          sql: "ALTER TABLE request_logs ADD COLUMN cache_tokens INTEGER",
+        },
+        { column: "ttfb", sql: "ALTER TABLE request_logs ADD COLUMN ttfb INTEGER" },
+      ];
+
+      for (const migration of migrations) {
+        try {
+          await client.query(migration.sql);
+        } catch (err: unknown) {
+          // Column already exists — that's fine
+          if (
+            err &&
+            typeof err === "object" &&
+            "code" in err &&
+            (err as { code: string }).code === "42701"
+          ) {
+            // duplicate_column — ignore
+          } else {
+            this.log.warn(
+              `[PostgresDriver] Migration warning for ${migration.column}: ${err instanceof Error ? err.message : String(err)}`
+            );
+          }
+        }
+      }
 
       const indexes = [
         "CREATE INDEX IF NOT EXISTS idx_timestamp ON request_logs(timestamp)",
@@ -318,8 +367,9 @@ export class PostgresDriver implements DatabaseDriver {
       `INSERT INTO request_logs (
         timestamp, provider_id, provider_name, method, path, target_url,
         request_body, response_body, original_request_body, original_response_body,
-        status_code, duration, success, error_message, client_id, status, route_type
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+        status_code, duration, success, error_message, client_id, status, route_type,
+        input_tokens, output_tokens, cache_tokens, ttfb
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
       [
         log.timestamp,
         log.providerId,
@@ -338,6 +388,10 @@ export class PostgresDriver implements DatabaseDriver {
         log.clientId ?? null,
         "completed",
         log.routeType ?? null,
+        log.inputTokens ?? null,
+        log.outputTokens ?? null,
+        log.cacheTokens ?? null,
+        log.ttfb ?? null,
       ]
     );
   }
@@ -364,8 +418,9 @@ export class PostgresDriver implements DatabaseDriver {
       `INSERT INTO request_logs (
         timestamp, provider_id, provider_name, method, path, target_url,
         request_body, response_body, original_request_body, original_response_body,
-        status_code, duration, success, error_message, client_id, status, route_type
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+        status_code, duration, success, error_message, client_id, status, route_type,
+        input_tokens, output_tokens, cache_tokens, ttfb
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
       [
         log.timestamp,
         log.providerId,
@@ -384,6 +439,10 @@ export class PostgresDriver implements DatabaseDriver {
         log.clientId ?? null,
         "pending",
         log.routeType ?? null,
+        log.inputTokens ?? null,
+        log.outputTokens ?? null,
+        log.cacheTokens ?? null,
+        log.ttfb ?? null,
       ]
     );
   }
@@ -398,7 +457,11 @@ export class PostgresDriver implements DatabaseDriver {
     duration: number,
     success: boolean,
     errorMessage: string | undefined,
-    originalResponseBody?: string
+    originalResponseBody?: string,
+    inputTokens?: number,
+    outputTokens?: number,
+    cacheTokens?: number,
+    ttfb?: number
   ): void {
     if (!this.isEnabled) {
       return;
@@ -412,8 +475,12 @@ export class PostgresDriver implements DatabaseDriver {
              duration = $4,
              success = $5,
              error_message = $6,
-             status = 'completed'
-         WHERE client_id = $7`,
+             status = 'completed',
+             input_tokens = $7,
+             output_tokens = $8,
+             cache_tokens = $9,
+             ttfb = $10
+         WHERE client_id = $11`,
       [
         statusCode,
         encodeForStorage(responseBody),
@@ -421,6 +488,10 @@ export class PostgresDriver implements DatabaseDriver {
         duration,
         success,
         encodeForStorage(errorMessage),
+        inputTokens ?? null,
+        outputTokens ?? null,
+        cacheTokens ?? null,
+        ttfb ?? null,
         clientId,
       ]
     ).catch(err => {
@@ -482,8 +553,9 @@ export class PostgresDriver implements DatabaseDriver {
           `INSERT INTO request_logs (
             timestamp, provider_id, provider_name, method, path, target_url,
             request_body, response_body, original_request_body, original_response_body,
-            status_code, duration, success, error_message, client_id, status, route_type
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+            status_code, duration, success, error_message, client_id, status, route_type,
+            input_tokens, output_tokens, cache_tokens, ttfb
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
           [
             log.timestamp,
             log.providerId,
@@ -502,6 +574,10 @@ export class PostgresDriver implements DatabaseDriver {
             log.clientId ?? null,
             "completed",
             log.routeType ?? null,
+            log.inputTokens ?? null,
+            log.outputTokens ?? null,
+            log.cacheTokens ?? null,
+            log.ttfb ?? null,
           ]
         );
       }

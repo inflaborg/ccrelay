@@ -278,7 +278,11 @@ export class DatabaseWorkerClient implements DatabaseDriver {
     duration: number,
     success: boolean,
     errorMessage: string | undefined,
-    originalResponseBody?: string
+    originalResponseBody?: string,
+    inputTokens?: number,
+    outputTokens?: number,
+    cacheTokens?: number,
+    ttfb?: number
   ): void {
     void this.send("updateLogCompleted", {
       clientId,
@@ -288,6 +292,10 @@ export class DatabaseWorkerClient implements DatabaseDriver {
       success,
       errorMessage,
       originalResponseBody,
+      inputTokens,
+      outputTokens,
+      cacheTokens,
+      ttfb,
     }).catch(err => {
       this.log.error("[DatabaseWorker] updateLogCompleted error:", err);
     });

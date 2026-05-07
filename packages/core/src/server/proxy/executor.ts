@@ -160,7 +160,15 @@ export class ProxyExecutor {
       log.info(
         `[${clientId}] GET /models: useCustomModelsList for ${provider.id}, models=${ids.length}`
       );
-      this.responseLogger.logResponse(clientId, duration, 200, chunks, undefined);
+      this.responseLogger.logResponse(
+        clientId,
+        duration,
+        200,
+        chunks,
+        undefined,
+        undefined,
+        undefined
+      );
       return Promise.resolve({
         statusCode: 200,
         headers: { "content-type": "application/json; charset=utf-8" },
@@ -551,7 +559,8 @@ export class ProxyExecutor {
           status,
           ctx.responseChunks,
           undefined,
-          ctx.originalResponseBody
+          ctx.originalResponseBody,
+          ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
         );
 
         resolve({
@@ -583,7 +592,8 @@ export class ProxyExecutor {
           502,
           ctx.responseChunks,
           `OpenAI conversion failed: ${errMsg}`,
-          ctx.originalResponseBody
+          ctx.originalResponseBody,
+          ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
         );
 
         resolve({
@@ -643,7 +653,8 @@ export class ProxyExecutor {
             status,
             ctx.responseChunks,
             undefined,
-            ctx.originalResponseBody
+            ctx.originalResponseBody,
+            ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
           );
           resolve({
             statusCode: status,
@@ -662,7 +673,8 @@ export class ProxyExecutor {
             status,
             ctx.responseChunks,
             undefined,
-            ctx.originalResponseBody
+            ctx.originalResponseBody,
+            ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
           );
           resolve({
             statusCode: status,
@@ -690,7 +702,8 @@ export class ProxyExecutor {
           502,
           ctx.responseChunks,
           `Anthropic to OpenAI conversion failed: ${errMsg}`,
-          ctx.originalResponseBody
+          ctx.originalResponseBody,
+          ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
         );
         resolve({
           statusCode: 502,
@@ -770,7 +783,8 @@ export class ProxyExecutor {
             status,
             ctx.responseChunks,
             undefined,
-            ctx.originalResponseBody
+            ctx.originalResponseBody,
+            ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
           );
           resolve({
             statusCode: status,
@@ -789,7 +803,8 @@ export class ProxyExecutor {
             status,
             ctx.responseChunks,
             undefined,
-            ctx.originalResponseBody
+            ctx.originalResponseBody,
+            ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
           );
           resolve({
             statusCode: status,
@@ -813,7 +828,8 @@ export class ProxyExecutor {
           502,
           ctx.responseChunks,
           `Chat to Responses failed: ${errMsg}`,
-          ctx.originalResponseBody
+          ctx.originalResponseBody,
+          ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
         );
         resolve({
           statusCode: 502,
@@ -982,7 +998,8 @@ export class ProxyExecutor {
             status,
             ctx.responseChunks,
             undefined,
-            ctx.originalResponseBody
+            ctx.originalResponseBody,
+            ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
           );
           resolve({
             statusCode: status,
@@ -1001,7 +1018,8 @@ export class ProxyExecutor {
             status,
             ctx.responseChunks,
             undefined,
-            ctx.originalResponseBody
+            ctx.originalResponseBody,
+            ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
           );
           resolve({
             statusCode: status,
@@ -1025,7 +1043,8 @@ export class ProxyExecutor {
           502,
           ctx.responseChunks,
           `A to Responses failed: ${errMsg}`,
-          ctx.originalResponseBody
+          ctx.originalResponseBody,
+          ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
         );
         resolve({
           statusCode: 502,
@@ -1130,7 +1149,9 @@ export class ProxyExecutor {
         totalDuration,
         ctx.clientDisconnected ? 499 : status,
         ctx.responseChunks,
-        ctx.clientDisconnected ? "Client disconnected" : undefined
+        ctx.clientDisconnected ? "Client disconnected" : undefined,
+        undefined,
+        ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
       );
       if (!ctx.clientDisconnected) {
         task.streamCompleted = true;
@@ -1301,7 +1322,9 @@ export class ProxyExecutor {
         totalDuration,
         outStatus,
         ctx.responseChunks,
-        undefined
+        undefined,
+        undefined,
+        ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
       );
       resolve({
         statusCode: outStatus,
@@ -1346,7 +1369,9 @@ export class ProxyExecutor {
           duration,
           499,
           ctx.responseChunks,
-          "Client disconnected"
+          "Client disconnected",
+          undefined,
+          ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
         );
         resolve({
           statusCode: 499,
@@ -1381,7 +1406,15 @@ export class ProxyExecutor {
       }
 
       log.error(`Proxy error to ${provider.id} (${duration}ms): ${err.message}`);
-      this.responseLogger.logResponse(clientId, duration, 0, ctx.responseChunks, err.message);
+      this.responseLogger.logResponse(
+        clientId,
+        duration,
+        0,
+        ctx.responseChunks,
+        err.message,
+        undefined,
+        undefined
+      );
       reject(new Error(`Proxy error: ${err.message}`));
     });
 
@@ -1396,7 +1429,15 @@ export class ProxyExecutor {
 
       // Abort the request
       abortController.abort();
-      this.responseLogger.logResponse(clientId, duration, 0, ctx.responseChunks, "Timeout");
+      this.responseLogger.logResponse(
+        clientId,
+        duration,
+        0,
+        ctx.responseChunks,
+        "Timeout",
+        undefined,
+        undefined
+      );
       reject(new Error("Proxy timeout"));
     });
   }

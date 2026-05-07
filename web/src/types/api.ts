@@ -136,6 +136,10 @@ export interface LogEntry {
   clientId?: string;
   status?: RequestStatus;
   routeType?: RouteType;
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheTokens?: number;
+  ttfb?: number;
 }
 
 export interface LogsQuery {

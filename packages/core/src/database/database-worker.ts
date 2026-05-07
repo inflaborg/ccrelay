@@ -89,6 +89,10 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
           success: boolean;
           errorMessage: string | undefined;
           originalResponseBody?: string;
+          inputTokens?: number;
+          outputTokens?: number;
+          cacheTokens?: number;
+          ttfb?: number;
         };
         driver?.updateLogCompleted(
           p.clientId,
@@ -97,7 +101,11 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
           p.duration,
           p.success,
           p.errorMessage,
-          p.originalResponseBody
+          p.originalResponseBody,
+          p.inputTokens,
+          p.outputTokens,
+          p.cacheTokens,
+          p.ttfb
         );
         return { id, success: true };
       }

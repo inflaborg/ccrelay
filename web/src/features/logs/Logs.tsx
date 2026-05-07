@@ -634,6 +634,49 @@ export default function Logs() {
       width: 70,
     },
     {
+      id: "tokens",
+      header: t("logs.table.header.tokens"),
+      cell: log => {
+        if (log.inputTokens == null && log.outputTokens == null) return <span className="text-[11px]">-</span>;
+        const parts: string[] = [];
+        if (log.inputTokens != null) parts.push(`${log.inputTokens}`);
+        if (log.outputTokens != null) parts.push(`${log.outputTokens}`);
+        if (log.cacheTokens != null && log.cacheTokens > 0) {
+          const v = log.cacheTokens >= 1000 ? `${(log.cacheTokens / 1000).toFixed(1)}K` : `${log.cacheTokens}`;
+          parts.push(v);
+        }
+        return <span className="font-mono text-[11px]" title={`In: ${log.inputTokens ?? 0} / Out: ${log.outputTokens ?? 0} / Cache: ${log.cacheTokens ?? 0}`}>{parts.join("/")}</span>;
+      },
+      className: "hidden md:table-cell",
+      headerClassName: "hidden md:table-cell",
+      width: 110,
+    },
+    {
+      id: "ttfb",
+      header: "TTFB",
+      cell: log => {
+        if (log.ttfb == null) return <span className="text-[11px]">-</span>;
+        return <span className="text-[11px]">{log.ttfb >= 1000 ? `${(log.ttfb / 1000).toFixed(1)}s` : `${log.ttfb}ms`}</span>;
+      },
+      className: "hidden md:table-cell",
+      headerClassName: "hidden md:table-cell",
+      width: 70,
+    },
+    {
+      id: "tps",
+      header: "TPS",
+      cell: log => {
+        if (log.outputTokens == null || !log.duration) return <span className="text-[11px]">-</span>;
+        const genTime = log.ttfb != null && log.ttfb > 0 ? log.duration - log.ttfb : log.duration;
+        const calcTime = genTime >= 1000 ? genTime : 1000;
+        const tps = (log.outputTokens / calcTime) * 1000;
+        return <span className="font-mono text-[11px]" title={`${log.outputTokens} tokens / ${genTime}ms`}>{tps.toFixed(1)}</span>;
+      },
+      className: "hidden md:table-cell",
+      headerClassName: "hidden md:table-cell",
+      width: 55,
+    },
+    {
       id: "time",
       header: t("logs.table.header.time"),
       cell: log => (
@@ -852,6 +895,59 @@ export default function Logs() {
                       </p>
                     </div>
                   )}
+
+                  {(selectedLog.inputTokens != null ||
+                    selectedLog.outputTokens != null ||
+                    selectedLog.cacheTokens != null) && (
+                    <div className="text-xs">
+                      <span className="text-muted-foreground">{t("logs.detail.tokens")}</span>
+                      <p className="font-mono text-[11px] mt-0.5 flex gap-3">
+                        {selectedLog.inputTokens != null && (
+                          <span>
+                            {t("logs.detail.tokenIn")}: {selectedLog.inputTokens.toLocaleString()}
+                          </span>
+                        )}
+                        {selectedLog.outputTokens != null && (
+                          <span>
+                            {t("logs.detail.tokenOut")}: {selectedLog.outputTokens.toLocaleString()}
+                          </span>
+                        )}
+                        {selectedLog.cacheTokens != null && selectedLog.cacheTokens > 0 && (
+                          <span>
+                            {t("logs.detail.tokenCache")}: {selectedLog.cacheTokens.toLocaleString()}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  )}
+
+                  {selectedLog.ttfb != null && (
+                    <div className="text-xs">
+                      <span className="text-muted-foreground">TTFB</span>
+                      <p className="font-mono text-[11px] mt-0.5">
+                        {selectedLog.ttfb >= 1000
+                          ? `${(selectedLog.ttfb / 1000).toFixed(2)}s`
+                          : `${selectedLog.ttfb}ms`}
+                      </p>
+                    </div>
+                  )}
+
+                  {selectedLog.outputTokens != null && selectedLog.duration > 0 && (() => {
+                    const genTime = selectedLog.ttfb != null && selectedLog.ttfb > 0 ? selectedLog.duration - selectedLog.ttfb : selectedLog.duration;
+                    const calcTime = genTime >= 1000 ? genTime : 1000;
+                    const tps = (selectedLog.outputTokens / calcTime) * 1000;
+                    return (
+                      <div className="text-xs">
+                        <span className="text-muted-foreground">Output TPS</span>
+                        <p className="font-mono text-[11px] mt-0.5">
+                          {tps.toFixed(1)} t/s
+                          <span className="text-muted-foreground ml-2">
+                            ({selectedLog.outputTokens} tokens / {genTime}ms)
+                          </span>
+                        </p>
+                      </div>
+                    );
+                  })()}
 
                   {selectedLog.errorMessage && (
                     <div className="text-xs">

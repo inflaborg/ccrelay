@@ -37,6 +37,10 @@ export interface RequestLog {
   clientId?: string;
   status?: RequestStatus;
   routeType?: RouteType;
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheTokens?: number;
+  ttfb?: number;
 }
 
 /**
@@ -136,7 +140,11 @@ export interface DatabaseDriver {
     duration: number,
     success: boolean,
     errorMessage: string | undefined,
-    originalResponseBody?: string
+    originalResponseBody?: string,
+    inputTokens?: number,
+    outputTokens?: number,
+    cacheTokens?: number,
+    ttfb?: number
   ): void;
 
   /**
