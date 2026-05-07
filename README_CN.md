@@ -53,7 +53,7 @@
 
 - 多实例协调（Leader/Follower），跨 VS Code 窗口与桌面应用
 - 配置热重载——编辑 `config.yaml` 后自动生效
-- 可选请求/响应日志（SQLite 或 PostgreSQL），内置日志查看器
+- 可选请求/响应日志（SQLite 或 PostgreSQL），内置日志查看器，支持 Token 追踪和性能指标（TTFB、输出 TPS、P50/P90 延迟）
 - 并发控制，支持按路由设置队列限制
 
 **桌面与 UI**
@@ -316,9 +316,9 @@ gemini:
 
 内置 Web 面板，通过命令面板 → `CCRelay: Open Dashboard`（VS Code）或托盘菜单 → **打开控制台**（桌面应用）访问。
 
-- **Dashboard** — 服务器状态、当前提供商、请求统计
+- **Dashboard** — 服务器状态、当前提供商、Token 用量、性能指标（TTFB、P50/P90 延迟、输出 TPS），支持时间范围筛选
 - **Providers** — 查看、切换、复制、导入/导出提供商
-- **Logs** — 请求/响应日志查看器（未启用日志时自动隐藏）
+- **Logs** — 请求/响应日志查看器，支持 Token 列、TTFB、输出 TPS 和模型映射显示（未启用日志时自动隐藏）
 - **Settings** — 在 UI 中管理 YAML 配置；路由和并发保存后即时生效，服务器和日志需重启
 - **Client configuration** — 从 UI 写入 Claude Code 环境变量和 Codex 配置
 

@@ -768,7 +768,7 @@ export class PostgresDriver implements DatabaseDriver {
        WHERE ${timeFilter}`,
       timeParams
     );
-    const base = baseResult.rows[0] as Record<string, string | number | null> | undefined ?? {};
+    const base = (baseResult.rows[0] as Record<string, string | number | null> | undefined) ?? {};
     const num = (v: string | number | null | undefined): number =>
       parseInt(String(v ?? "0"), 10) || 0;
     const fnum = (v: string | number | null | undefined): number =>
@@ -792,7 +792,7 @@ export class PostgresDriver implements DatabaseDriver {
          AND (duration - ttfb) > 500`,
       timeParams
     );
-    const tps = tpsResult.rows[0] as Record<string, string | number | null> | undefined ?? {};
+    const tps = (tpsResult.rows[0] as Record<string, string | number | null> | undefined) ?? {};
     const filteredTokens = num(tps.filteredTokens);
     const filteredGenTime = num(tps.filteredGenTime);
     const filteredCount = num(tps.filteredCount);

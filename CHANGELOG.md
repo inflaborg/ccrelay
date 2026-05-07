@@ -9,7 +9,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.1] - 2026-05-07 (pre-release)
 
-Pre-release line for 0.2.1.
+Enhanced log viewer and dashboard with token tracking, performance metrics, and model mapping display.
+
+### Added
+
+**Log Viewer**
+
+- Model mapping display in log list: shows `original → mapped` (e.g. `claude-sonnet-4-6 → glm-5.1`) when model mapping is active.
+- Token columns (Input / Output / Cache) in the log list table and detail panel.
+- TTFB (Time To First Byte) and output TPS (tokens per second) displayed in log list and detail panel.
+- TPS calculation treats generation time under 1 second as 1 second to avoid inflated values.
+- Request path and upstream URL shown in log detail panel.
+
+**Dashboard**
+
+- Time range selector (1d / 7d / 30d / All, default 7d) for all dashboard statistics.
+- Token usage stats: total input, output, cache tokens with cache hit rate.
+- Performance metrics: average TTFB, P50/P90 latency percentiles, filtered output TPS.
+- Output TPS only counts genuinely streamed requests (generation time > 500ms) to exclude fake SSE responses.
+- Per-provider breakdown table with request count and token usage.
+
+**Metrics Pipeline**
+
+- Token extraction from both JSON and SSE response bodies (Anthropic and OpenAI formats).
+- TTFB tracked through the entire proxy pipeline (executor → response logger → database).
+- Token and TTFB data stored in `request_logs` table (new columns: `input_tokens`, `output_tokens`, `cache_tokens`, `ttfb`).
+- Database stats API supports `?range=1d|7d|30d|all` query parameter.
+
+### Fixed
+
+- Log detail now shows "Pending" badge for in-progress requests instead of "Err".
+- Correctly extract model name from truncated base64-encoded request bodies.
+
+## [0.2.0] - 2026-05-04
 
 ## [0.2.0] - 2026-05-04
 

@@ -53,7 +53,7 @@
 
 - Multi-instance coordination (Leader/Follower) across VS Code windows and the desktop app
 - Config hot-reload — edits to `config.yaml` are picked up automatically
-- Optional request/response logging (SQLite or PostgreSQL) with a built-in log viewer
+- Optional request/response logging (SQLite or PostgreSQL) with a built-in log viewer, token tracking, and performance metrics (TTFB, output TPS, P50/P90 latency)
 - Concurrency control with per-route queue limits
 
 **Desktop & UI**
@@ -315,9 +315,9 @@ gemini:
 
 Built-in web dashboard accessible via Command Palette → `CCRelay: Open Dashboard` (VS Code) or tray menu → **Open Dashboard** (desktop app).
 
-- **Dashboard** — server status, current provider, request stats
+- **Dashboard** — server status, current provider, token usage, performance metrics (TTFB, P50/P90 latency, output TPS) with time range selector
 - **Providers** — view, switch, duplicate, import/export providers
-- **Logs** — request/response log viewer (hidden when logging is disabled)
+- **Logs** — request/response log viewer with token columns, TTFB, output TPS, and model mapping display (hidden when logging is disabled)
 - **Settings** — manage YAML config in the UI; routing and concurrency hot-reload on save, server and logging changes require a restart
 - **Client configuration** — write Claude Code env vars and Codex config from the UI
 
