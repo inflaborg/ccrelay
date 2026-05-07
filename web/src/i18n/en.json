@@ -252,6 +252,7 @@
       "error": "Error",
       "statusOk": "OK",
       "statusErr": "Err",
+      "statusPending": "Pending",
       "loadError": "Failed to load log details",
       "requestBody": "Request Body",
       "responseBody": "Response Body",

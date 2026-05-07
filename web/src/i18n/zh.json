@@ -252,6 +252,7 @@
       "error": "错误",
       "statusOk": "成功",
       "statusErr": "错误",
+      "statusPending": "进行中",
       "loadError": "加载日志详情失败",
       "requestBody": "请求体",
       "responseBody": "响应体",

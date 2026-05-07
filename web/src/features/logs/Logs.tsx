@@ -785,13 +785,21 @@ export default function Logs() {
                     <div className="flex items-center gap-1.5">
                       <span className="text-muted-foreground">{t("logs.detail.status")}</span>
                       <Badge
-                        variant={selectedLog.success ? "success" : "destructive"}
+                        variant={
+                          selectedLog.status === "pending"
+                            ? "outline"
+                            : selectedLog.success
+                              ? "success"
+                              : "destructive"
+                        }
                         className="text-[11px] px-1.5 py-0"
                       >
-                        {selectedLog.statusCode ||
-                          (selectedLog.success
-                            ? t("logs.detail.statusOk")
-                            : t("logs.detail.statusErr"))}
+                        {selectedLog.status === "pending"
+                          ? t("logs.detail.statusPending")
+                          : selectedLog.statusCode ||
+                            (selectedLog.success
+                              ? t("logs.detail.statusOk")
+                              : t("logs.detail.statusErr"))}
                       </Badge>
                     </div>
                     <div className="flex items-center gap-1.5">
