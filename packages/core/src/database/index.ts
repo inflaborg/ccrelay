@@ -165,7 +165,7 @@ export class LogDatabase {
   /**
    * Get database statistics
    */
-  async getStats() {
+  async getStats(query?: import("./types").StatsQuery) {
     if (!this.driver) {
       return {
         totalLogs: 0,
@@ -173,14 +173,24 @@ export class LogDatabase {
         errorCount: 0,
         avgDuration: 0,
         byProvider: {},
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalCacheTokens: 0,
+        cacheHitRate: 0,
+        avgTtfb: 0,
+        outputTps: 0,
+        outputTpsSampleCount: 0,
+        p50Duration: 0,
+        p90Duration: 0,
+        providerBreakdown: [],
         pendingWrites: 0,
       };
     }
 
-    const stats = await this.driver.getStats();
+    const stats = await this.driver.getStats(query);
     return {
       ...stats,
-      pendingWrites: 0, // Driver handles its own queue internally
+      pendingWrites: 0,
     };
   }
 

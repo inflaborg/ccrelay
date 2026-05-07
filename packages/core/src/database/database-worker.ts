@@ -11,7 +11,7 @@
 
 import { parentPort } from "worker_threads";
 import { SqliteCliDriver } from "./drivers/sqlite-cli";
-import type { RequestLog, LogFilter, RequestStatus, SqliteDriverConfig } from "./types";
+import type { RequestLog, LogFilter, RequestStatus, SqliteDriverConfig, StatsQuery } from "./types";
 
 // Message types
 type WorkerMessageType =
@@ -89,6 +89,10 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
           success: boolean;
           errorMessage: string | undefined;
           originalResponseBody?: string;
+          inputTokens?: number;
+          outputTokens?: number;
+          cacheTokens?: number;
+          ttfb?: number;
         };
         driver?.updateLogCompleted(
           p.clientId,
@@ -97,7 +101,11 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
           p.duration,
           p.success,
           p.errorMessage,
-          p.originalResponseBody
+          p.originalResponseBody,
+          p.inputTokens,
+          p.outputTokens,
+          p.cacheTokens,
+          p.ttfb
         );
         return { id, success: true };
       }
@@ -140,7 +148,8 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
       }
 
       case "getStats": {
-        const result = await driver?.getStats();
+        const q = (payload as { query?: StatsQuery })?.query;
+        const result = await driver?.getStats(q);
         return { id, success: true, data: result };
       }
 

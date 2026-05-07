@@ -16,7 +16,9 @@ import type {
   LogFilter,
   LogQueryResult,
   DatabaseStats,
+  ProviderStatRow,
   RequestStatus,
+  StatsQuery,
 } from "../types";
 
 /** Thrown when the `sqlite3` executable is absent; callers may degrade to disabled log storage. */
@@ -170,8 +172,9 @@ function buildInsertSql(
     sql: `INSERT INTO request_logs (
       timestamp, provider_id, provider_name, method, path, target_url,
       request_body, response_body, original_request_body, original_response_body,
-      status_code, duration, success, error_message, client_id, status, route_type
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      status_code, duration, success, error_message, client_id, status, route_type,
+      input_tokens, output_tokens, cache_tokens, ttfb
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: [
       log.timestamp,
       log.providerId,
@@ -190,8 +193,27 @@ function buildInsertSql(
       log.clientId ?? null,
       status,
       log.routeType ?? null,
+      log.inputTokens ?? null,
+      log.outputTokens ?? null,
+      log.cacheTokens ?? null,
+      log.ttfb ?? null,
     ],
   };
+}
+
+/**
+ * Extract model name from a JSON body that may be truncated.
+ * Tries JSON.parse first; falls back to regex for partial JSON.
+ */
+function extractModelFromPartialJson(body: string): string | undefined {
+  try {
+    const parsed = JSON.parse(body) as { model?: string; data?: { model?: string } };
+    return (typeof parsed.model === "string" && parsed.model) || parsed.data?.model || undefined;
+  } catch {
+    // Truncated JSON — extract "model":"value" via regex
+    const match = body.match(/"model"\s*:\s*"([^"]+)"/);
+    return match?.[1];
+  }
 }
 
 /**
@@ -212,24 +234,36 @@ function dbRowToLogWithoutBody(row: Record<string, unknown>): RequestLog {
     clientId: row.client_id as string | undefined,
     status: row.status as RequestLog["status"],
     routeType: row.route_type as RequestLog["routeType"],
+    inputTokens: row.input_tokens as number | undefined,
+    outputTokens: row.output_tokens as number | undefined,
+    cacheTokens: row.cache_tokens as number | undefined,
+    ttfb: row.ttfb as number | undefined,
   };
 
   if (log.errorMessage) {
     log.errorMessage = decodeFromStorage(log.errorMessage);
   }
 
+  // Extract original model (what the client sent) from original_request_body
+  const rawOriginalBody = row.original_request_body as string | undefined;
+  if (rawOriginalBody) {
+    const originalBody = decodeFromStorage(rawOriginalBody);
+    if (originalBody) {
+      log.model = extractModelFromPartialJson(originalBody);
+    }
+  }
+
+  // Extract mapped model (what was sent upstream) from request_body
   const rawRequestBody = row.request_body as string | undefined;
   if (rawRequestBody) {
     const requestBody = decodeFromStorage(rawRequestBody);
     if (requestBody) {
-      try {
-        const parsed = JSON.parse(requestBody) as { model?: string; data?: { model?: string } };
-        const model = parsed.model || parsed.data?.model;
-        if (model && typeof model === "string") {
+      const model = extractModelFromPartialJson(requestBody);
+      if (model) {
+        log.mappedModel = model;
+        if (!log.model) {
           log.model = model;
         }
-      } catch {
-        // Ignore parse errors
       }
     }
   }
@@ -245,9 +279,51 @@ function dbRowToLogWithoutBody(row: Record<string, unknown>): RequestLog {
 }
 
 /**
+ * Shared helper: populate model/mappedModel from stored bodies
+ */
+function extractModelsFromBodies(
+  row: Record<string, unknown>
+): Pick<RequestLog, "model" | "mappedModel"> {
+  const result: Pick<RequestLog, "model" | "mappedModel"> = {};
+
+  const rawOriginalBody = row.original_request_body as string | undefined;
+  if (rawOriginalBody) {
+    const originalBody = decodeFromStorage(rawOriginalBody);
+    if (originalBody) {
+      result.model = extractModelFromPartialJson(originalBody);
+    }
+  }
+
+  const rawRequestBody = row.request_body as string | undefined;
+  if (rawRequestBody) {
+    const requestBody = decodeFromStorage(rawRequestBody);
+    if (requestBody) {
+      const model = extractModelFromPartialJson(requestBody);
+      if (model) {
+        result.mappedModel = model;
+        if (!result.model) {
+          result.model = model;
+        }
+      }
+    }
+  }
+
+  if (!result.model) {
+    const path = (row.path as string) || "";
+    const pathModelMatch = path.match(/\/models\/([^\/\?]+)/);
+    if (pathModelMatch) {
+      result.model = pathModelMatch[1];
+    }
+  }
+
+  return result;
+}
+
+/**
  * Convert database row to RequestLog (with body fields for detail view)
  */
 function dbRowToLog(row: Record<string, unknown>): RequestLog {
+  const models = extractModelsFromBodies(row);
   return {
     id: row.id as number,
     timestamp: row.timestamp as number,
@@ -267,6 +343,11 @@ function dbRowToLog(row: Record<string, unknown>): RequestLog {
     clientId: row.client_id as string | undefined,
     status: row.status as RequestLog["status"],
     routeType: row.route_type as RequestLog["routeType"],
+    inputTokens: row.input_tokens as number | undefined,
+    outputTokens: row.output_tokens as number | undefined,
+    cacheTokens: row.cache_tokens as number | undefined,
+    ttfb: row.ttfb as number | undefined,
+    ...models,
   };
 }
 
@@ -1138,7 +1219,11 @@ export class SqliteCliDriver implements DatabaseDriver {
         error_message TEXT,
         client_id TEXT,
         status TEXT DEFAULT 'completed',
-        route_type TEXT
+        route_type TEXT,
+        input_tokens INTEGER,
+        output_tokens INTEGER,
+        cache_tokens INTEGER,
+        ttfb INTEGER
       )
     `);
 
@@ -1175,6 +1260,13 @@ export class SqliteCliDriver implements DatabaseDriver {
           sql: "ALTER TABLE request_logs ADD COLUMN status TEXT DEFAULT 'completed'",
         },
         { column: "route_type", sql: "ALTER TABLE request_logs ADD COLUMN route_type TEXT" },
+        { column: "input_tokens", sql: "ALTER TABLE request_logs ADD COLUMN input_tokens INTEGER" },
+        {
+          column: "output_tokens",
+          sql: "ALTER TABLE request_logs ADD COLUMN output_tokens INTEGER",
+        },
+        { column: "cache_tokens", sql: "ALTER TABLE request_logs ADD COLUMN cache_tokens INTEGER" },
+        { column: "ttfb", sql: "ALTER TABLE request_logs ADD COLUMN ttfb INTEGER" },
       ];
 
       for (const migration of migrations) {
@@ -1214,7 +1306,11 @@ export class SqliteCliDriver implements DatabaseDriver {
     duration: number,
     success: boolean,
     errorMessage: string | undefined,
-    originalResponseBody?: string
+    originalResponseBody?: string,
+    inputTokens?: number,
+    outputTokens?: number,
+    cacheTokens?: number,
+    ttfb?: number
   ): void {
     if (!this.isEnabled || !this.writeConn?.started) {
       return;
@@ -1229,7 +1325,11 @@ export class SqliteCliDriver implements DatabaseDriver {
            duration = ?,
            success = ?,
            error_message = ?,
-           status = 'completed'
+           status = 'completed',
+           input_tokens = ?,
+           output_tokens = ?,
+           cache_tokens = ?,
+           ttfb = ?
        WHERE client_id = ?`,
         [
           statusCode,
@@ -1238,6 +1338,10 @@ export class SqliteCliDriver implements DatabaseDriver {
           duration,
           success ? 1 : 0,
           encodeForStorage(errorMessage),
+          inputTokens ?? null,
+          outputTokens ?? null,
+          cacheTokens ?? null,
+          ttfb ?? null,
           clientId,
         ]
       )
@@ -1384,7 +1488,10 @@ export class SqliteCliDriver implements DatabaseDriver {
     const rows = await this.readConn.query(
       `SELECT id, timestamp, provider_id, provider_name, method, path,
               status_code, duration, success, error_message, client_id,
-              status, route_type, SUBSTR(request_body, 1, 500) as request_body
+              status, route_type,
+              input_tokens, output_tokens, cache_tokens, ttfb,
+              SUBSTR(request_body, 1, 500) as request_body,
+              SUBSTR(original_request_body, 1, 500) as original_request_body
        FROM request_logs ${whereClause} ORDER BY timestamp DESC LIMIT ? OFFSET ?`,
       [...params, limit, offset]
     );
@@ -1408,41 +1515,136 @@ export class SqliteCliDriver implements DatabaseDriver {
     return dbRowToLog(rows[0]);
   }
 
-  async getStats(): Promise<DatabaseStats> {
+  async getStats(query?: StatsQuery): Promise<DatabaseStats> {
+    const empty: DatabaseStats = {
+      totalLogs: 0,
+      successCount: 0,
+      errorCount: 0,
+      avgDuration: 0,
+      byProvider: {},
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalCacheTokens: 0,
+      cacheHitRate: 0,
+      avgTtfb: 0,
+      outputTps: 0,
+      outputTpsSampleCount: 0,
+      p50Duration: 0,
+      p90Duration: 0,
+      providerBreakdown: [],
+    };
+
     if (!this.readConn?.started) {
-      return {
-        totalLogs: 0,
-        successCount: 0,
-        errorCount: 0,
-        avgDuration: 0,
-        byProvider: {},
-      };
+      return empty;
     }
 
-    const rows = await this.readConn.query(
+    const since = query?.since;
+    const sinceParam = since ? since : null;
+    const timeFilter = since ? "(? IS NULL OR timestamp >= ?)" : "1=1";
+    const timeParams = since ? [sinceParam, sinceParam] : [];
+
+    // 1. Base stats + token aggregation
+    const baseRows = await this.readConn.query(
       `SELECT COUNT(*) as totalLogs,
               SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successCount,
               SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as errorCount,
-              AVG(duration) as avgDuration
-       FROM request_logs`
+              AVG(duration) as avgDuration,
+              COALESCE(SUM(input_tokens), 0) as totalInputTokens,
+              COALESCE(SUM(output_tokens), 0) as totalOutputTokens,
+              COALESCE(SUM(cache_tokens), 0) as totalCacheTokens,
+              AVG(ttfb) as avgTtfb
+       FROM request_logs
+       WHERE ${timeFilter}`,
+      timeParams
     );
+    const base = baseRows[0] ?? {};
+    const totalInput = (base.totalInputTokens as number) ?? 0;
+    const totalOutput = (base.totalOutputTokens as number) ?? 0;
+    const totalCache = (base.totalCacheTokens as number) ?? 0;
+    const denominator = totalInput + totalCache;
 
-    const row = rows[0] ?? {};
-    const byProviderRows = await this.readConn.query(
-      "SELECT provider_id, COUNT(*) as count FROM request_logs GROUP BY provider_id"
+    // 2. Filtered TPS (only genuinely streamed: genTime > 500ms)
+    const tpsRows = await this.readConn.query(
+      `SELECT COALESCE(SUM(output_tokens), 0) as filteredTokens,
+              COALESCE(SUM(duration - ttfb), 0) as filteredGenTime,
+              COUNT(*) as filteredCount
+       FROM request_logs
+       WHERE ${timeFilter}
+         AND ttfb IS NOT NULL
+         AND output_tokens IS NOT NULL
+         AND output_tokens > 0
+         AND (duration - ttfb) > 500`,
+      timeParams
+    );
+    const tps = tpsRows[0] ?? {};
+    const filteredTokens = (tps.filteredTokens as number) ?? 0;
+    const filteredGenTime = (tps.filteredGenTime as number) ?? 0;
+    const filteredCount = (tps.filteredCount as number) ?? 0;
+    const outputTps = filteredGenTime > 0 ? (filteredTokens / filteredGenTime) * 1000 : 0;
+
+    // 3. Percentiles via LIMIT/OFFSET
+    let p50Duration = 0;
+    let p90Duration = 0;
+    const totalLogs = (base.totalLogs as number) ?? 0;
+    if (totalLogs > 0) {
+      const p50Offset = Math.floor(0.5 * (totalLogs - 1));
+      const p90Offset = Math.floor(0.9 * (totalLogs - 1));
+      const [p50Rows, p90Rows] = await Promise.all([
+        this.readConn.query(
+          `SELECT duration FROM request_logs WHERE ${timeFilter} ORDER BY duration ASC LIMIT 1 OFFSET ?`,
+          [...timeParams, p50Offset]
+        ),
+        this.readConn.query(
+          `SELECT duration FROM request_logs WHERE ${timeFilter} ORDER BY duration ASC LIMIT 1 OFFSET ?`,
+          [...timeParams, p90Offset]
+        ),
+      ]);
+      p50Duration = Math.round((p50Rows[0]?.duration as number) ?? 0);
+      p90Duration = Math.round((p90Rows[0]?.duration as number) ?? 0);
+    }
+
+    // 4. Provider breakdown
+    const providerRows = await this.readConn.query(
+      `SELECT provider_id, provider_name, COUNT(*) as count,
+              COALESCE(SUM(input_tokens), 0) as totalInputTokens,
+              COALESCE(SUM(output_tokens), 0) as totalOutputTokens,
+              COALESCE(SUM(cache_tokens), 0) as totalCacheTokens
+       FROM request_logs
+       WHERE ${timeFilter}
+       GROUP BY provider_id, provider_name`,
+      timeParams
     );
 
     const byProvider: Record<string, number> = {};
-    for (const r of byProviderRows) {
+    const providerBreakdown: ProviderStatRow[] = [];
+    for (const r of providerRows) {
       byProvider[r.provider_id as string] = r.count as number;
+      providerBreakdown.push({
+        providerId: r.provider_id as string,
+        providerName: (r.provider_name as string) || (r.provider_id as string),
+        count: r.count as number,
+        totalInputTokens: (r.totalInputTokens as number) ?? 0,
+        totalOutputTokens: (r.totalOutputTokens as number) ?? 0,
+        totalCacheTokens: (r.totalCacheTokens as number) ?? 0,
+      });
     }
 
     return {
-      totalLogs: (row.totalLogs as number) ?? 0,
-      successCount: (row.successCount as number) ?? 0,
-      errorCount: (row.errorCount as number) ?? 0,
-      avgDuration: Math.round((row.avgDuration as number) ?? 0),
+      totalLogs,
+      successCount: (base.successCount as number) ?? 0,
+      errorCount: (base.errorCount as number) ?? 0,
+      avgDuration: Math.round((base.avgDuration as number) ?? 0),
       byProvider,
+      totalInputTokens: totalInput,
+      totalOutputTokens: totalOutput,
+      totalCacheTokens: totalCache,
+      cacheHitRate: denominator > 0 ? Math.round((totalCache / denominator) * 100) : 0,
+      avgTtfb: Math.round((base.avgTtfb as number) ?? 0),
+      outputTps: Math.round(outputTps * 10) / 10,
+      outputTpsSampleCount: filteredCount,
+      p50Duration,
+      p90Duration,
+      providerBreakdown,
     };
   }
 

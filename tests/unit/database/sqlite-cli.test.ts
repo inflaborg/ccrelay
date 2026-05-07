@@ -124,6 +124,16 @@ describe("SqliteCliDriver", () => {
         errorCount: 0,
         avgDuration: 0,
         byProvider: {},
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalCacheTokens: 0,
+        cacheHitRate: 0,
+        avgTtfb: 0,
+        outputTps: 0,
+        outputTpsSampleCount: 0,
+        p50Duration: 0,
+        p90Duration: 0,
+        providerBreakdown: [],
       });
     });
   });

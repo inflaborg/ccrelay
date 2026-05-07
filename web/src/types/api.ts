@@ -124,6 +124,7 @@ export interface LogEntry {
   path: string;
   targetUrl?: string;
   model?: string;
+  mappedModel?: string;
   requestBody?: string;
   responseBody?: string;
   originalRequestBody?: string;
@@ -135,6 +136,10 @@ export interface LogEntry {
   clientId?: string;
   status?: RequestStatus;
   routeType?: RouteType;
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheTokens?: number;
+  ttfb?: number;
 }
 
 export interface LogsQuery {
@@ -152,13 +157,34 @@ export interface LogsResponse {
   hasMore: boolean;
 }
 
+export interface ProviderBreakdownRow {
+  providerId: string;
+  providerName: string;
+  count: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCacheTokens: number;
+}
+
 export interface LogStats {
   totalLogs: number;
   successCount: number;
   errorCount: number;
   avgDuration: number;
   byProvider: Record<string, number>;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCacheTokens: number;
+  cacheHitRate: number;
+  avgTtfb: number;
+  outputTps: number;
+  outputTpsSampleCount: number;
+  p50Duration: number;
+  p90Duration: number;
+  providerBreakdown: ProviderBreakdownRow[];
 }
+
+export type StatsRange = "1d" | "7d" | "30d" | "all";
 
 export interface BlockPattern {
   path: string;

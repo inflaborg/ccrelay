@@ -46,7 +46,31 @@
       "title": "Performance",
       "avgResponseTime": "Average Response Time",
       "successRate": "Success Rate",
-      "providersUsed": "Providers Used"
+      "providersUsed": "Providers Used",
+      "p50Latency": "P50 Latency",
+      "p90Latency": "P90 Latency",
+      "avgTtfb": "Avg TTFB",
+      "outputTps": "Output TPS",
+      "outputTpsTooltip": "From genuinely streamed requests (gen time > 500ms)"
+    },
+    "tokens": {
+      "title": "Token Usage",
+      "input": "Input",
+      "output": "Output",
+      "cache": "Cache",
+      "cacheHitRate": "Cache Hit Rate"
+    },
+    "timeRange": {
+      "1d": "1d",
+      "7d": "7d",
+      "30d": "30d",
+      "all": "All"
+    },
+    "providerBreakdown": {
+      "title": "Provider Breakdown",
+      "provider": "Provider",
+      "requests": "Requests",
+      "tokens": "Tokens"
     }
   },
   "clientConfig": {
@@ -219,7 +243,8 @@
         "id": "ID",
         "method": "Method",
         "type": "Type",
-        "model": "Model",
+        "model": "Model → Mapped",
+        "tokens": "Tokens",
         "path": "Path",
         "provider": "Provider",
         "status": "Status",
@@ -246,11 +271,17 @@
       "provider": "Provider",
       "duration": "Duration",
       "time": "Time",
-      "path": "Path",
-      "targetUrl": "Target URL",
+      "path": "Request Path",
+      "targetUrl": "Upstream URL",
+      "model": "Model",
+      "tokens": "Tokens",
+      "tokenIn": "In",
+      "tokenOut": "Out",
+      "tokenCache": "Cache",
       "error": "Error",
       "statusOk": "OK",
       "statusErr": "Err",
+      "statusPending": "Pending",
       "loadError": "Failed to load log details",
       "requestBody": "Request Body",
       "responseBody": "Response Body",

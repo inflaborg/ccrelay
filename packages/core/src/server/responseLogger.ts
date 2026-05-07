@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/naming-convention */
+// API response fields use snake_case (input_tokens, prompt_tokens, etc.)
+
 /**
  * Response logger for database logging
  */
@@ -5,6 +8,105 @@
 import * as zlib from "zlib";
 import { ScopedLogger } from "../utils/logger";
 import type { LogDatabase } from "../database";
+
+interface TokenUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheTokens?: number;
+}
+
+interface UsageFields {
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_read_input_tokens?: number;
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    prompt_tokens_details?: { cached_tokens?: number };
+  };
+  message?: {
+    usage?: {
+      input_tokens?: number;
+      output_tokens?: number;
+      cache_read_input_tokens?: number;
+      prompt_tokens?: number;
+      completion_tokens?: number;
+      prompt_tokens_details?: { cached_tokens?: number };
+    };
+  };
+}
+
+/**
+ * Extract token usage from a response body (handles both JSON and SSE formats).
+ */
+function extractTokenUsage(body: string | undefined): TokenUsage {
+  if (!body) {
+    return {};
+  }
+
+  // Try direct JSON parse first
+  try {
+    const parsed = JSON.parse(body) as UsageFields;
+    return extractUsageFromObj(parsed);
+  } catch {
+    // Not direct JSON — try SSE format
+  }
+
+  // SSE format: scan data lines and accumulate usage
+  const result: TokenUsage = {};
+  for (const line of body.split("\n")) {
+    if (!line.startsWith("data: ") || line === "data: [DONE]") {
+      continue;
+    }
+    try {
+      const event = JSON.parse(line.slice(6)) as UsageFields;
+      const usage = extractUsageFromObj(event);
+      if (usage.inputTokens !== undefined) {
+        result.inputTokens = usage.inputTokens;
+      }
+      if (usage.outputTokens !== undefined) {
+        result.outputTokens = usage.outputTokens;
+      }
+      if (usage.cacheTokens !== undefined) {
+        result.cacheTokens = usage.cacheTokens;
+      }
+    } catch {
+      // Skip malformed SSE lines
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Extract usage from a parsed JSON object (Anthropic or OpenAI format).
+ */
+function extractUsageFromObj(obj: UsageFields): TokenUsage {
+  const usage = obj.usage || obj.message?.usage;
+  if (!usage) {
+    return {};
+  }
+
+  // Anthropic format
+  if (typeof usage.input_tokens === "number") {
+    return {
+      inputTokens: usage.input_tokens,
+      outputTokens: usage.output_tokens,
+      cacheTokens: usage.cache_read_input_tokens,
+    };
+  }
+
+  // OpenAI format
+  if (typeof usage.prompt_tokens === "number") {
+    return {
+      inputTokens: usage.prompt_tokens,
+      outputTokens: usage.completion_tokens,
+      cacheTokens: usage.prompt_tokens_details?.cached_tokens,
+    };
+  }
+
+  return {};
+}
 
 /**
  * Response logger handles logging request/response to database
@@ -30,7 +132,8 @@ export class ResponseLogger {
     statusCode: number,
     responseChunks: Buffer[],
     errorMessage: string | undefined,
-    originalResponseBody?: string
+    originalResponseBody?: string,
+    ttfb?: number
   ): void {
     if (!this.database.enabled) {
       this.log.info(`logResponse skipped - database not enabled. clientId=${clientId}`);
@@ -71,6 +174,12 @@ export class ResponseLogger {
 
     const success = statusCode >= 200 && statusCode < 300 && !errorMessage;
 
+    // Extract token usage from response body (try converted first, then original)
+    let tokens = extractTokenUsage(responseBodyLog);
+    if (tokens.inputTokens === undefined && originalResponseBody) {
+      tokens = extractTokenUsage(originalResponseBody);
+    }
+
     this.database.updateLogCompleted(
       clientId,
       statusCode,
@@ -78,7 +187,11 @@ export class ResponseLogger {
       duration,
       success,
       errorMessage,
-      originalResponseBody
+      originalResponseBody,
+      tokens.inputTokens,
+      tokens.outputTokens,
+      tokens.cacheTokens,
+      ttfb
     );
   }
 }

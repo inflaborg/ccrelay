@@ -33,9 +33,14 @@ export interface RequestLog {
   success: boolean;
   errorMessage?: string;
   model?: string;
+  mappedModel?: string;
   clientId?: string;
   status?: RequestStatus;
   routeType?: RouteType;
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheTokens?: number;
+  ttfb?: number;
 }
 
 /**
@@ -63,6 +68,26 @@ export interface LogQueryResult {
 }
 
 /**
+ * Stats query input (time range filter)
+ */
+export interface StatsQuery {
+  /** Millisecond epoch lower bound; omit for all time */
+  since?: number;
+}
+
+/**
+ * Per-provider row in dashboard breakdown
+ */
+export interface ProviderStatRow {
+  providerId: string;
+  providerName: string;
+  count: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCacheTokens: number;
+}
+
+/**
  * Database statistics
  */
 export interface DatabaseStats {
@@ -71,6 +96,16 @@ export interface DatabaseStats {
   errorCount: number;
   avgDuration: number;
   byProvider: Record<string, number>;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCacheTokens: number;
+  cacheHitRate: number;
+  avgTtfb: number;
+  outputTps: number;
+  outputTpsSampleCount: number;
+  p50Duration: number;
+  p90Duration: number;
+  providerBreakdown: ProviderStatRow[];
 }
 
 /**
@@ -135,7 +170,11 @@ export interface DatabaseDriver {
     duration: number,
     success: boolean,
     errorMessage: string | undefined,
-    originalResponseBody?: string
+    originalResponseBody?: string,
+    inputTokens?: number,
+    outputTokens?: number,
+    cacheTokens?: number,
+    ttfb?: number
   ): void;
 
   /**
@@ -177,7 +216,7 @@ export interface DatabaseDriver {
   /**
    * Get database statistics
    */
-  getStats(): Promise<DatabaseStats>;
+  getStats(query?: StatsQuery): Promise<DatabaseStats>;
 
   /**
    * Clean old logs (background maintenance)

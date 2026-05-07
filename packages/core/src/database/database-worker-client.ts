@@ -16,6 +16,7 @@ import type {
   DatabaseStats,
   RequestStatus,
   DatabaseDriverConfig,
+  StatsQuery,
 } from "./types";
 
 // Message types (must match worker)
@@ -278,7 +279,11 @@ export class DatabaseWorkerClient implements DatabaseDriver {
     duration: number,
     success: boolean,
     errorMessage: string | undefined,
-    originalResponseBody?: string
+    originalResponseBody?: string,
+    inputTokens?: number,
+    outputTokens?: number,
+    cacheTokens?: number,
+    ttfb?: number
   ): void {
     void this.send("updateLogCompleted", {
       clientId,
@@ -288,6 +293,10 @@ export class DatabaseWorkerClient implements DatabaseDriver {
       success,
       errorMessage,
       originalResponseBody,
+      inputTokens,
+      outputTokens,
+      cacheTokens,
+      ttfb,
     }).catch(err => {
       this.log.error("[DatabaseWorker] updateLogCompleted error:", err);
     });
@@ -366,9 +375,9 @@ export class DatabaseWorkerClient implements DatabaseDriver {
   /**
    * Get database statistics — returns zeroed stats on failure
    */
-  async getStats(): Promise<DatabaseStats> {
+  async getStats(query?: StatsQuery): Promise<DatabaseStats> {
     try {
-      return await this.send<DatabaseStats>("getStats");
+      return await this.send<DatabaseStats>("getStats", { query });
     } catch (err) {
       this.log.warn(
         `[DatabaseWorker] getStats failed, returning empty: ${err instanceof Error ? err.message : String(err)}`
@@ -379,6 +388,16 @@ export class DatabaseWorkerClient implements DatabaseDriver {
         errorCount: 0,
         avgDuration: 0,
         byProvider: {},
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalCacheTokens: 0,
+        cacheHitRate: 0,
+        avgTtfb: 0,
+        outputTps: 0,
+        outputTpsSampleCount: 0,
+        p50Duration: 0,
+        p90Duration: 0,
+        providerBreakdown: [],
       };
     }
   }
