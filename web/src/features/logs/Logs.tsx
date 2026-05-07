@@ -568,7 +568,7 @@ export default function Logs() {
       },
       className: "hidden sm:table-cell",
       headerClassName: "hidden sm:table-cell",
-      width: 160,
+      width: 260,
     },
     {
       id: "path",
