@@ -9,6 +9,37 @@ These commands ensure that the codebase remains consistently formatted and free 
 
 If the linter reports any warnings or errors, you must fix them in the source code before creating a git commit. The code must be clean with no remaining linter errors.
 
+# Documentation Writing Guidelines
+
+When editing README.md, README_CN.md, or CHANGELOG.md, follow these rules:
+
+## Audience separation
+
+- **README**: targets *users* (install, configure, use). Developer/internal details (CI matrix, build_targets, internal function names) go in CONTRIBUTING.md or commit messages, not README.
+- **CHANGELOG**: targets *users* reading what changed. Keep entries concise and user-facing; omit internal code symbols, function names, and implementation paths.
+
+## README structure rules
+
+- **Core Features**: one sentence per bullet, grouped by theme (3-4 groups, 3-4 items each). Do not write paragraphs here — detailed descriptions belong in dedicated sections below.
+- **Quick Start**: must be self-contained. Provide a complete, copy-pasteable minimal config that works in 3 steps. Mark optional steps clearly.
+- **Feature sections**: describe *what* and *how to configure*, not *how the code works*. Avoid internal function/class names (e.g. `resolveUpstreamPath`, `BodyProcessor`). Use tables and diagrams over prose.
+- **Desktop section**: only user-visible info (what to download, how to launch, macOS Gatekeeper). CI/packaging details are internal.
+- **Configuration tables**: keep descriptions short. Put the full YAML example in one place; do not repeat field descriptions in prose.
+
+## CHANGELOG entry rules
+
+- Each entry: **1-2 sentences max**. State what changed and why; omit how (code details go in commit messages).
+- **No internal code symbols** (`parseFunctionArguments`, `build.nsis.buildUniversalInstaller`, etc.). Mention user-visible behavior only.
+- **Group by theme** within Added/Changed/Fixed: `UI`, `Protocol/Conversion`, `Desktop/CI`, `Config`, etc. Use sub-headings when a section has 8+ items.
+- **Merge related items**: 3 SQLite fixes → 1 bullet with sub-items. 5 routing changes → 1 bullet.
+- **Summary paragraph** at the top of a release: 2-3 short sentences covering the major themes, not a single dense 60-word sentence.
+
+## Language and style
+
+- No emoji in documentation unless the user explicitly asks.
+- Short sentences. Prefer tables and bullet lists over paragraphs.
+- README_CN must stay in sync with README — same structure, same information, translated not paraphrased.
+
 # Release Workflow
 
 ## Version bump (pre-release)
