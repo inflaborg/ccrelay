@@ -141,6 +141,7 @@ export class TaskExecutor {
         method: task.method,
         path: task.requestPath,
         provider: task.provider,
+        targetUrl: task.targetUrl,
         isRouted: true,
       } as RoutingContext,
       {
@@ -222,6 +223,7 @@ export class TaskExecutor {
         method: task.method,
         path: task.requestPath,
         provider: task.provider,
+        targetUrl: task.targetUrl,
         isRouted: true,
       } as RoutingContext,
       {
