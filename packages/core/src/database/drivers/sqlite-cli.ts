@@ -16,7 +16,9 @@ import type {
   LogFilter,
   LogQueryResult,
   DatabaseStats,
+  ProviderStatRow,
   RequestStatus,
+  StatsQuery,
 } from "../types";
 
 /** Thrown when the `sqlite3` executable is absent; callers may degrade to disabled log storage. */
@@ -1513,41 +1515,136 @@ export class SqliteCliDriver implements DatabaseDriver {
     return dbRowToLog(rows[0]);
   }
 
-  async getStats(): Promise<DatabaseStats> {
+  async getStats(query?: StatsQuery): Promise<DatabaseStats> {
+    const empty: DatabaseStats = {
+      totalLogs: 0,
+      successCount: 0,
+      errorCount: 0,
+      avgDuration: 0,
+      byProvider: {},
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalCacheTokens: 0,
+      cacheHitRate: 0,
+      avgTtfb: 0,
+      outputTps: 0,
+      outputTpsSampleCount: 0,
+      p50Duration: 0,
+      p90Duration: 0,
+      providerBreakdown: [],
+    };
+
     if (!this.readConn?.started) {
-      return {
-        totalLogs: 0,
-        successCount: 0,
-        errorCount: 0,
-        avgDuration: 0,
-        byProvider: {},
-      };
+      return empty;
     }
 
-    const rows = await this.readConn.query(
+    const since = query?.since;
+    const sinceParam = since ? since : null;
+    const timeFilter = since ? "(? IS NULL OR timestamp >= ?)" : "1=1";
+    const timeParams = since ? [sinceParam, sinceParam] : [];
+
+    // 1. Base stats + token aggregation
+    const baseRows = await this.readConn.query(
       `SELECT COUNT(*) as totalLogs,
               SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successCount,
               SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as errorCount,
-              AVG(duration) as avgDuration
-       FROM request_logs`
+              AVG(duration) as avgDuration,
+              COALESCE(SUM(input_tokens), 0) as totalInputTokens,
+              COALESCE(SUM(output_tokens), 0) as totalOutputTokens,
+              COALESCE(SUM(cache_tokens), 0) as totalCacheTokens,
+              AVG(ttfb) as avgTtfb
+       FROM request_logs
+       WHERE ${timeFilter}`,
+      timeParams
     );
+    const base = baseRows[0] ?? {};
+    const totalInput = (base.totalInputTokens as number) ?? 0;
+    const totalOutput = (base.totalOutputTokens as number) ?? 0;
+    const totalCache = (base.totalCacheTokens as number) ?? 0;
+    const denominator = totalInput + totalCache;
 
-    const row = rows[0] ?? {};
-    const byProviderRows = await this.readConn.query(
-      "SELECT provider_id, COUNT(*) as count FROM request_logs GROUP BY provider_id"
+    // 2. Filtered TPS (only genuinely streamed: genTime > 500ms)
+    const tpsRows = await this.readConn.query(
+      `SELECT COALESCE(SUM(output_tokens), 0) as filteredTokens,
+              COALESCE(SUM(duration - ttfb), 0) as filteredGenTime,
+              COUNT(*) as filteredCount
+       FROM request_logs
+       WHERE ${timeFilter}
+         AND ttfb IS NOT NULL
+         AND output_tokens IS NOT NULL
+         AND output_tokens > 0
+         AND (duration - ttfb) > 500`,
+      timeParams
+    );
+    const tps = tpsRows[0] ?? {};
+    const filteredTokens = (tps.filteredTokens as number) ?? 0;
+    const filteredGenTime = (tps.filteredGenTime as number) ?? 0;
+    const filteredCount = (tps.filteredCount as number) ?? 0;
+    const outputTps = filteredGenTime > 0 ? (filteredTokens / filteredGenTime) * 1000 : 0;
+
+    // 3. Percentiles via LIMIT/OFFSET
+    let p50Duration = 0;
+    let p90Duration = 0;
+    const totalLogs = (base.totalLogs as number) ?? 0;
+    if (totalLogs > 0) {
+      const p50Offset = Math.floor(0.5 * (totalLogs - 1));
+      const p90Offset = Math.floor(0.9 * (totalLogs - 1));
+      const [p50Rows, p90Rows] = await Promise.all([
+        this.readConn.query(
+          `SELECT duration FROM request_logs WHERE ${timeFilter} ORDER BY duration ASC LIMIT 1 OFFSET ?`,
+          [...timeParams, p50Offset]
+        ),
+        this.readConn.query(
+          `SELECT duration FROM request_logs WHERE ${timeFilter} ORDER BY duration ASC LIMIT 1 OFFSET ?`,
+          [...timeParams, p90Offset]
+        ),
+      ]);
+      p50Duration = Math.round((p50Rows[0]?.duration as number) ?? 0);
+      p90Duration = Math.round((p90Rows[0]?.duration as number) ?? 0);
+    }
+
+    // 4. Provider breakdown
+    const providerRows = await this.readConn.query(
+      `SELECT provider_id, provider_name, COUNT(*) as count,
+              COALESCE(SUM(input_tokens), 0) as totalInputTokens,
+              COALESCE(SUM(output_tokens), 0) as totalOutputTokens,
+              COALESCE(SUM(cache_tokens), 0) as totalCacheTokens
+       FROM request_logs
+       WHERE ${timeFilter}
+       GROUP BY provider_id, provider_name`,
+      timeParams
     );
 
     const byProvider: Record<string, number> = {};
-    for (const r of byProviderRows) {
+    const providerBreakdown: ProviderStatRow[] = [];
+    for (const r of providerRows) {
       byProvider[r.provider_id as string] = r.count as number;
+      providerBreakdown.push({
+        providerId: r.provider_id as string,
+        providerName: (r.provider_name as string) || (r.provider_id as string),
+        count: r.count as number,
+        totalInputTokens: (r.totalInputTokens as number) ?? 0,
+        totalOutputTokens: (r.totalOutputTokens as number) ?? 0,
+        totalCacheTokens: (r.totalCacheTokens as number) ?? 0,
+      });
     }
 
     return {
-      totalLogs: (row.totalLogs as number) ?? 0,
-      successCount: (row.successCount as number) ?? 0,
-      errorCount: (row.errorCount as number) ?? 0,
-      avgDuration: Math.round((row.avgDuration as number) ?? 0),
+      totalLogs,
+      successCount: (base.successCount as number) ?? 0,
+      errorCount: (base.errorCount as number) ?? 0,
+      avgDuration: Math.round((base.avgDuration as number) ?? 0),
       byProvider,
+      totalInputTokens: totalInput,
+      totalOutputTokens: totalOutput,
+      totalCacheTokens: totalCache,
+      cacheHitRate: denominator > 0 ? Math.round((totalCache / denominator) * 100) : 0,
+      avgTtfb: Math.round((base.avgTtfb as number) ?? 0),
+      outputTps: Math.round(outputTps * 10) / 10,
+      outputTpsSampleCount: filteredCount,
+      p50Duration,
+      p90Duration,
+      providerBreakdown,
     };
   }
 

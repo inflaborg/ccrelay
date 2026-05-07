@@ -46,7 +46,31 @@
       "title": "性能",
       "avgResponseTime": "平均响应时间",
       "successRate": "成功率",
-      "providersUsed": "使用提供商数"
+      "providersUsed": "使用提供商数",
+      "p50Latency": "P50 延迟",
+      "p90Latency": "P90 延迟",
+      "avgTtfb": "平均首字节时间",
+      "outputTps": "输出 TPS",
+      "outputTpsTooltip": "仅统计真实流式请求（生成时间 > 500ms）"
+    },
+    "tokens": {
+      "title": "Token 用量",
+      "input": "输入",
+      "output": "输出",
+      "cache": "缓存",
+      "cacheHitRate": "缓存命中率"
+    },
+    "timeRange": {
+      "1d": "1天",
+      "7d": "7天",
+      "30d": "30天",
+      "all": "全部"
+    },
+    "providerBreakdown": {
+      "title": "提供商分布",
+      "provider": "提供商",
+      "requests": "请求数",
+      "tokens": "Token"
     }
   },
   "clientConfig": {

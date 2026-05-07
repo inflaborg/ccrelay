@@ -157,13 +157,34 @@ export interface LogsResponse {
   hasMore: boolean;
 }
 
+export interface ProviderBreakdownRow {
+  providerId: string;
+  providerName: string;
+  count: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCacheTokens: number;
+}
+
 export interface LogStats {
   totalLogs: number;
   successCount: number;
   errorCount: number;
   avgDuration: number;
   byProvider: Record<string, number>;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCacheTokens: number;
+  cacheHitRate: number;
+  avgTtfb: number;
+  outputTps: number;
+  outputTpsSampleCount: number;
+  p50Duration: number;
+  p90Duration: number;
+  providerBreakdown: ProviderBreakdownRow[];
 }
+
+export type StatsRange = "1d" | "7d" | "30d" | "all";
 
 export interface BlockPattern {
   path: string;

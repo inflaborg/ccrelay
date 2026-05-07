@@ -46,7 +46,31 @@
       "title": "Performance",
       "avgResponseTime": "Average Response Time",
       "successRate": "Success Rate",
-      "providersUsed": "Providers Used"
+      "providersUsed": "Providers Used",
+      "p50Latency": "P50 Latency",
+      "p90Latency": "P90 Latency",
+      "avgTtfb": "Avg TTFB",
+      "outputTps": "Output TPS",
+      "outputTpsTooltip": "From genuinely streamed requests (gen time > 500ms)"
+    },
+    "tokens": {
+      "title": "Token Usage",
+      "input": "Input",
+      "output": "Output",
+      "cache": "Cache",
+      "cacheHitRate": "Cache Hit Rate"
+    },
+    "timeRange": {
+      "1d": "1d",
+      "7d": "7d",
+      "30d": "30d",
+      "all": "All"
+    },
+    "providerBreakdown": {
+      "title": "Provider Breakdown",
+      "provider": "Provider",
+      "requests": "Requests",
+      "tokens": "Tokens"
     }
   },
   "clientConfig": {

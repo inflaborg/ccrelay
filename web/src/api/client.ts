@@ -18,6 +18,7 @@ import type {
   ClientConfigGetResponse,
   SettingsConfig,
   PatchConfigResponse,
+  StatsRange,
 } from "../types/api";
 
 // Re-export types for convenience
@@ -145,7 +146,10 @@ export const api = {
     }),
 
   // Stats
-  getStats: (): Promise<LogStats> => fetchAPI<LogStats>("/stats"),
+  getStats: (range?: StatsRange): Promise<LogStats> => {
+    const params = range && range !== "all" ? `?range=${range}` : "";
+    return fetchAPI<LogStats>(`/stats${params}`);
+  },
 
   // Version
   getVersion: (): Promise<VersionResponse> => fetchAPI<VersionResponse>("/version"),
