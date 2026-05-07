@@ -335,9 +335,9 @@ Built-in web dashboard accessible via Command Palette → `CCRelay: Open Dashboa
 
 **Desktop app**
 
-![Desktop tray](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-desktop-1.png)
+![Desktop — Dashboard](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-desktop-1.png)
 
-![Desktop dashboard](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-desktop-2.png)
+![Desktop — Provider list](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-desktop-2.png)
 
 ---
 

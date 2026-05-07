@@ -336,9 +336,9 @@ gemini:
 
 **桌面应用**
 
-![桌面托盘](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-desktop-1.png)
+![桌面 — 控制台](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-desktop-1.png)
 
-![桌面控制台](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-desktop-2.png)
+![桌面 — Provider 列表](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-desktop-2.png)
 
 ---
 
