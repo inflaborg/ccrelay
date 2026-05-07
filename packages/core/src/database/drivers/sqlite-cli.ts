@@ -1462,7 +1462,9 @@ export class SqliteCliDriver implements DatabaseDriver {
     const rows = await this.readConn.query(
       `SELECT id, timestamp, provider_id, provider_name, method, path,
               status_code, duration, success, error_message, client_id,
-              status, route_type, SUBSTR(request_body, 1, 500) as request_body
+              status, route_type,
+              SUBSTR(request_body, 1, 500) as request_body,
+              SUBSTR(original_request_body, 1, 500) as original_request_body
        FROM request_logs ${whereClause} ORDER BY timestamp DESC LIMIT ? OFFSET ?`,
       [...params, limit, offset]
     );
