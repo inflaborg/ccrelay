@@ -93,6 +93,7 @@
         "suggested": "建议："
       },
       "configureModels": "配置默认模型",
+      "restore": "还原",
       "upToDate": "已是最新",
       "apply": "应用 CCRelay 设置"
     },
@@ -106,6 +107,7 @@
         "default": "默认："
       },
       "configureModel": "配置模型",
+      "restore": "还原",
       "upToDate": "已是最新",
       "apply": "应用 CCRelay 模板"
     },
@@ -117,6 +119,12 @@
       },
       "replaceCodex": {
         "title": "替换 Codex 配置？"
+      },
+      "restore": {
+        "title": "还原 {{name}} 配置？",
+        "claudeDescription": "将从 settings.json 中移除 CCRelay 注入的键（ANTHROPIC_BASE_URL、ANTHROPIC_AUTH_TOKEN 等）。其他设置不受影响。",
+        "codexDescription": "将从 config.toml 中移除 CCRelay 的 model_provider 配置段，并将 model 重置为默认值。",
+        "action": "还原"
       }
     },
     "codexModelModal": {

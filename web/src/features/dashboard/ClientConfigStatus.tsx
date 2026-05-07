@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileCode2, Loader2, SlidersHorizontal, Terminal, X } from "lucide-react";
+import { FileCode2, Loader2, RotateCcw, SlidersHorizontal, Terminal, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -68,6 +68,8 @@ export default function ClientConfigStatus() {
   const [codexModalMode, setCodexModalMode] = useState<"apply" | "configure">("apply");
   const [codexModel, setCodexModel] = useState("");
   const [pendingCodexModel, setPendingCodexModel] = useState<string | undefined>(undefined);
+  const [restoreTarget, setRestoreTarget] = useState<"claudeCode" | "codex" | null>(null);
+  const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["clientConfig"],
@@ -111,6 +113,19 @@ export default function ClientConfigStatus() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clientConfig"] });
       setCodexModelModalOpen(false);
+    },
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: (target: "claudeCode" | "codex") =>
+      api.applyClientConfig({ target, restore: true }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["clientConfig"] });
+      setRestoreConfirmOpen(false);
+      setRestoreTarget(null);
+    },
+    onSettled: () => {
+      setApplyingTo(null);
     },
   });
 
@@ -253,7 +268,26 @@ export default function ClientConfigStatus() {
                     </div>
                   </div>
                 </div>
-                <div className="flex shrink-0 sm:pl-2">
+                <div className="flex shrink-0 sm:pl-2 gap-1">
+                  {data?.claudeCode.status === "ok" && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs gap-1 text-muted-foreground hover:text-destructive"
+                      disabled={restoreMutation.isPending}
+                      onClick={() => {
+                        setRestoreTarget("claudeCode");
+                        setRestoreConfirmOpen(true);
+                      }}
+                    >
+                      {restoreMutation.isPending && applyingTo === "claudeCode" ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <RotateCcw className="h-3 w-3" />
+                      )}
+                      <span className="hidden sm:inline">{t("clientConfig.claudeCode.restore")}</span>
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant={data?.claudeCode.status === "ok" ? "outline" : "default"}
@@ -341,7 +375,26 @@ export default function ClientConfigStatus() {
                     </div>
                   </div>
                 </div>
-                <div className="flex shrink-0 sm:pl-2">
+                <div className="flex shrink-0 sm:pl-2 gap-1">
+                  {data?.codex.status === "ok" && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs gap-1 text-muted-foreground hover:text-destructive"
+                      disabled={restoreMutation.isPending}
+                      onClick={() => {
+                        setRestoreTarget("codex");
+                        setRestoreConfirmOpen(true);
+                      }}
+                    >
+                      {restoreMutation.isPending && applyingTo === "codex" ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <RotateCcw className="h-3 w-3" />
+                      )}
+                      <span className="hidden sm:inline">{t("clientConfig.codex.restore")}</span>
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant={data?.codex.status === "ok" ? "outline" : "default"}
@@ -374,6 +427,51 @@ export default function ClientConfigStatus() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog
+        open={restoreConfirmOpen}
+        onOpenChange={(o) => {
+          setRestoreConfirmOpen(o);
+          if (!o) setRestoreTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("clientConfig.dialog.restore.title", {
+                name:
+                  restoreTarget === "codex"
+                    ? t("clientConfig.codex.name")
+                    : t("clientConfig.claudeCode.name"),
+              })}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {restoreTarget === "codex"
+                ? t("clientConfig.dialog.restore.codexDescription")
+                : t("clientConfig.dialog.restore.claudeDescription")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                if (restoreTarget) {
+                  setApplyingTo(restoreTarget);
+                  restoreMutation.mutate(restoreTarget);
+                }
+              }}
+            >
+              {restoreMutation.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                t("clientConfig.dialog.restore.action")
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={confirmOpen}
