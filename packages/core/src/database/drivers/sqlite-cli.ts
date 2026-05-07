@@ -195,6 +195,21 @@ function buildInsertSql(
 }
 
 /**
+ * Extract model name from a JSON body that may be truncated.
+ * Tries JSON.parse first; falls back to regex for partial JSON.
+ */
+function extractModelFromPartialJson(body: string): string | undefined {
+  try {
+    const parsed = JSON.parse(body) as { model?: string; data?: { model?: string } };
+    return (typeof parsed.model === "string" && parsed.model) || parsed.data?.model || undefined;
+  } catch {
+    // Truncated JSON — extract "model":"value" via regex
+    const match = body.match(/"model"\s*:\s*"([^"]+)"/);
+    return match?.[1];
+  }
+}
+
+/**
  * Convert a database row to RequestLog (without body fields for list view)
  */
 function dbRowToLogWithoutBody(row: Record<string, unknown>): RequestLog {
@@ -223,15 +238,7 @@ function dbRowToLogWithoutBody(row: Record<string, unknown>): RequestLog {
   if (rawOriginalBody) {
     const originalBody = decodeFromStorage(rawOriginalBody);
     if (originalBody) {
-      try {
-        const parsed = JSON.parse(originalBody) as { model?: string; data?: { model?: string } };
-        const model = parsed.model || parsed.data?.model;
-        if (model && typeof model === "string") {
-          log.model = model;
-        }
-      } catch {
-        // Ignore parse errors
-      }
+      log.model = extractModelFromPartialJson(originalBody);
     }
   }
 
@@ -240,18 +247,12 @@ function dbRowToLogWithoutBody(row: Record<string, unknown>): RequestLog {
   if (rawRequestBody) {
     const requestBody = decodeFromStorage(rawRequestBody);
     if (requestBody) {
-      try {
-        const parsed = JSON.parse(requestBody) as { model?: string; data?: { model?: string } };
-        const model = parsed.model || parsed.data?.model;
-        if (model && typeof model === "string") {
-          log.mappedModel = model;
-          // Fallback: if original_request_body had no model, use request_body as model
-          if (!log.model) {
-            log.model = model;
-          }
+      const model = extractModelFromPartialJson(requestBody);
+      if (model) {
+        log.mappedModel = model;
+        if (!log.model) {
+          log.model = model;
         }
-      } catch {
-        // Ignore parse errors
       }
     }
   }
@@ -278,15 +279,7 @@ function extractModelsFromBodies(
   if (rawOriginalBody) {
     const originalBody = decodeFromStorage(rawOriginalBody);
     if (originalBody) {
-      try {
-        const parsed = JSON.parse(originalBody) as { model?: string; data?: { model?: string } };
-        const model = parsed.model || parsed.data?.model;
-        if (model && typeof model === "string") {
-          result.model = model;
-        }
-      } catch {
-        // Ignore parse errors
-      }
+      result.model = extractModelFromPartialJson(originalBody);
     }
   }
 
@@ -294,17 +287,12 @@ function extractModelsFromBodies(
   if (rawRequestBody) {
     const requestBody = decodeFromStorage(rawRequestBody);
     if (requestBody) {
-      try {
-        const parsed = JSON.parse(requestBody) as { model?: string; data?: { model?: string } };
-        const model = parsed.model || parsed.data?.model;
-        if (model && typeof model === "string") {
-          result.mappedModel = model;
-          if (!result.model) {
-            result.model = model;
-          }
+      const model = extractModelFromPartialJson(requestBody);
+      if (model) {
+        result.mappedModel = model;
+        if (!result.model) {
+          result.model = model;
         }
-      } catch {
-        // Ignore parse errors
       }
     }
   }
