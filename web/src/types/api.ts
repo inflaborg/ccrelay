@@ -124,6 +124,7 @@ export interface LogEntry {
   path: string;
   targetUrl?: string;
   model?: string;
+  mappedModel?: string;
   requestBody?: string;
   responseBody?: string;
   originalRequestBody?: string;
