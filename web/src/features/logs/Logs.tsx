@@ -813,7 +813,7 @@ export default function Logs() {
                   {/* Path - Full width */}
                   <div className="text-xs">
                     <span className="text-muted-foreground">{t("logs.detail.path")}</span>
-                    <p className="font-medium font-mono text-[11px] break-all mt-0.5">
+                    <p className="font-mono text-[11px] break-all mt-0.5">
                       {selectedLog.path}
                     </p>
                   </div>
@@ -821,8 +821,26 @@ export default function Logs() {
                   {selectedLog.targetUrl && (
                     <div className="text-xs">
                       <span className="text-muted-foreground">{t("logs.detail.targetUrl")}</span>
-                      <p className="font-medium font-mono text-[11px] break-all mt-0.5">
+                      <p className="font-mono text-[11px] break-all mt-0.5">
                         {selectedLog.targetUrl}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Model mapping */}
+                  {selectedLog.model && (
+                    <div className="text-xs">
+                      <span className="text-muted-foreground">{t("logs.detail.model")}</span>
+                      <p className="font-mono text-[11px] mt-0.5">
+                        {selectedLog.mappedModel && selectedLog.mappedModel !== selectedLog.model ? (
+                          <>
+                            <span>{selectedLog.model}</span>
+                            <span className="text-muted-foreground"> → </span>
+                            <span>{selectedLog.mappedModel}</span>
+                          </>
+                        ) : (
+                          selectedLog.model
+                        )}
                       </p>
                     </div>
                   )}
