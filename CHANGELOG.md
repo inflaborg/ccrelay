@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-05-07 (pre-release)
+
+Pre-release line for 0.2.1.
+
 ## [0.2.0] - 2026-05-04
 
 Major refresh: unified routing, Electron desktop tray, web i18n, config hot-reload / WebSocket sync, `providerType` split (`openai` vs `openai_chat`), inbound `/openai` and `/anthropic` URL prefixes, and broad cross-protocol fixes. **Packaging:** `npm run package:beta` builds `0.2.0-beta.<build>`; `npm run package:release` strips `-beta…` for a final `0.2.0` build (root `package.json`).
