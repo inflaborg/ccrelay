@@ -314,13 +314,17 @@ gemini:
 
 ### Web UI 管理界面
 
-内置 Web 面板，访问地址 `http://127.0.0.1:7575/ccrelay/`（或命令面板 → `CCRelay: Open Dashboard`）：
+内置 Web 面板，通过命令面板 → `CCRelay: Open Dashboard`（VS Code）或托盘菜单 → **打开控制台**（桌面应用）访问。
 
 - **Dashboard** — 服务器状态、当前提供商、请求统计
 - **Providers** — 查看、切换、复制、导入/导出提供商
 - **Logs** — 请求/响应日志查看器（未启用日志时自动隐藏）
 - **Settings** — 在 UI 中管理 YAML 配置；路由和并发保存后即时生效，服务器和日志需重启
 - **Client configuration** — 从 UI 写入 Claude Code 环境变量和 Codex 配置
+
+> **注意**：直接在浏览器中打开 `http://127.0.0.1:7575/ccrelay/` 无法访问面板。面板仅允许来自 VS Code 扩展或桌面应用内部的请求（通过内部请求头验证）。请通过扩展命令或桌面托盘菜单打开面板。
+
+**Web UI**
 
 ![Client configuration](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-setup-1.png)
 
@@ -329,6 +333,12 @@ gemini:
 ![请求日志](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-1.png)
 
 ![日志详情](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-3.png)
+
+**桌面应用**
+
+![桌面托盘](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-desktop-1.png)
+
+![桌面控制台](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-desktop-2.png)
 
 ---
 

@@ -313,13 +313,17 @@ gemini:
 
 ### Web UI Dashboard
 
-Built-in web dashboard at `http://127.0.0.1:7575/ccrelay/` (or Command Palette → `CCRelay: Open Dashboard`):
+Built-in web dashboard accessible via Command Palette → `CCRelay: Open Dashboard` (VS Code) or tray menu → **Open Dashboard** (desktop app).
 
 - **Dashboard** — server status, current provider, request stats
 - **Providers** — view, switch, duplicate, import/export providers
 - **Logs** — request/response log viewer (hidden when logging is disabled)
 - **Settings** — manage YAML config in the UI; routing and concurrency hot-reload on save, server and logging changes require a restart
 - **Client configuration** — write Claude Code env vars and Codex config from the UI
+
+> **Note**: The dashboard is not accessible by directly opening `http://127.0.0.1:7575/ccrelay/` in a browser. Access is restricted to requests originating from within the VS Code extension or the desktop app, which include an internal header. Open the dashboard via the extension command or the desktop tray menu instead.
+
+**Web UI**
 
 ![Client configuration](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-setup-1.png)
 
@@ -328,6 +332,12 @@ Built-in web dashboard at `http://127.0.0.1:7575/ccrelay/` (or Command Palette �
 ![Request Logs](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-1.png)
 
 ![Log Details](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-3.png)
+
+**Desktop app**
+
+![Desktop tray](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-desktop-1.png)
+
+![Desktop dashboard](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-desktop-2.png)
 
 ---
 
