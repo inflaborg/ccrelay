@@ -70,16 +70,20 @@
 }
 
 /* Scrollbar styling for dark theme */
-/* Standard CSS (works in Firefox, Safari/WKWebView) */
-* {
+
+/* Force classic scrollbar mode (not overlay) for WebKit/Safari */
+html {
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--border)) transparent;
+  /* Force always-visible scrollbar to enable CSS styling on macOS */
+  overflow-y: scroll;
 }
 
-/* WebKit/Blink (Chrome, Edge, Electron) */
+/* WebKit/Blink (Chrome, Edge, Electron, Safari) */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
+  -webkit-appearance: none;
 }
 
 ::-webkit-scrollbar-track {

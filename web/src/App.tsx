@@ -152,7 +152,7 @@ function App() {
       </header>
 
       {/* Main content */}
-      <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-2 sm:px-4 py-3 [scrollbar-gutter:stable] [-webkit-overflow-scrolling:touch]">
+      <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-2 sm:px-4 py-3">
         {activeTab === "dashboard" && <Dashboard />}
         {activeTab === "providers" && <Providers />}
         {activeTab === "logs" && <Logs />}
