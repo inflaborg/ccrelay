@@ -26,12 +26,13 @@ pub fn run() {
         }))
         .setup(|app| {
             tray::create_tray(app)?;
-            // Start sidecar server in background (no auto-open dashboard)
+            // Start sidecar server and open dashboard when ready
             let handle = app.app_handle().clone();
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = sidecar::start_server(&handle).await {
                     eprintln!("Failed to start server: {e}");
                 }
+                sidecar::show_dashboard_from_state(&handle);
             });
             Ok(())
         })

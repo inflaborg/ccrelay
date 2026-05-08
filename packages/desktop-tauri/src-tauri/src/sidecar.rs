@@ -140,6 +140,8 @@ fn show_dashboard(app: &AppHandle, port: u16, host: &str, token: &str) {
         let _ = window.navigate(url.parse().unwrap());
         let _ = window.show();
         let _ = window.set_focus();
+        #[cfg(target_os = "macos")]
+        let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
     } else {
         match WebviewWindowBuilder::new(
             app,
@@ -159,6 +161,9 @@ fn show_dashboard(app: &AppHandle, port: u16, host: &str, token: &str) {
                         if let Some(w) = handle.get_webview_window("dashboard") {
                             let _ = w.hide();
                         }
+                        // Hide Dock icon — tray-only mode
+                        #[cfg(target_os = "macos")]
+                        let _ = handle.set_activation_policy(tauri::ActivationPolicy::Accessory);
                     }
                 });
             }
