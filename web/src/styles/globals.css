@@ -71,12 +71,10 @@
 
 /* Scrollbar styling for dark theme */
 
-/* Force classic scrollbar mode (not overlay) for WebKit/Safari */
+/* Firefox thin scrollbar */
 html {
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--border)) transparent;
-  /* Force always-visible scrollbar to enable CSS styling on macOS */
-  overflow-y: scroll;
 }
 
 /* WebKit/Blink (Chrome, Edge, Electron, Safari) */
