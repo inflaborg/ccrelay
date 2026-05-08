@@ -22,7 +22,12 @@ describe("normalizeToolForProvider (re-export)", () => {
   it("GLM upstream injects web_search envelope", () => {
     expect(normalizeToolForProvider({ type: "web_search", max_uses: 2 }, GLM_BASE)).toEqual({
       type: "web_search",
-      web_search: { enable: true, max_uses: 2 },
+      web_search: {
+        enable: true,
+        max_uses: 2,
+        search_engine: "search-prime",
+        search_result: true,
+      },
     });
   });
 
@@ -32,13 +37,16 @@ describe("normalizeToolForProvider (re-export)", () => {
     ).toEqual({
       type: "web_search",
       foo: 1,
-      web_search: { enable: true },
+      web_search: { enable: true, search_engine: "search-prime", search_result: true },
     });
   });
 
-  it("GLM retains valid web_search object", () => {
+  it("GLM merges Chat web-search defaults into an existing envelope", () => {
     const input = { type: "web_search", web_search: { enable: "True" } };
-    expect(normalizeToolForProvider(input, GLM_BASE)).toEqual(input);
+    expect(normalizeToolForProvider(input, GLM_BASE)).toEqual({
+      type: "web_search",
+      web_search: { enable: "True", search_engine: "search-prime", search_result: true },
+    });
   });
 });
 
@@ -59,7 +67,12 @@ describe("anthropicServerToolDefToOpenAIHosted", () => {
   it("GLM upstream nests web_search envelope", () => {
     expect(anthropicServerToolDefToOpenAIHosted(tool, GLM_BASE)).toEqual({
       type: "web_search",
-      web_search: { enable: true, max_uses: 9 },
+      web_search: {
+        enable: true,
+        max_uses: 9,
+        search_engine: "search-prime",
+        search_result: true,
+      },
     });
   });
 });

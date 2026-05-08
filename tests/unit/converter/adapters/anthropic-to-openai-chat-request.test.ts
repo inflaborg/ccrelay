@@ -604,7 +604,12 @@ describe("converter: anthropic-to-openai-chat-request", () => {
       expect(result.request.tools).toEqual([
         {
           type: "web_search",
-          web_search: { enable: true, max_uses: 5 },
+          web_search: {
+            enable: true,
+            max_uses: 5,
+            search_engine: "search-prime",
+            search_result: true,
+          },
         },
         {
           type: "function",

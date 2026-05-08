@@ -188,7 +188,7 @@ describe("convertResponsesRequestToChatCompletions", () => {
       {
         type: "web_search",
         search_context_size: "medium",
-        web_search: { enable: true },
+        web_search: { enable: true, search_engine: "search-prime", search_result: true },
       },
     ]);
   });

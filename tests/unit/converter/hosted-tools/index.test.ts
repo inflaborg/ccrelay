@@ -100,7 +100,12 @@ describe("normalizeToolForProvider", () => {
   it("nested web_search envelope for GLM upstream", () => {
     expect(normalizeToolForProvider({ type: "web_search", max_uses: 2 }, GLM_BASE)).toEqual({
       type: "web_search",
-      web_search: { enable: true, max_uses: 2 },
+      web_search: {
+        enable: true,
+        max_uses: 2,
+        search_engine: "search-prime",
+        search_result: true,
+      },
     });
   });
 
@@ -256,7 +261,12 @@ describe("transforms", () => {
   it("glmWebSearchEnvelope wraps web_search only", () => {
     expect(glmWebSearchEnvelopeTransform({ type: "web_search", max_uses: 7 })).toEqual({
       type: "web_search",
-      web_search: { enable: true, max_uses: 7 },
+      web_search: {
+        enable: true,
+        max_uses: 7,
+        search_engine: "search-prime",
+        search_result: true,
+      },
     });
     expect(glmWebSearchEnvelopeTransform({ type: "other" })).toEqual({ type: "other" });
   });
@@ -268,7 +278,7 @@ describe("provider baseUrl drives dispatch", () => {
       normalizeToolForProvider({ type: "web_search" }, mockProvider("https://api.z.ai").baseUrl)
     ).toEqual({
       type: "web_search",
-      web_search: { enable: true },
+      web_search: { enable: true, search_engine: "search-prime", search_result: true },
     });
   });
 
