@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Hosted Chat hosted-tool requests are inferred from the provider URL (no extra settings): rules map known upstreams to outbound tool shapes internally.
 
+### Fixed
+
+**Protocol/Conversion**
+
+- Anthropic → OpenAI Chat conversion now carries the native **web search** server tool correctly for upstream **Z.ai GLM** (including `open.bigmodel.cn`) and **Xiaomi MiMo**, so relayed completions can use those providers’ hosted search instead of losing or mis-shaping the tool.
+
 ### Added
 
 **Desktop**
