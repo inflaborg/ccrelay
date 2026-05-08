@@ -33,7 +33,12 @@ import {
   flushAnthropicToOpenAISseFinal,
   type OpenAIChatCompletionResponse,
 } from "../../converter";
-import { applyPlatformResponseTransforms } from "../../converter/platform-transforms";
+import {
+  applyPlatformResponseTransforms,
+  applyAnthropicSseRowsPlatformTransform,
+  parseAnthropicSseRows,
+  serializeAnthropicSseRows,
+} from "../../converter/platform-transforms";
 import type { ApiSurface } from "../../types";
 import type { RequestTask, ProxyResult } from "../../types";
 import type { ResponseLogger } from "../responseLogger";
@@ -490,6 +495,28 @@ export class ProxyExecutor {
 
     if (needsResponseConversion && isSSEResponse && clientRes) {
       this.handleCrossProtocolSseRejection(
+        proxyRes,
+        task,
+        ctx,
+        onClientDisconnect,
+        status,
+        responseHeaders,
+        resolve
+      );
+      return;
+    }
+
+    const shouldBufferGlmAnthropicHostedSearchSse =
+      !needsResponseConversion &&
+      upstreamWire === "anthropic" &&
+      clientSurface === "anthropic" &&
+      status === 200 &&
+      isSSEResponse &&
+      clientRes &&
+      task.hasHostedWebSearch;
+
+    if (shouldBufferGlmAnthropicHostedSearchSse) {
+      this.handleAnthropicSseBufferedWebSearchPassthrough(
         proxyRes,
         task,
         ctx,
@@ -1290,6 +1317,141 @@ export class ProxyExecutor {
           errorMessage: `A to Responses failed: ${errMsg}`,
         });
       }
+    });
+  }
+
+  /**
+   * Anthropic same-protocol SSE (GLM hosted search): buffer full upstream body, normalize
+   * GLM search tool_result payloads, then emit one synthesized SSE blob to the client.
+   */
+  private handleAnthropicSseBufferedWebSearchPassthrough(
+    proxyRes: http.IncomingMessage,
+    task: RequestTask,
+    ctx: ExecutionContext,
+    onClientDisconnect: () => void,
+    status: number,
+    responseHeaders: Record<string, string | string[]>,
+    resolve: (value: ProxyResult) => void
+  ): void {
+    const { clientId, provider, res: clientRes } = task;
+    if (!clientRes) {
+      resolve({
+        statusCode: 500,
+        headers: {},
+        duration: Date.now() - ctx.startTime,
+        errorMessage: "Missing client response for buffered Anthropic SSE",
+      });
+      return;
+    }
+
+    log.info(`[A->A SSE buffer] Hosted web search SSE normalize (${provider.id})`);
+
+    const chunks: Buffer[] = [];
+
+    proxyRes.on("data", (chunk: Buffer) => {
+      chunks.push(chunk);
+      if (this.responseLogger.enabled) {
+        ctx.responseChunks.push(chunk);
+      }
+    });
+
+    proxyRes.on("error", (err: Error) => {
+      log.error(`[${clientId}] Buffered SSE upstream error: ${err.message}`);
+      if (!clientRes.writableEnded) {
+        try {
+          clientRes.end();
+        } catch {
+          // Ignore errors when ending an already-closed stream
+        }
+      }
+    });
+
+    clientRes.on("error", (err: Error) => {
+      log.error(`[${clientId}] Client connection error during buffered SSE: ${err.message}`);
+      proxyRes.destroy();
+    });
+
+    proxyRes.on("end", () => {
+      if (clientRes) {
+        clientRes.off("close", onClientDisconnect);
+      }
+
+      const totalDuration = Date.now() - ctx.startTime;
+
+      if (ctx.clientDisconnected) {
+        log.info(
+          `[Perf:${clientId}] Buffered SSE end after client disconnect: ${chunks.length} chunks buffered`
+        );
+        this.responseLogger.logResponse(
+          clientId,
+          totalDuration,
+          499,
+          ctx.responseChunks,
+          "Client disconnected",
+          undefined,
+          ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+        );
+        resolve({
+          statusCode: 499,
+          headers: responseHeaders,
+          duration: totalDuration,
+          responseBodyChunks: ctx.responseChunks,
+          streamed: true,
+          streamCompleted: false,
+          errorMessage: "Client disconnected",
+        });
+        return;
+      }
+
+      const rawConcat = Buffer.concat(chunks).toString("utf-8");
+
+      try {
+        let rows = parseAnthropicSseRows(rawConcat);
+        rows = applyAnthropicSseRowsPlatformTransform(rows, provider.baseUrl);
+        const outgoing = serializeAnthropicSseRows(rows);
+
+        if (this.responseLogger.enabled) {
+          ctx.responseChunks.length = 0;
+          if (outgoing.length > 0) {
+            ctx.responseChunks.push(Buffer.from(outgoing, "utf-8"));
+          }
+        }
+
+        clientRes.writeHead(status, responseHeaders);
+        clientRes.end(Buffer.from(outgoing, "utf-8"));
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        log.warn(
+          `[${clientId}] Buffered Anthropic SSE transform failed (${provider.id}): ${errMsg}; replaying raw upstream stream`
+        );
+        if (this.responseLogger.enabled) {
+          ctx.responseChunks.length = 0;
+          for (const c of chunks) {
+            ctx.responseChunks.push(c);
+          }
+        }
+        clientRes.writeHead(status, responseHeaders);
+        clientRes.end(Buffer.concat(chunks));
+      }
+
+      task.streamCompleted = true;
+      this.responseLogger.logResponse(
+        clientId,
+        totalDuration,
+        status,
+        ctx.responseChunks,
+        undefined,
+        undefined,
+        ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+      );
+      resolve({
+        statusCode: status,
+        headers: responseHeaders,
+        duration: totalDuration,
+        responseBodyChunks: ctx.responseChunks,
+        streamed: true,
+        streamCompleted: true,
+      });
     });
   }
 

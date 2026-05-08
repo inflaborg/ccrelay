@@ -20,6 +20,8 @@ import type { OpenAIMessage } from "../../converter/adapters/anthropic-to-openai
 import {
   normalizeToolsForProvider,
   applyPlatformMessageTransforms,
+  anthropicMessagesBodyHasHostedWebSearch,
+  matchAnthropicSseRule,
 } from "../../converter/platform-transforms";
 import { ScopedLogger } from "../../utils/logger";
 import type { ApiSurface } from "../../types";
@@ -299,6 +301,23 @@ export class BodyProcessor {
       }
     }
 
+    let hasHostedWebSearchFlag = false;
+    if (
+      !needsConversion &&
+      clientSurface === "anthropic" &&
+      routing.method === "POST" &&
+      routing.targetPath === "/v1/messages" &&
+      body.length > 0 &&
+      matchAnthropicSseRule(routing.provider.baseUrl)?.anthropicSse
+    ) {
+      try {
+        const d = JSON.parse(body.toString("utf-8")) as Record<string, unknown>;
+        hasHostedWebSearchFlag = anthropicMessagesBodyHasHostedWebSearch(d);
+      } catch {
+        hasHostedWebSearchFlag = false;
+      }
+    }
+
     return {
       body,
       originalModel: clientWireModel,
@@ -307,6 +326,7 @@ export class BodyProcessor {
       ...(responsesStreamRequested ? { responsesStreamRequested: true } : {}),
       ...(streamRequested ? { streamRequested: true } : {}),
       ...(originalResponsesEcho !== undefined ? { originalResponsesEcho } : {}),
+      ...(hasHostedWebSearchFlag ? { hasHostedWebSearch: true } : {}),
     };
   }
 

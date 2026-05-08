@@ -78,9 +78,11 @@ export type {
   NormalizeToolsResult,
   PlatformMessageRule,
   PlatformMessageTransform,
+  PlatformAnthropicSseTransform,
   PlatformTransformRule,
   PlatformResponseTransform,
   PlatformToolTransform,
+  AnthropicSseEventRow,
 } from "./platform-transforms";
 
 export {
@@ -91,12 +93,21 @@ export {
   TOOL_TRANSFORM_REGISTRY,
   MESSAGE_TRANSFORM_REGISTRY,
   RESPONSE_TRANSFORM_REGISTRY,
+  ANTHROPIC_SSE_TRANSFORM_REGISTRY,
   applyPlatformMessageTransforms,
   applyPlatformResponseTransforms,
   applyPlatformToolTransforms,
+  applyAnthropicSseRowsPlatformTransform,
   glmFlattenContentTransform,
   glmWebSearchResponseTransform,
   isPlainObject,
+  matchAnthropicSseRule,
+  anthropicMessagesBodyHasHostedWebSearch,
+  parseAnthropicSseRows,
+  serializeAnthropicSseRows,
+  parseGlmToolResultAsSearchEntries,
+  transformGlmAnthropicSearchSseRows,
+  glmWebSearchServerToolName,
 } from "./platform-transforms";
 
 export {

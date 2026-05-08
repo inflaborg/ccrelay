@@ -6,6 +6,8 @@
 
 import type { OpenAIMessage } from "../adapters/anthropic-to-openai-chat-request";
 import type { AnthropicContentBlock } from "../adapters/openai-chat-to-anthropic-response";
+import type { AnthropicSseEventRow } from "./glm/anthropic-sse-emitter";
+import { transformGlmAnthropicSearchSseRows } from "./glm/anthropic-sse";
 import { glmWebSearchEnvelopeTransform } from "./glm/tools";
 import { glmFlattenContentTransform } from "./glm/messages";
 import { glmWebSearchResponseTransform } from "./glm/responses";
@@ -26,6 +28,11 @@ export type PlatformResponseTransform = (
   anthropicContent: AnthropicContentBlock[]
 ) => AnthropicContentBlock[];
 
+/** Buffered rewrite of upstream Anthropic `text/event-stream` rows (`data:` payloads). */
+export type PlatformAnthropicSseTransform = (
+  rows: AnthropicSseEventRow[]
+) => AnthropicSseEventRow[];
+
 export const TOOL_TRANSFORM_REGISTRY: Readonly<Record<string, PlatformToolTransform>> = {
   "glm-web-search-envelope": glmWebSearchEnvelopeTransform,
   "mimo-web-search": mimoWebSearchTransform,
@@ -38,6 +45,12 @@ export const MESSAGE_TRANSFORM_REGISTRY: Readonly<Record<string, PlatformMessage
 
 export const RESPONSE_TRANSFORM_REGISTRY: Readonly<Record<string, PlatformResponseTransform>> = {
   "glm-web-search-response": glmWebSearchResponseTransform,
+};
+
+export const ANTHROPIC_SSE_TRANSFORM_REGISTRY: Readonly<
+  Record<string, PlatformAnthropicSseTransform>
+> = {
+  "glm-web-search-prime-normalize": transformGlmAnthropicSearchSseRows,
 };
 
 export { passthroughTransform, isPlainObject } from "./passthrough";

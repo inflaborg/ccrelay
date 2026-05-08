@@ -618,6 +618,8 @@ export interface RequestTask {
   cancelledReason?: string;
   /** AbortController for cancelling the underlying HTTP request */
   abortController?: AbortController;
+  /** Client Anthropic Messages request declares hosted web search — enables SSE response normalization */
+  hasHostedWebSearch?: boolean;
 }
 
 /**

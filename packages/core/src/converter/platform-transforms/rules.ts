@@ -14,6 +14,8 @@ export interface PlatformTransformRule {
   messages?: string;
   /** Chat completion response transform (OpenAI-shaped body + Anthropic content). */
   responses?: string;
+  /** Anthropic Messages SSE buffered rewrite (hosted search normalization). Registry key. */
+  anthropicSse?: string;
 }
 
 /** Legacy name for tooling that matched hosted-tool-only rules (same payload). */
@@ -29,6 +31,7 @@ export const PLATFORM_TRANSFORM_RULES: readonly PlatformTransformRule[] = [
     tools: { web_search: "glm-web-search-envelope" },
     messages: "glm-flatten-content",
     responses: "glm-web-search-response",
+    anthropicSse: "glm-web-search-prime-normalize",
   },
   {
     provider: "xiaomimimo",

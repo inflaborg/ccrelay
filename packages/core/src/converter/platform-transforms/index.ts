@@ -2,6 +2,8 @@
  * Layer 3: hostname → outbound tools, messages; inbound Chat → Anthropic content shaping.
  */
 
+import type { AnthropicSseEventRow } from "./glm/anthropic-sse-emitter";
+
 import type { OpenAIMessage } from "../adapters/anthropic-to-openai-chat-request";
 import type { AnthropicContentBlock } from "../adapters/openai-chat-to-anthropic-response";
 import { hostnameMatchesDomain, normalizedHostnameFromBaseUrl } from "./hostname";
@@ -10,6 +12,7 @@ import {
   MESSAGE_TRANSFORM_REGISTRY,
   RESPONSE_TRANSFORM_REGISTRY,
   TOOL_TRANSFORM_REGISTRY,
+  ANTHROPIC_SSE_TRANSFORM_REGISTRY,
   passthroughTransform,
 } from "./registries";
 
@@ -17,6 +20,7 @@ export type { HostedToolRule, PlatformTransformRule, PlatformMessageRule } from 
 
 export type {
   HostedToolTransform,
+  PlatformAnthropicSseTransform,
   PlatformMessageTransform,
   PlatformResponseTransform,
   PlatformToolTransform,
@@ -32,10 +36,24 @@ export {
   TOOL_TRANSFORM_REGISTRY,
   MESSAGE_TRANSFORM_REGISTRY,
   RESPONSE_TRANSFORM_REGISTRY,
+  ANTHROPIC_SSE_TRANSFORM_REGISTRY,
   TRANSFORM_REGISTRY,
 } from "./registries";
 
 export { hostnameMatchesDomain, normalizedHostnameFromBaseUrl } from "./hostname";
+
+export {
+  parseAnthropicSseRows,
+  serializeAnthropicSseRows,
+  type AnthropicSseEventRow,
+} from "./glm/anthropic-sse-emitter";
+
+export { anthropicMessagesBodyHasHostedWebSearch } from "./anthropic-hosted-detect";
+export {
+  parseGlmToolResultAsSearchEntries,
+  transformGlmAnthropicSearchSseRows,
+  glmWebSearchServerToolName,
+} from "./glm/anthropic-sse";
 
 /** First matching provider rule wins (preserve `PLATFORM_TRANSFORM_RULES` order). */
 export function matchHostedToolRuleForBaseUrl(baseUrl: string): HostedToolRule | undefined {
@@ -80,6 +98,25 @@ function matchPlatformMessageRule(baseUrl: string): HostedToolRule | undefined {
   }
   for (const rule of PLATFORM_TRANSFORM_RULES) {
     if (!rule.messages) {
+      continue;
+    }
+    for (const host of rule.domains) {
+      if (hostnameMatchesDomain(hostname, host)) {
+        return rule;
+      }
+    }
+  }
+  return undefined;
+}
+
+/** Match first rule that declares inbound Anthropic SSE buffered transforms. */
+export function matchAnthropicSseRule(baseUrl: string): HostedToolRule | undefined {
+  const hostname = normalizedHostnameFromBaseUrl(baseUrl);
+  if (!hostname) {
+    return undefined;
+  }
+  for (const rule of PLATFORM_TRANSFORM_RULES) {
+    if (!rule.anthropicSse) {
       continue;
     }
     for (const host of rule.domains) {
@@ -169,4 +206,20 @@ export function applyPlatformResponseTransforms(
     return anthropicContent;
   }
   return transform(openaiCompletionBody, anthropicContent);
+}
+
+/**
+ * Apply Anthropic SSE row rewrite from `PLATFORM_TRANSFORM_RULES` (hostname + registry key).
+ * No-op when `baseUrl` has no matching `anthropicSse` rule.
+ */
+export function applyAnthropicSseRowsPlatformTransform(
+  rows: AnthropicSseEventRow[],
+  baseUrl: string
+): AnthropicSseEventRow[] {
+  const rule = matchAnthropicSseRule(baseUrl);
+  if (!rule?.anthropicSse) {
+    return rows;
+  }
+  const transform = ANTHROPIC_SSE_TRANSFORM_REGISTRY[rule.anthropicSse];
+  return transform?.(rows) ?? rows;
 }

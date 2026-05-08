@@ -9,12 +9,7 @@ import { randomUUID } from "crypto";
 
 import type { AnthropicContentBlock } from "../../adapters/openai-chat-to-anthropic-response";
 
-interface GlmWebSearchEntry {
-  title?: string;
-  link?: string;
-  content?: string;
-  refer?: string;
-}
+import type { GlmWebSearchEntry } from "./types";
 
 /** Prepend synthesized server-tool blocks when GLM returned `web_search` results on the Chat body. */
 export function glmWebSearchResponseTransform(
