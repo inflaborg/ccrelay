@@ -51,6 +51,7 @@ Starts a new version line. Bump ALL package versions in the monorepo together:
    - `packages/core/package.json`
    - `packages/vscode/package.json`
    - `packages/desktop/package.json`
+   - `packages/desktop-tauri/package.json`
    - `package-lock.json` (root version + all sub-package entries under `packages`)
 2. Add a new section in `CHANGELOG.md` under `[Unreleased]`:
    ```
