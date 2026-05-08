@@ -31,6 +31,7 @@ import {
 } from "./clientConfig";
 import { handleGetConfig, handlePatchConfig, setServer as setSettingsServer } from "./settings";
 import { setProxyServerForApi } from "./serverRef";
+import { getUiAccessToken } from "../server/httpAccessGate";
 import { ScopedLogger } from "../utils/logger";
 
 const log = new ScopedLogger("API");
@@ -48,6 +49,11 @@ export function setServer(server: ProxyServer): void {
   setSettingsServer(server);
 }
 
+/** Return this leader's UI access token (for followers to proxy dashboard auth). */
+function handleUiToken(_req: http.IncomingMessage, res: http.ServerResponse): void {
+  sendJson(res, 200, { token: getUiAccessToken() });
+}
+
 // API routes mapping
 type ApiHandler = (
   req: http.IncomingMessage,
@@ -63,6 +69,7 @@ const API_ROUTES: Record<string, ApiHandler> = {
   "/ccrelay/api/stats": handleStats,
   "/ccrelay/api/version": handleVersion,
   "/ccrelay/api/queue": handleQueueStats,
+  "/ccrelay/api/internal/ui-token": handleUiToken,
 };
 
 /**

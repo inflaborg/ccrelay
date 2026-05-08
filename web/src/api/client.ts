@@ -161,6 +161,7 @@ export const api = {
     target: "claudeCode" | "codex";
     overwrite?: boolean;
     model?: string;
+    restore?: boolean;
     patchClaudeModelsOnly?: boolean;
     patchCodexModelOnly?: boolean;
     claudeDefaultModels?: { opus?: string; sonnet?: string; haiku?: string };

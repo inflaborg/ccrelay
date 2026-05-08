@@ -93,6 +93,7 @@
         "suggested": "Suggested:"
       },
       "configureModels": "Configure default models",
+      "restore": "Restore",
       "upToDate": "Up to date",
       "apply": "Apply CCRelay settings"
     },
@@ -106,6 +107,7 @@
         "default": "Default:"
       },
       "configureModel": "Configure model",
+      "restore": "Restore",
       "upToDate": "Up to date",
       "apply": "Apply CCRelay template"
     },
@@ -117,6 +119,12 @@
       },
       "replaceCodex": {
         "title": "Replace Codex config?"
+      },
+      "restore": {
+        "title": "Restore {{name}} config?",
+        "claudeDescription": "This will remove CCRelay-injected keys (ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, etc.) from settings.json. Other settings are preserved.",
+        "codexDescription": "This will remove the CCRelay model provider section from config.toml and reset the model to the default.",
+        "action": "Restore"
       }
     },
     "codexModelModal": {

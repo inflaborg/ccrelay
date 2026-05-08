@@ -322,6 +322,7 @@ export async function handleApplyClientConfig(
       target?: ApplyTarget;
       overwrite?: boolean;
       model?: string;
+      restore?: boolean;
       patchClaudeModelsOnly?: boolean;
       patchCodexModelOnly?: boolean;
       claudeDefaultModels?: { opus?: string; sonnet?: string; haiku?: string };
@@ -331,6 +332,88 @@ export async function handleApplyClientConfig(
     if (target !== "claudeCode" && target !== "codex") {
       sendJson(res, 400, { status: "error", message: "target must be claudeCode or codex" });
       return;
+    }
+
+    // ── Restore mode: remove CCRelay-injected settings ──
+    if (body.restore) {
+      if (target === "claudeCode") {
+        if (!fs.existsSync(claudePath)) {
+          sendJson(res, 200, { status: "ok", message: "No settings.json to clean up" });
+          return;
+        }
+        let root: Record<string, unknown>;
+        try {
+          root = JSON.parse(fs.readFileSync(claudePath, "utf-8")) as Record<string, unknown>;
+        } catch {
+          sendJson(res, 200, { status: "ok", message: "File is not valid JSON, nothing to clean" });
+          return;
+        }
+        const env = (root.env as Record<string, unknown>) || {};
+        const keysToRemove = [
+          "ANTHROPIC_BASE_URL",
+          "ANTHROPIC_AUTH_TOKEN",
+          "API_TIMEOUT_MS",
+          "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+          "ANTHROPIC_DEFAULT_OPUS_MODEL",
+          "ANTHROPIC_DEFAULT_SONNET_MODEL",
+          "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+        ];
+        let removed = 0;
+        for (const key of keysToRemove) {
+          if (key in env) {
+            delete env[key];
+            removed++;
+          }
+        }
+        root.env = env;
+        fs.writeFileSync(claudePath, `${JSON.stringify(root, null, 2)}\n`, "utf-8");
+        sendJson(res, 200, {
+          status: "ok",
+          message: `Removed ${removed} CCRelay key(s) from ${claudePath}`,
+        });
+        return;
+      }
+
+      if (target === "codex") {
+        if (!fs.existsSync(codexPath)) {
+          sendJson(res, 200, { status: "ok", message: "No config.toml to clean up" });
+          return;
+        }
+        const raw = fs.readFileSync(codexPath, "utf-8");
+        const toml = parseTomlLite(raw);
+        const provider = toml.top.model_provider;
+        let lines = raw.split(/\r?\n/);
+        // Remove model_provider line if it references ccrelay
+        if (provider === "ccrelay") {
+          lines = lines.filter(l => !/^\s*model_provider\s*=\s*"ccrelay"\s*$/.test(l));
+        }
+        // Remove [model_providers.ccrelay] section
+        let inSection = false;
+        lines = lines.filter(l => {
+          if (/^\s*\[model_providers\.ccrelay\]\s*$/.test(l)) {
+            inSection = true;
+            return false;
+          }
+          if (inSection) {
+            if (/^\s*\[/.test(l)) {
+              inSection = false;
+              return true;
+            }
+            return false;
+          }
+          return true;
+        });
+        // Reset model to default
+        lines = lines.map(l =>
+          l.replace(/^(\s*model\s*=\s*)".*"(\s*)$/m, `$1"${CODEX_DEFAULT_MODEL}"$2`)
+        );
+        fs.writeFileSync(codexPath, lines.join("\n"), "utf-8");
+        sendJson(res, 200, {
+          status: "ok",
+          message: `Removed CCRelay provider from ${codexPath}`,
+        });
+        return;
+      }
     }
 
     if (target === "claudeCode" && body.patchClaudeModelsOnly) {

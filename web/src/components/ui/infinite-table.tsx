@@ -203,30 +203,7 @@ export function InfiniteTable<T>({
         )}
       </div>
 
-      <style>{`
-        .table-scroll {
-          scrollbar-gutter: stable;
-          scrollbar-width: thin;
-          scrollbar-color: hsl(var(--muted-foreground) / 0.2) transparent;
-        }
-        .table-scroll::-webkit-scrollbar {
-          width: 8px;
-          height: 8px;
-        }
-        .table-scroll::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .table-scroll::-webkit-scrollbar-thumb {
-          background-color: hsl(var(--muted-foreground) / 0.15);
-          border-radius: 4px;
-        }
-        .table-scroll::-webkit-scrollbar-thumb:hover {
-          background-color: hsl(var(--muted-foreground) / 0.25);
-        }
-        .table-scroll::-webkit-scrollbar-corner {
-          background: transparent;
-        }
-      `}</style>
+      {/* Scrollbar styling inherited from global CSS */}
     </div>
   );
 }

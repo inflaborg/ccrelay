@@ -70,9 +70,18 @@
 }
 
 /* Scrollbar styling for dark theme */
+
+/* Firefox thin scrollbar */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+
+/* WebKit/Blink (Chrome, Edge, Electron, Safari) */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
+  -webkit-appearance: none;
 }
 
 ::-webkit-scrollbar-track {

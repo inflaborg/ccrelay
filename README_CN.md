@@ -3,7 +3,7 @@
 [![VSCode Extension](https://img.shields.io/badge/VSCode-Extension-blue)](https://code.visualstudio.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**CCRelay** 是一套 VS Code 扩展，并提供可选的 **Electron 桌面托盘应用**；内置 HTTP 代理，可在不同 AI 提供商（Anthropic、OpenAI、Gemini 等）之间平滑切换且不丢失会话上下文。支持 **Claude Code**、**Claude Cowork** 与 **OpenAI Codex**。
+**CCRelay** 是一套 VS Code 扩展，并提供可选的 **Electron** 和 **Tauri** 桌面应用；内置 HTTP 代理，可在不同 AI 提供商（Anthropic、OpenAI、Gemini 等）之间平滑切换且不丢失会话上下文。支持 **Claude Code**、**Claude Cowork** 与 **OpenAI Codex**。
 
 **项目官网**: [https://ccrelay.inflab.org](https://ccrelay.inflab.org)
 
@@ -17,6 +17,7 @@
 - [系统要求](#系统要求)
 - [安装](#安装)
 - [桌面应用（Electron）](#桌面应用electron)
+- [桌面应用（Tauri）](#桌面应用tauri)
 - [快速开始](#快速开始)
 - [客户端对接](#客户端对接)
 - [使用指南](#使用指南)
@@ -58,7 +59,7 @@
 
 **桌面与 UI**
 
-- 可选 Electron 托盘应用——无需打开 VS Code 即可运行 CCRelay
+- 可选 Electron 或 Tauri 桌面应用——无需打开 VS Code 即可运行 CCRelay
 - Web 管理面板：提供商管理、设置、i18n（中英文）
 - Provider 导入/导出为 JSON 文件
 
@@ -102,7 +103,7 @@ npm run compile        # 或 npm run watch
 
 ## 桌面应用（Electron）
 
-可选的 Electron 托盘应用（`packages/desktop`），与 VS Code 扩展共享同一核心：
+可选的 Electron 桌面应用（`packages/desktop`），与 VS Code 扩展共享同一核心：
 
 - 共用 `~/.ccrelay/` 配置、状态和 Leader 选举
 - 托盘菜单 → **打开控制台** 在应用窗口内加载 Web UI
@@ -119,6 +120,28 @@ xattr -cr /path/to/CCRelay.app
 ```
 
 或 **按住 Control 点击** 应用 → **打开**。
+
+---
+
+## 桌面应用（Tauri）
+
+轻量级 Tauri 桌面应用（`packages/desktop-tauri`），与 VS Code 扩展和 Electron 应用共享同一核心：
+
+- 共用 `~/.ccrelay/` 配置、状态和 Leader 选举
+- 使用 Sidecar 架构：Rust 壳层管理 Node.js 服务进程
+- 托盘菜单支持启动/停止服务器和打开控制台
+- 从 [GitHub Releases](https://github.com/inflaborg/ccrelay/releases) 下载：
+  - **macOS**: `CCRelay.app`（Apple Silicon 和 Intel）
+  - **Windows**: `CCRelay.exe`（x64 和 arm64）
+
+### 开发
+
+```bash
+npm install
+npm run tauri:dev         # 开发模式，支持热重载
+npm run tauri:pack:mac    # 构建 macOS 应用
+npm run tauri:pack:win    # 构建 Windows 应用
+```
 
 ---
 
@@ -562,10 +585,15 @@ npm run package        # 构建 VSIX
 npm run build:dev      # 开发构建
 npm run build:prod     # 生产构建
 
-# 桌面应用
+# Electron 桌面应用
 npm run desktop:start
 npm run desktop:pack:mac
 npm run desktop:pack:win
+
+# Tauri 桌面应用
+npm run tauri:dev
+npm run tauri:pack:mac
+npm run tauri:pack:win
 ```
 
 ### 项目结构
@@ -573,13 +601,14 @@ npm run desktop:pack:win
 ```
 ccrelay/
 ├── packages/
-│   ├── core/         # 共享运行时（代理、配置、转换器）
-│   ├── vscode/       # VS Code 扩展
-│   └── desktop/      # Electron 托盘应用
-├── web/              # Web UI（React + Vite）
-├── tests/            # Vitest 单元测试与集成测试
-├── scripts/          # 构建和打包辅助脚本
-└── dists/            # 打包的 .vsix
+│   ├── core/              # 共享运行时（代理、配置、转换器）
+│   ├── vscode/            # VS Code 扩展
+│   ├── desktop/           # Electron 桌面应用
+│   └── desktop-tauri/     # Tauri 桌面应用
+├── web/                   # Web UI（React + Vite）
+├── tests/                 # Vitest 单元测试与集成测试
+├── scripts/               # 构建和打包辅助脚本
+└── dists/                 # 打包的 .vsix
 ```
 
 ---
