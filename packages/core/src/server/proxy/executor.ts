@@ -27,6 +27,10 @@ import {
   processStreamingChunk,
   createSseLineBuffer,
   isAnthropicMessageResponse,
+  createAnthropicToOpenAISseState,
+  createAnthropicSseEnvelopeBuffer,
+  processAnthropicStreamEnvelope,
+  flushAnthropicToOpenAISseFinal,
   type OpenAIChatCompletionResponse,
 } from "../../converter";
 import type { ApiSurface } from "../../types";
@@ -437,6 +441,52 @@ export class ProxyExecutor {
 
     const isSSEResponse = proxyRes.headers["content-type"]?.includes("text/event-stream");
 
+    // Anthropic upstream SSE → OpenAI Chat Completions SSE or Responses API SSE (true streaming).
+    if (
+      needsResponseConversion &&
+      upstreamWire === "anthropic" &&
+      isSSEResponse &&
+      status === 200 &&
+      clientRes
+    ) {
+      if (clientSurface === "openai") {
+        this.handleAnthropicSseToOpenAIChat(
+          proxyRes,
+          task,
+          ctx,
+          onClientDisconnect,
+          status,
+          responseHeaders,
+          originalModel,
+          resolve
+        );
+        return;
+      }
+      if (clientSurface === "openai_responses") {
+        this.handleAnthropicSseToResponsesSseThroughChat(
+          proxyRes,
+          task,
+          ctx,
+          onClientDisconnect,
+          status,
+          responseHeaders,
+          originalModel,
+          resolve
+        );
+        return;
+      }
+      this.handleCrossProtocolSseRejection(
+        proxyRes,
+        task,
+        ctx,
+        onClientDisconnect,
+        status,
+        responseHeaders,
+        resolve
+      );
+      return;
+    }
+
     if (needsResponseConversion && isSSEResponse && clientRes) {
       this.handleCrossProtocolSseRejection(
         proxyRes,
@@ -473,6 +523,185 @@ export class ProxyExecutor {
       responseHeaders,
       resolve
     );
+  }
+
+  /** Anthropic upstream SSE → client OpenAI Chat Completions SSE. */
+  private handleAnthropicSseToOpenAIChat(
+    proxyRes: http.IncomingMessage,
+    task: RequestTask,
+    ctx: ExecutionContext,
+    onClientDisconnect: () => void,
+    status: number,
+    responseHeaders: Record<string, string | string[]>,
+    originalModel: string | undefined,
+    resolve: (value: ProxyResult) => void
+  ): void {
+    const { clientId, provider, res: clientRes } = task;
+    if (!clientRes) {
+      resolve({
+        statusCode: 500,
+        headers: {},
+        duration: Date.now() - ctx.startTime,
+        errorMessage: "Missing client response for Anthropic SSE conversion",
+      });
+      return;
+    }
+
+    const sseHeaders = headersForResponsesSse(responseHeaders);
+    log.info(`[A->Chat SSE] ${clientId}: anthropic → OpenAI chunks (${provider.id})`);
+    clientRes.writeHead(status, sseHeaders);
+
+    const startTime = Date.now();
+
+    const chatState = createAnthropicToOpenAISseState(originalModel ?? task.originalModel ?? "");
+
+    const sseBuffer = createAnthropicSseEnvelopeBuffer(envelope => {
+      const fragments = processAnthropicStreamEnvelope(chatState, envelope);
+      for (const line of fragments) {
+        if (!ctx.clientDisconnected) {
+          clientRes.write(line);
+        }
+      }
+    });
+
+    proxyRes.on("data", (chunk: Buffer) => {
+      sseBuffer.push(chunk);
+    });
+
+    proxyRes.on("end", () => {
+      sseBuffer.flush();
+      if (!ctx.clientDisconnected) {
+        if (!chatState.streamingFinished) {
+          for (const line of flushAnthropicToOpenAISseFinal(chatState)) {
+            clientRes.write(line);
+          }
+        }
+        clientRes.end();
+      }
+
+      clientRes.off("close", onClientDisconnect);
+      task.streamCompleted = !ctx.clientDisconnected;
+      ctx.streamCompleted = task.streamCompleted;
+      resolve({
+        statusCode: ctx.clientDisconnected ? 499 : status,
+        headers: sseHeaders,
+        duration: Date.now() - startTime,
+        streamed: true,
+        streamCompleted: task.streamCompleted,
+        errorMessage: ctx.clientDisconnected ? "Client disconnected" : undefined,
+      });
+    });
+
+    proxyRes.on("error", err => {
+      log.error(`[A->Chat SSE] upstream error ${provider.id}`, err);
+      clientRes.off("close", onClientDisconnect);
+      if (!ctx.clientDisconnected && !clientRes.writableEnded) {
+        clientRes.end();
+      }
+    });
+
+    clientRes.on("error", () => {
+      proxyRes.destroy();
+    });
+  }
+
+  /** Anthropic upstream SSE → Responses SSE via Chat completion chunk bridge. */
+  private handleAnthropicSseToResponsesSseThroughChat(
+    proxyRes: http.IncomingMessage,
+    task: RequestTask,
+    ctx: ExecutionContext,
+    onClientDisconnect: () => void,
+    status: number,
+    responseHeaders: Record<string, string | string[]>,
+    originalModel: string | undefined,
+    resolve: (value: ProxyResult) => void
+  ): void {
+    const { provider, res: clientRes } = task;
+    if (!clientRes) {
+      resolve({
+        statusCode: 500,
+        headers: {},
+        duration: Date.now() - ctx.startTime,
+        errorMessage: "Missing client response for Anthropic→Responses SSE",
+      });
+      return;
+    }
+
+    const sseHeaders = headersForResponsesSse(responseHeaders);
+    log.info(`[A->Responses SSE] anthropic sse → Responses (${provider.id})`);
+    clientRes.writeHead(status, sseHeaders);
+
+    const startTime = Date.now();
+    const chatState = createAnthropicToOpenAISseState(originalModel ?? task.originalModel ?? "");
+    const respState = createStreamingState({ echo: task.originalResponsesEcho });
+
+    const feedSyntheticChatCompletionChunk = (line: string): void => {
+      const trimmed = line.trimEnd();
+      const payload = trimmed.startsWith("data:") ? trimmed.slice(5).trim() : trimmed;
+      if (!payload) {
+        return;
+      }
+      const synth = processStreamingChunk(respState, payload);
+      for (const ev of synth) {
+        if (!ctx.clientDisconnected) {
+          clientRes.write(ev);
+        }
+      }
+    };
+
+    const sseBuffer = createAnthropicSseEnvelopeBuffer(envelope => {
+      const fragments = processAnthropicStreamEnvelope(chatState, envelope);
+      for (const line of fragments) {
+        feedSyntheticChatCompletionChunk(line);
+      }
+    });
+
+    proxyRes.on("data", (chunk: Buffer) => {
+      sseBuffer.push(chunk);
+    });
+
+    proxyRes.on("end", () => {
+      sseBuffer.flush();
+      if (!ctx.clientDisconnected && !chatState.streamingFinished) {
+        for (const line of flushAnthropicToOpenAISseFinal(chatState)) {
+          feedSyntheticChatCompletionChunk(line);
+        }
+      }
+      if (!ctx.clientDisconnected && respState.phase !== "done") {
+        for (const ev of processStreamingChunk(respState, "[DONE]")) {
+          clientRes.write(ev);
+        }
+      }
+
+      clientRes.off("close", onClientDisconnect);
+      if (!ctx.clientDisconnected) {
+        clientRes.end();
+      }
+
+      task.streamCompleted = !ctx.clientDisconnected;
+      ctx.streamCompleted = task.streamCompleted;
+
+      resolve({
+        statusCode: ctx.clientDisconnected ? 499 : status,
+        headers: sseHeaders,
+        duration: Date.now() - startTime,
+        streamed: true,
+        streamCompleted: task.streamCompleted,
+        errorMessage: ctx.clientDisconnected ? "Client disconnected" : undefined,
+      });
+    });
+
+    proxyRes.on("error", err => {
+      log.error(`[A->Responses SSE via stream] upstream error ${provider.id}`, err);
+      clientRes.off("close", onClientDisconnect);
+      if (!ctx.clientDisconnected && !clientRes.writableEnded) {
+        clientRes.end();
+      }
+    });
+
+    clientRes.on("error", () => {
+      proxyRes.destroy();
+    });
   }
 
   /**

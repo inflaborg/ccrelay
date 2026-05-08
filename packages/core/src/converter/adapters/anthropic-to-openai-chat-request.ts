@@ -9,7 +9,13 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 // External API fields use snake_case (max_tokens, tool_choice, etc.)
 
-import type { MessageParam, ContentBlockParam, OpenAICompat } from "../../types";
+import {
+  type MessageParam,
+  type ContentBlockParam,
+  type OpenAICompat,
+  type AnthropicServerToolDef,
+  isServerToolResultBlock,
+} from "../../types";
 import {
   isGeminiOpenAiModel,
   sanitizeAzureOpenAiChatRequest,
@@ -17,6 +23,7 @@ import {
 } from "../rules/openai-chat-platform-transforms";
 import { assignOpenAiChatMaxOutput } from "../rules/openai-chat-model-rules";
 import { mapAnthropicWirePathToOpenAiUpstream } from "../paths";
+import { anthropicServerToolDefToOpenAIHosted } from "../tool-schema-conversion";
 
 /**
  * Anthropic Messages API request format
@@ -29,7 +36,7 @@ export interface AnthropicMessageRequest {
   temperature?: number;
   top_p?: number;
   stream?: boolean;
-  tools?: AnthropicTool[];
+  tools?: (AnthropicTool | AnthropicServerToolDef)[];
   tool_choice?: AnthropicToolChoice;
   stop_sequences?: string[];
   thinking?: {
@@ -124,15 +131,29 @@ export interface OpenAIImageContent {
 }
 
 /**
- * OpenAI tool definition
+ * OpenAI Chat Completions `tools[]` entry — function tool or hosted/server tool (web_search, etc.).
  */
-export interface OpenAITool {
+export interface OpenAIFunctionTool {
   type: "function";
   function: {
     name: string;
     description?: string;
     parameters: Record<string, unknown>;
   };
+}
+
+/**
+ * Non-function tool on OpenAI Chat / Responses wire (`type` other than `function`).
+ */
+export interface OpenAIHostedTool {
+  type: string;
+  [key: string]: unknown;
+}
+
+export type OpenAITool = OpenAIFunctionTool | OpenAIHostedTool;
+
+export function isOpenAIFunctionTool(t: OpenAITool): t is OpenAIFunctionTool {
+  return t.type === "function";
 }
 
 /**
@@ -174,6 +195,8 @@ export interface ConversionResult {
 export interface ConvertRequestToOpenAIOptions {
   /** When `azure_openai`, strip fields Azure Chat Completions rejects (e.g. `reasoning`). */
   openaiCompat?: OpenAICompat;
+  /** Upstream `baseUrl` — selects hosted-tool outbound transforms (`hosted-tools/rules`). */
+  providerBaseUrl?: string;
 }
 
 /**
@@ -250,13 +273,16 @@ export function convertRequestToOpenAI(
     assignOpenAiChatMaxOutput(openai, anthropic.max_tokens);
   }
 
-  // tools - format conversion
+  // tools — client `function` defs + hosted/server tools mapped to Chat-hosted `type`
   if (anthropic.tools && anthropic.tools.length > 0) {
-    openai.tools = convertTools(anthropic.tools);
+    const convertedTools = convertTools(anthropic.tools, options?.providerBaseUrl ?? "");
+    if (convertedTools.length > 0) {
+      openai.tools = convertedTools;
+    }
   }
 
-  // tool_choice
-  if (anthropic.tool_choice) {
+  // tool_choice (when any converted tools exist)
+  if (anthropic.tool_choice && openai.tools && openai.tools.length > 0) {
     openai.tool_choice = convertToolChoice(anthropic.tool_choice);
   }
 
@@ -352,11 +378,10 @@ function convertMessage(msg: MessageParam, targetModel: string): OpenAIMessage[]
 function convertUserMessage(content: ContentBlockParam[]): OpenAIMessage[] {
   const messages: OpenAIMessage[] = [];
 
-  // 1. Extract tool_result blocks → separate tool messages
+  // 1. Extract client-only tool_result blocks → separate tool messages
   const toolResultBlocks = content.filter(c => c.type === "tool_result");
   if (toolResultBlocks.length) {
     for (const tool of toolResultBlocks) {
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- Type narrowing after filter
       const block = tool as Extract<ContentBlockParam, { type: "tool_result" }>;
       const toolMessage: OpenAIMessage = {
         role: "tool",
@@ -367,21 +392,40 @@ function convertUserMessage(content: ContentBlockParam[]): OpenAIMessage[] {
     }
   }
 
-  // 2. Extract text and image blocks → single user message
+  // 2. Extract text and image blocks, plus opaque server-tool snapshots → single user message
+  const serverToolBlocks = content.filter(
+    c => c.type === "server_tool_use" || isServerToolResultBlock(c)
+  );
+
   // Reference: passes through original part object (including cache_control)
   const textAndMediaParts = content.filter(
     c =>
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- Type narrowing after filter
       (c.type === "text" && (c as Extract<ContentBlockParam, { type: "text" }>).text) ||
       c.type === "image"
   );
 
-  if (textAndMediaParts.length) {
-    messages.push({
-      role: "user",
-      content: textAndMediaParts.map((part): OpenAIContent => {
+  const opaqueServerTextParts: OpenAITextContent[] = serverToolBlocks.map(block => {
+    if (block.type === "server_tool_use") {
+      return {
+        type: "text" as const,
+        text: JSON.stringify(block),
+      };
+    }
+    const sr = block as unknown as Record<string, unknown>;
+    return {
+      type: "text" as const,
+      text: JSON.stringify({
+        type: sr.type,
+        tool_use_id: sr.tool_use_id,
+        content: sr.content,
+      }),
+    };
+  });
+
+  if (textAndMediaParts.length || opaqueServerTextParts.length) {
+    const combinedParts: OpenAIContent[] = [
+      ...textAndMediaParts.map((part): OpenAIContent => {
         if (part.type === "image") {
-          // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- Type narrowing in conditional
           const imgBlock = part as Extract<ContentBlockParam, { type: "image" }>;
           const imageUrl = convertImageSource(imgBlock.source);
           // Only include media_type if both data and media_type are present (valid image)
@@ -402,6 +446,11 @@ function convertUserMessage(content: ContentBlockParam[]): OpenAIMessage[] {
         // Reference: returns the raw part object
         return part as unknown as OpenAIContent;
       }),
+      ...opaqueServerTextParts,
+    ];
+    messages.push({
+      role: "user",
+      content: combinedParts,
     });
   }
 
@@ -426,7 +475,6 @@ function convertAssistantMessage(content: ContentBlockParam[], targetModel: stri
   // Extract thinking blocks (may be multiple; merge content, use last non-empty signature)
   let thoughtSignature: string | undefined;
   let combinedThinkingContent: string | undefined;
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- filter does not narrow generic unions
   const thinkingParts = content.filter(c => c.type === "thinking") as Extract<
     ContentBlockParam,
     { type: "thinking" }
@@ -447,8 +495,27 @@ function convertAssistantMessage(content: ContentBlockParam[], targetModel: stri
     (c): c is Extract<ContentBlockParam, { type: "text" }> =>
       c.type === "text" && "text" in c && typeof c.text === "string"
   );
-  if (textParts.length) {
-    assistantMessage.content = textParts.map(t => t.text).join("\n");
+  const serverOpaqueLines: string[] = [];
+  for (const c of content) {
+    if (c.type === "server_tool_use") {
+      serverOpaqueLines.push(JSON.stringify(c));
+      continue;
+    }
+    if (isServerToolResultBlock(c)) {
+      const sr = c as unknown as Record<string, unknown>;
+      serverOpaqueLines.push(
+        JSON.stringify({
+          type: sr.type,
+          tool_use_id: sr.tool_use_id,
+          content: sr.content,
+        })
+      );
+    }
+  }
+
+  const mainTextParts = [...textParts.map(t => t.text), ...serverOpaqueLines];
+  if (mainTextParts.length) {
+    assistantMessage.content = mainTextParts.join("\n");
   }
 
   // Extract tool_use blocks → tool_calls
@@ -506,17 +573,43 @@ function convertImageSource(source: {
 }
 
 /**
- * Convert tools from Anthropic to OpenAI format
+ * Server-side tool defs use `type` (e.g. web_search_20250305); client tools use `custom` or omit.
  */
-function convertTools(tools: AnthropicTool[]): OpenAITool[] {
-  return tools.map(tool => ({
-    type: "function",
-    function: {
-      name: tool.name,
-      description: tool.description || "",
-      parameters: tool.input_schema,
-    },
-  }));
+function isAnthropicServerToolDefinition(tool: unknown): tool is AnthropicServerToolDef {
+  if (!tool || typeof tool !== "object") {
+    return false;
+  }
+  const t = tool as Record<string, unknown>;
+  return typeof t.type === "string" && t.type !== "custom";
+}
+
+/**
+ * Convert tools from Anthropic to OpenAI Chat format (client `function` tools + hosted/server tools).
+ */
+function convertTools(
+  tools: (AnthropicTool | AnthropicServerToolDef)[],
+  providerBaseUrl: string
+): OpenAITool[] {
+  const out: OpenAITool[] = [];
+  for (const tool of tools) {
+    if (isAnthropicServerToolDefinition(tool)) {
+      out.push(anthropicServerToolDefToOpenAIHosted(tool, providerBaseUrl) as OpenAIHostedTool);
+      continue;
+    }
+    out.push({
+      type: "function",
+      function: {
+        name: tool.name,
+        description:
+          "description" in tool && typeof tool.description === "string" ? tool.description : "",
+        parameters:
+          "input_schema" in tool && tool.input_schema && typeof tool.input_schema === "object"
+            ? tool.input_schema
+            : { type: "object", properties: {} },
+      },
+    });
+  }
+  return out;
 }
 
 /**

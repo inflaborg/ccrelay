@@ -540,13 +540,221 @@ describe("converter: anthropic-to-openai-chat-request", () => {
 
       expect(result.request.tools).toBeUndefined();
     });
+
+    it("maps Anthropic server tool definitions to OpenAI-hosted tools (passthrough web_search)", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 4096,
+        tools: [
+          {
+            type: "web_search_20250305",
+            name: "web_search",
+            max_uses: 5,
+          },
+          {
+            name: "client_fn",
+            description: "client",
+            input_schema: { type: "object", properties: {} },
+          },
+        ],
+        messages: [],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.tools).toEqual([
+        {
+          type: "web_search",
+          max_uses: 5,
+        },
+        {
+          type: "function",
+          function: {
+            name: "client_fn",
+            description: "client",
+            parameters: { type: "object", properties: {} },
+          },
+        },
+      ]);
+    });
+
+    it("GLM provider baseUrl nests web_search envelope for Anthropic→Chat", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 4096,
+        tools: [
+          {
+            type: "web_search_20250305",
+            name: "web_search",
+            max_uses: 5,
+          },
+          {
+            name: "client_fn",
+            description: "client",
+            input_schema: { type: "object", properties: {} },
+          },
+        ],
+        messages: [],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath, {
+        providerBaseUrl: "https://api.z.ai/",
+      });
+
+      expect(result.request.tools).toEqual([
+        {
+          type: "web_search",
+          web_search: { enable: true, max_uses: 5 },
+        },
+        {
+          type: "function",
+          function: {
+            name: "client_fn",
+            description: "client",
+            parameters: { type: "object", properties: {} },
+          },
+        },
+      ]);
+    });
+
+    it("preserves tool_choice when only hosted/server tools exist", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 4096,
+        tool_choice: { type: "auto" },
+        tools: [
+          {
+            type: "web_search_20250305",
+            name: "web_search",
+          },
+        ],
+        messages: [],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.tools).toEqual([{ type: "web_search" }]);
+      expect(result.request.tool_choice).toBe("auto");
+    });
+
+    it("maps code_execution_<version> server tools to Chat code_interpreter", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 4096,
+        messages: [],
+        tools: [
+          {
+            type: "code_execution_20250522",
+            name: "code_execution",
+            storage_limit_mb: 200,
+          },
+        ],
+      };
+      const result = convertRequestToOpenAI(request, basePath);
+      expect(result.request.tools).toEqual([{ type: "code_interpreter", storage_limit_mb: 200 }]);
+    });
+  });
+
+  describe("server tool blocks in message history", () => {
+    it("should embed server_tool_use and server tool results in assistant content as JSON lines", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 4096,
+        messages: [
+          {
+            role: "assistant",
+            content: [
+              { type: "text", text: "Ok." },
+              {
+                type: "server_tool_use",
+                id: "s1",
+                name: "web_search",
+                input: { q: "a" },
+              },
+              {
+                type: "web_search_tool_result",
+                tool_use_id: "s1",
+                content: { hits: 1 },
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.messages).toHaveLength(1);
+      const content = result.request.messages[0].content as string;
+      expect(content.startsWith("Ok.\n")).toBe(true);
+      expect(content).toContain(
+        JSON.stringify({
+          type: "server_tool_use",
+          id: "s1",
+          name: "web_search",
+          input: { q: "a" },
+        })
+      );
+      expect(content).toContain(
+        JSON.stringify({
+          type: "web_search_tool_result",
+          tool_use_id: "s1",
+          content: { hits: 1 },
+        })
+      );
+    });
+
+    it("should add opaque server-tool text parts alongside user multimodal content", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 4096,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Refs:" },
+              {
+                type: "server_tool_use",
+                id: "s2",
+                name: "web_search",
+                input: {},
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.messages[0].role).toBe("user");
+      const parts = result.request.messages[0].content as Array<{ type: string; text?: string }>;
+      expect(parts[0]).toEqual({ type: "text", text: "Refs:" });
+      expect(parts[1]).toEqual({
+        type: "text",
+        text: JSON.stringify({
+          type: "server_tool_use",
+          id: "s2",
+          name: "web_search",
+          input: {},
+        }),
+      });
+    });
   });
 
   describe("tool_choice conversion", () => {
+    /** OpenAI `tool_choice` is only emitted when at least one client function tool exists. */
+    const clientToolForChoice: AnthropicMessageRequest["tools"] = [
+      {
+        name: "stub_for_tool_choice",
+        description: "",
+        input_schema: { type: "object", properties: {} },
+      },
+    ];
+
     it("should convert { type: 'auto' } to 'auto'", () => {
       const request: AnthropicMessageRequest = {
         model: "claude-3-5-sonnet-20241022",
         max_tokens: 4096,
+        tools: clientToolForChoice,
         tool_choice: { type: "auto" },
         messages: [],
       };
@@ -560,6 +768,7 @@ describe("converter: anthropic-to-openai-chat-request", () => {
       const request: AnthropicMessageRequest = {
         model: "claude-3-5-sonnet-20241022",
         max_tokens: 4096,
+        tools: clientToolForChoice,
         tool_choice: { type: "any" },
         messages: [],
       };
@@ -573,6 +782,7 @@ describe("converter: anthropic-to-openai-chat-request", () => {
       const request: AnthropicMessageRequest = {
         model: "claude-3-5-sonnet-20241022",
         max_tokens: 4096,
+        tools: clientToolForChoice,
         tool_choice: { type: "none" },
         messages: [],
       };
@@ -586,6 +796,13 @@ describe("converter: anthropic-to-openai-chat-request", () => {
       const request: AnthropicMessageRequest = {
         model: "claude-3-5-sonnet-20241022",
         max_tokens: 4096,
+        tools: [
+          {
+            name: "X",
+            description: "",
+            input_schema: { type: "object", properties: {} },
+          },
+        ],
         tool_choice: { type: "tool", name: "X" },
         messages: [],
       };

@@ -51,12 +51,34 @@ export {
   convertResponsesRequestToChatCompletions,
   isOpenAIResponsesRequest,
   type ResponsesToChatResult,
+  type ResponsesToChatOptions,
   extractResponsesEcho,
   mergedResponseShellEcho,
   extractFunctionToolsForEcho,
 } from "./adapters/openai-responses-to-chat";
 
 export type { ResponsesRequestEcho } from "../types";
+
+export {
+  stripAnthropicToolVersionSuffix,
+  anthropicToolBaseToChatHostedType,
+  CHAT_HOSTED_TOOL_TO_ANTHROPIC,
+  anthropicServerToolDefToOpenAIHosted,
+  openAIHostedToolToAnthropicServerToolDef,
+  normalizeToolForProvider,
+  normalizedHostnameFromBaseUrl,
+  hostnameMatchesDomain,
+  matchHostedToolRuleForBaseUrl,
+} from "./tool-schema-conversion";
+
+export type { HostedToolRule, HostedToolTransform } from "./hosted-tools";
+
+export {
+  glmWebSearchEnvelopeTransform,
+  mimoWebSearchTransform,
+  passthroughTransform,
+  TRANSFORM_REGISTRY,
+} from "./hosted-tools";
 
 export {
   convertChatCompletionToResponses,
@@ -67,6 +89,14 @@ export {
   formatOpenAIResponsesSse,
   formatOpenAIChatCompletionsSse,
 } from "./streaming/sse-formatters";
+
+export {
+  createAnthropicToOpenAISseState,
+  processAnthropicStreamEnvelope,
+  flushAnthropicToOpenAISseFinal,
+  createAnthropicSseEnvelopeBuffer,
+  type AnthropicToOpenAISseState,
+} from "./streaming/anthropic-sse-to-openai-chat";
 
 export {
   createStreamingState,

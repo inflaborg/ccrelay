@@ -5,8 +5,17 @@
 /* eslint-disable @typescript-eslint/naming-convention -- OpenAI Responses API wire names */
 
 import type { ResponsesRequestEcho } from "../../types";
+import type {
+  OpenAIMessage,
+  OpenAIMessageRequest,
+  OpenAITool,
+  OpenAIToolChoice,
+} from "./anthropic-to-openai-chat-request";
+import { assignOpenAiChatMaxOutput } from "../rules/openai-chat-model-rules";
+import { normalizeToolForProvider } from "../hosted-tools";
+import { isOpenAIChatCompletionsRequest } from "./openai-chat-to-anthropic-request";
 
-/** Collect tools suitable for echo: `type=function` entries and nested `namespace` bundles. Hosted tools omitted. */
+/** Collect tools for Responses echo: `function` defs, nested `namespace` bundles (inner tools), and hosted tools (web_search, etc.). */
 export function extractFunctionToolsForEcho(tools: unknown): unknown[] {
   if (!Array.isArray(tools)) {
     return [];
@@ -26,13 +35,16 @@ export function extractFunctionToolsForEcho(tools: unknown): unknown[] {
         if (
           inner &&
           typeof inner === "object" &&
-          (inner as { type?: string }).type === "function"
+          typeof (inner as { type?: string }).type === "string"
         ) {
           out.push(inner);
         }
       }
+      continue;
     }
-    // web_search / mcp / etc. intentionally skipped
+    if (typeof o.type === "string") {
+      out.push(t);
+    }
   }
   return out;
 }
@@ -131,34 +143,14 @@ export function mergedResponseShellEcho(echo?: ResponsesRequestEcho): Record<str
   };
 }
 
-import { ScopedLogger } from "../../utils/logger";
-import type {
-  OpenAIMessage,
-  OpenAIMessageRequest,
-  OpenAITool,
-  OpenAIToolChoice,
-} from "./anthropic-to-openai-chat-request";
-import { assignOpenAiChatMaxOutput } from "../rules/openai-chat-model-rules";
-import { isOpenAIChatCompletionsRequest } from "./openai-chat-to-anthropic-request";
-
-const log = new ScopedLogger("ResponsesToChat");
-
-const STRIPPED_TOOL_TYPES = new Set([
-  "web_search",
-  "mcp",
-  "code_interpreter",
-  "file_search",
-  "computer",
-  "computer_use_preview",
-  "image_generation",
-  "local_shell",
-  "shell",
-  "tool_search",
-]);
-
 export interface ResponsesToChatResult {
   request: OpenAIMessageRequest;
   newPath: string;
+}
+
+export interface ResponsesToChatOptions {
+  /** Upstream `baseUrl`; selects hosted-tool outbound transforms (`hosted-tools/rules`). */
+  providerBaseUrl?: string;
 }
 
 /**
@@ -180,7 +172,8 @@ export function isOpenAIResponsesRequest(data: Record<string, unknown>): boolean
  */
 export function convertResponsesRequestToChatCompletions(
   raw: Record<string, unknown>,
-  _originalPath: string
+  _originalPath: string,
+  options?: ResponsesToChatOptions
 ): ResponsesToChatResult {
   const messages: OpenAIMessage[] = [];
   const instructions = raw.instructions;
@@ -244,14 +237,9 @@ export function convertResponsesRequestToChatCompletions(
     };
   }
 
-  const { tools, stripped } = mapResponsesTools(raw.tools);
+  const tools = mapResponsesTools(raw.tools, options?.providerBaseUrl ?? "");
   if (tools.length) {
     out.tools = tools;
-  }
-  if (stripped > 0) {
-    log.warn(
-      `Responses->Chat: stripped ${String(stripped)} non-function tool(s) (web_search, mcp, etc.); not supported in v1`
-    );
   }
   const mappedChoice = mapResponsesToolChoice(raw.tool_choice);
   if (mappedChoice !== undefined) {
@@ -287,12 +275,11 @@ function mapResponsesToolChoice(tc: unknown): OpenAIToolChoice | undefined {
   return undefined;
 }
 
-function mapResponsesTools(tools: unknown): { tools: OpenAITool[]; stripped: number } {
+function mapResponsesTools(tools: unknown, providerBaseUrl: string): OpenAITool[] {
   if (!Array.isArray(tools)) {
-    return { tools: [], stripped: 0 };
+    return [];
   }
   const out: OpenAITool[] = [];
-  let stripped = 0;
   for (const t of tools) {
     if (!t || typeof t !== "object") {
       continue;
@@ -312,15 +299,14 @@ function mapResponsesTools(tools: unknown): { tools: OpenAITool[]; stripped: num
           },
         },
       });
-    } else if (typeof typ === "string" && STRIPPED_TOOL_TYPES.has(typ)) {
-      stripped += 1;
     } else if (typ === "namespace" && Array.isArray(o.tools)) {
       for (const inner of o.tools as unknown[]) {
-        if (
-          inner &&
-          typeof inner === "object" &&
-          (inner as { type?: string }).type === "function"
-        ) {
+        if (!inner || typeof inner !== "object") {
+          continue;
+        }
+        const inn = inner as Record<string, unknown>;
+        const it = inn.type;
+        if (it === "function") {
           const f = inner as { name?: string; description?: string; parameters?: unknown };
           out.push({
             type: "function",
@@ -333,13 +319,15 @@ function mapResponsesTools(tools: unknown): { tools: OpenAITool[]; stripped: num
               },
             },
           });
+        } else if (typeof it === "string") {
+          out.push(normalizeToolForProvider(inn, providerBaseUrl) as OpenAITool);
         }
       }
-    } else {
-      stripped += 1;
+    } else if (typeof typ === "string") {
+      out.push(normalizeToolForProvider(o, providerBaseUrl) as OpenAITool);
     }
   }
-  return { tools: out, stripped };
+  return out;
 }
 
 function mapEasyMessageContentToText(content: unknown): string | undefined {
@@ -421,17 +409,21 @@ function appendInputItemsToMessages(items: unknown[], messages: OpenAIMessage[])
           : typeof rawId.id === "string"
             ? rawId.id
             : "";
-      messages.push({
-        role: "assistant",
-        content: "",
-        tool_calls: [
-          {
-            id: callId || `call_${name}`,
-            type: "function" as const,
-            function: { name, arguments: argStr },
-          },
-        ],
-      });
+      const toolCall = {
+        id: callId || `call_${name}`,
+        type: "function" as const,
+        function: { name, arguments: argStr },
+      };
+      const prev = messages[messages.length - 1];
+      if (prev?.role === "assistant" && Array.isArray(prev.tool_calls)) {
+        prev.tool_calls.push(toolCall);
+      } else {
+        messages.push({
+          role: "assistant",
+          content: "",
+          tool_calls: [toolCall],
+        });
+      }
       continue;
     }
 

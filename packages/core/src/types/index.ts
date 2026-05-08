@@ -425,7 +425,47 @@ export type ContentBlockParam =
   | ImageBlockParam
   | ToolUseBlockParam
   | ToolResultBlockParam
-  | ThinkingBlockParam;
+  | ThinkingBlockParam
+  | ServerToolUseBlockParam
+  | ServerToolResultBlockParam;
+
+/**
+ * Server-side tool invocation (Anthropic Messages API — executed upstream, no client callback).
+ */
+export interface ServerToolUseBlockParam {
+  type: "server_tool_use";
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+/**
+ * Server-side tool result block (Anthropic Messages API — type varies per tool family).
+ */
+export interface ServerToolResultBlockParam {
+  type: string;
+  tool_use_id: string;
+  content: unknown;
+}
+
+/**
+ * True when `block` is a server-tool result (`tool_use_id` present, distinct from client `tool_result`).
+ */
+export function isServerToolResultBlock(block: { type?: string }): boolean {
+  if (!block?.type || block.type === "tool_result") {
+    return false;
+  }
+  return typeof (block as Record<string, unknown>).tool_use_id === "string";
+}
+
+/**
+ * Anthropic request tool definition for server tools (`type` is not `"custom"`).
+ */
+export interface AnthropicServerToolDef {
+  type: string;
+  name: string;
+  [key: string]: unknown;
+}
 
 /**
  * Thinking content block (with optional signature for Gemini)

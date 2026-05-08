@@ -86,6 +86,48 @@ describe("convertResponsesRequestToChatCompletions", () => {
     expect(request.tool_choice).toBe("required");
   });
 
+  it("merges consecutive parallel function_call input items into one assistant message", () => {
+    const { request } = convertResponsesRequestToChatCompletions(
+      {
+        model: "gpt-4o",
+        input: [
+          { type: "function_call", name: "list_a", arguments: "{}", call_id: "call_a" },
+          { type: "function_call", name: "list_b", arguments: "{}", call_id: "call_b" },
+          { type: "function_call_output", call_id: "call_a", output: "[]" },
+          { type: "function_call_output", call_id: "call_b", output: "[]" },
+        ],
+      },
+      "/v1/responses"
+    );
+    const assistants = request.messages.filter(m => m.role === "assistant");
+    expect(assistants).toHaveLength(1);
+    expect(assistants[0].tool_calls).toHaveLength(2);
+    expect(assistants[0].tool_calls?.[0].function.name).toBe("list_a");
+    expect(assistants[0].tool_calls?.[1].function.name).toBe("list_b");
+    const tools = request.messages.filter(m => m.role === "tool");
+    expect(tools).toHaveLength(2);
+    expect(tools[0].tool_call_id).toBe("call_a");
+    expect(tools[1].tool_call_id).toBe("call_b");
+  });
+
+  it("does not merge function_call after a tool message (new assistant turn)", () => {
+    const { request } = convertResponsesRequestToChatCompletions(
+      {
+        model: "gpt-4o",
+        input: [
+          { type: "function_call", name: "first", arguments: "{}", call_id: "c1" },
+          { type: "function_call_output", call_id: "c1", output: "done" },
+          { type: "function_call", name: "second", arguments: "{}", call_id: "c2" },
+        ],
+      },
+      "/v1/responses"
+    );
+    const assistants = request.messages.filter(m => m.role === "assistant");
+    expect(assistants).toHaveLength(2);
+    expect(assistants[0].tool_calls).toHaveLength(1);
+    expect(assistants[1].tool_calls).toHaveLength(1);
+  });
+
   it("expands namespace tools with nested function tools", () => {
     const { request } = convertResponsesRequestToChatCompletions(
       {
@@ -119,27 +161,95 @@ describe("convertResponsesRequestToChatCompletions", () => {
       },
     ]);
   });
+
+  it("copies Responses hosted tools into Chat tools (passthrough: no nested web_search envelope)", () => {
+    const { request } = convertResponsesRequestToChatCompletions(
+      {
+        model: "m",
+        input: "x",
+        tools: [{ type: "web_search", search_context_size: "medium" }],
+      },
+      "/v1/responses"
+    );
+    expect(request.tools).toEqual([{ type: "web_search", search_context_size: "medium" }]);
+  });
+
+  it("GLM upstream inserts web_search envelope from provider baseUrl", () => {
+    const { request } = convertResponsesRequestToChatCompletions(
+      {
+        model: "m",
+        input: "x",
+        tools: [{ type: "web_search", search_context_size: "medium" }],
+      },
+      "/v1/responses",
+      { providerBaseUrl: "https://api.z.ai/v1" }
+    );
+    expect(request.tools).toEqual([
+      {
+        type: "web_search",
+        search_context_size: "medium",
+        web_search: { enable: true },
+      },
+    ]);
+  });
+
+  it("copies nested hosted tools from namespace bundles", () => {
+    const { request } = convertResponsesRequestToChatCompletions(
+      {
+        model: "m",
+        input: "x",
+        tools: [
+          {
+            type: "namespace",
+            name: "ns",
+            tools: [
+              {
+                type: "function",
+                name: "fn",
+                description: "d",
+                parameters: { type: "object", properties: {} },
+              },
+              { type: "mcp", connector_id: "c" },
+            ],
+          },
+        ],
+      },
+      "/v1/responses"
+    );
+    expect(request.tools).toHaveLength(2);
+    expect(request.tools?.[0]).toMatchObject({ type: "function", function: { name: "fn" } });
+    expect(request.tools?.[1]).toEqual({ type: "mcp", connector_id: "c" });
+  });
 });
 
 describe("extractFunctionToolsForEcho", () => {
-  it("keeps top-level type=function tools and drops hosted tools", () => {
+  it("keeps top-level type=function tools and hosted tools", () => {
     const raw = [
       { type: "function", name: "my_tool", parameters: {} },
       { type: "web_search" },
       { type: "mcp", connector_id: "x" },
     ];
-    expect(extractFunctionToolsForEcho(raw)).toHaveLength(1);
-    expect((extractFunctionToolsForEcho(raw)[0] as { name?: string }).name).toBe("my_tool");
+    const got = extractFunctionToolsForEcho(raw);
+    expect(got).toHaveLength(3);
+    expect((got[0] as { name?: string }).name).toBe("my_tool");
+    expect((got[1] as { type?: string }).type).toBe("web_search");
+    expect((got[2] as { type?: string }).type).toBe("mcp");
   });
 
-  it("expands namespace bundle inner function tools", () => {
+  it("expands namespace bundle inner tools (function + hosted)", () => {
     const raw = [
       {
         type: "namespace",
-        tools: [{ type: "function", name: "inner_fn", parameters: { type: "object" } }],
+        tools: [
+          { type: "function", name: "inner_fn", parameters: { type: "object" } },
+          { type: "web_search" },
+        ],
       },
     ];
-    expect(extractFunctionToolsForEcho(raw)).toHaveLength(1);
+    const got = extractFunctionToolsForEcho(raw);
+    expect(got).toHaveLength(2);
+    expect((got[0] as { name?: string }).name).toBe("inner_fn");
+    expect((got[1] as { type?: string }).type).toBe("web_search");
   });
 });
 

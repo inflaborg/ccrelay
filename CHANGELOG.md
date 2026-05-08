@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+**Protocol/Conversion**
+
+- Hosted Chat hosted-tool requests are inferred from the provider URL (no extra settings): rules map known upstreams to outbound tool shapes internally.
+
 ### Added
 
 **Desktop**

@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/naming-convention -- OpenAI/Anthropic API bodies use snake_case */
+import type { AnthropicServerToolDef } from "@/types";
 import { describe, it, expect } from "vitest";
 import {
   convertOpenAIRequestToAnthropic,
@@ -126,6 +127,69 @@ describe("convertOpenAIRequestToAnthropic", () => {
       "/v1/chat/completions"
     );
     expect(r4.tool_choice).toEqual({ type: "tool", name: "exec_command" });
+  });
+
+  it("hoists glm-style nested web_search config when mapping to Anthropic tools", () => {
+    const { request } = convertOpenAIRequestToAnthropic(
+      {
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1,
+        messages: [{ role: "user", content: "x" }],
+        tools: [
+          {
+            type: "web_search",
+            web_search: { enable: true, max_uses: 7 },
+          },
+        ],
+      },
+      "/v1/chat/completions"
+    );
+    const raw = request.tools?.find(
+      t =>
+        t &&
+        typeof t === "object" &&
+        "type" in t &&
+        (t as { type: string }).type === "web_search_20250305"
+    );
+    const anthropicWs = raw as AnthropicServerToolDef | undefined;
+    expect(anthropicWs).toEqual({
+      type: "web_search_20250305",
+      name: "web_search",
+      max_uses: 7,
+    });
+    expect((raw as Record<string, unknown> | undefined)?.web_search).toBeUndefined();
+  });
+
+  it("maps hosted Chat tools to Anthropic server tool definitions with versioned types", () => {
+    const { request } = convertOpenAIRequestToAnthropic(
+      {
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1,
+        messages: [{ role: "user", content: "x" }],
+        tools: [
+          sampleFunctionTool,
+          { type: "web_search", max_uses: 3 },
+          { type: "code_interpreter" },
+        ],
+      },
+      "/v1/chat/completions"
+    );
+    expect(request.tools).toEqual([
+      {
+        name: "exec_command",
+        description: "x",
+        input_schema: { type: "object", properties: {} },
+      },
+      {
+        type: "web_search_20250305",
+        name: "web_search",
+        max_uses: 3,
+      },
+      {
+        type: "code_execution_20250522",
+        name: "code_execution",
+      },
+    ]);
   });
 
   it("omits tool_choice when there are no tools (even if tool_choice was set)", () => {

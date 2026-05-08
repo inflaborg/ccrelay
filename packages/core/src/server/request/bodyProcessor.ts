@@ -161,8 +161,11 @@ export class BodyProcessor {
     }
 
     if (needsConversion) {
-      // Responses→Chat supports true SSE streaming; let the stream flag pass through.
-      const skipDisableStream = clientSurface === "openai_responses" && upstreamWire === "openai";
+      // Responses→Chat and OpenAI-surfaces→Anthropic streaming: keep stream=true upstream.
+      const skipDisableStream =
+        (clientSurface === "openai_responses" && upstreamWire === "openai") ||
+        ((clientSurface === "openai" || clientSurface === "openai_responses") &&
+          upstreamWire === "anthropic");
       if (!skipDisableStream) {
         body = forceDisableStreamInBody(body, `${clientSurface}->${upstreamWire}`);
       }
@@ -263,7 +266,7 @@ export class BodyProcessor {
       const conversionResult = convertRequestToOpenAI(
         anthropicRequest as unknown as Parameters<typeof convertRequestToOpenAI>[0],
         routing.targetPath,
-        { openaiCompat }
+        { openaiCompat, providerBaseUrl: routing.provider.baseUrl }
       );
       return {
         body: Buffer.from(JSON.stringify(conversionResult.request), "utf-8"),
@@ -290,7 +293,9 @@ export class BodyProcessor {
         return null;
       }
       const originalResponsesEcho = extractResponsesEcho(raw);
-      const c = convertResponsesRequestToChatCompletions(raw, routing.targetPath);
+      const c = convertResponsesRequestToChatCompletions(raw, routing.targetPath, {
+        providerBaseUrl: routing.provider.baseUrl,
+      });
       return {
         body: Buffer.from(JSON.stringify(c.request), "utf-8"),
         newPath: c.newPath,
@@ -317,7 +322,9 @@ export class BodyProcessor {
         return null;
       }
       const originalResponsesEcho = extractResponsesEcho(raw);
-      const chat = convertResponsesRequestToChatCompletions(raw, routing.path);
+      const chat = convertResponsesRequestToChatCompletions(raw, routing.path, {
+        providerBaseUrl: routing.provider.baseUrl,
+      });
       const c = convertOpenAIRequestToAnthropic(chat.request, chat.newPath);
       return {
         body: Buffer.from(JSON.stringify(c.request), "utf-8"),

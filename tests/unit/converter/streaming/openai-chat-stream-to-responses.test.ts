@@ -202,6 +202,42 @@ describe("processStreamingChunk", () => {
     expect(state.phase).toBe("text");
   });
 
+  it("closes reasoning before tool_calls when reasoning goes straight to tools (MiMo-style)", () => {
+    const state = createStreamingState();
+    processStreamingChunk(
+      state,
+      chunk({
+        role: "assistant",
+        content: "",
+        reasoning_content: "plan",
+      })
+    );
+    expect(state.phase).toBe("reasoning");
+
+    const events = processStreamingChunk(
+      state,
+      chunk({
+        tool_calls: [
+          {
+            index: 0,
+            id: "call_mimo",
+            type: "function",
+            function: { name: "shell", arguments: "{}" },
+          },
+        ],
+      })
+    );
+    const types = extractTypes(events);
+    const idxReasoningTextDone = types.indexOf("response.reasoning_text.done");
+    const idxReasoningItemDone = types.indexOf("response.output_item.done");
+    const idxFnItemAdded = types.lastIndexOf("response.output_item.added");
+    expect(idxReasoningTextDone).toBeGreaterThanOrEqual(0);
+    expect(idxReasoningItemDone).toBeGreaterThan(idxReasoningTextDone);
+    expect(idxFnItemAdded).toBeGreaterThan(idxReasoningItemDone);
+    expect(types).toContain("response.content_part.added");
+    expect(state.phase).toBe("tool");
+  });
+
   it("handles tool call streaming", () => {
     const state = createStreamingState();
 

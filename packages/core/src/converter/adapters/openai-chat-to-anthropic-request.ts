@@ -5,16 +5,18 @@
 
 /* eslint-disable @typescript-eslint/naming-convention */
 
-import type { MessageParam, ContentBlockParam } from "../../types";
-import type {
-  AnthropicMessageRequest,
-  AnthropicTool,
-  AnthropicToolChoice,
-  OpenAIMessage,
-  OpenAIMessageRequest,
-  OpenAITool,
+import type { MessageParam, ContentBlockParam, AnthropicServerToolDef } from "../../types";
+import {
+  isOpenAIFunctionTool,
+  type AnthropicMessageRequest,
+  type AnthropicTool,
+  type AnthropicToolChoice,
+  type OpenAIMessage,
+  type OpenAIMessageRequest,
+  type OpenAITool,
 } from "./anthropic-to-openai-chat-request";
 import { mapOpenAiWirePathToAnthropicUpstream } from "../paths";
+import { openAIHostedToolToAnthropicServerToolDef } from "../tool-schema-conversion";
 
 export interface OpenAIToAnthropicRequestResult {
   request: AnthropicMessageRequest;
@@ -306,12 +308,20 @@ function parseDataUrl(url: string): { mediaType: string; data: string } | null {
   return { mediaType: m[1], data: m[2] };
 }
 
-function convertToolsFromOpenAI(tools: OpenAITool[]): AnthropicTool[] {
-  return tools.map(t => ({
-    name: t.function.name,
-    description: t.function.description,
-    input_schema: t.function.parameters || { type: "object", properties: {} },
-  }));
+function convertToolsFromOpenAI(tools: OpenAITool[]): (AnthropicTool | AnthropicServerToolDef)[] {
+  const out: (AnthropicTool | AnthropicServerToolDef)[] = [];
+  for (const t of tools) {
+    if (isOpenAIFunctionTool(t)) {
+      out.push({
+        name: t.function.name,
+        description: t.function.description,
+        input_schema: t.function.parameters || { type: "object", properties: {} },
+      });
+    } else {
+      out.push(openAIHostedToolToAnthropicServerToolDef(t));
+    }
+  }
+  return out;
 }
 
 function convertToolChoiceFromOpenAI(
