@@ -34,6 +34,8 @@ import { RequestHandler } from "./request";
 import { WsBroadcaster, WsFollowerClient } from "./websocket";
 import {
   hasRequiredUiGateHeader,
+  hasUiGateAccess,
+  handleUiAuthRedirect,
   isBearerAuthorized,
   sendHtmlUiGateBlocked,
   sendJsonUnauthorized,
@@ -644,12 +646,22 @@ export class ProxyServer {
       }
     }
 
+    // UI auth endpoint — validate token, set session cookie, redirect (for Tauri WebView)
+    if (path === "/ccrelay/ui-auth") {
+      handleUiAuthRedirect(res, req.url || "");
+      return;
+    }
+
     if (isStaticRequest(path)) {
-      if (!hasRequiredUiGateHeader(req.headers)) {
+      if (!hasUiGateAccess(req.headers)) {
         sendHtmlUiGateBlocked(res);
         return;
       }
-      serveStatic(req, res);
+      // Pass bearer token for session-based clients (Tauri) to inject into index.html
+      const bearerForSession = hasRequiredUiGateHeader(req.headers)
+        ? undefined
+        : this.config.getApiBearerToken();
+      serveStatic(req, res, bearerForSession);
       return;
     }
 

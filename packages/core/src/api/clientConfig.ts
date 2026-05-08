@@ -385,11 +385,11 @@ export async function handleApplyClientConfig(
         let lines = raw.split(/\r?\n/);
         // Remove model_provider line if it references ccrelay
         if (provider === "ccrelay") {
-          lines = lines.filter((l) => !/^\s*model_provider\s*=\s*"ccrelay"\s*$/.test(l));
+          lines = lines.filter(l => !/^\s*model_provider\s*=\s*"ccrelay"\s*$/.test(l));
         }
         // Remove [model_providers.ccrelay] section
         let inSection = false;
-        lines = lines.filter((l) => {
+        lines = lines.filter(l => {
           if (/^\s*\[model_providers\.ccrelay\]\s*$/.test(l)) {
             inSection = true;
             return false;
@@ -404,7 +404,7 @@ export async function handleApplyClientConfig(
           return true;
         });
         // Reset model to default
-        lines = lines.map((l) =>
+        lines = lines.map(l =>
           l.replace(/^(\s*model\s*=\s*)".*"(\s*)$/m, `$1"${CODEX_DEFAULT_MODEL}"$2`)
         );
         fs.writeFileSync(codexPath, lines.join("\n"), "utf-8");

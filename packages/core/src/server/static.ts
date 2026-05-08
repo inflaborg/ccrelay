@@ -72,12 +72,16 @@ export function isStaticRequest(reqPath: string): boolean {
  * Serve static file for Web UI
  * @returns true if the request was handled, false otherwise
  */
-export function serveStatic(req: http.IncomingMessage, res: http.ServerResponse): boolean {
+export function serveStatic(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  apiBearerToken?: string
+): boolean {
   const reqPath = req.url || "";
 
   // Root path - serve index.html
   if (reqPath === "/ccrelay" || reqPath === "/ccrelay/") {
-    return serveIndex(res);
+    return serveIndex(res, apiBearerToken);
   }
 
   // Assets or other files
@@ -91,9 +95,9 @@ export function serveStatic(req: http.IncomingMessage, res: http.ServerResponse)
 }
 
 /**
- * Serve index.html
+ * Serve index.html, optionally injecting CCRELAY_API_BEARER for session-based clients (Tauri).
  */
-function serveIndex(res: http.ServerResponse): boolean {
+function serveIndex(res: http.ServerResponse, apiBearerToken?: string): boolean {
   const indexPath = path.join(getWebDist(), "index.html");
 
   if (!fs.existsSync(indexPath)) {
@@ -105,7 +109,12 @@ function serveIndex(res: http.ServerResponse): boolean {
   }
 
   try {
-    const content = fs.readFileSync(indexPath, "utf-8");
+    let content = fs.readFileSync(indexPath, "utf-8");
+    // Inject API bearer token for session-based clients (Tauri WebView)
+    if (apiBearerToken) {
+      const inject = `<script>window.CCRELAY_API_BEARER=${JSON.stringify(apiBearerToken)};</script>`;
+      content = content.replace("<head>", `<head>${inject}`);
+    }
     res.writeHead(200, {
       "Content-Type": "text/html",
       "Cache-Control": "no-cache",

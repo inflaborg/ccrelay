@@ -11,10 +11,11 @@
   "workspaces": [
     "packages/core",
     "packages/vscode",
-    "packages/desktop"
+    "packages/desktop",
+    "packages/desktop-tauri"
   ],
   "scripts": {
-    "clean": "npx shx rm -rf packages/vscode/out web/dist packages/desktop/out packages/desktop/dist packages/desktop/web",
+    "clean": "npx shx rm -rf packages/vscode/out web/dist packages/desktop/out packages/desktop/dist packages/desktop/web packages/desktop-tauri/out packages/desktop-tauri/web",
     "vscode:prepublish": "node scripts/build-config.mjs && npm run build:web && node scripts/generate-version.mjs && npm run bundle:vscode",
     "bundle:vscode": "node scripts/esbuild.config.mjs",
     "bundle:desktop": "node scripts/esbuild.desktop.mjs",
@@ -22,6 +23,12 @@
     "desktop:start": "npm run desktop:build && npm run start -w ccrelay-desktop",
     "desktop:pack:mac": "npm run desktop:build && npm run pack:mac -w ccrelay-desktop",
     "desktop:pack:win": "npm run desktop:build && npm run pack:win -w ccrelay-desktop",
+    "bundle:tauri": "node scripts/esbuild.tauri.mjs",
+    "build:web:tauri": "npx shx rm -rf packages/desktop-tauri/web && cd web && npm run build && npx shx mkdir -p ../packages/desktop-tauri && npx shx cp -r dist ../packages/desktop-tauri/web",
+    "tauri:build": "node scripts/generate-version.mjs && node scripts/build-config.mjs && npm run build:web:tauri && npm run bundle:tauri",
+    "tauri:dev": "npm run tauri:build && cd packages/desktop-tauri && npx tauri dev",
+    "tauri:pack:mac": "npm run tauri:build && cd packages/desktop-tauri && npx tauri build",
+    "tauri:pack:win": "npm run tauri:build && cd packages/desktop-tauri && npx tauri build",
     "build:web": "npx shx rm -rf packages/vscode/out/web && cd web && npm install && npm run build && npx shx mkdir -p ../packages/vscode/out/web && npx shx cp -r dist/* ../packages/vscode/out/web/",
     "build:web:desktop": "npx shx rm -rf packages/desktop/web && cd web && npm run build && npx shx mkdir -p ../packages/desktop && npx shx cp -r dist ../packages/desktop/web",
     "dev": "npm run watch",

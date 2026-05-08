@@ -1,0 +1,20 @@
+{
+  "name": "@ccrelay/desktop-tauri",
+  "version": "0.2.1",
+  "private": true,
+  "description": "CCRelay desktop app (Tauri)",
+  "scripts": {
+    "build": "node ../../scripts/esbuild.tauri.mjs",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
+  },
+  "dependencies": {
+    "@ccrelay/core": "*"
+  },
+  "devDependencies": {
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/cli": "^2",
+    "typescript": "^5.0.4"
+  }
+}

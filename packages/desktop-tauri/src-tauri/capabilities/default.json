@@ -1,0 +1,13 @@
+{
+  "identifier": "default",
+  "description": "Capability for the main window",
+  "windows": ["main", "dashboard"],
+  "permissions": [
+    "core:default",
+    "shell:allow-spawn",
+    "shell:allow-kill",
+    "shell:allow-stdin-write",
+    "process:allow-restart",
+    "process:allow-exit"
+  ]
+}

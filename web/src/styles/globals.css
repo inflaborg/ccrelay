@@ -70,6 +70,13 @@
 }
 
 /* Scrollbar styling for dark theme */
+/* Standard CSS (works in Firefox, Safari/WKWebView) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+
+/* WebKit/Blink (Chrome, Edge, Electron) */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
