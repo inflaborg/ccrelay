@@ -45,7 +45,30 @@ describe("normalizeToolForProvider (re-export)", () => {
     const input = { type: "web_search", web_search: { enable: "True" } };
     expect(normalizeToolForProvider(input, GLM_BASE)).toEqual({
       type: "web_search",
-      web_search: { enable: "True", search_engine: "search-prime", search_result: true },
+      web_search: { enable: true, search_engine: "search-prime", search_result: true },
+    });
+  });
+
+  it("GLM hoists flat Z.ai-style keys into nested web_search", () => {
+    expect(
+      normalizeToolForProvider(
+        {
+          type: "web_search",
+          search_engine: "search_pro",
+          count: "5",
+          search_prompt: "Summarize: {{search_result}}",
+        },
+        GLM_BASE
+      )
+    ).toEqual({
+      type: "web_search",
+      web_search: {
+        enable: true,
+        search_engine: "search_pro",
+        search_result: true,
+        count: "5",
+        search_prompt: "Summarize: {{search_result}}",
+      },
     });
   });
 });

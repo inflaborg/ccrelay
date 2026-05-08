@@ -6,6 +6,7 @@ import {
   extractResponsesEcho,
   extractFunctionToolsForEcho,
 } from "@/converter/adapters/openai-responses-to-chat";
+import { normalizeToolsForProvider } from "@/converter/hosted-tools";
 
 describe("isOpenAIResponsesRequest", () => {
   it("is true for input string", () => {
@@ -174,17 +175,21 @@ describe("convertResponsesRequestToChatCompletions", () => {
     expect(request.tools).toEqual([{ type: "web_search", search_context_size: "medium" }]);
   });
 
-  it("GLM upstream inserts web_search envelope from provider baseUrl", () => {
+  it("hosted-tools inject adds GLM web_search envelope for Responses-hosted tools", () => {
     const { request } = convertResponsesRequestToChatCompletions(
       {
         model: "m",
         input: "x",
         tools: [{ type: "web_search", search_context_size: "medium" }],
       },
-      "/v1/responses",
-      { providerBaseUrl: "https://api.z.ai/v1" }
+      "/v1/responses"
     );
-    expect(request.tools).toEqual([
+    const { tools } = normalizeToolsForProvider(
+      request.tools as Record<string, unknown>[],
+      "https://api.z.ai/v1",
+      request.tool_choice
+    );
+    expect(tools).toEqual([
       {
         type: "web_search",
         search_context_size: "medium",

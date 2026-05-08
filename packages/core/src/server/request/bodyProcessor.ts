@@ -16,10 +16,62 @@ import {
   mapOpenAiWirePathToAnthropicUpstream,
   type ResponsesRequestEcho,
 } from "../../converter";
+import type { OpenAIMessage } from "../../converter/adapters/anthropic-to-openai-chat-request";
+import { normalizeToolsForProvider } from "../../converter/hosted-tools";
+import { applyPlatformMessageTransforms } from "../../converter/platform-messages";
 import { ScopedLogger } from "../../utils/logger";
 import type { ApiSurface } from "../../types";
 
 const log = new ScopedLogger("BodyProcessor");
+
+/** OpenAI Chat outbound: path after routing targets `/chat/completions`. */
+function isOpenAiChatCompletionsTargetPath(targetPath: string): boolean {
+  return targetPath.toLowerCase().includes("chat/completions");
+}
+
+function applyHostedToolsToOpenAiChatRecord(data: Record<string, unknown>, baseUrl: string): void {
+  const tools = data.tools;
+  if (!Array.isArray(tools) || tools.length === 0) {
+    return;
+  }
+  const { tools: outTools, toolChoice } = normalizeToolsForProvider(
+    tools as Record<string, unknown>[],
+    baseUrl,
+    data.tool_choice
+  );
+  data.tools = outTools;
+  if (toolChoice !== undefined) {
+    data.tool_choice = toolChoice;
+  }
+}
+
+function applyPlatformMessagesToOpenAiChatRecord(
+  data: Record<string, unknown>,
+  baseUrl: string
+): void {
+  const messages = data.messages;
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return;
+  }
+  data.messages = applyPlatformMessageTransforms(messages as OpenAIMessage[], baseUrl);
+}
+
+function applyPlatformTransformsToOpenAiChatBody(body: Buffer, baseUrl: string): Buffer {
+  if (!body.length) {
+    return body;
+  }
+  try {
+    const data = JSON.parse(body.toString("utf-8")) as Record<string, unknown>;
+    if (!isOpenAIChatCompletionsRequest(data)) {
+      return body;
+    }
+    applyHostedToolsToOpenAiChatRecord(data, baseUrl);
+    applyPlatformMessagesToOpenAiChatRecord(data, baseUrl);
+    return Buffer.from(JSON.stringify(data), "utf-8");
+  } catch {
+    return body;
+  }
+}
 
 function extractClientWireModel(rawBody: Buffer): string | undefined {
   if (!rawBody || rawBody.length === 0) {
@@ -233,6 +285,10 @@ export class BodyProcessor {
       }
     }
 
+    if (isOpenAiChatCompletionsTargetPath(routing.targetPath)) {
+      body = applyPlatformTransformsToOpenAiChatBody(body, routing.provider.baseUrl);
+    }
+
     if (databaseEnabled && body && body.length > 0) {
       try {
         requestBodyLog = body.toString("utf-8");
@@ -325,7 +381,12 @@ export class BodyProcessor {
       const chat = convertResponsesRequestToChatCompletions(raw, routing.path, {
         providerBaseUrl: routing.provider.baseUrl,
       });
-      const c = convertOpenAIRequestToAnthropic(chat.request, chat.newPath);
+      const chatReq = chat.request as unknown as Record<string, unknown>;
+      applyHostedToolsToOpenAiChatRecord(chatReq, routing.provider.baseUrl);
+      const c = convertOpenAIRequestToAnthropic(
+        chatReq as unknown as Parameters<typeof convertOpenAIRequestToAnthropic>[0],
+        chat.newPath
+      );
       return {
         body: Buffer.from(JSON.stringify(c.request), "utf-8"),
         newPath: c.newPath,
@@ -347,6 +408,7 @@ export class BodyProcessor {
       if (!isOpenAIChatCompletionsRequest(oai)) {
         return null;
       }
+      applyHostedToolsToOpenAiChatRecord(oai, routing.provider.baseUrl);
       const c = convertOpenAIRequestToAnthropic(
         oai as unknown as Parameters<typeof convertOpenAIRequestToAnthropic>[0],
         routing.targetPath

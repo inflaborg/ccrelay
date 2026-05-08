@@ -7,7 +7,7 @@
 export interface HostedToolRule {
   /** Human-readable upstream family label (logging / maintenance only). */
   provider: string;
-  /** Allowed upstream hostnames (case-insensitive exact match). GLM: `["api.z.ai"]`. */
+  /** Allowed upstream hostnames for this provider (case-insensitive exact match). */
   domains: readonly string[];
   /** Chat `tools[].type` → transform registry key (`transforms.ts`). */
   tools: Readonly<Record<string, string>>;
@@ -16,8 +16,8 @@ export interface HostedToolRule {
 export const HOSTED_TOOL_RULES: readonly HostedToolRule[] = [
   {
     provider: "glm",
-    /** GLM OpenAI-compat Coding PaaS — fixed upstream host only. */
-    domains: ["api.z.ai"],
+    /** GLM / Zhipu OpenAI-compat — exact upstream hosts only. */
+    domains: ["api.z.ai", "open.bigmodel.cn"],
     tools: {
       web_search: "glm-web-search-envelope",
     },

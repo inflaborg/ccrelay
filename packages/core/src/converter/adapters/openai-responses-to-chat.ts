@@ -12,7 +12,6 @@ import type {
   OpenAIToolChoice,
 } from "./anthropic-to-openai-chat-request";
 import { assignOpenAiChatMaxOutput } from "../rules/openai-chat-model-rules";
-import { normalizeToolForProvider } from "../hosted-tools";
 import { isOpenAIChatCompletionsRequest } from "./openai-chat-to-anthropic-request";
 
 /** Collect tools for Responses echo: `function` defs, nested `namespace` bundles (inner tools), and hosted tools (web_search, etc.). */
@@ -149,7 +148,7 @@ export interface ResponsesToChatResult {
 }
 
 export interface ResponsesToChatOptions {
-  /** Upstream `baseUrl`; selects hosted-tool outbound transforms (`hosted-tools/rules`). */
+  /** Kept for callers; hosted-tool shaping runs in `BodyProcessor` via `normalizeToolsForProvider`. */
   providerBaseUrl?: string;
 }
 
@@ -173,7 +172,7 @@ export function isOpenAIResponsesRequest(data: Record<string, unknown>): boolean
 export function convertResponsesRequestToChatCompletions(
   raw: Record<string, unknown>,
   _originalPath: string,
-  options?: ResponsesToChatOptions
+  _options?: ResponsesToChatOptions
 ): ResponsesToChatResult {
   const messages: OpenAIMessage[] = [];
   const instructions = raw.instructions;
@@ -237,7 +236,7 @@ export function convertResponsesRequestToChatCompletions(
     };
   }
 
-  const tools = mapResponsesTools(raw.tools, options?.providerBaseUrl ?? "");
+  const tools = mapResponsesTools(raw.tools);
   if (tools.length) {
     out.tools = tools;
   }
@@ -275,7 +274,7 @@ function mapResponsesToolChoice(tc: unknown): OpenAIToolChoice | undefined {
   return undefined;
 }
 
-function mapResponsesTools(tools: unknown, providerBaseUrl: string): OpenAITool[] {
+function mapResponsesTools(tools: unknown): OpenAITool[] {
   if (!Array.isArray(tools)) {
     return [];
   }
@@ -320,11 +319,11 @@ function mapResponsesTools(tools: unknown, providerBaseUrl: string): OpenAITool[
             },
           });
         } else if (typeof it === "string") {
-          out.push(normalizeToolForProvider(inn, providerBaseUrl) as OpenAITool);
+          out.push(inn as OpenAITool);
         }
       }
     } else if (typeof typ === "string") {
-      out.push(normalizeToolForProvider(o, providerBaseUrl) as OpenAITool);
+      out.push(o as OpenAITool);
     }
   }
   return out;

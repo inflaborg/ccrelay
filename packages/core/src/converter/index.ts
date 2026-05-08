@@ -66,12 +66,13 @@ export {
   anthropicServerToolDefToOpenAIHosted,
   openAIHostedToolToAnthropicServerToolDef,
   normalizeToolForProvider,
+  normalizeToolsForProvider,
   normalizedHostnameFromBaseUrl,
   hostnameMatchesDomain,
   matchHostedToolRuleForBaseUrl,
 } from "./tool-schema-conversion";
 
-export type { HostedToolRule, HostedToolTransform } from "./hosted-tools";
+export type { HostedToolRule, HostedToolTransform, NormalizeToolsResult } from "./hosted-tools";
 
 export {
   glmWebSearchEnvelopeTransform,
@@ -79,6 +80,10 @@ export {
   passthroughTransform,
   TRANSFORM_REGISTRY,
 } from "./hosted-tools";
+
+export type { PlatformMessageRule, PlatformMessageTransform } from "./platform-messages";
+
+export { applyPlatformMessageTransforms, glmFlattenContentTransform } from "./platform-messages";
 
 export {
   convertChatCompletionToResponses,

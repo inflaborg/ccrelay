@@ -10,10 +10,13 @@ import { normalizeToolForProvider } from "./hosted-tools";
 
 export {
   normalizeToolForProvider,
+  normalizeToolsForProvider,
   normalizedHostnameFromBaseUrl,
   hostnameMatchesDomain,
   matchHostedToolRuleForBaseUrl,
 } from "./hosted-tools";
+
+export type { NormalizeToolsResult } from "./hosted-tools";
 
 /** Anthropic `{type}_${YYYYMMDD}` suffix (API version stamp, not a request timestamp). */
 const ANTHROPIC_TOOL_VERSION_SUFFIX = /^(.+)_(\d{8})$/;

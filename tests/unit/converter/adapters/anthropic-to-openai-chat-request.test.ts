@@ -16,6 +16,7 @@ import {
   convertRequestToOpenAI,
   type AnthropicMessageRequest,
 } from "@/converter/adapters/anthropic-to-openai-chat-request";
+import { normalizeToolsForProvider } from "@/converter/hosted-tools";
 
 /* eslint-disable @typescript-eslint/naming-convention -- Testing API formats with snake_case */
 
@@ -620,6 +621,121 @@ describe("converter: anthropic-to-openai-chat-request", () => {
           },
         },
       ]);
+    });
+
+    it("GLM keeps WebSearch as function tool (no coalesce)", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 4096,
+        tools: [
+          {
+            name: "WebSearch",
+            description: "Search the web",
+            input_schema: {
+              type: "object",
+              properties: { query: { type: "string" } },
+            },
+          },
+          {
+            name: "client_fn",
+            description: "client",
+            input_schema: { type: "object", properties: {} },
+          },
+        ],
+        messages: [],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath, {
+        providerBaseUrl: "https://api.z.ai/",
+      });
+
+      const { tools } = normalizeToolsForProvider(
+        result.request.tools as Record<string, unknown>[],
+        "https://api.z.ai/",
+        result.request.tool_choice
+      );
+
+      expect(tools).toEqual([
+        {
+          type: "function",
+          function: {
+            name: "WebSearch",
+            description: "Search the web",
+            parameters: {
+              type: "object",
+              properties: { query: { type: "string" } },
+            },
+          },
+        },
+        {
+          type: "function",
+          function: {
+            name: "client_fn",
+            description: "client",
+            parameters: { type: "object", properties: {} },
+          },
+        },
+      ]);
+    });
+
+    it("non-GLM: WebSearch client tool remains an OpenAI function", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 4096,
+        tools: [
+          {
+            name: "WebSearch",
+            description: "Search",
+            input_schema: { type: "object", properties: { query: { type: "string" } } },
+          },
+        ],
+        messages: [],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.tools).toEqual([
+        {
+          type: "function",
+          function: {
+            name: "WebSearch",
+            description: "Search",
+            parameters: { type: "object", properties: { query: { type: "string" } } },
+          },
+        },
+      ]);
+    });
+
+    it("GLM preserves tool_choice when WebSearch stays a function tool", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 4096,
+        tools: [
+          {
+            name: "WebSearch",
+            description: "Search",
+            input_schema: { type: "object", properties: {} },
+          },
+        ],
+        tool_choice: { type: "tool", name: "WebSearch" },
+        messages: [],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath, {
+        providerBaseUrl: "https://api.z.ai/api/coding/paas/v4",
+      });
+
+      const { tools, toolChoice } = normalizeToolsForProvider(
+        result.request.tools as Record<string, unknown>[],
+        "https://api.z.ai/api/coding/paas/v4",
+        result.request.tool_choice
+      );
+
+      expect(toolChoice).toEqual({ type: "function", function: { name: "WebSearch" } });
+      expect(tools[0]).toMatchObject({
+        type: "function",
+        function: { name: "WebSearch" },
+      });
     });
 
     it("preserves tool_choice when only hosted/server tools exist", () => {

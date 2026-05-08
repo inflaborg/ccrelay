@@ -29,6 +29,7 @@ function mockProvider(baseUrl: string): Provider {
 describe("normalizedHostnameFromBaseUrl", () => {
   it("parses HTTPS URLs", () => {
     expect(normalizedHostnameFromBaseUrl("https://api.z.ai/api/v4")).toBe("api.z.ai");
+    expect(normalizedHostnameFromBaseUrl("https://open.bigmodel.cn/v1")).toBe("open.bigmodel.cn");
   });
 
   it("prepends HTTPS when scheme is omitted", () => {
@@ -67,16 +68,28 @@ describe("matchHostedToolRuleForBaseUrl", () => {
     expect(r?.tools.web_search).toBe("glm-web-search-envelope");
   });
 
+  it("hits GLM rule for open.bigmodel.cn", () => {
+    const r = matchHostedToolRuleForBaseUrl(
+      "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+    );
+    expect(r?.provider).toBe("glm");
+    expect(r?.tools.web_search).toBe("glm-web-search-envelope");
+  });
+
   it("returns undefined for unrelated providers", () => {
     expect(matchHostedToolRuleForBaseUrl("https://api.openai.com/v1")).toBeUndefined();
   });
 
-  it("does not match GLM for other *.z.ai hosts (only api.z.ai)", () => {
+  it("does not match GLM for other *.z.ai hosts (glm uses api.z.ai only among z.ai)", () => {
     expect(matchHostedToolRuleForBaseUrl("https://chat.z.ai/v1")).toBeUndefined();
   });
 
   it("does not match GLM for subdomains of api.z.ai", () => {
     expect(matchHostedToolRuleForBaseUrl("https://v1.api.z.ai/v1")).toBeUndefined();
+  });
+
+  it("does not match GLM for subdomains of open.bigmodel.cn", () => {
+    expect(matchHostedToolRuleForBaseUrl("https://api.open.bigmodel.cn/v1")).toBeUndefined();
   });
 
   it("hits MiMo rule for api.xiaomimimo.com", () => {
@@ -269,6 +282,26 @@ describe("transforms", () => {
       },
     });
     expect(glmWebSearchEnvelopeTransform({ type: "other" })).toEqual({ type: "other" });
+  });
+
+  it("glmWebSearchEnvelope preserves unknown top-level keys beside nested envelope", () => {
+    expect(
+      glmWebSearchEnvelopeTransform({
+        type: "web_search",
+        max_uses: 2,
+        foo: "bar",
+        web_search: { search_engine: "search_pro" },
+      })
+    ).toEqual({
+      type: "web_search",
+      foo: "bar",
+      web_search: {
+        enable: true,
+        max_uses: 2,
+        search_engine: "search_pro",
+        search_result: true,
+      },
+    });
   });
 });
 

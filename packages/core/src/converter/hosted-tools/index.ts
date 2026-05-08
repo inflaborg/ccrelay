@@ -64,3 +64,24 @@ export function normalizeToolForProvider(
   const transform = TRANSFORM_REGISTRY[transformName] ?? passthroughTransform;
   return transform(tool);
 }
+
+export interface NormalizeToolsResult {
+  tools: Record<string, unknown>[];
+  toolChoice?: unknown;
+}
+
+/**
+ * Apply per-tool hosted transforms (GLM envelope, MiMo flat fields, …) before upstream.
+ */
+export function normalizeToolsForProvider(
+  tools: Record<string, unknown>[],
+  baseUrl: string,
+  toolChoice?: unknown
+): NormalizeToolsResult {
+  if (tools.length === 0) {
+    return { tools, toolChoice };
+  }
+
+  const normalized = tools.map(t => normalizeToolForProvider(t, baseUrl));
+  return { tools: normalized, toolChoice };
+}
