@@ -72,18 +72,32 @@ export {
   matchHostedToolRuleForBaseUrl,
 } from "./tool-schema-conversion";
 
-export type { HostedToolRule, HostedToolTransform, NormalizeToolsResult } from "./hosted-tools";
+export type {
+  HostedToolRule,
+  HostedToolTransform,
+  NormalizeToolsResult,
+  PlatformMessageRule,
+  PlatformMessageTransform,
+  PlatformTransformRule,
+  PlatformResponseTransform,
+  PlatformToolTransform,
+} from "./platform-transforms";
 
 export {
   glmWebSearchEnvelopeTransform,
   mimoWebSearchTransform,
   passthroughTransform,
   TRANSFORM_REGISTRY,
-} from "./hosted-tools";
-
-export type { PlatformMessageRule, PlatformMessageTransform } from "./platform-messages";
-
-export { applyPlatformMessageTransforms, glmFlattenContentTransform } from "./platform-messages";
+  TOOL_TRANSFORM_REGISTRY,
+  MESSAGE_TRANSFORM_REGISTRY,
+  RESPONSE_TRANSFORM_REGISTRY,
+  applyPlatformMessageTransforms,
+  applyPlatformResponseTransforms,
+  applyPlatformToolTransforms,
+  glmFlattenContentTransform,
+  glmWebSearchResponseTransform,
+  isPlainObject,
+} from "./platform-transforms";
 
 export {
   convertChatCompletionToResponses,

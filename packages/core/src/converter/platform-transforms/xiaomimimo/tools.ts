@@ -1,6 +1,6 @@
 /**
- * Xiaomi MiMo OpenAI-chat `web_search`: passthrough tool fields; drop `user_location` (optional upstream);
- * map Anthropic `max_uses` / `max_users` → `max_keyword` when `max_keyword` is absent; fill MiMo defaults only for missing slots.
+ * Xiaomi MiMo OpenAI-chat `web_search`: passthrough tool fields; drop `user_location`;
+ * map Anthropic `max_uses` / `max_users` → `max_keyword` when absent; MiMo defaults.
  */
 
 import { isPlainObject, passthroughTransform } from "../passthrough";

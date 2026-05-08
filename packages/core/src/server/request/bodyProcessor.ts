@@ -17,8 +17,10 @@ import {
   type ResponsesRequestEcho,
 } from "../../converter";
 import type { OpenAIMessage } from "../../converter/adapters/anthropic-to-openai-chat-request";
-import { normalizeToolsForProvider } from "../../converter/hosted-tools";
-import { applyPlatformMessageTransforms } from "../../converter/platform-messages";
+import {
+  normalizeToolsForProvider,
+  applyPlatformMessageTransforms,
+} from "../../converter/platform-transforms";
 import { ScopedLogger } from "../../utils/logger";
 import type { ApiSurface } from "../../types";
 

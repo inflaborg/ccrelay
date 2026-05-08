@@ -16,7 +16,7 @@ import {
   convertRequestToOpenAI,
   type AnthropicMessageRequest,
 } from "@/converter/adapters/anthropic-to-openai-chat-request";
-import { normalizeToolsForProvider } from "@/converter/hosted-tools";
+import { normalizeToolsForProvider } from "@/converter/platform-transforms";
 
 /* eslint-disable @typescript-eslint/naming-convention -- Testing API formats with snake_case */
 

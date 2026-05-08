@@ -1,5 +1,5 @@
 /**
- * Default outbound transform and shared guards (no imports from glm/xiaomimimo — avoids cycles).
+ * Default outbound tool transform and shared guards (shared by provider tool modules — keep cycle-free).
  */
 
 export function isPlainObject(val: unknown): val is Record<string, unknown> {

@@ -1,6 +1,5 @@
 /**
  * GLM outbound: flatten Chat `messages[].content` when it is a text-only parts array.
- * Hosted `web_search` on Z.ai does not extract queries reliably from array-format content.
  */
 
 import type { OpenAIMessage } from "../../adapters/anthropic-to-openai-chat-request";

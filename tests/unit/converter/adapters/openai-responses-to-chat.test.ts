@@ -6,7 +6,7 @@ import {
   extractResponsesEcho,
   extractFunctionToolsForEcho,
 } from "@/converter/adapters/openai-responses-to-chat";
-import { normalizeToolsForProvider } from "@/converter/hosted-tools";
+import { normalizeToolsForProvider } from "@/converter/platform-transforms";
 
 describe("isOpenAIResponsesRequest", () => {
   it("is true for input string", () => {
@@ -175,7 +175,7 @@ describe("convertResponsesRequestToChatCompletions", () => {
     expect(request.tools).toEqual([{ type: "web_search", search_context_size: "medium" }]);
   });
 
-  it("hosted-tools inject adds GLM web_search envelope for Responses-hosted tools", () => {
+  it("platform-transforms inject adds GLM web_search envelope for Responses-hosted tools", () => {
     const { request } = convertResponsesRequestToChatCompletions(
       {
         model: "m",

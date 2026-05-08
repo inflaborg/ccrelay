@@ -195,7 +195,7 @@ export interface ConversionResult {
 export interface ConvertRequestToOpenAIOptions {
   /** When `azure_openai`, strip fields Azure Chat Completions rejects (e.g. `reasoning`). */
   openaiCompat?: OpenAICompat;
-  /** Upstream `baseUrl` — selects hosted-tool outbound transforms (`hosted-tools/rules`). */
+  /** Upstream `baseUrl` — selects platform outbound transforms (`platform-transforms/rules`). */
   providerBaseUrl?: string;
 }
 

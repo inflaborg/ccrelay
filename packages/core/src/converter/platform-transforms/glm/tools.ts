@@ -1,17 +1,11 @@
 /**
  * GLM / Z.ai OpenAI-chat `web_search`: nested `web_search` object cannot be absent or null upstream.
- * "Web Search in Chat" only returns real retrieval when `search_engine` and `search_result` are set
- * (see Z.AI guides); `{ enable, max_uses }` alone is accepted but does not populate response `web_search`.
- *
- * Z.ai examples nest options under `web_search`; flat keys on the tool entry are hoisted into that
- * object so protocol conversions (or clients) that leave `search_engine` / `count` on the surface
- * still match the upstream shape.
  */
-/* eslint-disable @typescript-eslint/naming-convention -- Z.ai / OpenAI-hosted tool wire keys (`web_search`, …) */
+
+/* eslint-disable @typescript-eslint/naming-convention -- Z.ai / OpenAI-hosted tool wire keys */
 
 import { isPlainObject, passthroughTransform } from "../passthrough";
 
-/** Keys Z.ai documents under `web_search` — if present on the tool object top-level, nest them. */
 const GLM_WEB_SEARCH_ENVELOPE_KEYS = new Set([
   "enable",
   "search_engine",

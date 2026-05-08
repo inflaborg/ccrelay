@@ -175,6 +175,8 @@ export interface AnthropicWebSearchResult {
   type: "web_search_result";
   url: string;
   title: string;
+  /** Optional excerpt / payload (e.g. Z.ai hosted search snippet). */
+  encrypted_content?: string;
 }
 
 /**

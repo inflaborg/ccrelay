@@ -33,6 +33,7 @@ import {
   flushAnthropicToOpenAISseFinal,
   type OpenAIChatCompletionResponse,
 } from "../../converter";
+import { applyPlatformResponseTransforms } from "../../converter/platform-transforms";
 import type { ApiSurface } from "../../types";
 import type { RequestTask, ProxyResult } from "../../types";
 import type { ResponseLogger } from "../responseLogger";
@@ -778,6 +779,11 @@ export class ProxyExecutor {
         const anthropicResponse = convertResponseToAnthropic(
           openaiResponse,
           originalModel || "none"
+        );
+        anthropicResponse.content = applyPlatformResponseTransforms(
+          openaiResponse as unknown as Record<string, unknown>,
+          anthropicResponse.content,
+          provider.baseUrl
         );
 
         ctx.responseChunks.push(Buffer.from(JSON.stringify(anthropicResponse), "utf-8"));

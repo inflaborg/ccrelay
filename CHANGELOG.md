@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Protocol/Conversion**
 
+- OpenAI Chat → Anthropic completions for **Z.ai GLM** preserve upstream **web search** results on the response body, so Anthropic clients receive those citations.
 - Anthropic → OpenAI Chat conversion now carries the native **web search** server tool correctly for upstream **Z.ai GLM** (including `open.bigmodel.cn`) and **Xiaomi MiMo**, so relayed completions can use those providers’ hosted search instead of losing or mis-shaping the tool.
 
 ### Added

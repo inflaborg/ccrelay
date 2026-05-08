@@ -6,7 +6,7 @@
 /* eslint-disable @typescript-eslint/naming-convention -- wire tool strings (`web_search`, `code_execution`, …) */
 
 import type { AnthropicServerToolDef } from "../types";
-import { normalizeToolForProvider } from "./hosted-tools";
+import { normalizeToolForProvider } from "./platform-transforms";
 
 export {
   normalizeToolForProvider,
@@ -14,9 +14,9 @@ export {
   normalizedHostnameFromBaseUrl,
   hostnameMatchesDomain,
   matchHostedToolRuleForBaseUrl,
-} from "./hosted-tools";
+} from "./platform-transforms";
 
-export type { NormalizeToolsResult } from "./hosted-tools";
+export type { NormalizeToolsResult } from "./platform-transforms";
 
 /** Anthropic `{type}_${YYYYMMDD}` suffix (API version stamp, not a request timestamp). */
 const ANTHROPIC_TOOL_VERSION_SUFFIX = /^(.+)_(\d{8})$/;
@@ -54,7 +54,7 @@ function isPlainObject(val: unknown): val is Record<string, unknown> {
 /**
  * Build `{ type: <chat-hosted>, ... }` from Anthropic server tool definition.
  *
- * `providerBaseUrl`: upstream hostname drives hosted-tool outbound transforms (`hosted-tools/rules.ts`).
+ * `providerBaseUrl`: upstream hostname drives platform outbound transforms (`platform-transforms/rules`).
  */
 export function anthropicServerToolDefToOpenAIHosted(
   tool: AnthropicServerToolDef,
