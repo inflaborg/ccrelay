@@ -20,7 +20,6 @@ on:
           - tauri
           - tauri-mac
           - tauri-win
-          - tauri-mac-x64
           - tauri-mac-arm64
           - tauri-win-x64
         default: all

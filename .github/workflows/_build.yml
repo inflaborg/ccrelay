@@ -94,10 +94,9 @@ jobs:
           MATRIX_WIN_X64='[{"os":"windows-latest","platform":"win","arch":"x64"}]'
           MATRIX_WIN_ARM64='[{"os":"windows-latest","platform":"win","arch":"arm64"}]'
 
-          TAURI_MATRIX='[{"os":"macos-latest","platform":"mac","arch":"arm64","rust_target":"aarch64-apple-darwin"},{"os":"macos-13","platform":"mac","arch":"x64","rust_target":"x86_64-apple-darwin"},{"os":"windows-latest","platform":"win","arch":"x64","rust_target":"x86_64-pc-windows-msvc"}]'
-          TAURI_MAC='[{"os":"macos-latest","platform":"mac","arch":"arm64","rust_target":"aarch64-apple-darwin"},{"os":"macos-13","platform":"mac","arch":"x64","rust_target":"x86_64-apple-darwin"}]'
+          TAURI_MATRIX='[{"os":"macos-latest","platform":"mac","arch":"arm64","rust_target":"aarch64-apple-darwin"},{"os":"windows-latest","platform":"win","arch":"x64","rust_target":"x86_64-pc-windows-msvc"}]'
+          TAURI_MAC='[{"os":"macos-latest","platform":"mac","arch":"arm64","rust_target":"aarch64-apple-darwin"}]'
           TAURI_WIN='[{"os":"windows-latest","platform":"win","arch":"x64","rust_target":"x86_64-pc-windows-msvc"}]'
-          TAURI_MAC_X64='[{"os":"macos-13","platform":"mac","arch":"x64","rust_target":"x86_64-apple-darwin"}]'
           TAURI_MAC_ARM64='[{"os":"macos-latest","platform":"mac","arch":"arm64","rust_target":"aarch64-apple-darwin"}]'
           TAURI_WIN_X64='[{"os":"windows-latest","platform":"win","arch":"x64","rust_target":"x86_64-pc-windows-msvc"}]'
 
@@ -160,11 +159,6 @@ jobs:
               WANT_T=true
               DESKTOP_MATRIX='[]'
               TAURI_TARGETS="$TAURI_WIN"
-              ;;
-            tauri-mac-x64)
-              WANT_T=true
-              DESKTOP_MATRIX='[]'
-              TAURI_TARGETS="$TAURI_MAC_X64"
               ;;
             tauri-mac-arm64)
               WANT_T=true
