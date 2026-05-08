@@ -3,7 +3,7 @@
 [![VSCode Extension](https://img.shields.io/badge/VSCode-Extension-blue)](https://code.visualstudio.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**CCRelay** is a VS Code extension — with an optional **Electron desktop tray app** — that bundles a local API proxy so you can seamlessly switch between AI providers (Anthropic, OpenAI, Gemini, etc.) without losing conversation context. Designed for **Claude Code**, **Claude Cowork**, and **OpenAI Codex**.
+**CCRelay** is a VS Code extension — with optional **Electron** and **Tauri** desktop apps — that bundles a local API proxy so you can seamlessly switch between AI providers (Anthropic, OpenAI, Gemini, etc.) without losing conversation context. Designed for **Claude Code**, **Claude Cowork**, and **OpenAI Codex**.
 
 **Website**: [https://ccrelay.inflab.org](https://ccrelay.inflab.org)
 
@@ -17,6 +17,7 @@
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Desktop App (Electron)](#desktop-app-electron)
+- [Desktop App (Tauri)](#desktop-app-tauri)
 - [Quick Start](#quick-start)
 - [Client Integrations](#client-integrations)
 - [Usage Guide](#usage-guide)
@@ -58,7 +59,7 @@
 
 **Desktop & UI**
 
-- Optional Electron tray app — run CCRelay without VS Code
+- Optional Electron or Tauri desktop app — run CCRelay without VS Code
 - Web dashboard with provider management, settings, and i18n (English + Chinese)
 - Provider import/export as JSON
 
@@ -101,7 +102,7 @@ npm run compile        # or npm run watch
 
 ## Desktop App (Electron)
 
-An optional Electron tray app (`packages/desktop`) runs the same core as the VS Code extension:
+An optional Electron desktop app (`packages/desktop`) runs the same core as the VS Code extension:
 
 - Shares `~/.ccrelay/` config, state, and Leader election with the extension
 - Tray menu → **Open Dashboard** loads the web UI in an app window
@@ -118,6 +119,28 @@ xattr -cr /path/to/CCRelay.app
 ```
 
 Or **Control-click** the app → **Open** the first time.
+
+---
+
+## Desktop App (Tauri)
+
+A lightweight Tauri desktop app (`packages/desktop-tauri`) runs the same core as the VS Code extension and Electron app:
+
+- Shares `~/.ccrelay/` config, state, and Leader election with all other instances
+- Uses a sidecar architecture: Rust shell manages a Node.js server process
+- Tray menu with Start/Stop Server and Open Dashboard
+- Download from [GitHub Releases](https://github.com/inflaborg/ccrelay/releases):
+  - **macOS**: `CCRelay.app` (Apple Silicon and Intel)
+  - **Windows**: `CCRelay.exe` (x64 and arm64)
+
+### Development
+
+```bash
+npm install
+npm run tauri:dev         # Dev mode with hot reload
+npm run tauri:pack:mac    # Build macOS app
+npm run tauri:pack:win    # Build Windows app
+```
 
 ---
 
@@ -561,10 +584,15 @@ npm run package        # Build VSIX
 npm run build:dev      # Dev build
 npm run build:prod     # Prod build
 
-# Desktop app
+# Electron desktop app
 npm run desktop:start
 npm run desktop:pack:mac
 npm run desktop:pack:win
+
+# Tauri desktop app
+npm run tauri:dev
+npm run tauri:pack:mac
+npm run tauri:pack:win
 ```
 
 ### Project Structure
@@ -572,13 +600,14 @@ npm run desktop:pack:win
 ```
 ccrelay/
 ├── packages/
-│   ├── core/         # Shared runtime (proxy, config, converters)
-│   ├── vscode/       # VS Code extension
-│   └── desktop/      # Electron tray app
-├── web/              # Web UI (React + Vite)
-├── tests/            # Vitest unit + integration
-├── scripts/          # Build & packaging helpers
-└── dists/            # Packaged .vsix
+│   ├── core/              # Shared runtime (proxy, config, converters)
+│   ├── vscode/            # VS Code extension
+│   ├── desktop/           # Electron desktop app
+│   └── desktop-tauri/     # Tauri desktop app
+├── web/                   # Web UI (React + Vite)
+├── tests/                 # Vitest unit + integration
+├── scripts/               # Build & packaging helpers
+└── dists/                 # Packaged .vsix
 ```
 
 ---

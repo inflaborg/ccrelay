@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**Desktop**
+
+- Tauri desktop app: lightweight alternative to Electron using sidecar architecture (Rust shell + Node.js server process).
+- Dynamic UI access token with HMAC-signed session cookies for secure WebView authentication.
+- Internal API endpoint for follower instances to fetch leader's UI token for dashboard access.
+
 ## [0.2.1] - 2026-05-07 (pre-release)
 
 Enhanced log viewer and dashboard with token tracking, performance metrics, and model mapping display.
