@@ -24,253 +24,50 @@ on:
           - desktop-mac-arm64
           - desktop-win-x64
           - desktop-win-arm64
+          - tauri
+          - tauri-mac
+          - tauri-win
+          - tauri-mac-x64
+          - tauri-mac-arm64
+          - tauri-win-x64
         default: all
 
 permissions:
   contents: write
 
+concurrency:
+  group: build-dev-auto-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  prepare:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Run lint
-        run: npm run lint
-
-      - name: Run tests (unit + integration)
-        run: npm run test:all
-
-  configure:
-    runs-on: ubuntu-latest
-    needs: test
     outputs:
-      version: ${{ steps.meta.outputs.version }}
       suffix: ${{ steps.meta.outputs.suffix }}
-      want_build_vscode: ${{ steps.targets.outputs.want_build_vscode }}
-      want_build_desktop: ${{ steps.targets.outputs.want_build_desktop }}
-      desktop_matrix: ${{ steps.targets.outputs.desktop_matrix }}
+      tag_name: ${{ steps.meta.outputs.tag_name }}
+      release_name: ${{ steps.meta.outputs.release_name }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Resolve version & suffix
+      - name: Resolve version, suffix & release metadata
         id: meta
         run: |
           VERSION=$(node -p "require('./packages/vscode/package.json').version")
           DATE=$(date +%Y%m%d)
           SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
-          SUFFIX="-auto-${DATE}-${SHORT_SHA}"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "suffix=$SUFFIX" >> "$GITHUB_OUTPUT"
+          echo "suffix=-auto-${DATE}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "tag_name=dev-${VERSION}-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "release_name=Dev Build ${VERSION} (#${{ github.run_number }})" >> "$GITHUB_OUTPUT"
 
-      - name: Resolve build targets & desktop matrix JSON
-        id: targets
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          INPUT_TARGETS: ${{ github.event.inputs.build_targets }}
-        run: |
-          MATRIX='[{"os":"macos-latest","platform":"mac","arch":"x64"},{"os":"macos-latest","platform":"mac","arch":"arm64"},{"os":"windows-latest","platform":"win","arch":"x64"},{"os":"windows-latest","platform":"win","arch":"arm64"}]'
-          MATRIX_MAC='[{"os":"macos-latest","platform":"mac","arch":"x64"},{"os":"macos-latest","platform":"mac","arch":"arm64"}]'
-          MATRIX_WIN='[{"os":"windows-latest","platform":"win","arch":"x64"},{"os":"windows-latest","platform":"win","arch":"arm64"}]'
-          MATRIX_MAC_X64='[{"os":"macos-latest","platform":"mac","arch":"x64"}]'
-          MATRIX_MAC_ARM64='[{"os":"macos-latest","platform":"mac","arch":"arm64"}]'
-          MATRIX_WIN_X64='[{"os":"windows-latest","platform":"win","arch":"x64"}]'
-          MATRIX_WIN_ARM64='[{"os":"windows-latest","platform":"win","arch":"arm64"}]'
-
-          WANT_V=false
-          WANT_D=false
-
-          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$INPUT_TARGETS" ]; then
-            TARGET="$INPUT_TARGETS"
-          else
-            TARGET=all
-          fi
-
-          case "$TARGET" in
-            all)
-              WANT_V=true
-              WANT_D=true
-              DESKTOP_MATRIX="$MATRIX"
-              ;;
-            vscode)
-              WANT_V=true
-              DESKTOP_MATRIX='[]'
-              ;;
-            desktop)
-              WANT_D=true
-              DESKTOP_MATRIX="$MATRIX"
-              ;;
-            desktop-mac)
-              WANT_D=true
-              DESKTOP_MATRIX="$MATRIX_MAC"
-              ;;
-            desktop-win)
-              WANT_D=true
-              DESKTOP_MATRIX="$MATRIX_WIN"
-              ;;
-            desktop-mac-x64)
-              WANT_D=true
-              DESKTOP_MATRIX="$MATRIX_MAC_X64"
-              ;;
-            desktop-mac-arm64)
-              WANT_D=true
-              DESKTOP_MATRIX="$MATRIX_MAC_ARM64"
-              ;;
-            desktop-win-x64)
-              WANT_D=true
-              DESKTOP_MATRIX="$MATRIX_WIN_X64"
-              ;;
-            desktop-win-arm64)
-              WANT_D=true
-              DESKTOP_MATRIX="$MATRIX_WIN_ARM64"
-              ;;
-            *)
-              echo "Unknown build_targets=$TARGET" >&2
-              exit 1
-              ;;
-          esac
-
-          if [ "$WANT_V" = true ]; then
-            echo "want_build_vscode=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "want_build_vscode=false" >> "$GITHUB_OUTPUT"
-          fi
-
-          if [ "$WANT_D" = true ]; then
-            echo "want_build_desktop=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "want_build_desktop=false" >> "$GITHUB_OUTPUT"
-          fi
-
-          {
-            echo "desktop_matrix<<__MATRIX_EOF__"
-            echo "$DESKTOP_MATRIX"
-            echo "__MATRIX_EOF__"
-          } >> "$GITHUB_OUTPUT"
-
-  build-vscode:
-    runs-on: ubuntu-latest
-    needs: configure
-    if: ${{ needs.configure.outputs.want_build_vscode == 'true' }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: |
-          npm install
-          cd web && npm install
-
-      - name: Build dev package
-        run: npm run package:dev
-
-      - name: Rename vsix file
-        run: |
-          SUFFIX="${{ needs.configure.outputs.suffix }}"
-          cd dists
-          for file in *.vsix; do
-            BASENAME="${file%.vsix}"
-            mv "$file" "${BASENAME}${SUFFIX}.vsix"
-          done
-          ls -la
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ccrelay-vscode-dev-${{ needs.configure.outputs.version }}${{ needs.configure.outputs.suffix }}
-          path: dists/*.vsix
-          retention-days: 30
-
-  build-desktop:
-    needs: configure
-    if: ${{ needs.configure.outputs.want_build_desktop == 'true' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.configure.outputs.desktop_matrix) }}
-    runs-on: ${{ matrix.os }}
-    env:
-      ELECTRON_CACHE: ${{ github.workspace }}/.electron-cache
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Cache Electron downloads
-        uses: actions/cache@v4
-        with:
-          path: .electron-cache
-          key: electron-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('package-lock.json', 'packages/desktop/package.json') }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: |
-          npm install
-          cd web && npm install
-
-      - name: Build desktop
-        run: npm run desktop:build
-
-      - name: Pack desktop (${{ matrix.platform }} ${{ matrix.arch }})
-        run: npx electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never
-        working-directory: packages/desktop
-
-      - name: Upload desktop artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ccrelay-desktop-${{ matrix.platform }}-${{ matrix.arch }}-${{ needs.configure.outputs.version }}${{ needs.configure.outputs.suffix }}
-          path: |
-            packages/desktop/dist/*.zip
-            packages/desktop/dist/*.exe
-          retention-days: 30
-
-  release:
-    runs-on: ubuntu-latest
-    needs: [configure, build-vscode, build-desktop]
-    if: >-
-      ${{
-        needs.configure.result == 'success'
-        && (needs.configure.outputs.want_build_vscode != 'true' || needs.build-vscode.result == 'success')
-        && (needs.configure.outputs.want_build_desktop != 'true' || needs.build-desktop.result == 'success')
-      }}
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: release-assets
-          merge-multiple: true
-
-      - name: List release assets
-        run: find release-assets -type f | head -50
-
-      - name: Create dev release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: dev-${{ needs.configure.outputs.version }}-${{ github.run_number }}
-          name: Dev Build ${{ needs.configure.outputs.version }} (#${{ github.run_number }})
-          prerelease: true
-          files: release-assets/*
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  build:
+    needs: prepare
+    uses: ./.github/workflows/_build.yml
+    with:
+      build_targets: ${{ inputs.build_targets || 'all' }}
+      suffix: ${{ needs.prepare.outputs.suffix }}
+      create_release: true
+      prerelease: true
+      tag_name: ${{ needs.prepare.outputs.tag_name }}
+      release_name: ${{ needs.prepare.outputs.release_name }}
+    secrets: inherit

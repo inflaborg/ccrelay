@@ -1,0 +1,387 @@
+name: Build (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      build_targets:
+        type: string
+        default: 'all'
+      suffix:
+        type: string
+        default: ''
+      is_prod:
+        type: boolean
+        default: false
+      skip_tests:
+        type: boolean
+        default: false
+      create_release:
+        type: boolean
+        default: false
+      prerelease:
+        type: boolean
+        default: true
+      tag_name:
+        type: string
+        default: ''
+      release_name:
+        type: string
+        default: ''
+      retention_days:
+        type: number
+        default: 30
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    if: ${{ !inputs.skip_tests }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Run tests (unit + integration)
+        run: npm run test:all
+
+  configure:
+    runs-on: ubuntu-latest
+    needs: test
+    if: ${{ always() && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      want_build_vscode: ${{ steps.targets.outputs.want_build_vscode }}
+      want_build_desktop: ${{ steps.targets.outputs.want_build_desktop }}
+      want_build_tauri: ${{ steps.targets.outputs.want_build_tauri }}
+      desktop_matrix: ${{ steps.targets.outputs.desktop_matrix }}
+      tauri_matrix: ${{ steps.targets.outputs.tauri_matrix }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: meta
+        run: |
+          VERSION=$(node -p "require('./packages/vscode/package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve build targets & desktop matrix JSON
+        id: targets
+        env:
+          TARGET: ${{ inputs.build_targets || 'all' }}
+        run: |
+          MATRIX='[{"os":"macos-latest","platform":"mac","arch":"x64"},{"os":"macos-latest","platform":"mac","arch":"arm64"},{"os":"windows-latest","platform":"win","arch":"x64"},{"os":"windows-latest","platform":"win","arch":"arm64"}]'
+          MATRIX_MAC='[{"os":"macos-latest","platform":"mac","arch":"x64"},{"os":"macos-latest","platform":"mac","arch":"arm64"}]'
+          MATRIX_WIN='[{"os":"windows-latest","platform":"win","arch":"x64"},{"os":"windows-latest","platform":"win","arch":"arm64"}]'
+          MATRIX_MAC_X64='[{"os":"macos-latest","platform":"mac","arch":"x64"}]'
+          MATRIX_MAC_ARM64='[{"os":"macos-latest","platform":"mac","arch":"arm64"}]'
+          MATRIX_WIN_X64='[{"os":"windows-latest","platform":"win","arch":"x64"}]'
+          MATRIX_WIN_ARM64='[{"os":"windows-latest","platform":"win","arch":"arm64"}]'
+
+          TAURI_MATRIX='[{"os":"macos-latest","platform":"mac","arch":"arm64","rust_target":"aarch64-apple-darwin"},{"os":"macos-13","platform":"mac","arch":"x64","rust_target":"x86_64-apple-darwin"},{"os":"windows-latest","platform":"win","arch":"x64","rust_target":"x86_64-pc-windows-msvc"}]'
+          TAURI_MAC='[{"os":"macos-latest","platform":"mac","arch":"arm64","rust_target":"aarch64-apple-darwin"},{"os":"macos-13","platform":"mac","arch":"x64","rust_target":"x86_64-apple-darwin"}]'
+          TAURI_WIN='[{"os":"windows-latest","platform":"win","arch":"x64","rust_target":"x86_64-pc-windows-msvc"}]'
+          TAURI_MAC_X64='[{"os":"macos-13","platform":"mac","arch":"x64","rust_target":"x86_64-apple-darwin"}]'
+          TAURI_MAC_ARM64='[{"os":"macos-latest","platform":"mac","arch":"arm64","rust_target":"aarch64-apple-darwin"}]'
+          TAURI_WIN_X64='[{"os":"windows-latest","platform":"win","arch":"x64","rust_target":"x86_64-pc-windows-msvc"}]'
+
+          WANT_V=false
+          WANT_D=false
+          WANT_T=false
+          TAURI_TARGETS='[]'
+
+          case "$TARGET" in
+            all)
+              WANT_V=true
+              WANT_D=true
+              WANT_T=true
+              DESKTOP_MATRIX="$MATRIX"
+              TAURI_TARGETS="$TAURI_MATRIX"
+              ;;
+            vscode)
+              WANT_V=true
+              DESKTOP_MATRIX='[]'
+              ;;
+            desktop)
+              WANT_D=true
+              DESKTOP_MATRIX="$MATRIX"
+              ;;
+            desktop-mac)
+              WANT_D=true
+              DESKTOP_MATRIX="$MATRIX_MAC"
+              ;;
+            desktop-win)
+              WANT_D=true
+              DESKTOP_MATRIX="$MATRIX_WIN"
+              ;;
+            desktop-mac-x64)
+              WANT_D=true
+              DESKTOP_MATRIX="$MATRIX_MAC_X64"
+              ;;
+            desktop-mac-arm64)
+              WANT_D=true
+              DESKTOP_MATRIX="$MATRIX_MAC_ARM64"
+              ;;
+            desktop-win-x64)
+              WANT_D=true
+              DESKTOP_MATRIX="$MATRIX_WIN_X64"
+              ;;
+            desktop-win-arm64)
+              WANT_D=true
+              DESKTOP_MATRIX="$MATRIX_WIN_ARM64"
+              ;;
+            tauri)
+              WANT_T=true
+              DESKTOP_MATRIX='[]'
+              TAURI_TARGETS="$TAURI_MATRIX"
+              ;;
+            tauri-mac)
+              WANT_T=true
+              DESKTOP_MATRIX='[]'
+              TAURI_TARGETS="$TAURI_MAC"
+              ;;
+            tauri-win)
+              WANT_T=true
+              DESKTOP_MATRIX='[]'
+              TAURI_TARGETS="$TAURI_WIN"
+              ;;
+            tauri-mac-x64)
+              WANT_T=true
+              DESKTOP_MATRIX='[]'
+              TAURI_TARGETS="$TAURI_MAC_X64"
+              ;;
+            tauri-mac-arm64)
+              WANT_T=true
+              DESKTOP_MATRIX='[]'
+              TAURI_TARGETS="$TAURI_MAC_ARM64"
+              ;;
+            tauri-win-x64)
+              WANT_T=true
+              DESKTOP_MATRIX='[]'
+              TAURI_TARGETS="$TAURI_WIN_X64"
+              ;;
+            *)
+              echo "Unknown build_targets=$TARGET" >&2
+              exit 1
+              ;;
+          esac
+
+          echo "want_build_vscode=$WANT_V" >> "$GITHUB_OUTPUT"
+          echo "want_build_desktop=$WANT_D" >> "$GITHUB_OUTPUT"
+          echo "want_build_tauri=$WANT_T" >> "$GITHUB_OUTPUT"
+          {
+            echo "desktop_matrix<<__MATRIX_EOF__"
+            echo "$DESKTOP_MATRIX"
+            echo "__MATRIX_EOF__"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "tauri_matrix<<__TAURI_MATRIX_EOF__"
+            echo "$TAURI_TARGETS"
+            echo "__TAURI_MATRIX_EOF__"
+          } >> "$GITHUB_OUTPUT"
+
+  build-vscode:
+    runs-on: ubuntu-latest
+    needs: configure
+    if: ${{ needs.configure.outputs.want_build_vscode == 'true' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build package
+        run: npm run ${{ inputs.is_prod && 'package:prod' || 'package:dev' }}
+
+      - name: Rename vsix file
+        if: ${{ inputs.suffix != '' }}
+        run: |
+          SUFFIX="${{ inputs.suffix }}"
+          cd dists
+          for file in *.vsix; do
+            BASENAME="${file%.vsix}"
+            mv "$file" "${BASENAME}${SUFFIX}.vsix"
+          done
+          ls -la
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ccrelay-vscode-${{ inputs.is_prod && 'prod' || 'dev' }}-${{ needs.configure.outputs.version }}${{ inputs.suffix }}
+          path: dists/*.vsix
+          retention-days: ${{ inputs.retention_days }}
+
+  build-desktop:
+    needs: configure
+    if: ${{ needs.configure.outputs.want_build_desktop == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.configure.outputs.desktop_matrix) }}
+    runs-on: ${{ matrix.os }}
+    env:
+      ELECTRON_CACHE: ${{ github.workspace }}/.electron-cache
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Cache Electron downloads
+        uses: actions/cache@v4
+        with:
+          path: .electron-cache
+          key: electron-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('package-lock.json', 'packages/desktop/package.json') }}
+          restore-keys: |
+            electron-${{ runner.os }}-${{ matrix.arch }}-
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build desktop
+        run: npm run desktop:build
+
+      - name: Pack desktop (${{ matrix.platform }} ${{ matrix.arch }})
+        run: npx electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never
+        working-directory: packages/desktop
+
+      - name: Upload desktop artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ccrelay-desktop-${{ matrix.platform }}-${{ matrix.arch }}-${{ needs.configure.outputs.version }}${{ inputs.suffix }}
+          path: |
+            packages/desktop/dist/*.zip
+            packages/desktop/dist/*.exe
+          retention-days: ${{ inputs.retention_days }}
+
+  build-tauri:
+    needs: configure
+    if: ${{ needs.configure.outputs.want_build_tauri == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.configure.outputs.tauri_matrix) }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            packages/desktop-tauri/src-tauri/target
+          key: cargo-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('packages/desktop-tauri/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-${{ matrix.arch }}-
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Tauri (frontend, SEA sidecar, Rust host prep)
+        run: npm run tauri:build
+        env:
+          CCRELAY_SEA: '1'
+
+      - name: Pack Tauri (${{ matrix.platform }} ${{ matrix.arch }})
+        run: npx tauri build --target ${{ matrix.rust_target }}
+        working-directory: packages/desktop-tauri
+
+      - name: Stage Tauri bundle files
+        shell: bash
+        run: |
+          mkdir -p tauri-dist
+          BUNDLE="packages/desktop-tauri/src-tauri/target/${{ matrix.rust_target }}/release/bundle"
+          if [ -d "$BUNDLE" ]; then
+            find "$BUNDLE" -type f \( -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.msi' -o -name '*.exe' \) -exec cp {} tauri-dist/ \;
+          fi
+          ls -la tauri-dist/
+
+      - name: Upload Tauri artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ccrelay-tauri-${{ matrix.platform }}-${{ matrix.arch }}-${{ needs.configure.outputs.version }}${{ inputs.suffix }}
+          path: tauri-dist/*
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention_days }}
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [configure, build-vscode, build-desktop, build-tauri]
+    if: >-
+      ${{ always()
+        && inputs.create_release
+        && needs.configure.result == 'success'
+        && (needs.configure.outputs.want_build_vscode != 'true' || needs.build-vscode.result == 'success')
+        && (needs.configure.outputs.want_build_desktop != 'true' || needs.build-desktop.result == 'success')
+        && (needs.configure.outputs.want_build_tauri != 'true' || needs.build-tauri.result == 'success')
+      }}
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: List release assets
+        run: find release-assets -type f | head -50
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag_name }}
+          name: ${{ inputs.release_name }}
+          prerelease: ${{ inputs.prerelease }}
+          files: release-assets/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
