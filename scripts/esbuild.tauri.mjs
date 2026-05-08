@@ -23,15 +23,6 @@ const commonOptions = {
   platform: "node",
   target: "node20",
   format: "cjs",
-  external: [
-    "pg",
-    "pg-*",
-    "pgpass",
-    "postgres-array",
-    "postgres-bytea",
-    "postgres-date",
-    "postgres-interval",
-  ],
   sourcemap: false,
   minify: false,
 };
@@ -82,8 +73,8 @@ if (isSea) {
     stdio: "inherit",
   });
 
-  // Copy node binary and inject SEA blob
-  const nodePath = execSync("which node").toString().trim();
+  // Copy node binary and inject SEA blob (use execPath: Windows is node.exe, not `node`)
+  const nodePath = process.execPath;
   fs.copyFileSync(nodePath, sidecarBinaryPath);
   fs.chmodSync(sidecarBinaryPath, 0o755);
 
@@ -93,8 +84,9 @@ if (isSea) {
     });
   }
 
+  const machoFlag = process.platform === "darwin" ? " --macho-segment-name NODE_SEA" : "";
   execSync(
-    `npx postject "${sidecarBinaryPath}" NODE_SEA_BLOB "${seaBlobPath}" --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2`,
+    `npx postject "${sidecarBinaryPath}" NODE_SEA_BLOB "${seaBlobPath}" --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2${machoFlag}`,
     { stdio: "inherit" }
   );
 
@@ -107,7 +99,7 @@ if (isSea) {
   console.log(`SEA binary created: ${sidecarBinaryPath}`);
 } else {
   // Development: create a wrapper script that runs node with the bundle
-  const nodePath = execSync("which node").toString().trim();
+  const nodePath = process.execPath;
   const wrapperScript = `#!/bin/sh
 exec "${nodePath}" "${outDir}/ccrelay-server.js" "$@"
 `;
