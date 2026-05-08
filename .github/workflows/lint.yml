@@ -1,12 +1,13 @@
 name: Lint
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
       - main
+
+concurrency:
+  group: lint-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint:
@@ -18,13 +19,7 @@ jobs:
       - name: Check if docs-only changes
         id: check
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            files=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files --jq '.[].filename')
-          else
-            # For push events, compare with the previous state using github's before/after SHA
-            git fetch origin ${{ github.event.before }} --depth=1 2>/dev/null || true
-            files=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} 2>/dev/null || git diff --name-only HEAD^ HEAD)
-          fi
+          files=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files --jq '.[].filename')
           if echo "$files" | grep -qvE '(\.md$|^docs/)'; then
             echo "has_code_changes=true" >> $GITHUB_OUTPUT
           else
@@ -39,12 +34,13 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
 
       - name: Install dependencies
         if: steps.check.outputs.has_code_changes == 'true'
-        run: |
-          npm install
-          cd web && npm install
+        run: npm install
 
       - name: Lint root
         if: steps.check.outputs.has_code_changes == 'true'
