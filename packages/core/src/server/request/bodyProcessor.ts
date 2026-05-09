@@ -20,7 +20,9 @@ import type { OpenAIMessage } from "../../converter/adapters/anthropic-to-openai
 import {
   normalizeToolsForProvider,
   applyPlatformMessageTransforms,
+  applyPlatformQueryPolicy,
   applyPlatformRequestOverride,
+  applyPlatformRequestSanitize,
   matchAnthropicSseRule,
 } from "../../converter/platform-transforms";
 import { anthropicBodyHasHostedTool } from "../../converter/hosted-tools";
@@ -72,6 +74,7 @@ function applyPlatformTransformsToOpenAiChatBody(body: Buffer, baseUrl: string):
     }
     applyHostedToolsToOpenAiChatRecord(data, baseUrl);
     applyPlatformMessagesToOpenAiChatRecord(data, baseUrl);
+    applyPlatformRequestSanitize(data, baseUrl);
     return Buffer.from(JSON.stringify(data), "utf-8");
   } catch {
     return body;
@@ -171,6 +174,7 @@ export class BodyProcessor {
           ? clientSurface !== "openai"
           : clientSurface !== "openai" && clientSurface !== "openai_responses";
 
+    applyPlatformQueryPolicy(routing);
     applyCrossProtocolUpstreamPath(routing, clientSurface, upstreamWire, needsConversion);
 
     // GET or no body: no JSON conversion; upstream path already aligned when needsConversion

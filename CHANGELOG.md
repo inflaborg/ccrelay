@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Protocol/Conversion**
 
+- **Google Gemini** (OpenAI-compatible endpoint): forwarded requests no longer append unsupported URL query flags from the client; outbound Chat bodies drop Responses-only fields and unsupported tool types so Gemini accepts the payload.
 - OpenAI Chat → Anthropic completions for **Z.ai GLM** preserve upstream **web search** results on the response body, so Anthropic clients receive those citations.
 - Anthropic → OpenAI Chat conversion now carries the native **web search** server tool correctly for upstream **Z.ai GLM** (including `open.bigmodel.cn`) and **Xiaomi MiMo**, so relayed completions can use those providers’ hosted search instead of losing or mis-shaping the tool.
 - Streaming **Anthropic Messages** to **GLM** with hosted web search now normalizes SSE: GLM `web_search_prime` results are rewritten to standard **`web_search` / `web_search_tool_result`**, so citations and client UI behave like native Anthropic search.

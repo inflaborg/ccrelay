@@ -16,6 +16,7 @@ import { glmWebSearchResponseTransform } from "./glm/responses";
 import { mimoWebSearchTransform } from "./xiaomimimo/tools";
 import { mimoAnnotationsWebSearchResponseTransform } from "./xiaomimimo/responses";
 import type { PlatformRequestOverrideTransform } from "./rules";
+import { geminiChatSanitize } from "./gemini/request-sanitize";
 import { passthroughTransform } from "./passthrough";
 
 /** Outbound Chat `tools[]` entry (`type` keyed by rule). */
@@ -36,6 +37,9 @@ export type PlatformResponseTransform = (
 export type PlatformAnthropicSseTransform = (
   rows: AnthropicSseEventRow[]
 ) => AnthropicSseEventRow[];
+
+/** Outbound Chat Completions JSON body sanitize (provider-specific). */
+export type PlatformRequestSanitizeTransform = (body: Record<string, unknown>) => void;
 
 export const REQUEST_OVERRIDE_REGISTRY: Readonly<Record<string, PlatformRequestOverrideTransform>> =
   {
@@ -64,6 +68,11 @@ export const ANTHROPIC_SSE_TRANSFORM_REGISTRY: Readonly<
   "glm-web-search-prime-normalize": transformGlmAnthropicSearchSseRows,
 };
 
+export const REQUEST_SANITIZE_REGISTRY: Readonly<Record<string, PlatformRequestSanitizeTransform>> =
+  {
+    "gemini-chat-sanitize": geminiChatSanitize,
+  };
+
 export { passthroughTransform, isPlainObject } from "./passthrough";
 export { glmWebSearchEnvelopeTransform } from "./glm/tools";
 export { glmFlattenContentTransform } from "./glm/messages";
@@ -76,6 +85,7 @@ export {
   mapAzureResponsesToolEntryForHostedWebSearch,
   sanitizeAzureResponsesRequestTools,
 } from "./azure-openai/responses-request-tools";
+export { geminiChatSanitize } from "./gemini/request-sanitize";
 
 /** @deprecated Prefer `TOOL_TRANSFORM_REGISTRY`. */
 export const TRANSFORM_REGISTRY = TOOL_TRANSFORM_REGISTRY;

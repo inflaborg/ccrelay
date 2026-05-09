@@ -1,6 +1,6 @@
 /**
  * Layer 1: declarative hostname → platform transforms (tools, messages, responses).
- * Provider implementations live under `glm/`, `xiaomimimo/`, `azure-openai/`.
+ * Provider implementations live under `glm/`, `xiaomimimo/`, `azure-openai/`, `gemini/`.
  */
 
 /* eslint-disable @typescript-eslint/naming-convention -- wire tool.type literals */
@@ -27,6 +27,10 @@ export interface PlatformTransformRule {
    * (e.g. hosted web_search → Responses API on Azure).
    */
   requestOverride?: string;
+  /** Strip client query string from outbound upstream URL when matched (e.g. Gemini rejects unknown params). */
+  stripQuery?: boolean;
+  /** Outbound Chat Completions JSON sanitize registry key (runs after tools/messages transforms). */
+  requestSanitize?: string;
 }
 
 /** Legacy name for tooling that matched hosted-tool-only rules (same payload). */
@@ -68,5 +72,11 @@ export const PLATFORM_TRANSFORM_RULES: readonly PlatformTransformRule[] = [
     domainParents: ["cognitiveservices.azure.com"],
     requestOverride: "azure-web-search-to-responses",
     responses: "azure-responses-web-search",
+  },
+  {
+    provider: "gemini",
+    domains: ["generativelanguage.googleapis.com"],
+    stripQuery: true,
+    requestSanitize: "gemini-chat-sanitize",
   },
 ];

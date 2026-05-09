@@ -16,6 +16,7 @@ import {
 import {
   MESSAGE_TRANSFORM_REGISTRY,
   REQUEST_OVERRIDE_REGISTRY,
+  REQUEST_SANITIZE_REGISTRY,
   RESPONSE_TRANSFORM_REGISTRY,
   TOOL_TRANSFORM_REGISTRY,
   ANTHROPIC_SSE_TRANSFORM_REGISTRY,
@@ -34,6 +35,7 @@ export type {
   HostedToolTransform,
   PlatformAnthropicSseTransform,
   PlatformMessageTransform,
+  PlatformRequestSanitizeTransform,
   PlatformResponseTransform,
   PlatformToolTransform,
 } from "./registries";
@@ -48,11 +50,13 @@ export {
   azureResponsesWebSearchResponseTransform,
   sanitizeAzureResponsesRequestTools,
   mapAzureResponsesToolEntryForHostedWebSearch,
+  geminiChatSanitize,
   passthroughTransform,
   isPlainObject,
   TOOL_TRANSFORM_REGISTRY,
   MESSAGE_TRANSFORM_REGISTRY,
   REQUEST_OVERRIDE_REGISTRY,
+  REQUEST_SANITIZE_REGISTRY,
   RESPONSE_TRANSFORM_REGISTRY,
   ANTHROPIC_SSE_TRANSFORM_REGISTRY,
   TRANSFORM_REGISTRY,
@@ -79,6 +83,14 @@ export {
   glmWebSearchServerToolName,
 } from "./glm/anthropic-sse";
 
+/** Routing slice used to strip outbound query per platform rule (no server-layer import). */
+export interface PlatformOutboundQueryRouting {
+  targetUrl: string;
+  targetQuery: string;
+  targetPath: string;
+  provider: { baseUrl: string };
+}
+
 /** First matching provider rule wins (preserve `PLATFORM_TRANSFORM_RULES` order). */
 export function matchHostedToolRuleForBaseUrl(baseUrl: string): HostedToolRule | undefined {
   const hostname = normalizedHostnameFromBaseUrl(baseUrl);
@@ -91,6 +103,21 @@ export function matchHostedToolRuleForBaseUrl(baseUrl: string): HostedToolRule |
     }
   }
   return undefined;
+}
+
+/**
+ * When the matched platform rule sets `stripQuery`, clear client query and rebuild target URL
+ * without a query string (hostname-driven; no provider-specific code in callers).
+ */
+export function applyPlatformQueryPolicy(routing: PlatformOutboundQueryRouting): void {
+  const rule = matchHostedToolRuleForBaseUrl(routing.provider.baseUrl);
+  if (!rule?.stripQuery || !routing.targetQuery) {
+    return;
+  }
+  routing.targetQuery = "";
+  const b = routing.provider.baseUrl.replace(/\/$/, "");
+  const p = routing.targetPath.startsWith("/") ? routing.targetPath : `/${routing.targetPath}`;
+  routing.targetUrl = `${b}${p}`;
 }
 
 /** Match first rule that declares outbound `responses` transforms. */
@@ -236,6 +263,19 @@ export function applyPlatformMessageTransforms(
     return messages;
   }
   return transform(messages);
+}
+
+/**
+ * Apply outbound Chat Completions body sanitization when the platform rule declares `requestSanitize`.
+ */
+export function applyPlatformRequestSanitize(body: Record<string, unknown>, baseUrl: string): void {
+  const rule = matchHostedToolRuleForBaseUrl(baseUrl);
+  const key = rule?.requestSanitize;
+  if (!key) {
+    return;
+  }
+  const fn = REQUEST_SANITIZE_REGISTRY[key];
+  fn?.(body);
 }
 
 /**
