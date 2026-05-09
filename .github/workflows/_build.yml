@@ -332,11 +332,46 @@ jobs:
 
       - name: Stage Tauri bundle files
         shell: bash
+        env:
+          VERSION: ${{ needs.configure.outputs.version }}
+          MATRIX_PLATFORM: ${{ matrix.platform }}
+          MATRIX_ARCH: ${{ matrix.arch }}
         run: |
+          set -euo pipefail
           mkdir -p tauri-dist
           BUNDLE="packages/desktop-tauri/src-tauri/target/${{ matrix.rust_target }}/release/bundle"
-          if [ -d "$BUNDLE" ]; then
-            find "$BUNDLE" -type f \( -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.msi' -o -name '*.exe' \) -exec cp {} tauri-dist/ \;
+          if [[ "$MATRIX_PLATFORM" == "mac" ]]; then
+            EB_PLATFORM=darwin
+          else
+            EB_PLATFORM=win32
+          fi
+          # Mirror Electron artifactName: ${productName}-${version}-${platform}-${arch}.${ext}, plus "-tauri-"
+          BASE="CCRelay-${VERSION}-tauri-${EB_PLATFORM}-${MATRIX_ARCH}"
+          if [[ ! -d "$BUNDLE" ]]; then
+            echo "Missing bundle dir: $BUNDLE" >&2
+            exit 1
+          fi
+          copied=0
+          while IFS= read -r -d '' f; do
+            case "$f" in
+              *.dmg)
+                cp "$f" "tauri-dist/${BASE}.dmg"
+                copied=$((copied + 1))
+                ;;
+              *.exe)
+                cp "$f" "tauri-dist/${BASE}.exe"
+                copied=$((copied + 1))
+                ;;
+              *.app.tar.gz)
+                cp "$f" "tauri-dist/${BASE}.app.tar.gz"
+                copied=$((copied + 1))
+                ;;
+              *) ;;
+            esac
+          done < <(find "$BUNDLE" -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.app.tar.gz' \) -print0)
+          if [[ "$copied" -eq 0 ]]; then
+            echo "No installable .dmg/.exe/.app.tar.gz under $BUNDLE" >&2
+            exit 1
           fi
           ls -la tauri-dist/
 

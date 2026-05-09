@@ -153,8 +153,7 @@ A lightweight Tauri desktop app (`packages/desktop-tauri`) runs the same core as
 - Uses a sidecar architecture: Rust shell manages a Node.js server process
 - Tray menu with Start/Stop Server and Open Dashboard
 - Download from [GitHub Releases](https://github.com/inflaborg/ccrelay/releases):
-  - **macOS**: `CCRelay.app` (Apple Silicon and Intel)
-  - **Windows**: `CCRelay.exe` (x64 and arm64)
+  - Installer names follow the Electron desktop pattern (`CCRelay-<version>-<platform>-<arch>.<ext>`) with **`tauri`** added after the version (for example `CCRelay-0.2.1-tauri-darwin-arm64.dmg`, `CCRelay-0.2.1-tauri-win32-x64.exe`). Windows ships **NSIS `.exe`** only (no MSI).
 
 ### Development
 

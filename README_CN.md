@@ -154,8 +154,7 @@ xattr -cr /path/to/CCRelay.app
 - 使用 Sidecar 架构：Rust 壳层管理 Node.js 服务进程
 - 托盘菜单支持启动/停止服务器和打开控制台
 - 从 [GitHub Releases](https://github.com/inflaborg/ccrelay/releases) 下载：
-  - **macOS**: `CCRelay.app`（Apple Silicon 和 Intel）
-  - **Windows**: `CCRelay.exe`（x64 和 arm64）
+  - 安装包命名与 Electron 桌面版一致（`CCRelay-<版本>-<platform>-<arch>.<扩展名>`），在版本号后增加 **`tauri`**（例如 `CCRelay-0.2.1-tauri-darwin-arm64.dmg`、`CCRelay-0.2.1-tauri-win32-x64.exe`）。Windows 仅提供 **NSIS 安装包（`.exe`）**，不提供 MSI。
 
 ### 开发
 
