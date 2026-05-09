@@ -14,7 +14,7 @@
 ## 目录
 
 - [核心特性](#核心特性)
-- [托管网页搜索支持（按上游）](#托管网页搜索支持按上游)
+- [已验证上游（按主机）](#已验证上游按主机)
 - [系统要求](#系统要求)
 - [安装](#安装)
 - [桌面应用（Electron）](#桌面应用electron)
@@ -64,11 +64,13 @@
 - Web 管理面板：提供商管理、设置、i18n（中英文）
 - Provider 导入/导出为 JSON 文件
 
-### 托管网页搜索支持（按上游）
+### 已验证上游（按主机）
 
-**托管网页搜索**时，CCRelay 会按**上游提供商**做归一化，使搜索在依赖 **Anthropic 风格**工具与展示的客户端里表现正确。**只认上游：**规则由路由里配置的 **provider 目标 URL（主机名）** 决定，与如何访问本地中继无关。
+中继按 **provider 的 `baseUrl` 主机名** 选规则。下表中的行是我们在配置为 provider 时**已验证过**的上游端点。各厂商可能同时提供 Anthropic 协议、OpenAI 兼容接口等，但**客户端协议**与**上游协议**常常不一致；不一致时需要**协议转换**，一致时也可能在**工具能力**上不同（例如托管网页搜索、仅 Chat 接受的字段、或仅 Responses 支持的托管工具）。
 
-下表表示 CCRelay 是否支持将各**客户端协议**转发到该上游，以及**托管网页搜索**在上游的接入位置。**Azure OpenAI：**上游仅提供 **OpenAI Chat Completions** 与 **OpenAI Responses API**，**没有** Anthropic **`/v1/messages`** 接口。托管 **web search** **仅**适用于 **Responses API**，Chat Completions 不支持。指向 Azure 上游时，CCRelay 按**主机名**路由 Anthropic 风格客户端并归一化请求体（无需额外 provider 开关）。
+**未出现在表中的主机**只走**通用协议转换**（无额外平台层）。**表中列出的主机**在通用转换之上，还会按主机名叠加**平台对齐**（工具、消息、响应形态及 URL/请求体等）。最后一列表示该厂商**托管网页搜索**在上游侧的接入位置；与如何访问本地中继无关。
+
+**示例——Azure OpenAI：** 上游侧 **托管网页搜索** 仅存在于 **Responses API**（因此表的 Web search 列为「仅 Responses API」）。你仍可以让客户端用 **OpenAI Chat Completions** 对接 CCRelay。将 **Azure OpenAI** 配成 provider 的 `baseUrl` 后，含托管 web search 的 **Chat 形态**请求会在**转换层**被改写为对上游的 **Responses** 调用，从而继续支持搜索——不必要求客户端直接调用 `/v1/responses`。
 
 | 提供商（目标主机） | Anthropic `/v1/messages` | OpenAI `/chat/completions` | OpenAI `/v1/responses` | Web search |
 | --- | --- | --- | --- | --- |
@@ -76,7 +78,7 @@
 | **小米 MiMo**（`api.xiaomimimo.com`） | 支持 | 支持 | 不支持 | 仅 Chat |
 | **Google Gemini**（`generativelanguage.googleapis.com`，OpenAI 兼容） | 不支持 | 支持 | 不支持 | 不支持 |
 | **Azure OpenAI**（`*.cognitiveservices.azure.com`） | 不支持 | 支持 | 支持 | 仅 Responses API |
-| *其余提供商* | *视情况* | *视情况* | *视情况* | *—* |
+| *其他主机* | *视情况* | *视情况* | *视情况* | 仅通用转换 |
 
 **截图示例（Claude Code 经 CCRelay）**
 

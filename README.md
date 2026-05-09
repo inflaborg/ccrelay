@@ -14,7 +14,7 @@
 ## Table of Contents
 
 - [Core Features](#core-features)
-- [Hosted web search support (by upstream)](#hosted-web-search-support-by-upstream)
+- [Verified upstreams (by host)](#verified-upstreams-by-host)
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Desktop App (Electron)](#desktop-app-electron)
@@ -64,11 +64,13 @@
 - Web dashboard with provider management, settings, and i18n (English + Chinese)
 - Provider import/export as JSON
 
-### Hosted web search support (by upstream)
+### Verified upstreams (by host)
 
-For **hosted web search**, CCRelay applies **provider-specific** normalization so search shows up correctly for tools and UIs that expect **Anthropic-style** behavior. **Only the upstream matters:** rules are chosen from the route’s **provider target URL** (host). It does not depend on how you address the relay.
+Relaying uses the **provider `baseUrl` hostname**. The rows below are **upstream endpoints we have validated** when you add them as a provider. Vendors may offer Anthropic APIs, OpenAI-compatible APIs, or both — but your **client protocol** and the **upstream protocol** are often not the same. When they differ, CCRelay applies **generic protocol conversion** first, then **hostname-specific alignment** where we maintain it. When the wire looks the same on both sides, **tooling still differs** by vendor (for example hosted web search, strict Chat schemas, or Responses-only tools).
 
-The table below is whether CCRelay can route each **client wire** to that upstream, and where **hosted web search** is accepted. **Azure OpenAI:** the upstream exposes **OpenAI Chat Completions** and **OpenAI Responses API** only — **no** Anthropic **`/v1/messages`** endpoint. Hosted **web search** works **only** on the **Responses API**, not Chat Completions. For Azure targets, CCRelay routes Anthropic-style clients and normalizes bodies by **upstream host** (no extra provider flag).
+**Hosts not listed** get **generic conversion only** (no extra platform layer). **Listed hosts** get **generic conversion plus** platform rules for tools, messages, responses, and request URL/body quirks. The last column is where **hosted web search** is supported for that vendor; it does not depend on how you reach the relay.
+
+**Example — Azure OpenAI:** Upstream **hosted web search** exists **only** on the **Responses API** (hence “Responses API only” in the Web search column). You can still point clients at CCRelay using the **OpenAI Chat Completions** surface. After you set **Azure OpenAI** as the provider `baseUrl`, Chat-shaped calls that include hosted web search are **rewritten in the conversion layer** into upstream **Responses** requests so search keeps working—you do not need the client to call `/v1/responses` itself.
 
 | Provider (target host) | Anthropic `/v1/messages` | OpenAI `/chat/completions` | OpenAI `/v1/responses` | Web search |
 | --- | --- | --- | --- | --- |
@@ -76,7 +78,7 @@ The table below is whether CCRelay can route each **client wire** to that upstre
 | **Xiaomi MiMo** (`api.xiaomimimo.com`) | Supported | Supported | Not supported | Chat only |
 | **Google Gemini** (OpenAI-compatible, `generativelanguage.googleapis.com`) | Not supported | Supported | Not supported | Not supported |
 | **Azure OpenAI** (`*.cognitiveservices.azure.com`) | Not supported | Supported | Supported | Responses API only |
-| *Other providers* | *Varies* | *Varies* | *Varies* | *—* |
+| *Other hosts* | *Varies* | *Varies* | *Varies* | Generic conversion only |
 
 **Screenshots (Claude Code through CCRelay)**
 
