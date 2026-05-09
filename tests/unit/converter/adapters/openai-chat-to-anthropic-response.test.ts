@@ -5,7 +5,7 @@
  * - Preserves original tool_call.id as tool_use.id (no ID generation)
  * - Inlines thought_signature in thinking block (no external storage)
  * - Stateless - no database required
- * - Converts web_search annotations to web_search_tool_result blocks
+ * - Serializes assistant `annotations` into an opaque `{ type: \"text\" }` block (`JSON.stringify`)
  * - Restores original model in response (after model mapping)
  */
 
@@ -334,7 +334,7 @@ describe("converter: openai-chat-to-anthropic-response", () => {
   });
 
   describe("web_search annotations", () => {
-    it("should convert url_citation annotations to web_search_tool_result", () => {
+    it("should serialize annotations as opaque JSON text (no synthetic server_tool blocks)", () => {
       const openai: OpenAIChatCompletionResponse = {
         id: "chatcmpl-abc123",
         object: "chat.completion",
@@ -368,35 +368,15 @@ describe("converter: openai-chat-to-anthropic-response", () => {
 
       const result = convertResponseToAnthropic(openai, originalModel);
 
-      const serverToolUseId = (result.content[1] as { id: string }).id;
-
-      expect(result.content).toHaveLength(3);
+      expect(result.content).toHaveLength(2);
       expect(result.content[0]).toEqual({ type: "text", text: "Here are some search results:" });
       expect(result.content[1]).toEqual({
-        type: "server_tool_use",
-        id: expect.stringMatching(/^srvtoolu_/) as string,
-        name: "web_search",
-        input: { query: "" },
-      });
-      expect(result.content[2]).toEqual({
-        type: "web_search_tool_result",
-        tool_use_id: serverToolUseId,
-        content: [
-          {
-            type: "web_search_result",
-            url: "https://example.com/article1",
-            title: "Article 1",
-          },
-          {
-            type: "web_search_result",
-            url: "https://example.com/article2",
-            title: "Article 2",
-          },
-        ],
+        type: "text",
+        text: JSON.stringify(openai.choices[0].message.annotations),
       });
     });
 
-    it("should not add web_search_tool_result when annotations is empty", () => {
+    it("should not append annotations block when annotations is empty", () => {
       const openai: OpenAIChatCompletionResponse = {
         id: "chatcmpl-abc123",
         object: "chat.completion",
@@ -417,7 +397,7 @@ describe("converter: openai-chat-to-anthropic-response", () => {
 
       const result = convertResponseToAnthropic(openai, originalModel);
 
-      // Should only have text block, no web_search_tool_result
+      // Should only have text block — empty annotations omitted
       expect(result.content).toEqual([{ type: "text", text: "Response" }]);
     });
 
@@ -446,18 +426,11 @@ describe("converter: openai-chat-to-anthropic-response", () => {
 
       const result = convertResponseToAnthropic(openai, originalModel);
 
-      // Should have text block, server_tool_use, and empty web_search_tool_result
-      expect(result.content).toHaveLength(3);
+      expect(result.content).toHaveLength(2);
       expect(result.content[0]).toEqual({ type: "text", text: "Response" });
       expect(result.content[1]).toEqual({
-        type: "server_tool_use",
-        id: expect.stringMatching(/^srvtoolu_/) as string,
-        name: "web_search",
-        input: { query: "" },
-      });
-      expect(result.content[2]).toMatchObject({
-        type: "web_search_tool_result",
-        content: [],
+        type: "text",
+        text: JSON.stringify(openai.choices[0].message.annotations),
       });
     });
   });
@@ -1147,14 +1120,7 @@ describe("converter: openai-chat-to-anthropic-response", () => {
 
       const result = convertResponseToAnthropic(openai, originalModel);
 
-      // Should have: text, server_tool_use, web_search_tool_result, tool_use
-      expect(result.content).toHaveLength(4);
-      expect(result.content[0]).toEqual({
-        type: "text",
-        text: "Here are the search results:",
-      });
-      // Should have: text, tool_use, server_tool_use, web_search_tool_result
-      expect(result.content).toHaveLength(4);
+      expect(result.content).toHaveLength(3);
       expect(result.content[0]).toEqual({
         type: "text",
         text: "Here are the search results:",
@@ -1165,13 +1131,9 @@ describe("converter: openai-chat-to-anthropic-response", () => {
         name: "browser_search",
         input: { query: "test" },
       });
-      // Skip strict equality for server tools to avoid ID matching complexity
-      expect(result.content[2]).toMatchObject({
-        type: "server_tool_use",
-        name: "web_search",
-      });
-      expect(result.content[3]).toMatchObject({
-        type: "web_search_tool_result",
+      expect(result.content[2]).toEqual({
+        type: "text",
+        text: JSON.stringify(openai.choices[0].message.annotations),
       });
     });
 

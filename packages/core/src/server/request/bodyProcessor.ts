@@ -11,15 +11,74 @@ import {
   extractResponsesEcho,
   isOpenAIChatCompletionsRequest,
   isOpenAIResponsesRequest,
-  resolveOpenAICompatForAnthropicToOpenAI,
   mapAnthropicWirePathToOpenAiUpstream,
   mapOpenAiWirePathToAnthropicUpstream,
   type ResponsesRequestEcho,
 } from "../../converter";
+import type { OpenAIMessage } from "../../converter/adapters/anthropic-to-openai-chat-request";
+import {
+  normalizeToolsForProvider,
+  applyPlatformMessageTransforms,
+  applyPlatformQueryPolicy,
+  applyPlatformRequestOverride,
+  applyPlatformRequestSanitize,
+  matchAnthropicSseRule,
+} from "../../converter/platform-transforms";
+import { anthropicBodyHasHostedTool } from "../../converter/hosted-tools";
 import { ScopedLogger } from "../../utils/logger";
 import type { ApiSurface } from "../../types";
 
 const log = new ScopedLogger("BodyProcessor");
+
+/** OpenAI Chat outbound: path after routing targets `/chat/completions`. */
+function isOpenAiChatCompletionsTargetPath(targetPath: string): boolean {
+  return targetPath.toLowerCase().includes("chat/completions");
+}
+
+function applyHostedToolsToOpenAiChatRecord(data: Record<string, unknown>, baseUrl: string): void {
+  const tools = data.tools;
+  if (!Array.isArray(tools) || tools.length === 0) {
+    return;
+  }
+  const { tools: outTools, toolChoice } = normalizeToolsForProvider(
+    tools as Record<string, unknown>[],
+    baseUrl,
+    data.tool_choice
+  );
+  data.tools = outTools;
+  if (toolChoice !== undefined) {
+    data.tool_choice = toolChoice;
+  }
+}
+
+function applyPlatformMessagesToOpenAiChatRecord(
+  data: Record<string, unknown>,
+  baseUrl: string
+): void {
+  const messages = data.messages;
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return;
+  }
+  data.messages = applyPlatformMessageTransforms(messages as OpenAIMessage[], baseUrl);
+}
+
+function applyPlatformTransformsToOpenAiChatBody(body: Buffer, baseUrl: string): Buffer {
+  if (!body.length) {
+    return body;
+  }
+  try {
+    const data = JSON.parse(body.toString("utf-8")) as Record<string, unknown>;
+    if (!isOpenAIChatCompletionsRequest(data)) {
+      return body;
+    }
+    applyHostedToolsToOpenAiChatRecord(data, baseUrl);
+    applyPlatformMessagesToOpenAiChatRecord(data, baseUrl);
+    applyPlatformRequestSanitize(data, baseUrl);
+    return Buffer.from(JSON.stringify(data), "utf-8");
+  } catch {
+    return body;
+  }
+}
 
 function extractClientWireModel(rawBody: Buffer): string | undefined {
   if (!rawBody || rawBody.length === 0) {
@@ -114,6 +173,7 @@ export class BodyProcessor {
           ? clientSurface !== "openai"
           : clientSurface !== "openai" && clientSurface !== "openai_responses";
 
+    applyPlatformQueryPolicy(routing);
     applyCrossProtocolUpstreamPath(routing, clientSurface, upstreamWire, needsConversion);
 
     // GET or no body: no JSON conversion; upstream path already aligned when needsConversion
@@ -136,6 +196,8 @@ export class BodyProcessor {
 
     const clientWireModel = extractClientWireModel(rawBody);
     let body = applyModelMapping(rawBody, routing.provider);
+
+    let upstreamResponseFormat: string | undefined;
 
     let responsesStreamRequested = false;
     let streamRequested = false;
@@ -161,8 +223,11 @@ export class BodyProcessor {
     }
 
     if (needsConversion) {
-      // Responses→Chat supports true SSE streaming; let the stream flag pass through.
-      const skipDisableStream = clientSurface === "openai_responses" && upstreamWire === "openai";
+      // Responses→Chat and OpenAI-surfaces→Anthropic streaming: keep stream=true upstream.
+      const skipDisableStream =
+        (clientSurface === "openai_responses" && upstreamWire === "openai") ||
+        ((clientSurface === "openai" || clientSurface === "openai_responses") &&
+          upstreamWire === "anthropic");
       if (!skipDisableStream) {
         body = forceDisableStreamInBody(body, `${clientSurface}->${upstreamWire}`);
       }
@@ -203,15 +268,32 @@ export class BodyProcessor {
     } else if (clientSurface === "anthropic" && upstreamWire === "openai") {
       const result = this.convertAnthropicToOpenAIRequest(body, routing);
       if (result) {
-        body = result.body;
-        routing.targetPath = result.newPath;
-        routing.targetUrl = buildTargetUrl(
-          routing.provider.baseUrl,
-          result.newPath,
-          routing.targetQuery
-        );
+        let nextBody = result.body;
+        let nextPath = result.newPath;
+
+        try {
+          const parsed = JSON.parse(result.body.toString("utf-8")) as Record<string, unknown>;
+          const override = applyPlatformRequestOverride(
+            parsed,
+            result.newPath,
+            routing.provider.baseUrl
+          );
+          if (override) {
+            nextBody = Buffer.from(JSON.stringify(override.body), "utf-8");
+            nextPath = override.path;
+            if (override.responseFormat !== undefined) {
+              upstreamResponseFormat = override.responseFormat;
+            }
+          }
+        } catch {
+          /* keep A→Chat */
+        }
+
+        body = nextBody;
+        routing.targetPath = nextPath;
+        routing.targetUrl = buildTargetUrl(routing.provider.baseUrl, nextPath, routing.targetQuery);
         log.info(
-          `[Router] A->O request: path ${routing.path} -> ${result.newPath}, target="${routing.targetUrl}"`
+          `[Router] A->O request: path ${routing.path} -> ${nextPath}, target="${routing.targetUrl}"`
         );
       }
     } else if (clientSurface === "openai" && upstreamWire === "anthropic") {
@@ -230,11 +312,32 @@ export class BodyProcessor {
       }
     }
 
+    if (isOpenAiChatCompletionsTargetPath(routing.targetPath)) {
+      body = applyPlatformTransformsToOpenAiChatBody(body, routing.provider.baseUrl);
+    }
+
     if (databaseEnabled && body && body.length > 0) {
       try {
         requestBodyLog = body.toString("utf-8");
       } catch {
         requestBodyLog = undefined;
+      }
+    }
+
+    let hasHostedWebSearchFlag = false;
+    if (
+      !needsConversion &&
+      clientSurface === "anthropic" &&
+      routing.method === "POST" &&
+      routing.targetPath === "/v1/messages" &&
+      body.length > 0 &&
+      matchAnthropicSseRule(routing.provider.baseUrl)?.anthropicSse
+    ) {
+      try {
+        const d = JSON.parse(body.toString("utf-8")) as Record<string, unknown>;
+        hasHostedWebSearchFlag = anthropicBodyHasHostedTool(d, "web_search");
+      } catch {
+        hasHostedWebSearchFlag = false;
       }
     }
 
@@ -246,6 +349,8 @@ export class BodyProcessor {
       ...(responsesStreamRequested ? { responsesStreamRequested: true } : {}),
       ...(streamRequested ? { streamRequested: true } : {}),
       ...(originalResponsesEcho !== undefined ? { originalResponsesEcho } : {}),
+      ...(hasHostedWebSearchFlag ? { hasHostedWebSearch: true } : {}),
+      ...(upstreamResponseFormat !== undefined ? { upstreamResponseFormat } : {}),
     };
   }
 
@@ -259,11 +364,10 @@ export class BodyProcessor {
       if (!anthropicRequest.messages || !Array.isArray(anthropicRequest.messages)) {
         return null;
       }
-      const openaiCompat = resolveOpenAICompatForAnthropicToOpenAI(routing.provider);
       const conversionResult = convertRequestToOpenAI(
         anthropicRequest as unknown as Parameters<typeof convertRequestToOpenAI>[0],
         routing.targetPath,
-        { openaiCompat }
+        { providerBaseUrl: routing.provider.baseUrl }
       );
       return {
         body: Buffer.from(JSON.stringify(conversionResult.request), "utf-8"),
@@ -290,7 +394,9 @@ export class BodyProcessor {
         return null;
       }
       const originalResponsesEcho = extractResponsesEcho(raw);
-      const c = convertResponsesRequestToChatCompletions(raw, routing.targetPath);
+      const c = convertResponsesRequestToChatCompletions(raw, routing.targetPath, {
+        providerBaseUrl: routing.provider.baseUrl,
+      });
       return {
         body: Buffer.from(JSON.stringify(c.request), "utf-8"),
         newPath: c.newPath,
@@ -317,8 +423,15 @@ export class BodyProcessor {
         return null;
       }
       const originalResponsesEcho = extractResponsesEcho(raw);
-      const chat = convertResponsesRequestToChatCompletions(raw, routing.path);
-      const c = convertOpenAIRequestToAnthropic(chat.request, chat.newPath);
+      const chat = convertResponsesRequestToChatCompletions(raw, routing.path, {
+        providerBaseUrl: routing.provider.baseUrl,
+      });
+      const chatReq = chat.request as unknown as Record<string, unknown>;
+      applyHostedToolsToOpenAiChatRecord(chatReq, routing.provider.baseUrl);
+      const c = convertOpenAIRequestToAnthropic(
+        chatReq as unknown as Parameters<typeof convertOpenAIRequestToAnthropic>[0],
+        chat.newPath
+      );
       return {
         body: Buffer.from(JSON.stringify(c.request), "utf-8"),
         newPath: c.newPath,
@@ -340,6 +453,7 @@ export class BodyProcessor {
       if (!isOpenAIChatCompletionsRequest(oai)) {
         return null;
       }
+      applyHostedToolsToOpenAiChatRecord(oai, routing.provider.baseUrl);
       const c = convertOpenAIRequestToAnthropic(
         oai as unknown as Parameters<typeof convertOpenAIRequestToAnthropic>[0],
         routing.targetPath

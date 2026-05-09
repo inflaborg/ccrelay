@@ -186,6 +186,15 @@ export function processStreamingChunk(state: StreamingConversionState, line: str
       events.push(...emitOutputItemAdded(state, "message"));
       events.push(...emitContentPartAdded(state, state.messageId, "output_text"));
     }
+    // MiMo et al.: reasoning_content deltas then tool_calls with no intervening assistant text
+    if (state.phase === "reasoning") {
+      events.push(...emitReasoningTextDone(state));
+      events.push(...emitReasoningItemDone(state));
+      state.outputIndex++;
+      state.phase = "text";
+      events.push(...emitOutputItemAdded(state, "message"));
+      events.push(...emitContentPartAdded(state, state.messageId, "output_text"));
+    }
 
     for (const tc of delta.tool_calls as Record<string, unknown>[]) {
       const fn = tc.function as Record<string, unknown> | undefined;

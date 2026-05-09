@@ -64,7 +64,6 @@ export function handleListProviders(
     modelMappingEnabled: p.modelMappingEnabled !== false,
     useCustomModelsList: Boolean(p.useCustomModelsList),
     customModelsList: p.useCustomModelsList ? (p.customModelsList ?? []) : undefined,
-    openaiCompat: p.openaiCompat,
   }));
 
   const response: ProvidersResponse = {
@@ -345,6 +344,7 @@ interface AddProviderRequest {
   headers?: Record<string, string>;
   useCustomModelsList?: boolean;
   customModelsList?: string[];
+  /** @deprecated Ignored at runtime; accepted for backward-compatible YAML/API. */
   openaiCompat?: "default" | "azure_openai";
 }
 
@@ -390,7 +390,6 @@ export async function handleExportProviders(
         headers: p.headers,
         useCustomModelsList: p.useCustomModelsList,
         customModelsList: p.customModelsList,
-        openaiCompat: p.openaiCompat,
       }));
 
     sendJson(res, 200, { providers });

@@ -175,6 +175,8 @@ export interface AnthropicWebSearchResult {
   type: "web_search_result";
   url: string;
   title: string;
+  /** Optional excerpt / payload (e.g. Z.ai hosted search snippet). */
+  encrypted_content?: string;
 }
 
 /**
@@ -269,26 +271,11 @@ export function convertResponseToAnthropic(
     }
   }
 
-  // Handle annotations (web search results, etc.)
-  // Reference: creates server_tool_use + web_search_tool_result pair with matching id
+  // Handle annotations: opaque structured data as text (no synthetic server_tool blocks)
   if (message.annotations && message.annotations.length > 0) {
-    const toolUseId = `srvtoolu_${randomUUID()}`;
     content.push({
-      type: "server_tool_use",
-      id: toolUseId,
-      name: "web_search",
-      input: { query: "" },
-    });
-    content.push({
-      type: "web_search_tool_result",
-      tool_use_id: toolUseId,
-      content: message.annotations
-        .filter(a => a.url_citation)
-        .map(a => ({
-          type: "web_search_result" as const,
-          url: a.url_citation!.url,
-          title: a.url_citation!.title,
-        })),
+      type: "text",
+      text: JSON.stringify(message.annotations),
     });
   }
 

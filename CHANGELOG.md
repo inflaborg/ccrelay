@@ -7,49 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+## [0.2.1] - 2026-05-09
 
-**Desktop**
-
-- Tauri desktop app: lightweight alternative to Electron using sidecar architecture (Rust shell + Node.js server process).
-- Dynamic UI access token with HMAC-signed session cookies for secure WebView authentication.
-- Internal API endpoint for follower instances to fetch leader's UI token for dashboard access.
-
-## [0.2.1] - 2026-05-07 (pre-release)
-
-Enhanced log viewer and dashboard with token tracking, performance metrics, and model mapping display.
+This release expands the web dashboard (logs, stats, provider wizard) and tightens protocol handling for Gemini, GLM, MiMo, and Azure. **Desktop:** optional Tauri build with secure dashboard auth.
 
 ### Added
+
+**UI**
+
+- **Add provider** wizard: single scrollable flow with preset cards (manual setup, Zhipu GLM, Xiaomi MiMo, Azure OpenAI, Gemini OpenAI-compatible), connection fields, inline summary, and **Create**. Upstream model list and endpoint checks run via authenticated **same-origin** API routes so the browser does not call provider URLs directly (avoids CORS).
 
 **Log Viewer**
 
-- Model mapping display in log list: shows `original → mapped` (e.g. `claude-sonnet-4-6 → glm-5.1`) when model mapping is active.
-- Token columns (Input / Output / Cache) in the log list table and detail panel.
-- TTFB (Time To First Byte) and output TPS (tokens per second) displayed in log list and detail panel.
-- TPS calculation treats generation time under 1 second as 1 second to avoid inflated values.
-- Request path and upstream URL shown in log detail panel.
+- Model mapping in the log list when active (`original → mapped`, e.g. `claude-sonnet-4-6 → glm-5.1`).
+- Token columns (input / output / cache), TTFB, output TPS, request path, and upstream URL in list and detail. TPS treats generation under 1s as 1s to avoid spikes.
 
 **Dashboard**
 
-- Time range selector (1d / 7d / 30d / All, default 7d) for all dashboard statistics.
-- Token usage stats: total input, output, cache tokens with cache hit rate.
-- Performance metrics: average TTFB, P50/P90 latency percentiles, filtered output TPS.
-- Output TPS only counts genuinely streamed requests (generation time > 500ms) to exclude fake SSE responses.
-- Per-provider breakdown table with request count and token usage.
+- Stats time range (1d / 7d / 30d / All, default 7d); token totals and cache hit rate; TTFB average and P50/P90; output TPS for streamed requests only (generation over 500 ms); per-provider breakdown.
 
-**Metrics Pipeline**
+**Metrics**
 
-- Token extraction from both JSON and SSE response bodies (Anthropic and OpenAI formats).
-- TTFB tracked through the entire proxy pipeline (executor → response logger → database).
-- Token and TTFB data stored in `request_logs` table (new columns: `input_tokens`, `output_tokens`, `cache_tokens`, `ttfb`).
-- Database stats API supports `?range=1d|7d|30d|all` query parameter.
+- Tokens parsed from JSON and SSE responses; TTFB traced end-to-end; `request_logs` gains `input_tokens`, `output_tokens`, `cache_tokens`, `ttfb`; stats API accepts `?range=1d|7d|30d|all`.
+
+**Protocol/Conversion**
+
+- **Azure OpenAI**: Anthropic inbound requests using hosted web search are sent to the **Responses** API when Chat Completions would reject those tools.
+- Hosted Chat **hosted-tool** shaping for outbound requests is inferred from the provider URL (no separate UI toggle).
+
+**Desktop**
+
+- **Tauri** desktop variant (Rust shell + Node sidecar).
+- HMAC-backed UI access token and session cookies for the WebView; followers can fetch the leader UI token from an internal API.
+
+### Changed
+
+**Config**
+
+- Provider field **`openaiCompat`** is legacy (YAML/API may still include it); behavior no longer depends on it. Azure OpenAI Chat shaping applies when the upstream host matches **`*.cognitiveservices.azure.com`**.
+
+**UI**
+
+- Provider dialog drops the cross-protocol **Azure OpenAI** toggle; routing follows the configured upstream URL.
 
 ### Fixed
 
-- Log detail now shows "Pending" badge for in-progress requests instead of "Err".
-- Correctly extract model name from truncated base64-encoded request bodies.
+**Log Viewer**
 
-## [0.2.0] - 2026-05-04
+- In-progress requests show a **Pending** badge instead of **Err**.
+- Model name extraction works when request bodies are truncated base64.
+
+**Protocol/Conversion**
+
+- **Gemini** (OpenAI-compatible): strip unsupported URL query flags; outbound Chat bodies omit Responses-only fields and unsupported tool types.
+- **Z.ai GLM** (including `open.bigmodel.cn`): preserve web search across OpenAI Chat ↔ Anthropic; normalize streaming SSE (`web_search_prime` → standard `web_search` / `web_search_tool_result`) for **`/v1/messages`** and **`/anthropic/v1/messages`**; align assistant text that still references `web_search_prime`.
+- **Xiaomi MiMo**: carry hosted web search in Anthropic ↔ OpenAI conversions; map **`url_citation`** to **`web_search` / `web_search_tool_result`** instead of a trailing JSON-only blob.
 
 ## [0.2.0] - 2026-05-04
 

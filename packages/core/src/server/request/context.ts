@@ -47,6 +47,10 @@ export interface BodyProcessResult {
   streamRequested?: boolean;
   /** Original POST /v1/responses fields echoed into synthesized Responses output */
   originalResponsesEcho?: ResponsesRequestEcho;
+  /** Anthropic POST /v1/messages with hosted `web_search` tool — enables SSE response rewrite (GLM). */
+  hasHostedWebSearch?: boolean;
+  /** After cross-protocol conversion: upstream JSON wire shape for response handling (e.g. OpenAI Responses). */
+  upstreamResponseFormat?: string;
 }
 
 /**

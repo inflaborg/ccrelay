@@ -16,6 +16,7 @@ import {
   convertRequestToOpenAI,
   type AnthropicMessageRequest,
 } from "@/converter/adapters/anthropic-to-openai-chat-request";
+import { normalizeToolsForProvider } from "@/converter/platform-transforms";
 
 /* eslint-disable @typescript-eslint/naming-convention -- Testing API formats with snake_case */
 
@@ -540,13 +541,341 @@ describe("converter: anthropic-to-openai-chat-request", () => {
 
       expect(result.request.tools).toBeUndefined();
     });
+
+    it("maps Anthropic server tool definitions to OpenAI-hosted tools (passthrough web_search)", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 4096,
+        tools: [
+          {
+            type: "web_search_20250305",
+            name: "web_search",
+            max_uses: 5,
+          },
+          {
+            name: "client_fn",
+            description: "client",
+            input_schema: { type: "object", properties: {} },
+          },
+        ],
+        messages: [],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.tools).toEqual([
+        {
+          type: "web_search",
+          max_uses: 5,
+        },
+        {
+          type: "function",
+          function: {
+            name: "client_fn",
+            description: "client",
+            parameters: { type: "object", properties: {} },
+          },
+        },
+      ]);
+    });
+
+    it("GLM provider baseUrl nests web_search envelope for Anthropic→Chat", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 4096,
+        tools: [
+          {
+            type: "web_search_20250305",
+            name: "web_search",
+            max_uses: 5,
+          },
+          {
+            name: "client_fn",
+            description: "client",
+            input_schema: { type: "object", properties: {} },
+          },
+        ],
+        messages: [],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath, {
+        providerBaseUrl: "https://api.z.ai/",
+      });
+
+      expect(result.request.tools).toEqual([
+        {
+          type: "web_search",
+          web_search: {
+            enable: true,
+            max_uses: 5,
+            search_engine: "search-prime",
+            search_result: true,
+          },
+        },
+        {
+          type: "function",
+          function: {
+            name: "client_fn",
+            description: "client",
+            parameters: { type: "object", properties: {} },
+          },
+        },
+      ]);
+    });
+
+    it("GLM keeps WebSearch as function tool (no coalesce)", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 4096,
+        tools: [
+          {
+            name: "WebSearch",
+            description: "Search the web",
+            input_schema: {
+              type: "object",
+              properties: { query: { type: "string" } },
+            },
+          },
+          {
+            name: "client_fn",
+            description: "client",
+            input_schema: { type: "object", properties: {} },
+          },
+        ],
+        messages: [],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath, {
+        providerBaseUrl: "https://api.z.ai/",
+      });
+
+      const { tools } = normalizeToolsForProvider(
+        result.request.tools as Record<string, unknown>[],
+        "https://api.z.ai/",
+        result.request.tool_choice
+      );
+
+      expect(tools).toEqual([
+        {
+          type: "function",
+          function: {
+            name: "WebSearch",
+            description: "Search the web",
+            parameters: {
+              type: "object",
+              properties: { query: { type: "string" } },
+            },
+          },
+        },
+        {
+          type: "function",
+          function: {
+            name: "client_fn",
+            description: "client",
+            parameters: { type: "object", properties: {} },
+          },
+        },
+      ]);
+    });
+
+    it("non-GLM: WebSearch client tool remains an OpenAI function", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 4096,
+        tools: [
+          {
+            name: "WebSearch",
+            description: "Search",
+            input_schema: { type: "object", properties: { query: { type: "string" } } },
+          },
+        ],
+        messages: [],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.tools).toEqual([
+        {
+          type: "function",
+          function: {
+            name: "WebSearch",
+            description: "Search",
+            parameters: { type: "object", properties: { query: { type: "string" } } },
+          },
+        },
+      ]);
+    });
+
+    it("GLM preserves tool_choice when WebSearch stays a function tool", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 4096,
+        tools: [
+          {
+            name: "WebSearch",
+            description: "Search",
+            input_schema: { type: "object", properties: {} },
+          },
+        ],
+        tool_choice: { type: "tool", name: "WebSearch" },
+        messages: [],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath, {
+        providerBaseUrl: "https://api.z.ai/api/coding/paas/v4",
+      });
+
+      const { tools, toolChoice } = normalizeToolsForProvider(
+        result.request.tools as Record<string, unknown>[],
+        "https://api.z.ai/api/coding/paas/v4",
+        result.request.tool_choice
+      );
+
+      expect(toolChoice).toEqual({ type: "function", function: { name: "WebSearch" } });
+      expect(tools[0]).toMatchObject({
+        type: "function",
+        function: { name: "WebSearch" },
+      });
+    });
+
+    it("preserves tool_choice when only hosted/server tools exist", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 4096,
+        tool_choice: { type: "auto" },
+        tools: [
+          {
+            type: "web_search_20250305",
+            name: "web_search",
+          },
+        ],
+        messages: [],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.tools).toEqual([{ type: "web_search" }]);
+      expect(result.request.tool_choice).toBe("auto");
+    });
+
+    it("maps code_execution_<version> server tools to Chat code_interpreter", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 4096,
+        messages: [],
+        tools: [
+          {
+            type: "code_execution_20250522",
+            name: "code_execution",
+            storage_limit_mb: 200,
+          },
+        ],
+      };
+      const result = convertRequestToOpenAI(request, basePath);
+      expect(result.request.tools).toEqual([{ type: "code_interpreter", storage_limit_mb: 200 }]);
+    });
+  });
+
+  describe("server tool blocks in message history", () => {
+    it("should embed server_tool_use and server tool results in assistant content as JSON lines", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 4096,
+        messages: [
+          {
+            role: "assistant",
+            content: [
+              { type: "text", text: "Ok." },
+              {
+                type: "server_tool_use",
+                id: "s1",
+                name: "web_search",
+                input: { q: "a" },
+              },
+              {
+                type: "web_search_tool_result",
+                tool_use_id: "s1",
+                content: { hits: 1 },
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.messages).toHaveLength(1);
+      const content = result.request.messages[0].content as string;
+      expect(content.startsWith("Ok.\n")).toBe(true);
+      expect(content).toContain(
+        JSON.stringify({
+          type: "server_tool_use",
+          id: "s1",
+          name: "web_search",
+          input: { q: "a" },
+        })
+      );
+      expect(content).toContain(
+        JSON.stringify({
+          type: "web_search_tool_result",
+          tool_use_id: "s1",
+          content: { hits: 1 },
+        })
+      );
+    });
+
+    it("should add opaque server-tool text parts alongside user multimodal content", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 4096,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Refs:" },
+              {
+                type: "server_tool_use",
+                id: "s2",
+                name: "web_search",
+                input: {},
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.messages[0].role).toBe("user");
+      const parts = result.request.messages[0].content as Array<{ type: string; text?: string }>;
+      expect(parts[0]).toEqual({ type: "text", text: "Refs:" });
+      expect(parts[1]).toEqual({
+        type: "text",
+        text: JSON.stringify({
+          type: "server_tool_use",
+          id: "s2",
+          name: "web_search",
+          input: {},
+        }),
+      });
+    });
   });
 
   describe("tool_choice conversion", () => {
+    /** OpenAI `tool_choice` is only emitted when at least one client function tool exists. */
+    const clientToolForChoice: AnthropicMessageRequest["tools"] = [
+      {
+        name: "stub_for_tool_choice",
+        description: "",
+        input_schema: { type: "object", properties: {} },
+      },
+    ];
+
     it("should convert { type: 'auto' } to 'auto'", () => {
       const request: AnthropicMessageRequest = {
         model: "claude-3-5-sonnet-20241022",
         max_tokens: 4096,
+        tools: clientToolForChoice,
         tool_choice: { type: "auto" },
         messages: [],
       };
@@ -560,6 +889,7 @@ describe("converter: anthropic-to-openai-chat-request", () => {
       const request: AnthropicMessageRequest = {
         model: "claude-3-5-sonnet-20241022",
         max_tokens: 4096,
+        tools: clientToolForChoice,
         tool_choice: { type: "any" },
         messages: [],
       };
@@ -573,6 +903,7 @@ describe("converter: anthropic-to-openai-chat-request", () => {
       const request: AnthropicMessageRequest = {
         model: "claude-3-5-sonnet-20241022",
         max_tokens: 4096,
+        tools: clientToolForChoice,
         tool_choice: { type: "none" },
         messages: [],
       };
@@ -586,6 +917,13 @@ describe("converter: anthropic-to-openai-chat-request", () => {
       const request: AnthropicMessageRequest = {
         model: "claude-3-5-sonnet-20241022",
         max_tokens: 4096,
+        tools: [
+          {
+            name: "X",
+            description: "",
+            input_schema: { type: "object", properties: {} },
+          },
+        ],
         tool_choice: { type: "tool", name: "X" },
         messages: [],
       };
@@ -682,70 +1020,6 @@ describe("converter: anthropic-to-openai-chat-request", () => {
         effort: "high",
         enabled: true,
       });
-    });
-  });
-
-  describe("Azure OpenAI compat (openaiCompat)", () => {
-    it("strips reasoning, cache_control, assistant thinking, and tool extra_content", () => {
-      const request: AnthropicMessageRequest = {
-        model: "gpt-4",
-        max_tokens: 256,
-        thinking: { type: "adaptive", budget_tokens: 1024 },
-        system: [{ type: "text", text: "system-a", cache_control: { type: "ephemeral" } }],
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: "hi",
-                cache_control: { type: "ephemeral" },
-              },
-            ],
-          },
-          {
-            role: "assistant",
-            content: [
-              { type: "thinking", thinking: "t1", signature: "sig1" },
-              { type: "text", text: "yo" },
-              {
-                type: "tool_use",
-                id: "call_1",
-                name: "noop",
-                input: {},
-              },
-            ],
-          },
-        ],
-      };
-
-      const result = convertRequestToOpenAI(request, basePath, { openaiCompat: "azure_openai" });
-
-      expect(result.request.reasoning).toBeUndefined();
-      const systemMsg = result.request.messages[0];
-      expect(systemMsg.role).toBe("system");
-      expect(Array.isArray(systemMsg.content)).toBe(true);
-      expect((systemMsg.content as { cache_control?: unknown }[])[0].cache_control).toBeUndefined();
-      expect((systemMsg.content as { text: string }[])[0].text).toBe("system-a");
-
-      const userMsg = result.request.messages[1];
-      expect((userMsg.content as { cache_control?: unknown }[])[0].cache_control).toBeUndefined();
-
-      const asst = result.request.messages[2];
-      expect(asst.thinking).toBeUndefined();
-      expect(asst.tool_calls?.[0].extra_content).toBeUndefined();
-      expect(asst.tool_calls?.[0].function.name).toBe("noop");
-    });
-
-    it("does not strip reasoning when openaiCompat is default", () => {
-      const request: AnthropicMessageRequest = {
-        model: "gpt-4",
-        max_tokens: 100,
-        thinking: { type: "enabled" },
-        messages: [],
-      };
-      const r = convertRequestToOpenAI(request, basePath, { openaiCompat: "default" });
-      expect(r.request.reasoning).toEqual({ effort: "medium", enabled: true });
     });
   });
 

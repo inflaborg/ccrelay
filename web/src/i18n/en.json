@@ -186,10 +186,6 @@
       "typeOpenaiChatOnly": "OpenAI (Chat Only)",
       "modePassthrough": "Passthrough",
       "modeInject": "Inject",
-      "crossProtocol": "Cross-protocol (Anthropic -> Chat)",
-      "crossProtocolStandard": "Standard",
-      "crossProtocolAzure": "Azure OpenAI",
-      "crossProtocolHelp": "Choose Azure when the upstream rejects extra fields (for example reasoning).",
       "apiKey": "API Key",
       "apiKeyNotSet": "(not set)",
       "apiKeyHelpEdit": "API Key cannot be modified. To change, delete and recreate the provider.",
@@ -234,6 +230,95 @@
     "selectAll": "Select All",
     "cancelSelection": "Cancel",
     "selectedCount": "{{count}} selected"
+  },
+  "wizard": {
+    "title": "Add provider",
+    "titleBrand": "{{brand}} — setup",
+    "chooser": {
+      "genericSection": "Generic endpoints",
+      "customSection": "Custom",
+      "custom": "Manual setup",
+      "customDesc": "Full provider form with YAML model map and advanced options.",
+      "partners": "Partners"
+    },
+    "brand": {
+      "genericOpenaiChat": "OpenAI Chat",
+      "genericAnthropic": "Anthropic",
+      "glm": "Zhipu GLM",
+      "xiaomi": "Xiaomi MiMo",
+      "azure": "Azure OpenAI",
+      "geminiOpenai": "Gemini (OpenAI-compatible)"
+    },
+    "toggle": {
+      "off": "No",
+      "on": "Yes"
+    },
+    "option": {
+      "region": "Region",
+      "codingPlan": "Coding Plan",
+      "tokenPlan": "Token Plan"
+    },
+    "region": {
+      "international": "International",
+      "china": "China"
+    },
+    "field": {
+      "name": "Display name",
+      "apiKey": "API key",
+      "baseUrl": "Endpoint URL",
+      "models": "Upstream model IDs",
+      "customModels": "Custom model list",
+      "claudeSupport": "Support Claude Code / Codex"
+    },
+    "models": {
+      "referenceTitle": "Endpoint models",
+      "loading": "Fetching models from endpoint…",
+      "success": "{{count}} models available",
+      "authError": "Authentication failed (401/403). Check your API key.",
+      "networkError": "Could not reach the endpoint. Check the URL.",
+      "formatError": "Unexpected response format from /models endpoint.",
+      "empty": "Endpoint returned no models."
+    },
+    "test": {
+      "button": "Test",
+      "testing": "Testing…",
+      "pass": "OK",
+      "fail": "Failed",
+      "noModel": "Enter at least one upstream model ID to test.",
+      "noProbeModels": "No models listed yet — wait for endpoint fetch or enable custom model list.",
+      "selectModel": "Select model to test",
+      "pickModelTitle": "Choose model for test",
+      "pickModelDescription": "Multiple models were returned from the endpoint. Select one to run the test.",
+      "continueWithTest": "Continue",
+      "networkError": "Network error",
+      "authError": "Auth failed ({{status}})",
+      "serverError": "Server error ({{status}})",
+      "clientError": "Request rejected ({{status}})",
+      "htmlResponse": "Got HTML (proxy misconfigured?)",
+      "timeout": "Timed out (5s)",
+      "formatError": "Unexpected response format"
+    },
+    "placeholder": {
+      "models": "glm-5.1\nglm-4.7"
+    },
+    "help": {
+      "azureEndpoint": "Your Azure OpenAI base URL, e.g. https://…cognitiveservices.azure.com/openai/v1",
+      "customEndpoint": "Paste your upstream base URL (must match the protocol you chose: OpenAI Chat or Anthropic Messages).",
+      "presetEndpointDefault": "Official API URL by default; edit if you use another host or proxy.",
+      "models": "One model id per line. Each becomes anthropic/{id} in the local model list.",
+      "claudeSupport": "Adds claude-* and gpt-* patterns mapped to the first model for Claude Code and Codex."
+    },
+    "confirm": {
+      "lead": "These providers will be created:",
+      "submit": "Create",
+      "back": "Back",
+      "working": "Creating…"
+    },
+    "step": {
+      "next": "Next",
+      "back": "Back",
+      "cancel": "Cancel"
+    }
   },
   "logs": {
     "title": "Request Logs",

@@ -45,4 +45,79 @@ describe("convertAnthropicResponseToOpenAI", () => {
     );
     expect(o.choices[0].finish_reason).toBe("stop");
   });
+
+  describe("server-side tools (opaque text, not OpenAI tool_calls)", () => {
+    it("serializes server_tool_use and *_tool_result as assistant text JSON, no tool_calls", () => {
+      const anthropic = {
+        ...base,
+        content: [
+          { type: "text", text: "Searching." },
+          {
+            type: "server_tool_use",
+            id: "srv_1",
+            name: "web_search",
+            input: { query: "pandas" },
+          },
+          {
+            type: "web_search_tool_result",
+            tool_use_id: "srv_1",
+            content: [],
+          },
+        ],
+      } satisfies AnthropicMessageResponse;
+
+      const o = convertAnthropicResponseToOpenAI(anthropic, "claude-3");
+      expect(o.choices[0].message.tool_calls).toBeUndefined();
+      const content = o.choices[0].message.content ?? "";
+      expect(content).toContain("Searching.");
+      expect(content).toContain(
+        JSON.stringify({
+          type: "server_tool_use",
+          id: "srv_1",
+          name: "web_search",
+          input: { query: "pandas" },
+        })
+      );
+      const linesOut = content.split("\n");
+      expect(linesOut[linesOut.length - 1]).toBe("[]");
+    });
+
+    it("maps stop_reason tool_use to finish_reason stop when only server_tool_use blocks", () => {
+      const anthropic = {
+        ...base,
+        stop_reason: "tool_use",
+        content: [
+          {
+            type: "server_tool_use",
+            id: "srv_1",
+            name: "web_search",
+            input: {},
+          },
+        ],
+      } satisfies AnthropicMessageResponse;
+
+      const o = convertAnthropicResponseToOpenAI(anthropic, "claude-3");
+      expect(o.choices[0].finish_reason).toBe("stop");
+      expect(o.choices[0].message.tool_calls).toBeUndefined();
+    });
+
+    it("keeps stop_reason tool_use -> finish_reason tool_calls when client tool_use exists", () => {
+      const anthropic = {
+        ...base,
+        stop_reason: "tool_use",
+        content: [
+          {
+            type: "tool_use",
+            id: "toolu_01",
+            name: "browser_search",
+            input: { q: "x" },
+          },
+        ],
+      } satisfies AnthropicMessageResponse;
+
+      const o = convertAnthropicResponseToOpenAI(anthropic, "claude-3");
+      expect(o.choices[0].finish_reason).toBe("tool_calls");
+      expect(o.choices[0].message.tool_calls).toHaveLength(1);
+    });
+  });
 });

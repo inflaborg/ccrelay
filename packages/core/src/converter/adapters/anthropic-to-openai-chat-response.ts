@@ -15,6 +15,7 @@ import type {
   AnthropicMessageResponse,
   AnthropicContentBlock,
 } from "./openai-chat-to-anthropic-response";
+import { isServerToolResultBlock } from "../../types";
 
 /**
  * Non-streaming Anthropic `message` response to OpenAI chat.completion shape
@@ -29,7 +30,7 @@ export function convertAnthropicResponseToOpenAI(
   const choice: OpenAIChoice = {
     index: 0,
     message,
-    finish_reason: mapAnthropicStopReasonToOpenAI(anthropic.stop_reason),
+    finish_reason: mapAnthropicStopReasonToOpenAI(anthropic.stop_reason, anthropic.content),
   };
 
   return {
@@ -55,14 +56,25 @@ export function convertAnthropicResponseToOpenAI(
   };
 }
 
-function mapAnthropicStopReasonToOpenAI(reason: string): string {
+function mapAnthropicStopReasonToOpenAI(reason: string, blocks: AnthropicContentBlock[]): string {
+  if (reason === "tool_use") {
+    const hasClientToolUse = blocks.some(b => b.type === "tool_use");
+    if (!hasClientToolUse) {
+      return "stop";
+    }
+    return "tool_calls";
+  }
   const mapping: Record<string, string> = {
     end_turn: "stop",
     max_tokens: "length",
-    tool_use: "tool_calls",
     stop_sequence: "stop",
   };
   return mapping[reason] || "stop";
+}
+
+/** Uniform opaque serialization — no tool-specific branches. */
+function serializeServerToolResultContent(content: unknown): string {
+  return JSON.stringify(content ?? null);
 }
 
 function buildOpenAIMessageFromContent(blocks: AnthropicContentBlock[]): OpenAIResponseMessage {
@@ -91,28 +103,9 @@ function buildOpenAIMessageFromContent(blocks: AnthropicContentBlock[]): OpenAIR
         },
       });
     } else if (b.type === "server_tool_use") {
-      toolCalls.push({
-        id: b.id,
-        type: "function",
-        function: {
-          name: b.name,
-          arguments: JSON.stringify(b.input ?? {}),
-        },
-      });
-    } else if (b.type === "web_search_tool_result") {
-      // Map to OpenAI-style annotations (best-effort)
-      const annotations = b.content
-        .filter(
-          (x): x is { type: "web_search_result"; url: string; title: string } =>
-            (x as { type?: string }).type === "web_search_result"
-        )
-        .map(x => ({
-          url_citation: { url: x.url, title: x.title },
-        }));
-      if (annotations.length) {
-        const existing = message.annotations || [];
-        message.annotations = [...existing, ...annotations];
-      }
+      textParts.push(JSON.stringify(b));
+    } else if (isServerToolResultBlock(b)) {
+      textParts.push(serializeServerToolResultContent((b as { content?: unknown }).content));
     }
   }
 

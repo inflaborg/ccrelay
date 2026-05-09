@@ -549,9 +549,7 @@ export default function Logs() {
       header: t("logs.table.header.model"),
       cell: log => {
         const hasMapping = log.mappedModel && log.mappedModel !== log.model;
-        const title = hasMapping
-          ? `${log.model} → ${log.mappedModel}`
-          : log.model || "";
+        const title = hasMapping ? `${log.model} → ${log.mappedModel}` : log.model || "";
         return (
           <span className="font-mono text-[11px] block truncate" title={title}>
             {hasMapping ? (
@@ -637,15 +635,26 @@ export default function Logs() {
       id: "tokens",
       header: t("logs.table.header.tokens"),
       cell: log => {
-        if (log.inputTokens == null && log.outputTokens == null) return <span className="text-[11px]">-</span>;
+        if (log.inputTokens == null && log.outputTokens == null)
+          return <span className="text-[11px]">-</span>;
         const parts: string[] = [];
         if (log.inputTokens != null) parts.push(`${log.inputTokens}`);
         if (log.outputTokens != null) parts.push(`${log.outputTokens}`);
         if (log.cacheTokens != null && log.cacheTokens > 0) {
-          const v = log.cacheTokens >= 1000 ? `${(log.cacheTokens / 1000).toFixed(1)}K` : `${log.cacheTokens}`;
+          const v =
+            log.cacheTokens >= 1000
+              ? `${(log.cacheTokens / 1000).toFixed(1)}K`
+              : `${log.cacheTokens}`;
           parts.push(v);
         }
-        return <span className="font-mono text-[11px]" title={`In: ${log.inputTokens ?? 0} / Out: ${log.outputTokens ?? 0} / Cache: ${log.cacheTokens ?? 0}`}>{parts.join("/")}</span>;
+        return (
+          <span
+            className="font-mono text-[11px]"
+            title={`In: ${log.inputTokens ?? 0} / Out: ${log.outputTokens ?? 0} / Cache: ${log.cacheTokens ?? 0}`}
+          >
+            {parts.join("/")}
+          </span>
+        );
       },
       className: "hidden md:table-cell",
       headerClassName: "hidden md:table-cell",
@@ -656,7 +665,11 @@ export default function Logs() {
       header: "TTFB",
       cell: log => {
         if (log.ttfb == null) return <span className="text-[11px]">-</span>;
-        return <span className="text-[11px]">{log.ttfb >= 1000 ? `${(log.ttfb / 1000).toFixed(1)}s` : `${log.ttfb}ms`}</span>;
+        return (
+          <span className="text-[11px]">
+            {log.ttfb >= 1000 ? `${(log.ttfb / 1000).toFixed(1)}s` : `${log.ttfb}ms`}
+          </span>
+        );
       },
       className: "hidden md:table-cell",
       headerClassName: "hidden md:table-cell",
@@ -666,11 +679,19 @@ export default function Logs() {
       id: "tps",
       header: "TPS",
       cell: log => {
-        if (log.outputTokens == null || !log.duration) return <span className="text-[11px]">-</span>;
+        if (log.outputTokens == null || !log.duration)
+          return <span className="text-[11px]">-</span>;
         const genTime = log.ttfb != null && log.ttfb > 0 ? log.duration - log.ttfb : log.duration;
         const calcTime = genTime >= 1000 ? genTime : 1000;
         const tps = (log.outputTokens / calcTime) * 1000;
-        return <span className="font-mono text-[11px]" title={`${log.outputTokens} tokens / ${genTime}ms`}>{tps.toFixed(1)}</span>;
+        return (
+          <span
+            className="font-mono text-[11px]"
+            title={`${log.outputTokens} tokens / ${genTime}ms`}
+          >
+            {tps.toFixed(1)}
+          </span>
+        );
       },
       className: "hidden md:table-cell",
       headerClassName: "hidden md:table-cell",
@@ -864,9 +885,7 @@ export default function Logs() {
                   {/* Path - Full width */}
                   <div className="text-xs">
                     <span className="text-muted-foreground">{t("logs.detail.path")}</span>
-                    <p className="font-mono text-[11px] break-all mt-0.5">
-                      {selectedLog.path}
-                    </p>
+                    <p className="font-mono text-[11px] break-all mt-0.5">{selectedLog.path}</p>
                   </div>
 
                   {selectedLog.targetUrl && (
@@ -883,7 +902,8 @@ export default function Logs() {
                     <div className="text-xs">
                       <span className="text-muted-foreground">{t("logs.detail.model")}</span>
                       <p className="font-mono text-[11px] mt-0.5">
-                        {selectedLog.mappedModel && selectedLog.mappedModel !== selectedLog.model ? (
+                        {selectedLog.mappedModel &&
+                        selectedLog.mappedModel !== selectedLog.model ? (
                           <>
                             <span>{selectedLog.model}</span>
                             <span className="text-muted-foreground"> → </span>
@@ -914,7 +934,8 @@ export default function Logs() {
                         )}
                         {selectedLog.cacheTokens != null && selectedLog.cacheTokens > 0 && (
                           <span>
-                            {t("logs.detail.tokenCache")}: {selectedLog.cacheTokens.toLocaleString()}
+                            {t("logs.detail.tokenCache")}:{" "}
+                            {selectedLog.cacheTokens.toLocaleString()}
                           </span>
                         )}
                       </p>
@@ -932,22 +953,27 @@ export default function Logs() {
                     </div>
                   )}
 
-                  {selectedLog.outputTokens != null && selectedLog.duration > 0 && (() => {
-                    const genTime = selectedLog.ttfb != null && selectedLog.ttfb > 0 ? selectedLog.duration - selectedLog.ttfb : selectedLog.duration;
-                    const calcTime = genTime >= 1000 ? genTime : 1000;
-                    const tps = (selectedLog.outputTokens / calcTime) * 1000;
-                    return (
-                      <div className="text-xs">
-                        <span className="text-muted-foreground">Output TPS</span>
-                        <p className="font-mono text-[11px] mt-0.5">
-                          {tps.toFixed(1)} t/s
-                          <span className="text-muted-foreground ml-2">
-                            ({selectedLog.outputTokens} tokens / {genTime}ms)
-                          </span>
-                        </p>
-                      </div>
-                    );
-                  })()}
+                  {selectedLog.outputTokens != null &&
+                    selectedLog.duration > 0 &&
+                    (() => {
+                      const genTime =
+                        selectedLog.ttfb != null && selectedLog.ttfb > 0
+                          ? selectedLog.duration - selectedLog.ttfb
+                          : selectedLog.duration;
+                      const calcTime = genTime >= 1000 ? genTime : 1000;
+                      const tps = (selectedLog.outputTokens / calcTime) * 1000;
+                      return (
+                        <div className="text-xs">
+                          <span className="text-muted-foreground">Output TPS</span>
+                          <p className="font-mono text-[11px] mt-0.5">
+                            {tps.toFixed(1)} t/s
+                            <span className="text-muted-foreground ml-2">
+                              ({selectedLog.outputTokens} tokens / {genTime}ms)
+                            </span>
+                          </p>
+                        </div>
+                      );
+                    })()}
 
                   {selectedLog.errorMessage && (
                     <div className="text-xs">

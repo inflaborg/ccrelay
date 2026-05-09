@@ -51,12 +51,85 @@ export {
   convertResponsesRequestToChatCompletions,
   isOpenAIResponsesRequest,
   type ResponsesToChatResult,
+  type ResponsesToChatOptions,
   extractResponsesEcho,
   mergedResponseShellEcho,
   extractFunctionToolsForEcho,
 } from "./adapters/openai-responses-to-chat";
 
+export {
+  convertOpenAIMessageRequestToResponsesRequest,
+  convertOpenAiChatBodyBufferToResponsesRequest,
+  type ChatToResponsesRequestResult,
+} from "./adapters/openai-chat-to-responses-request";
+
+export {
+  chatBodyHasHostedTool,
+  anthropicBodyHasHostedTool,
+  detectChatHostedToolKinds,
+  HOSTED_TOOL_MATCHERS,
+} from "./hosted-tools";
+
+export type { HostedToolKind, HostedToolMatcher } from "./hosted-tools";
+
+export {
+  convertResponsesApiJsonToAnthropicMessageResponse,
+  isOpenAIResponsesApiResultBody,
+} from "./adapters/openai-responses-to-anthropic-response";
+
 export type { ResponsesRequestEcho } from "../types";
+
+export {
+  stripAnthropicToolVersionSuffix,
+  anthropicToolBaseToChatHostedType,
+  CHAT_HOSTED_TOOL_TO_ANTHROPIC,
+  anthropicServerToolDefToOpenAIHosted,
+  openAIHostedToolToAnthropicServerToolDef,
+  normalizeToolForProvider,
+  normalizeToolsForProvider,
+  normalizedHostnameFromBaseUrl,
+  hostnameMatchesDomain,
+  matchHostedToolRuleForBaseUrl,
+} from "./tool-schema-conversion";
+
+export type {
+  HostedToolRule,
+  HostedToolTransform,
+  NormalizeToolsResult,
+  PlatformMessageRule,
+  PlatformMessageTransform,
+  PlatformAnthropicSseTransform,
+  PlatformTransformRule,
+  PlatformResponseTransform,
+  PlatformToolTransform,
+  AnthropicSseEventRow,
+} from "./platform-transforms";
+
+export {
+  glmWebSearchEnvelopeTransform,
+  mimoWebSearchTransform,
+  passthroughTransform,
+  TRANSFORM_REGISTRY,
+  TOOL_TRANSFORM_REGISTRY,
+  MESSAGE_TRANSFORM_REGISTRY,
+  RESPONSE_TRANSFORM_REGISTRY,
+  ANTHROPIC_SSE_TRANSFORM_REGISTRY,
+  applyPlatformMessageTransforms,
+  applyPlatformResponseTransforms,
+  applyPlatformToolTransforms,
+  applyAnthropicSseRowsPlatformTransform,
+  glmFlattenContentTransform,
+  glmWebSearchResponseTransform,
+  mimoAnnotationsWebSearchResponseTransform,
+  isPlainObject,
+  matchAnthropicSseRule,
+  anthropicMessagesBodyHasHostedWebSearch,
+  parseAnthropicSseRows,
+  serializeAnthropicSseRows,
+  parseGlmToolResultAsSearchEntries,
+  transformGlmAnthropicSearchSseRows,
+  glmWebSearchServerToolName,
+} from "./platform-transforms";
 
 export {
   convertChatCompletionToResponses,
@@ -67,6 +140,14 @@ export {
   formatOpenAIResponsesSse,
   formatOpenAIChatCompletionsSse,
 } from "./streaming/sse-formatters";
+
+export {
+  createAnthropicToOpenAISseState,
+  processAnthropicStreamEnvelope,
+  flushAnthropicToOpenAISseFinal,
+  createAnthropicSseEnvelopeBuffer,
+  type AnthropicToOpenAISseState,
+} from "./streaming/anthropic-sse-to-openai-chat";
 
 export {
   createStreamingState,
@@ -82,8 +163,6 @@ export {
 } from "./rules/openai-chat-model-rules";
 
 export {
-  resolveOpenAICompatForAnthropicToOpenAI,
-  sanitizeAzureOpenAiChatRequest,
   isGeminiOpenAiModel,
   withOptionalGeminiThoughtSignature,
 } from "./rules/openai-chat-platform-transforms";

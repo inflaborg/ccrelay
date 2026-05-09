@@ -20,8 +20,6 @@ export interface Provider {
   modelMappingEnabled?: boolean;
   useCustomModelsList?: boolean;
   customModelsList?: string[];
-  /** Set `azure_openai` when the upstream is Azure OpenAI (Anthropic client → Chat Completions). */
-  openaiCompat?: "default" | "azure_openai";
 }
 
 export interface ProvidersResponse {
@@ -68,7 +66,6 @@ export interface AddProviderRequest {
   headers?: Record<string, string>;
   useCustomModelsList?: boolean;
   customModelsList?: string[];
-  openaiCompat?: "default" | "azure_openai";
 }
 
 export interface AddProviderResponse {
@@ -312,4 +309,44 @@ export interface PatchConfigResponse {
   status: string;
   restartRequired?: boolean;
   message?: string;
+}
+
+/** Wizard upstream proxy (same-origin; avoids browser CORS to provider APIs) */
+
+export type WizardProviderType = "anthropic" | "openai" | "openai_chat";
+
+export interface WizardProbeModelsRequest {
+  baseUrl: string;
+  apiKey: string;
+  providerType: WizardProviderType;
+}
+
+export type WizardProbeModelsResponse =
+  | { ok: true; modelIds: string[] }
+  | { ok: false; errorCode: "auth" | "network" | "format" };
+
+export interface WizardEndpointVariantInput {
+  id: string;
+  name: string;
+  baseUrl: string;
+  providerType: WizardProviderType;
+  authHeader?: string;
+}
+
+export interface WizardEndpointTestRequest {
+  apiKey: string;
+  modelId: string;
+  variants: WizardEndpointVariantInput[];
+}
+
+export interface WizardEndpointTestResultLine {
+  id: string;
+  pass: boolean;
+  httpStatus?: number;
+  detail?: string;
+}
+
+export interface WizardEndpointTestResponse {
+  ok: true;
+  results: WizardEndpointTestResultLine[];
 }

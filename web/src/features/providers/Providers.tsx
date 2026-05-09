@@ -1,7 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Copy, Loader2, Plus, RotateCw, X, Upload, Download, CheckSquare, MinusSquare } from "lucide-react";
+import {
+  Check,
+  Copy,
+  Loader2,
+  Plus,
+  RotateCw,
+  X,
+  Upload,
+  Download,
+  CheckSquare,
+  MinusSquare,
+} from "lucide-react";
 import * as yaml from "js-yaml";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +31,7 @@ import { ContextMenuWrapper } from "@/components/ui/context-menu";
 import { Select } from "@/components/ui/select";
 import { api } from "@/api/client";
 import type { AddProviderRequest, Provider, ModelMapEntry } from "@/types/api";
+import { WizardDialog } from "./wizard/WizardDialog";
 
 const PROVIDER_PROTOCOL_LABEL: Record<string, { label: string; className: string }> = {
   anthropic: { label: "providers.protocol.anthropic", className: "bg-indigo-500 text-white" },
@@ -47,6 +59,7 @@ const DEFAULT_FORM: AddProviderRequest = {
 export default function Providers() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const [showWizard, setShowWizard] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [formData, setFormData] = useState<AddProviderRequest>(DEFAULT_FORM);
   const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
@@ -161,6 +174,10 @@ export default function Providers() {
   };
 
   const openAddModal = () => {
+    setShowWizard(true);
+  };
+
+  const openLegacyAddModal = () => {
     setEditingProvider(null);
     setFormData(DEFAULT_FORM);
     setModelMapText("");
@@ -186,7 +203,6 @@ export default function Providers() {
       modelMappingEnabled: provider.modelMappingEnabled !== false,
       useCustomModelsList: Boolean(provider.useCustomModelsList),
       customModelsList: provider.customModelsList,
-      openaiCompat: provider.openaiCompat === "azure_openai" ? "azure_openai" : undefined,
     });
     setModelMapText(modelMap ? yaml.dump(modelMap, { indent: 2, lineWidth: -1 }) : "");
     setModelMapError(null);
@@ -305,7 +321,16 @@ export default function Providers() {
     if (selectedIds.size === 0) return;
     try {
       const result = await api.exportProviders([...selectedIds]);
-      const blob = new Blob([JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), providers: result.providers }, null, 2)], { type: "application/json" });
+      const blob = new Blob(
+        [
+          JSON.stringify(
+            { version: 1, exportedAt: new Date().toISOString(), providers: result.providers },
+            null,
+            2
+          ),
+        ],
+        { type: "application/json" }
+      );
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -327,7 +352,11 @@ export default function Providers() {
     try {
       const text = await file.text();
       const data = JSON.parse(text);
-      const providersToImport = Array.isArray(data.providers) ? data.providers : Array.isArray(data) ? data : [];
+      const providersToImport = Array.isArray(data.providers)
+        ? data.providers
+        : Array.isArray(data)
+          ? data
+          : [];
       if (providersToImport.length === 0) return;
       await api.importProviders(providersToImport);
       queryClient.invalidateQueries({ queryKey: ["providers"] });
@@ -366,7 +395,8 @@ export default function Providers() {
 
   const selectableProviders = providers.filter(p => p.id !== "official");
   const isSelectMode = selectedIds.size > 0;
-  const isAllSelected = selectedIds.size === selectableProviders.length && selectableProviders.length > 0;
+  const isAllSelected =
+    selectedIds.size === selectableProviders.length && selectableProviders.length > 0;
 
   const toggleSelectAll = () => {
     if (isAllSelected) {
@@ -382,22 +412,43 @@ export default function Providers() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-base font-semibold tracking-tight">
-            {isSelectMode ? t("providers.selectedCount", { count: selectedIds.size }) : t("providers.title")}
+            {isSelectMode
+              ? t("providers.selectedCount", { count: selectedIds.size })
+              : t("providers.title")}
           </h2>
           <p className="text-xs text-muted-foreground">{t("providers.subtitle")}</p>
         </div>
         <div className="flex items-center gap-1">
           {isSelectMode ? (
             <>
-              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => void handleExport()}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs gap-1"
+                onClick={() => void handleExport()}
+              >
                 <Download className="h-3 w-3" />
                 {t("providers.export")} ({selectedIds.size})
               </Button>
-              <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={toggleSelectAll}>
-                {isAllSelected ? <MinusSquare className="h-3 w-3" /> : <CheckSquare className="h-3 w-3" />}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs gap-1"
+                onClick={toggleSelectAll}
+              >
+                {isAllSelected ? (
+                  <MinusSquare className="h-3 w-3" />
+                ) : (
+                  <CheckSquare className="h-3 w-3" />
+                )}
                 {t("providers.selectAll")}
               </Button>
-              <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={cancelSelection}>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs gap-1"
+                onClick={cancelSelection}
+              >
                 <X className="h-3 w-3" />
                 {t("providers.cancelSelection")}
               </Button>
@@ -412,7 +463,9 @@ export default function Providers() {
                 disabled={reloadMutation.isPending}
                 title={t("providers.reloadConfig")}
               >
-                <RotateCw className={`h-3.5 w-3.5 ${reloadMutation.isPending ? "animate-spin" : ""}`} />
+                <RotateCw
+                  className={`h-3.5 w-3.5 ${reloadMutation.isPending ? "animate-spin" : ""}`}
+                />
               </Button>
               <input
                 ref={fileInputRef}
@@ -421,11 +474,21 @@ export default function Providers() {
                 className="hidden"
                 onChange={e => void handleImportFile(e)}
               />
-              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={handleImportClick}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs gap-1"
+                onClick={handleImportClick}
+              >
                 <Upload className="h-3 w-3" />
                 {t("providers.import")}
               </Button>
-              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={openAddModal}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs gap-1"
+                onClick={openAddModal}
+              >
                 <Plus className="h-3 w-3" />
                 {t("providers.add")}
               </Button>
@@ -494,7 +557,9 @@ export default function Providers() {
                     ) : (
                       <span className="w-3.5 flex-shrink-0" />
                     )}
-                    <CardTitle className="text-sm truncate mx-1.5 flex-1 min-w-0">{provider.name}</CardTitle>
+                    <CardTitle className="text-sm truncate mx-1.5 flex-1 min-w-0">
+                      {provider.name}
+                    </CardTitle>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                       {(() => {
                         const proto = PROVIDER_PROTOCOL_LABEL[provider.providerType];
@@ -586,6 +651,19 @@ export default function Providers() {
           </CardContent>
         </Card>
       )}
+
+      <WizardDialog
+        open={showWizard}
+        onOpenChange={setShowWizard}
+        onCustom={() => {
+          setShowWizard(false);
+          openLegacyAddModal();
+        }}
+        onComplete={() => {
+          void queryClient.invalidateQueries({ queryKey: ["providers"] });
+        }}
+        addMutation={addMutation}
+      />
 
       {/* Add/Edit Provider Modal */}
       {showAddModal && (
@@ -699,7 +777,6 @@ export default function Providers() {
                       setFormData(prev => ({
                         ...prev,
                         providerType: t,
-                        ...(t === "anthropic" ? { openaiCompat: undefined } : {}),
                       }));
                     }}
                     className="h-8 text-xs"
@@ -718,31 +795,6 @@ export default function Providers() {
                   />
                 </div>
               </div>
-
-              {(formData.providerType === "openai" || formData.providerType === "openai_chat") && (
-                <div className="space-y-1">
-                  <label className="text-xs font-medium">
-                    {t("providers.modal.crossProtocol")}
-                  </label>
-                  <Select
-                    value={formData.openaiCompat === "azure_openai" ? "azure_openai" : "standard"}
-                    options={[
-                      { value: "standard", label: t("providers.modal.crossProtocolStandard") },
-                      { value: "azure_openai", label: t("providers.modal.crossProtocolAzure") },
-                    ]}
-                    onChange={v =>
-                      setFormData(prev => ({
-                        ...prev,
-                        openaiCompat: v === "azure_openai" ? "azure_openai" : undefined,
-                      }))
-                    }
-                    className="h-8 text-xs"
-                  />
-                  <p className="text-[10px] text-muted-foreground">
-                    {t("providers.modal.crossProtocolHelp")}
-                  </p>
-                </div>
-              )}
 
               {/* API Key */}
               <div className="space-y-1">
