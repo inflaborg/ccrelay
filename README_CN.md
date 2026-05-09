@@ -664,8 +664,8 @@ ccrelay/
 
 本项目代码 **100% 由 AI 生成**。特别感谢：
 
-- **[Claude Code](https://claude.ai/code)** — AI 编程助手
-- **[GLM](https://z.ai/model-api)** — GLM 模型作为后端提供商
+- **[Cursor](https://cursor.com)** 与 **[Claude Code](https://claude.ai/code)** — AI 编程助手
+- **[GLM](https://z.ai/model-api)** 与 **[小米 MiMo](https://platform.xiaomimimo.com/token-plan)** — 开发阶段使用的模型后端
 
 ---
 

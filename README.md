@@ -663,8 +663,8 @@ Issues and Pull Requests are welcome!
 
 This project is **100% AI-generated code**. Special thanks to:
 
-- **[Claude Code](https://claude.ai/code)** — AI coding assistant
-- **[GLM](https://z.ai/model-api)** — GLM models as the backend provider
+- **[Cursor](https://cursor.com)** and **[Claude Code](https://claude.ai/code)** — AI coding assistants
+- **[GLM](https://z.ai/model-api)** and **[Xiaomi MiMo](https://platform.xiaomimimo.com/token-plan)** — model APIs used as development backends
 
 ---
 
