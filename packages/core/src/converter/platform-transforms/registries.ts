@@ -12,6 +12,7 @@ import { glmWebSearchEnvelopeTransform } from "./glm/tools";
 import { glmFlattenContentTransform } from "./glm/messages";
 import { glmWebSearchResponseTransform } from "./glm/responses";
 import { mimoWebSearchTransform } from "./xiaomimimo/tools";
+import { mimoAnnotationsWebSearchResponseTransform } from "./xiaomimimo/responses";
 import { passthroughTransform } from "./passthrough";
 
 /** Outbound Chat `tools[]` entry (`type` keyed by rule). */
@@ -45,6 +46,7 @@ export const MESSAGE_TRANSFORM_REGISTRY: Readonly<Record<string, PlatformMessage
 
 export const RESPONSE_TRANSFORM_REGISTRY: Readonly<Record<string, PlatformResponseTransform>> = {
   "glm-web-search-response": glmWebSearchResponseTransform,
+  "mimo-annotations-web-search": mimoAnnotationsWebSearchResponseTransform,
 };
 
 export const ANTHROPIC_SSE_TRANSFORM_REGISTRY: Readonly<
@@ -57,6 +59,7 @@ export { passthroughTransform, isPlainObject } from "./passthrough";
 export { glmWebSearchEnvelopeTransform } from "./glm/tools";
 export { glmFlattenContentTransform } from "./glm/messages";
 export { glmWebSearchResponseTransform } from "./glm/responses";
+export { mimoAnnotationsWebSearchResponseTransform } from "./xiaomimimo/responses";
 export { mimoWebSearchTransform } from "./xiaomimimo/tools";
 
 /** @deprecated Prefer `TOOL_TRANSFORM_REGISTRY`. */

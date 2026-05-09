@@ -9,6 +9,7 @@ import {
   glmFlattenContentTransform,
   glmWebSearchEnvelopeTransform,
   glmWebSearchResponseTransform,
+  mimoAnnotationsWebSearchResponseTransform,
   hostnameMatchesDomain,
   matchHostedToolRuleForBaseUrl,
   mimoWebSearchTransform,
@@ -514,10 +515,59 @@ describe("applyPlatformResponseTransforms", () => {
     ).toBeGreaterThan(blocks.length);
   });
 
-  it("is no-op for MiMo and unknown hosts", () => {
+  it("MiMo: no-op without message.annotations (GLM top-level web_search is ignored)", () => {
     const blocks: AnthropicContentBlock[] = [{ type: "text", text: "hi" }];
     const body = { web_search: [{ title: "x", link: "https://x" }] };
     expect(applyPlatformResponseTransforms(body, blocks, MIMO_BASE)).toBe(blocks);
     expect(applyPlatformResponseTransforms(body, blocks, "https://api.openai.com")).toBe(blocks);
+  });
+
+  it("injects MiMo web search blocks from choices[0].message.annotations", () => {
+    const annotations = [
+      { type: "url_citation", url: "https://a.example", title: "A", summary: "snippet a" },
+      { type: "url_citation", url: "https://b.example", title: "B" },
+    ];
+    const body = {
+      choices: [{ message: { role: "assistant", content: "answer", annotations } }],
+    };
+    const prose: AnthropicContentBlock = { type: "text", text: "answer" };
+    const citationDump: AnthropicContentBlock = {
+      type: "text",
+      text: JSON.stringify(annotations),
+    };
+    const blocks: AnthropicContentBlock[] = [prose, citationDump];
+    const out = applyPlatformResponseTransforms(body, blocks, MIMO_BASE);
+    expect(out).toHaveLength(3);
+    expect(out[0]).toMatchObject({ type: "server_tool_use", name: "web_search" });
+    expect(out[1]).toMatchObject({ type: "web_search_tool_result" });
+    const tr = out[1] as { tool_use_id: string; content: unknown[] };
+    expect(tr.tool_use_id).toBe((out[0] as { id: string }).id);
+    expect(tr.content).toEqual([
+      {
+        type: "web_search_result",
+        url: "https://a.example",
+        title: "A",
+        encrypted_content: "snippet a",
+      },
+      {
+        type: "web_search_result",
+        url: "https://b.example",
+        title: "B",
+      },
+    ]);
+    expect(out[2]).toEqual({ type: "text", text: "answer" });
+  });
+});
+
+describe("mimoAnnotationsWebSearchResponseTransform", () => {
+  it("returns blocks unchanged when annotations missing or empty", () => {
+    const blocks: AnthropicContentBlock[] = [{ type: "text", text: "x" }];
+    expect(mimoAnnotationsWebSearchResponseTransform({}, blocks)).toBe(blocks);
+    expect(
+      mimoAnnotationsWebSearchResponseTransform(
+        { choices: [{ message: { annotations: [] } }] },
+        blocks
+      )
+    ).toBe(blocks);
   });
 });

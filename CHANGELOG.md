@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Streaming **Anthropic Messages** to **GLM** with hosted web search now normalizes SSE: GLM `web_search_prime` results are rewritten to standard **`web_search` / `web_search_tool_result`**, so citations and client UI behave like native Anthropic search.
 - The same GLM SSE normalization now activates for **`/anthropic/v1/messages`** clients (not only legacy `/v1/messages` URLs).
 - GLM **text** scaffolding that still mentions **`web_search_prime`** is rewritten to **`web_search`** so it matches normalized tool blocks in the same stream.
+- **OpenAI Chat → Anthropic** completions for **Xiaomi MiMo**: hosted search **`url_citation` annotations** are surfaced as **`web_search` / `web_search_tool_result`** instead of only a trailing JSON text blob.
 
 ### Added
 

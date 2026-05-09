@@ -30,6 +30,7 @@ export {
   glmWebSearchEnvelopeTransform,
   glmFlattenContentTransform,
   glmWebSearchResponseTransform,
+  mimoAnnotationsWebSearchResponseTransform,
   mimoWebSearchTransform,
   passthroughTransform,
   isPlainObject,

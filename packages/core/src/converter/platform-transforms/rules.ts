@@ -37,5 +37,6 @@ export const PLATFORM_TRANSFORM_RULES: readonly PlatformTransformRule[] = [
     provider: "xiaomimimo",
     domains: ["api.xiaomimimo.com"],
     tools: { web_search: "mimo-web-search" },
+    responses: "mimo-annotations-web-search",
   },
 ];
