@@ -173,16 +173,16 @@ export const PARTNER_PRESETS: readonly PartnerPreset[] = [
     ],
     variants: [
       {
-        providerType: "anthropic",
-        urlTemplate: "{host}/anthropic",
-        idSuffix: "{regionTag}-anthropic",
-        nameSuffix: "{regionTag}-Anthropic",
-      },
-      {
         providerType: "openai_chat",
         urlTemplate: "{host}/v1",
         idSuffix: "{regionTag}-openai",
         nameSuffix: "{regionTag}-OpenAI",
+      },
+      {
+        providerType: "anthropic",
+        urlTemplate: "{host}/anthropic",
+        idSuffix: "{regionTag}-anthropic",
+        nameSuffix: "{regionTag}-Anthropic",
       },
     ],
   },
