@@ -66,13 +66,13 @@
 
 ### 已验证上游（按主机）
 
-中继按 **provider 的 `baseUrl` 主机名** 选规则。下表中的行是我们在配置为 provider 时**已验证过**的上游端点。各厂商可能同时提供 Anthropic 协议、OpenAI 兼容接口等，但**客户端协议**与**上游协议**常常不一致；不一致时需要**协议转换**，一致时也可能在**工具能力**上不同（例如托管网页搜索、仅 Chat 接受的字段、或仅 Responses 支持的托管工具）。
+中继按 **provider 的 `baseUrl` 主机名** 选规则。下表中的行是我们在配置为 provider 时**已验证过**的上游端点。各厂商可能同时提供 Anthropic 协议、OpenAI 兼容接口等，但**客户端协议**与**上游协议**常常不一致；不一致时需要**协议转换**，一致时也可能在**工具能力**上不同（例如服务端联网搜索工具、仅 Chat 接受的字段、或仅 Responses 支持的托管工具）。
 
-**未出现在表中的主机**只走**通用协议转换**（无额外平台层）。**表中列出的主机**在通用转换之上，还会按主机名叠加**平台对齐**（工具、消息、响应形态及 URL/请求体等）。最后一列表示该厂商**托管网页搜索**在上游侧的接入位置；与如何访问本地中继无关。
+**未出现在表中的主机**只走**通用协议转换**（无额外平台层）。**表中列出的主机**在通用转换之上，还会按主机名叠加**平台对齐**（工具、消息、响应形态及 URL/请求体等）。最后一列表示该厂商**服务端联网搜索工具**在上游侧的接入位置；与如何访问本地中继无关。
 
-**示例——Azure OpenAI：** 上游侧 **托管网页搜索** 仅存在于 **Responses API**（因此表的 Web search 列为「仅 Responses API」）。你仍可以让客户端用 **OpenAI Chat Completions** 对接 CCRelay。将 **Azure OpenAI** 配成 provider 的 `baseUrl` 后，含托管 web search 的 **Chat 形态**请求会在**转换层**被改写为对上游的 **Responses** 调用，从而继续支持搜索——不必要求客户端直接调用 `/v1/responses`。
+**示例——Azure OpenAI：** 上游侧 **服务端联网搜索工具** 仅存在于 **Responses API**（因此表中「服务端联网搜索工具」列为「仅 Responses API」）。你仍可以让客户端用 **OpenAI Chat Completions** 对接 CCRelay。将 **Azure OpenAI** 配成 provider 的 `baseUrl` 后，含服务端联网搜索工具的 **Chat 形态**请求会在**转换层**被改写为对上游的 **Responses** 调用，从而继续支持搜索——不必要求客户端直接调用 `/v1/responses`。
 
-| 提供商（目标主机） | Anthropic `/v1/messages` | OpenAI `/chat/completions` | OpenAI `/v1/responses` | Web search |
+| 提供商（目标主机） | Anthropic `/v1/messages` | OpenAI `/chat/completions` | OpenAI `/v1/responses` | 服务端联网搜索工具 |
 | --- | --- | --- | --- | --- |
 | **Z.ai GLM**（`api.z.ai`、`open.bigmodel.cn`） | 支持 | 支持 | 不支持 | 支持 |
 | **小米 MiMo**（`api.xiaomimimo.com`） | 支持 | 支持 | 不支持 | 仅 Chat |
@@ -82,9 +82,9 @@
 
 **截图示例（Claude Code 经 CCRelay）**
 
-![Claude Code — 使用 GLM 托管网页搜索](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-claude-glm-web-search.png)
+![Claude Code — 使用 GLM 服务端联网搜索工具](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-claude-glm-web-search.png)
 
-![Claude Code — 使用小米 MiMo 托管网页搜索](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-claude-xiaomi-mimo-web-search.png)
+![Claude Code — 使用小米 MiMo 服务端联网搜索工具](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-claude-xiaomi-mimo-web-search.png)
 
 ---
 
@@ -154,8 +154,7 @@ xattr -cr /path/to/CCRelay.app
 - 使用 Sidecar 架构：Rust 壳层管理 Node.js 服务进程
 - 托盘菜单支持启动/停止服务器和打开控制台
 - 从 [GitHub Releases](https://github.com/inflaborg/ccrelay/releases) 下载：
-  - **macOS**: `CCRelay.app`（Apple Silicon 和 Intel）
-  - **Windows**: `CCRelay.exe`（x64 和 arm64）
+  - 安装包命名与 Electron 桌面版一致（`CCRelay-<版本>-<platform>-<arch>.<扩展名>`），在版本号后增加 **`tauri`**（例如 `CCRelay-0.2.1-tauri-darwin-arm64.dmg`、`CCRelay-0.2.1-tauri-win32-x64.exe`）。Windows 仅提供 **NSIS 安装包（`.exe`）**，不提供 MSI。
 
 ### 开发
 
@@ -664,8 +663,8 @@ ccrelay/
 
 本项目代码 **100% 由 AI 生成**。特别感谢：
 
-- **[Claude Code](https://claude.ai/code)** — AI 编程助手
-- **[GLM](https://z.ai/model-api)** — GLM 模型作为后端提供商
+- **[Cursor](https://cursor.com)** 与 **[Claude Code](https://claude.ai/code)** — AI 编程助手
+- **[GLM](https://z.ai/model-api)** 与 **[小米 MiMo](https://platform.xiaomimimo.com/token-plan)** — 开发阶段使用的模型后端
 
 ---
 
