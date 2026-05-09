@@ -66,13 +66,13 @@
 
 ### Verified upstreams (by host)
 
-Relaying uses the **provider `baseUrl` hostname**. The rows below are **upstream endpoints we have validated** when you add them as a provider. Vendors may offer Anthropic APIs, OpenAI-compatible APIs, or both — but your **client protocol** and the **upstream protocol** are often not the same. When they differ, CCRelay applies **generic protocol conversion** first, then **hostname-specific alignment** where we maintain it. When the wire looks the same on both sides, **tooling still differs** by vendor (for example hosted web search, strict Chat schemas, or Responses-only tools).
+Relaying uses the **provider `baseUrl` hostname**. The rows below are **upstream endpoints we have validated** when you add them as a provider. Vendors may offer Anthropic APIs, OpenAI-compatible APIs, or both — but your **client protocol** and the **upstream protocol** are often not the same. When they differ, CCRelay applies **generic protocol conversion** first, then **hostname-specific alignment** where we maintain it. When the wire looks the same on both sides, **tooling still differs** by vendor (for example Web Search Server Tools, strict Chat schemas, or Responses-only tools).
 
-**Hosts not listed** get **generic conversion only** (no extra platform layer). **Listed hosts** get **generic conversion plus** platform rules for tools, messages, responses, and request URL/body quirks. The last column is where **hosted web search** is supported for that vendor; it does not depend on how you reach the relay.
+**Hosts not listed** get **generic conversion only** (no extra platform layer). **Listed hosts** get **generic conversion plus** platform rules for tools, messages, responses, and request URL/body quirks. The last column is where **Web Search Server Tools** are supported for that vendor; it does not depend on how you reach the relay.
 
-**Example — Azure OpenAI:** Upstream **hosted web search** exists **only** on the **Responses API** (hence “Responses API only” in the Web search column). You can still point clients at CCRelay using the **OpenAI Chat Completions** surface. After you set **Azure OpenAI** as the provider `baseUrl`, Chat-shaped calls that include hosted web search are **rewritten in the conversion layer** into upstream **Responses** requests so search keeps working—you do not need the client to call `/v1/responses` itself.
+**Example — Azure OpenAI:** Upstream **Web Search Server Tools** exist **only** on the **Responses API** (hence “Responses API only” in the Web Search Server Tools column). You can still point clients at CCRelay using the **OpenAI Chat Completions** surface. After you set **Azure OpenAI** as the provider `baseUrl`, Chat-shaped calls that include Web Search Server Tools are **rewritten in the conversion layer** into upstream **Responses** requests so search keeps working—you do not need the client to call `/v1/responses` itself.
 
-| Provider (target host) | Anthropic `/v1/messages` | OpenAI `/chat/completions` | OpenAI `/v1/responses` | Web search |
+| Provider (target host) | Anthropic `/v1/messages` | OpenAI `/chat/completions` | OpenAI `/v1/responses` | Web Search Server Tools |
 | --- | --- | --- | --- | --- |
 | **Z.ai GLM** (`api.z.ai`, `open.bigmodel.cn`) | Supported | Supported | Not supported | Supported |
 | **Xiaomi MiMo** (`api.xiaomimimo.com`) | Supported | Supported | Not supported | Chat only |
@@ -82,9 +82,9 @@ Relaying uses the **provider `baseUrl` hostname**. The rows below are **upstream
 
 **Screenshots (Claude Code through CCRelay)**
 
-![Claude Code — GLM hosted web search](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-claude-glm-web-search.png)
+![Claude Code — GLM Web Search Server Tools](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-claude-glm-web-search.png)
 
-![Claude Code — Xiaomi MiMo hosted web search](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-claude-xiaomi-mimo-web-search.png)
+![Claude Code — Xiaomi MiMo Web Search Server Tools](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-claude-xiaomi-mimo-web-search.png)
 
 ---
 

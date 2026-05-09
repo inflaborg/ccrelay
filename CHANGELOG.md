@@ -32,7 +32,7 @@ This release expands the web dashboard (logs, stats, provider wizard) and tighte
 
 **Protocol/Conversion**
 
-- **Azure OpenAI**: Anthropic inbound requests using hosted web search are sent to the **Responses** API when Chat Completions would reject those tools.
+- **Azure OpenAI**: Anthropic inbound requests using Web Search Server Tools are sent to the **Responses** API when Chat Completions would reject those tools.
 - Hosted Chat **hosted-tool** shaping for outbound requests is inferred from the provider URL (no separate UI toggle).
 
 **Desktop**
@@ -60,8 +60,8 @@ This release expands the web dashboard (logs, stats, provider wizard) and tighte
 **Protocol/Conversion**
 
 - **Gemini** (OpenAI-compatible): strip unsupported URL query flags; outbound Chat bodies omit Responses-only fields and unsupported tool types.
-- **Z.ai GLM** (including `open.bigmodel.cn`): preserve web search across OpenAI Chat ↔ Anthropic; normalize streaming SSE (`web_search_prime` → standard `web_search` / `web_search_tool_result`) for **`/v1/messages`** and **`/anthropic/v1/messages`**; align assistant text that still references `web_search_prime`.
-- **Xiaomi MiMo**: carry hosted web search in Anthropic ↔ OpenAI conversions; map **`url_citation`** to **`web_search` / `web_search_tool_result`** instead of a trailing JSON-only blob.
+- **Z.ai GLM** (including `open.bigmodel.cn`): preserve Web Search Server Tools across OpenAI Chat ↔ Anthropic; normalize streaming SSE (`web_search_prime` → standard `web_search` / `web_search_tool_result`) for **`/v1/messages`** and **`/anthropic/v1/messages`**; align assistant text that still references `web_search_prime`.
+- **Xiaomi MiMo**: carry Web Search Server Tools in Anthropic ↔ OpenAI conversions; map **`url_citation`** to **`web_search` / `web_search_tool_result`** instead of a trailing JSON-only blob.
 
 ## [0.2.0] - 2026-05-04
 
