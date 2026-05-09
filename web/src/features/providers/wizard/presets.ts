@@ -165,7 +165,7 @@ export const PARTNER_PRESETS: readonly PartnerPreset[] = [
         optionKeys: ["tokenPlan", "region"],
         map: {
           true_intl: "https://token-plan-sgp.xiaomimimo.com",
-          true_cn: "https://token-plan.xiaomimimo.com",
+          true_cn: "https://token-plan-cn.xiaomimimo.com",
           false_intl: "https://api.xiaomimimo.com",
           false_cn: "https://api.xiaomimimo.com",
         },
