@@ -19,6 +19,10 @@ import type {
   SettingsConfig,
   PatchConfigResponse,
   StatsRange,
+  WizardProbeModelsRequest,
+  WizardProbeModelsResponse,
+  WizardEndpointTestRequest,
+  WizardEndpointTestResponse,
 } from "../types/api";
 
 // Re-export types for convenience
@@ -68,6 +72,25 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
   }
 
   return response.json();
+}
+
+/** POST helper: parses JSON on any 2xx; throws only when HTTP status is not ok (e.g. 400). */
+async function fetchWizardPostJson<T>(
+  endpoint: string,
+  body: unknown,
+  signal?: AbortSignal
+): Promise<T> {
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    method: "POST",
+    headers: buildDefaultHeaders(true),
+    body: JSON.stringify(body),
+    signal,
+  });
+  const data = (await response.json().catch(() => ({}))) as T & { message?: string };
+  if (!response.ok) {
+    throw new Error(data.message || `HTTP ${response.status}`);
+  }
+  return data as T;
 }
 
 export const api = {
@@ -197,4 +220,16 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
+
+  wizardProbeModels: (
+    body: WizardProbeModelsRequest,
+    signal?: AbortSignal
+  ): Promise<WizardProbeModelsResponse> =>
+    fetchWizardPostJson<WizardProbeModelsResponse>("/wizard/probe-models", body, signal),
+
+  wizardEndpointTest: (
+    body: WizardEndpointTestRequest,
+    signal?: AbortSignal
+  ): Promise<WizardEndpointTestResponse> =>
+    fetchWizardPostJson<WizardEndpointTestResponse>("/wizard/endpoint-test", body, signal),
 };

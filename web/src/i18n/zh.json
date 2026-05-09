@@ -231,6 +231,95 @@
     "cancelSelection": "取消",
     "selectedCount": "已选 {{count}} 项"
   },
+  "wizard": {
+    "title": "添加提供商",
+    "titleBrand": "{{brand}} — 设置",
+    "chooser": {
+      "genericSection": "通用端点",
+      "customSection": "自定义",
+      "custom": "手动配置",
+      "customDesc": "完整表单，含 YAML 模型映射与高级选项。",
+      "partners": "合作商"
+    },
+    "brand": {
+      "genericOpenaiChat": "OpenAI Chat",
+      "genericAnthropic": "Anthropic",
+      "glm": "智谱 GLM",
+      "xiaomi": "小米 MiMo",
+      "azure": "Azure OpenAI",
+      "geminiOpenai": "Gemini（OpenAI 兼容）"
+    },
+    "toggle": {
+      "off": "否",
+      "on": "是"
+    },
+    "option": {
+      "region": "地区",
+      "codingPlan": "是否 Coding Plan",
+      "tokenPlan": "是否 Token Plan"
+    },
+    "region": {
+      "international": "国际",
+      "china": "中国"
+    },
+    "field": {
+      "name": "显示名称",
+      "apiKey": "API 密钥",
+      "baseUrl": "端点 URL",
+      "models": "上游模型 ID",
+      "customModels": "自定义模型列表",
+      "claudeSupport": "支持 Claude Code / Codex"
+    },
+    "models": {
+      "referenceTitle": "端点模型（对照）",
+      "loading": "正在从端点获取模型列表…",
+      "success": "{{count}} 个模型可用",
+      "authError": "鉴权失败（401/403），请检查 API Key。",
+      "networkError": "无法连接端点，请检查 URL。",
+      "formatError": "端点返回格式异常，不符合 /models 预期。",
+      "empty": "端点未返回任何模型。"
+    },
+    "test": {
+      "button": "测试",
+      "testing": "测试中…",
+      "pass": "通过",
+      "fail": "失败",
+      "noModel": "请至少填写一行上游模型 ID 后再测试。",
+      "noProbeModels": "暂无可用模型 — 请等待端点获取列表或开启自定义模型列表。",
+      "selectModel": "选择测试模型",
+      "pickModelTitle": "选择测试模型",
+      "pickModelDescription": "检测到多个模型，请选择其一后继续测试。",
+      "continueWithTest": "继续",
+      "networkError": "网络错误",
+      "authError": "鉴权失败（{{status}}）",
+      "serverError": "服务端错误（{{status}}）",
+      "clientError": "请求被拒绝（{{status}}）",
+      "htmlResponse": "收到 HTML 响应（代理配置错误？）",
+      "timeout": "请求超时（5s）",
+      "formatError": "响应格式异常"
+    },
+    "placeholder": {
+      "models": "glm-5.1\nglm-4.7"
+    },
+    "help": {
+      "azureEndpoint": "Azure OpenAI 基础 URL，例如 https://…cognitiveservices.azure.com/openai/v1",
+      "customEndpoint": "填写上游基础 URL（需与所选协议一致：OpenAI Chat 或 Anthropic Messages）。",
+      "presetEndpointDefault": "默认为官方 API 地址；若使用其它网关或代理请修改。",
+      "models": "每行一个模型 ID。将写入为 anthropic/{id} 出现在本地模型列表。",
+      "claudeSupport": "将 claude-* 与 gpt-* 映射到第一个模型，供 Claude Code 与 Codex 使用。"
+    },
+    "confirm": {
+      "lead": "将创建以下提供商：",
+      "submit": "创建",
+      "back": "返回",
+      "working": "创建中…"
+    },
+    "step": {
+      "next": "下一步",
+      "back": "返回",
+      "cancel": "取消"
+    }
+  },
   "logs": {
     "title": "请求日志",
     "subtitle": "查看和分析 API 请求日志",

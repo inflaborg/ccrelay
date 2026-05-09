@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **UI**
 
 - Provider dialog no longer shows the cross-protocol **Azure OpenAI** toggle; routing follows the upstream URL.
+- Web dashboard **Add provider** uses a **single scrollable** partner flow: **card** choices (source, region, toggles), then connection fields and an inline **summary** before **Create**; pick **manual setup** or a **partner preset** (Zhipu GLM, Xiaomi MiMo, Azure OpenAI, Gemini OpenAI-compatible) with prefilled URLs and model-list defaults.
 
 **Protocol/Conversion**
 

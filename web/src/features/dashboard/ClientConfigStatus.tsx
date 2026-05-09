@@ -285,7 +285,9 @@ export default function ClientConfigStatus() {
                       ) : (
                         <RotateCcw className="h-3 w-3" />
                       )}
-                      <span className="hidden sm:inline">{t("clientConfig.claudeCode.restore")}</span>
+                      <span className="hidden sm:inline">
+                        {t("clientConfig.claudeCode.restore")}
+                      </span>
                     </Button>
                   )}
                   <Button
@@ -430,7 +432,7 @@ export default function ClientConfigStatus() {
 
       <AlertDialog
         open={restoreConfirmOpen}
-        onOpenChange={(o) => {
+        onOpenChange={o => {
           setRestoreConfirmOpen(o);
           if (!o) setRestoreTarget(null);
         }}
@@ -455,7 +457,7 @@ export default function ClientConfigStatus() {
             <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={(e) => {
+              onClick={e => {
                 e.preventDefault();
                 if (restoreTarget) {
                   setApplyingTo(restoreTarget);

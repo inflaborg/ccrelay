@@ -310,3 +310,43 @@ export interface PatchConfigResponse {
   restartRequired?: boolean;
   message?: string;
 }
+
+/** Wizard upstream proxy (same-origin; avoids browser CORS to provider APIs) */
+
+export type WizardProviderType = "anthropic" | "openai" | "openai_chat";
+
+export interface WizardProbeModelsRequest {
+  baseUrl: string;
+  apiKey: string;
+  providerType: WizardProviderType;
+}
+
+export type WizardProbeModelsResponse =
+  | { ok: true; modelIds: string[] }
+  | { ok: false; errorCode: "auth" | "network" | "format" };
+
+export interface WizardEndpointVariantInput {
+  id: string;
+  name: string;
+  baseUrl: string;
+  providerType: WizardProviderType;
+  authHeader?: string;
+}
+
+export interface WizardEndpointTestRequest {
+  apiKey: string;
+  modelId: string;
+  variants: WizardEndpointVariantInput[];
+}
+
+export interface WizardEndpointTestResultLine {
+  id: string;
+  pass: boolean;
+  httpStatus?: number;
+  detail?: string;
+}
+
+export interface WizardEndpointTestResponse {
+  ok: true;
+  results: WizardEndpointTestResultLine[];
+}

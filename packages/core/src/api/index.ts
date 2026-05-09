@@ -30,6 +30,8 @@ import {
   setServer as setClientConfigServer,
 } from "./clientConfig";
 import { handleGetConfig, handlePatchConfig, setServer as setSettingsServer } from "./settings";
+import { handleWizardProbeModels, handleWizardEndpointTest } from "./wizardUpstream";
+import { sendJson } from "./httpJson";
 import { setProxyServerForApi } from "./serverRef";
 import { getUiAccessToken } from "../server/httpAccessGate";
 import { ScopedLogger } from "../utils/logger";
@@ -222,6 +224,26 @@ export function handleApiRequest(req: http.IncomingMessage, res: http.ServerResp
     return true;
   }
 
+  if (reqPath === "/ccrelay/api/wizard/probe-models" && method === "POST") {
+    handleWizardProbeModels(req, res).catch(err => {
+      log.error("Error handling POST /wizard/probe-models", err);
+      if (!res.headersSent) {
+        sendJson(res, 500, { error: "Internal server error" });
+      }
+    });
+    return true;
+  }
+
+  if (reqPath === "/ccrelay/api/wizard/endpoint-test" && method === "POST") {
+    handleWizardEndpointTest(req, res).catch(err => {
+      log.error("Error handling POST /wizard/endpoint-test", err);
+      if (!res.headersSent) {
+        sendJson(res, 500, { error: "Internal server error" });
+      }
+    });
+    return true;
+  }
+
   // Check for exact route matches
   if (API_ROUTES[reqPath]) {
     const handler = API_ROUTES[reqPath];
@@ -252,33 +274,7 @@ export function setCorsHeaders(res: http.ServerResponse): void {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key");
 }
 
-/**
- * Send JSON response
- */
-export function sendJson(res: http.ServerResponse, status: number, data: unknown): void {
-  res.writeHead(status, { "Content-Type": "application/json" });
-  res.end(JSON.stringify(data));
-}
-
-/**
- * Parse JSON body from request
- */
-export async function parseJsonBody<T = unknown>(req: http.IncomingMessage): Promise<T> {
-  return new Promise((resolve, reject) => {
-    let body = "";
-    req.on("data", (chunk: Buffer) => {
-      body += chunk.toString();
-    });
-    req.on("end", () => {
-      try {
-        resolve(JSON.parse(body || "{}") as T);
-      } catch (err) {
-        reject(err instanceof Error ? err : new Error(String(err)));
-      }
-    });
-    req.on("error", reject);
-  });
-}
+export { sendJson, parseJsonBody } from "./httpJson";
 
 // Export handlers for direct use
 export {
