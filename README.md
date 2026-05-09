@@ -14,6 +14,7 @@
 ## Table of Contents
 
 - [Core Features](#core-features)
+- [Hosted web search support (by upstream)](#hosted-web-search-support-by-upstream)
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Desktop App (Electron)](#desktop-app-electron)
@@ -62,6 +63,22 @@
 - Optional Electron or Tauri desktop app — run CCRelay without VS Code
 - Web dashboard with provider management, settings, and i18n (English + Chinese)
 - Provider import/export as JSON
+
+### Hosted web search support (by upstream)
+
+For **hosted web search**, CCRelay applies **provider-specific** normalization so search shows up correctly for tools and UIs that expect **Anthropic-style** behavior. **Only the upstream matters:** rules are chosen from the route’s **provider target URL** (host). It does not depend on how you address the relay.
+
+| Provider (target host) | **Anthropic** | **OpenAI-compatible** |
+| --- | --- | --- |
+| **Z.ai GLM** (`api.z.ai`, `open.bigmodel.cn`) | **Supported** | **Supported** |
+| **Xiaomi MiMo** (`api.xiaomimimo.com`) | **Not supported** | **Supported** — **not on Token Plan**. See Xiaomi MiMo for which plans apply. |
+| *Other providers* | *TBD* | *TBD* |
+
+**Screenshots (Claude Code through CCRelay)**
+
+![Claude Code — GLM hosted web search](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-claude-glm-web-search.png)
+
+![Claude Code — Xiaomi MiMo hosted web search](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-claude-xiaomi-mimo-web-search.png)
 
 ---
 

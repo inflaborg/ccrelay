@@ -14,6 +14,7 @@
 ## 目录
 
 - [核心特性](#核心特性)
+- [托管网页搜索支持（按上游）](#托管网页搜索支持按上游)
 - [系统要求](#系统要求)
 - [安装](#安装)
 - [桌面应用（Electron）](#桌面应用electron)
@@ -62,6 +63,22 @@
 - 可选 Electron 或 Tauri 桌面应用——无需打开 VS Code 即可运行 CCRelay
 - Web 管理面板：提供商管理、设置、i18n（中英文）
 - Provider 导入/导出为 JSON 文件
+
+### 托管网页搜索支持（按上游）
+
+**托管网页搜索**时，CCRelay 会按**上游提供商**做归一化，使搜索在依赖 **Anthropic 风格**工具与展示的客户端里表现正确。**只认上游：**规则由路由里配置的 **provider 目标 URL（主机名）** 决定，与如何访问本地中继无关。
+
+| 提供商（目标主机） | **Anthropic** | **OpenAI 兼容** |
+| --- | --- | --- |
+| **Z.ai GLM**（`api.z.ai`、`open.bigmodel.cn`） | **支持** | **支持** |
+| **小米 MiMo**（`api.xiaomimimo.com`） | **不支持** | **支持** — **Token Plan 不适用**；请以小米 MiMo 官方说明为准。 |
+| *其余提供商* | *待补充* | *待补充* |
+
+**截图示例（Claude Code 经 CCRelay）**
+
+![Claude Code — 使用 GLM 托管网页搜索](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-claude-glm-web-search.png)
+
+![Claude Code — 使用小米 MiMo 托管网页搜索](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-claude-xiaomi-mimo-web-search.png)
 
 ---
 
