@@ -11,7 +11,6 @@ import {
   extractResponsesEcho,
   isOpenAIChatCompletionsRequest,
   isOpenAIResponsesRequest,
-  resolveOpenAICompatForAnthropicToOpenAI,
   mapAnthropicWirePathToOpenAiUpstream,
   mapOpenAiWirePathToAnthropicUpstream,
   type ResponsesRequestEcho,
@@ -365,11 +364,10 @@ export class BodyProcessor {
       if (!anthropicRequest.messages || !Array.isArray(anthropicRequest.messages)) {
         return null;
       }
-      const openaiCompat = resolveOpenAICompatForAnthropicToOpenAI(routing.provider);
       const conversionResult = convertRequestToOpenAI(
         anthropicRequest as unknown as Parameters<typeof convertRequestToOpenAI>[0],
         routing.targetPath,
-        { openaiCompat, providerBaseUrl: routing.provider.baseUrl }
+        { providerBaseUrl: routing.provider.baseUrl }
       );
       return {
         body: Buffer.from(JSON.stringify(conversionResult.request), "utf-8"),

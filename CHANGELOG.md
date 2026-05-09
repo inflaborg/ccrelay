@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+**Config**
+
+- The optional provider field **`openaiCompat`** is legacy: YAML and API may still include it, but it no longer changes behavior. Azure OpenAI Chat outbound shaping applies automatically when the upstream host matches **`*.cognitiveservices.azure.com`**.
+
+**UI**
+
+- Provider dialog no longer shows the cross-protocol **Azure OpenAI** toggle; routing follows the upstream URL.
+
 **Protocol/Conversion**
 
 - Hosted Chat hosted-tool requests are inferred from the provider URL (no extra settings): rules map known upstreams to outbound tool shapes internally.
@@ -29,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Protocol/Conversion**
 
-- **Azure OpenAI** (with `openaiCompat: azure_openai`): Anthropic-inbound requests that use hosted web search are routed to the **Responses API** automatically, since Azure Chat Completions rejects hosted `web_search` tools.
+- **Azure OpenAI**: Anthropic-inbound requests that use hosted web search are routed to the **Responses API** automatically, since Azure Chat Completions rejects hosted `web_search` tools.
 
 **Desktop**
 

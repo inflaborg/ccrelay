@@ -68,7 +68,7 @@
 
 For **hosted web search**, CCRelay applies **provider-specific** normalization so search shows up correctly for tools and UIs that expect **Anthropic-style** behavior. **Only the upstream matters:** rules are chosen from the route’s **provider target URL** (host). It does not depend on how you address the relay.
 
-The table below is whether CCRelay can route each **client wire** to that upstream, and where **hosted web search** is accepted. **Azure OpenAI:** the upstream exposes **OpenAI Chat Completions** and **OpenAI Responses API** only — **no** Anthropic **`/v1/messages`** endpoint. Hosted **web search** works **only** on the **Responses API**, not Chat Completions. Use **`openaiCompat: azure_openai`** when sending Anthropic-style clients to Azure so hosted tools map correctly.
+The table below is whether CCRelay can route each **client wire** to that upstream, and where **hosted web search** is accepted. **Azure OpenAI:** the upstream exposes **OpenAI Chat Completions** and **OpenAI Responses API** only — **no** Anthropic **`/v1/messages`** endpoint. Hosted **web search** works **only** on the **Responses API**, not Chat Completions. For Azure targets, CCRelay routes Anthropic-style clients and normalizes bodies by **upstream host** (no extra provider flag).
 
 | Provider (target host) | Anthropic `/v1/messages` | OpenAI `/chat/completions` | OpenAI `/v1/responses` | Web search |
 | --- | --- | --- | --- | --- |

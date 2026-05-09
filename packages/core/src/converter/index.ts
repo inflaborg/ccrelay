@@ -163,8 +163,6 @@ export {
 } from "./rules/openai-chat-model-rules";
 
 export {
-  resolveOpenAICompatForAnthropicToOpenAI,
-  sanitizeAzureOpenAiChatRequest,
   isGeminiOpenAiModel,
   withOptionalGeminiThoughtSignature,
 } from "./rules/openai-chat-platform-transforms";

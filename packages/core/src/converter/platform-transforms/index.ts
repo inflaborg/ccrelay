@@ -50,6 +50,7 @@ export {
   azureResponsesWebSearchResponseTransform,
   sanitizeAzureResponsesRequestTools,
   mapAzureResponsesToolEntryForHostedWebSearch,
+  azureChatSanitize,
   geminiChatSanitize,
   passthroughTransform,
   isPlainObject,

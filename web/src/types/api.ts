@@ -20,8 +20,6 @@ export interface Provider {
   modelMappingEnabled?: boolean;
   useCustomModelsList?: boolean;
   customModelsList?: string[];
-  /** Set `azure_openai` when the upstream is Azure OpenAI (Anthropic client → Chat Completions). */
-  openaiCompat?: "default" | "azure_openai";
 }
 
 export interface ProvidersResponse {
@@ -68,7 +66,6 @@ export interface AddProviderRequest {
   headers?: Record<string, string>;
   useCustomModelsList?: boolean;
   customModelsList?: string[];
-  openaiCompat?: "default" | "azure_openai";
 }
 
 export interface AddProviderResponse {

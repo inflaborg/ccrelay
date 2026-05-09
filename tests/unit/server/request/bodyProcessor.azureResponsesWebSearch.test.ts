@@ -13,7 +13,6 @@ describe("BodyProcessor Azure Responses web_search (Anthropic inbound)", () => {
     mode: "inject",
     providerType: "openai",
     apiKey: "k",
-    openaiCompat: "azure_openai",
   };
 
   function makeRouting(overrides: Partial<RoutingContext>): RoutingContext {
@@ -78,7 +77,6 @@ describe("BodyProcessor Azure Responses web_search (Anthropic inbound)", () => {
     const plainOpenAi: Provider = {
       ...azureOpenAi,
       id: "openai",
-      openaiCompat: undefined,
       baseUrl: "https://api.openai.com/v1",
     };
     const body = Buffer.from(

@@ -68,7 +68,7 @@
 
 **托管网页搜索**时，CCRelay 会按**上游提供商**做归一化，使搜索在依赖 **Anthropic 风格**工具与展示的客户端里表现正确。**只认上游：**规则由路由里配置的 **provider 目标 URL（主机名）** 决定，与如何访问本地中继无关。
 
-下表表示 CCRelay 是否支持将各**客户端协议**转发到该上游，以及**托管网页搜索**在上游的接入位置。**Azure OpenAI：**上游仅提供 **OpenAI Chat Completions** 与 **OpenAI Responses API**，**没有** Anthropic **`/v1/messages`** 接口。托管 **web search** **仅**适用于 **Responses API**，Chat Completions 不支持。将 Anthropic 风格客户端指向 Azure 时请配置 **`openaiCompat: azure_openai`**，以便托管工具正确映射。
+下表表示 CCRelay 是否支持将各**客户端协议**转发到该上游，以及**托管网页搜索**在上游的接入位置。**Azure OpenAI：**上游仅提供 **OpenAI Chat Completions** 与 **OpenAI Responses API**，**没有** Anthropic **`/v1/messages`** 接口。托管 **web search** **仅**适用于 **Responses API**，Chat Completions 不支持。指向 Azure 上游时，CCRelay 按**主机名**路由 Anthropic 风格客户端并归一化请求体（无需额外 provider 开关）。
 
 | 提供商（目标主机） | Anthropic `/v1/messages` | OpenAI `/chat/completions` | OpenAI `/v1/responses` | Web search |
 | --- | --- | --- | --- | --- |

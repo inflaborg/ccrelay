@@ -1,61 +1,9 @@
 /**
  * Platform-specific transforms for OpenAI Chat Completions bodies (Anthropic client → OpenAI upstream).
- * Azure OpenAI strict schema, Gemini OpenAI-compat quirks, and profile selection from provider config.
+ * Gemini OpenAI-compat quirks (Azure sanitization is hostname-based in `platform-transforms`).
  */
 
-import type { Provider, OpenAICompat } from "../../types";
-import type {
-  OpenAIMessage,
-  OpenAIMessageRequest,
-  OpenAIToolCall,
-} from "../adapters/anthropic-to-openai-chat-request";
-
-/**
- * Chat Completions body compat when bridging an Anthropic Messages client to this upstream.
- * Only `azure_openai` enables strict sanitization; everything else behaves as generic OpenAI.
- */
-export function resolveOpenAICompatForAnthropicToOpenAI(provider: Provider): OpenAICompat {
-  return provider.openaiCompat === "azure_openai" ? "azure_openai" : "default";
-}
-
-// --- Azure OpenAI ---
-
-function stripCacheControlFromContent(content: OpenAIMessage["content"]): OpenAIMessage["content"] {
-  if (content === null || typeof content === "string" || !Array.isArray(content)) {
-    return content;
-  }
-  return content.map(part => {
-    if (part && typeof part === "object" && "cache_control" in part) {
-      const r = part as Record<string, unknown>;
-      const next = { ...r };
-      delete next.cache_control;
-      return next as unknown as (typeof content)[number];
-    }
-    return part;
-  });
-}
-
-function sanitizeMessage(msg: OpenAIMessage): OpenAIMessage {
-  const out: OpenAIMessage = { ...msg };
-  delete out.thinking;
-  out.content = stripCacheControlFromContent(out.content);
-  if (out.tool_calls?.length) {
-    out.tool_calls = out.tool_calls.map(tc => {
-      const r = { ...tc };
-      delete r.extra_content;
-      return r;
-    });
-  }
-  return out;
-}
-
-/** Strip fields Azure OpenAI rejects when relaying from an Anthropic-shaped client. */
-export function sanitizeAzureOpenAiChatRequest(req: OpenAIMessageRequest): OpenAIMessageRequest {
-  const out: OpenAIMessageRequest = { ...req };
-  delete out.reasoning;
-  out.messages = (out.messages ?? []).map(sanitizeMessage);
-  return out;
-}
+import type { OpenAIToolCall } from "../adapters/anthropic-to-openai-chat-request";
 
 // --- Gemini OpenAI-compat ---
 

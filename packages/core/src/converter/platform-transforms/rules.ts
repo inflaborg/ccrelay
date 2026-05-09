@@ -72,6 +72,7 @@ export const PLATFORM_TRANSFORM_RULES: readonly PlatformTransformRule[] = [
     domainParents: ["cognitiveservices.azure.com"],
     requestOverride: "azure-web-search-to-responses",
     responses: "azure-responses-web-search",
+    requestSanitize: "azure-chat-sanitize",
   },
   {
     provider: "gemini",

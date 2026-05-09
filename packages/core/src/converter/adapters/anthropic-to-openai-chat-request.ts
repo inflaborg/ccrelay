@@ -12,13 +12,11 @@
 import {
   type MessageParam,
   type ContentBlockParam,
-  type OpenAICompat,
   type AnthropicServerToolDef,
   isServerToolResultBlock,
 } from "../../types";
 import {
   isGeminiOpenAiModel,
-  sanitizeAzureOpenAiChatRequest,
   withOptionalGeminiThoughtSignature,
 } from "../rules/openai-chat-platform-transforms";
 import { assignOpenAiChatMaxOutput } from "../rules/openai-chat-model-rules";
@@ -193,8 +191,6 @@ export interface ConversionResult {
 }
 
 export interface ConvertRequestToOpenAIOptions {
-  /** When `azure_openai`, strip fields Azure Chat Completions rejects (e.g. `reasoning`). */
-  openaiCompat?: OpenAICompat;
   /** Upstream `baseUrl` — selects platform outbound transforms (`platform-transforms/rules`). */
   providerBaseUrl?: string;
 }
@@ -303,11 +299,8 @@ export function convertRequestToOpenAI(
 
   const newPath = mapAnthropicWirePathToOpenAiUpstream(originalPath, "POST");
 
-  const request =
-    options?.openaiCompat === "azure_openai" ? sanitizeAzureOpenAiChatRequest(openai) : openai;
-
   return {
-    request,
+    request: openai,
     originalPath,
     newPath,
   };

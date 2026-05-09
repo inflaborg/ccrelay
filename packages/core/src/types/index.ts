@@ -278,7 +278,10 @@ export interface Provider {
   useCustomModelsList?: boolean;
   /** Model ids exposed when {@link Provider.useCustomModelsList} is true. */
   customModelsList?: string[];
-  /** Anthropic→Chat Completions: use `azure_openai` to strip fields Azure rejects (e.g. `reasoning`). */
+  /**
+   * Legacy YAML/API field; parsed for backward compatibility but **ignored** at runtime.
+   * Azure Chat outbound sanitization is selected by upstream hostname (`platform-transforms`).
+   */
   openaiCompat?: OpenAICompat;
 }
 
@@ -330,7 +333,6 @@ export interface ProviderInfo {
   modelMappingEnabled?: boolean;
   useCustomModelsList?: boolean;
   customModelsList?: string[];
-  openaiCompat?: OpenAICompat;
 }
 
 export interface ProxyRequest {

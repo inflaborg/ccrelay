@@ -186,7 +186,6 @@ export default function Providers() {
       modelMappingEnabled: provider.modelMappingEnabled !== false,
       useCustomModelsList: Boolean(provider.useCustomModelsList),
       customModelsList: provider.customModelsList,
-      openaiCompat: provider.openaiCompat === "azure_openai" ? "azure_openai" : undefined,
     });
     setModelMapText(modelMap ? yaml.dump(modelMap, { indent: 2, lineWidth: -1 }) : "");
     setModelMapError(null);
@@ -699,7 +698,6 @@ export default function Providers() {
                       setFormData(prev => ({
                         ...prev,
                         providerType: t,
-                        ...(t === "anthropic" ? { openaiCompat: undefined } : {}),
                       }));
                     }}
                     className="h-8 text-xs"
@@ -718,31 +716,6 @@ export default function Providers() {
                   />
                 </div>
               </div>
-
-              {(formData.providerType === "openai" || formData.providerType === "openai_chat") && (
-                <div className="space-y-1">
-                  <label className="text-xs font-medium">
-                    {t("providers.modal.crossProtocol")}
-                  </label>
-                  <Select
-                    value={formData.openaiCompat === "azure_openai" ? "azure_openai" : "standard"}
-                    options={[
-                      { value: "standard", label: t("providers.modal.crossProtocolStandard") },
-                      { value: "azure_openai", label: t("providers.modal.crossProtocolAzure") },
-                    ]}
-                    onChange={v =>
-                      setFormData(prev => ({
-                        ...prev,
-                        openaiCompat: v === "azure_openai" ? "azure_openai" : undefined,
-                      }))
-                    }
-                    className="h-8 text-xs"
-                  />
-                  <p className="text-[10px] text-muted-foreground">
-                    {t("providers.modal.crossProtocolHelp")}
-                  </p>
-                </div>
-              )}
 
               {/* API Key */}
               <div className="space-y-1">
