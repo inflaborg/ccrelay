@@ -20,9 +20,10 @@ import type { OpenAIMessage } from "../../converter/adapters/anthropic-to-openai
 import {
   normalizeToolsForProvider,
   applyPlatformMessageTransforms,
-  anthropicMessagesBodyHasHostedWebSearch,
+  applyPlatformRequestOverride,
   matchAnthropicSseRule,
 } from "../../converter/platform-transforms";
+import { anthropicBodyHasHostedTool } from "../../converter/hosted-tools";
 import { ScopedLogger } from "../../utils/logger";
 import type { ApiSurface } from "../../types";
 
@@ -193,6 +194,8 @@ export class BodyProcessor {
     const clientWireModel = extractClientWireModel(rawBody);
     let body = applyModelMapping(rawBody, routing.provider);
 
+    let upstreamResponseFormat: string | undefined;
+
     let responsesStreamRequested = false;
     let streamRequested = false;
     let originalResponsesEcho: ResponsesRequestEcho | undefined;
@@ -262,15 +265,32 @@ export class BodyProcessor {
     } else if (clientSurface === "anthropic" && upstreamWire === "openai") {
       const result = this.convertAnthropicToOpenAIRequest(body, routing);
       if (result) {
-        body = result.body;
-        routing.targetPath = result.newPath;
-        routing.targetUrl = buildTargetUrl(
-          routing.provider.baseUrl,
-          result.newPath,
-          routing.targetQuery
-        );
+        let nextBody = result.body;
+        let nextPath = result.newPath;
+
+        try {
+          const parsed = JSON.parse(result.body.toString("utf-8")) as Record<string, unknown>;
+          const override = applyPlatformRequestOverride(
+            parsed,
+            result.newPath,
+            routing.provider.baseUrl
+          );
+          if (override) {
+            nextBody = Buffer.from(JSON.stringify(override.body), "utf-8");
+            nextPath = override.path;
+            if (override.responseFormat !== undefined) {
+              upstreamResponseFormat = override.responseFormat;
+            }
+          }
+        } catch {
+          /* keep A→Chat */
+        }
+
+        body = nextBody;
+        routing.targetPath = nextPath;
+        routing.targetUrl = buildTargetUrl(routing.provider.baseUrl, nextPath, routing.targetQuery);
         log.info(
-          `[Router] A->O request: path ${routing.path} -> ${result.newPath}, target="${routing.targetUrl}"`
+          `[Router] A->O request: path ${routing.path} -> ${nextPath}, target="${routing.targetUrl}"`
         );
       }
     } else if (clientSurface === "openai" && upstreamWire === "anthropic") {
@@ -312,7 +332,7 @@ export class BodyProcessor {
     ) {
       try {
         const d = JSON.parse(body.toString("utf-8")) as Record<string, unknown>;
-        hasHostedWebSearchFlag = anthropicMessagesBodyHasHostedWebSearch(d);
+        hasHostedWebSearchFlag = anthropicBodyHasHostedTool(d, "web_search");
       } catch {
         hasHostedWebSearchFlag = false;
       }
@@ -327,6 +347,7 @@ export class BodyProcessor {
       ...(streamRequested ? { streamRequested: true } : {}),
       ...(originalResponsesEcho !== undefined ? { originalResponsesEcho } : {}),
       ...(hasHostedWebSearchFlag ? { hasHostedWebSearch: true } : {}),
+      ...(upstreamResponseFormat !== undefined ? { upstreamResponseFormat } : {}),
     };
   }
 

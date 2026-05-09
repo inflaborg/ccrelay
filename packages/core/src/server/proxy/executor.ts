@@ -16,6 +16,8 @@ import {
   formatOpenAIResponsesSse,
   formatOpenAIChatCompletionsSse,
   convertResponseToAnthropic,
+  convertResponsesApiJsonToAnthropicMessageResponse,
+  isOpenAIResponsesApiResultBody,
   convertOpenAIModelsToAnthropic,
   convertAnthropicModelsToOpenAI,
   isAnthropicModelsListJson,
@@ -393,6 +395,28 @@ export class ProxyExecutor {
       isJsonResponse
     ) {
       this.handleAnthropicJsonToOpenAIResponsesForClient(
+        proxyRes,
+        task,
+        ctx,
+        onClientDisconnect,
+        status,
+        responseHeaders,
+        originalModel,
+        resolve
+      );
+      return;
+    }
+
+    if (
+      !skipStructuredChatJsonConverters &&
+      needsResponseConversion &&
+      upstreamWire === "openai" &&
+      clientSurface === "anthropic" &&
+      task.upstreamResponseFormat === "responses" &&
+      status === 200 &&
+      isJsonResponse
+    ) {
+      this.handleResponsesJsonToAnthropicResponse(
         proxyRes,
         task,
         ctx,
@@ -865,6 +889,105 @@ export class ProxyExecutor {
           duration,
           responseBodyChunks: ctx.responseChunks,
           errorMessage: `OpenAI conversion failed: ${errMsg}`,
+        });
+      }
+    });
+  }
+
+  /**
+   * Upstream OpenAI Responses API JSON -> client Anthropic Messages JSON (platform transforms enrich content).
+   */
+  private handleResponsesJsonToAnthropicResponse(
+    proxyRes: http.IncomingMessage,
+    task: RequestTask,
+    ctx: ExecutionContext,
+    onClientDisconnect: () => void,
+    status: number,
+    responseHeaders: Record<string, string | string[]>,
+    originalModel: string | undefined,
+    resolve: (value: ProxyResult) => void
+  ): void {
+    const { clientId, provider, res: clientRes } = task;
+
+    let responseBody = "";
+    proxyRes.on("data", (chunk: Buffer) => {
+      responseBody += chunk.toString();
+    });
+
+    proxyRes.on("end", () => {
+      if (clientRes) {
+        clientRes.off("close", onClientDisconnect);
+      }
+      ctx.originalResponseBody = responseBody;
+      const duration = Date.now() - ctx.startTime;
+
+      try {
+        const parsed = JSON.parse(responseBody) as Record<string, unknown>;
+        if (!isOpenAIResponsesApiResultBody(parsed)) {
+          throw new Error("Response is not a valid Responses API JSON object");
+        }
+        const anthropicResponse = convertResponsesApiJsonToAnthropicMessageResponse(
+          parsed,
+          originalModel || "none"
+        );
+        anthropicResponse.content = applyPlatformResponseTransforms(
+          parsed,
+          anthropicResponse.content,
+          provider.baseUrl
+        );
+
+        ctx.responseChunks.push(Buffer.from(JSON.stringify(anthropicResponse), "utf-8"));
+
+        this.responseLogger.logResponse(
+          clientId,
+          duration,
+          status,
+          ctx.responseChunks,
+          undefined,
+          ctx.originalResponseBody,
+          ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+        );
+
+        resolve({
+          statusCode: status,
+          headers: responseHeaders,
+          body: JSON.stringify(anthropicResponse),
+          duration,
+          responseBodyChunks: ctx.responseChunks,
+          originalResponseBody: ctx.originalResponseBody,
+        });
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        log.warn(`[Responses->A response] Conversion failed for ${provider.id}: ${errMsg}`);
+
+        const errorResponse = {
+          type: "error",
+          error: {
+            type: "api_error",
+            message: `Response format conversion failed: ${errMsg}`,
+          },
+        };
+        const errorBody = JSON.stringify(errorResponse);
+
+        ctx.responseChunks.push(Buffer.from(errorBody, "utf-8"));
+
+        this.responseLogger.logResponse(
+          clientId,
+          duration,
+          502,
+          ctx.responseChunks,
+          `Responses conversion failed: ${errMsg}`,
+          ctx.originalResponseBody,
+          ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+        );
+
+        resolve({
+          statusCode: 502,
+          headers: { "Content-Type": "application/json" },
+          body: errorBody,
+          duration,
+          responseBodyChunks: ctx.responseChunks,
+          errorMessage: `Responses conversion failed: ${errMsg}`,
         });
       }
     });

@@ -620,6 +620,8 @@ export interface RequestTask {
   abortController?: AbortController;
   /** Client Anthropic Messages request declares hosted web search — enables SSE response normalization */
   hasHostedWebSearch?: boolean;
+  /** Upstream JSON wire shape for conversion (e.g. OpenAI Responses after platform request override). */
+  upstreamResponseFormat?: string;
 }
 
 /**

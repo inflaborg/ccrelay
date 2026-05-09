@@ -7,12 +7,15 @@
 import type { OpenAIMessage } from "../adapters/anthropic-to-openai-chat-request";
 import type { AnthropicContentBlock } from "../adapters/openai-chat-to-anthropic-response";
 import type { AnthropicSseEventRow } from "./glm/anthropic-sse-emitter";
+import { azureWebSearchRequestOverride } from "./azure-openai/request-override";
+import { azureResponsesWebSearchResponseTransform } from "./azure-openai/responses-web-search";
 import { transformGlmAnthropicSearchSseRows } from "./glm/anthropic-sse";
 import { glmWebSearchEnvelopeTransform } from "./glm/tools";
 import { glmFlattenContentTransform } from "./glm/messages";
 import { glmWebSearchResponseTransform } from "./glm/responses";
 import { mimoWebSearchTransform } from "./xiaomimimo/tools";
 import { mimoAnnotationsWebSearchResponseTransform } from "./xiaomimimo/responses";
+import type { PlatformRequestOverrideTransform } from "./rules";
 import { passthroughTransform } from "./passthrough";
 
 /** Outbound Chat `tools[]` entry (`type` keyed by rule). */
@@ -34,6 +37,11 @@ export type PlatformAnthropicSseTransform = (
   rows: AnthropicSseEventRow[]
 ) => AnthropicSseEventRow[];
 
+export const REQUEST_OVERRIDE_REGISTRY: Readonly<Record<string, PlatformRequestOverrideTransform>> =
+  {
+    "azure-web-search-to-responses": azureWebSearchRequestOverride,
+  };
+
 export const TOOL_TRANSFORM_REGISTRY: Readonly<Record<string, PlatformToolTransform>> = {
   "glm-web-search-envelope": glmWebSearchEnvelopeTransform,
   "mimo-web-search": mimoWebSearchTransform,
@@ -47,6 +55,7 @@ export const MESSAGE_TRANSFORM_REGISTRY: Readonly<Record<string, PlatformMessage
 export const RESPONSE_TRANSFORM_REGISTRY: Readonly<Record<string, PlatformResponseTransform>> = {
   "glm-web-search-response": glmWebSearchResponseTransform,
   "mimo-annotations-web-search": mimoAnnotationsWebSearchResponseTransform,
+  "azure-responses-web-search": azureResponsesWebSearchResponseTransform,
 };
 
 export const ANTHROPIC_SSE_TRANSFORM_REGISTRY: Readonly<
@@ -61,6 +70,12 @@ export { glmFlattenContentTransform } from "./glm/messages";
 export { glmWebSearchResponseTransform } from "./glm/responses";
 export { mimoAnnotationsWebSearchResponseTransform } from "./xiaomimimo/responses";
 export { mimoWebSearchTransform } from "./xiaomimimo/tools";
+export { azureWebSearchRequestOverride } from "./azure-openai/request-override";
+export { azureResponsesWebSearchResponseTransform } from "./azure-openai/responses-web-search";
+export {
+  mapAzureResponsesToolEntryForHostedWebSearch,
+  sanitizeAzureResponsesRequestTools,
+} from "./azure-openai/responses-request-tools";
 
 /** @deprecated Prefer `TOOL_TRANSFORM_REGISTRY`. */
 export const TRANSFORM_REGISTRY = TOOL_TRANSFORM_REGISTRY;

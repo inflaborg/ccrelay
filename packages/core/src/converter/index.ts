@@ -57,6 +57,26 @@ export {
   extractFunctionToolsForEcho,
 } from "./adapters/openai-responses-to-chat";
 
+export {
+  convertOpenAIMessageRequestToResponsesRequest,
+  convertOpenAiChatBodyBufferToResponsesRequest,
+  type ChatToResponsesRequestResult,
+} from "./adapters/openai-chat-to-responses-request";
+
+export {
+  chatBodyHasHostedTool,
+  anthropicBodyHasHostedTool,
+  detectChatHostedToolKinds,
+  HOSTED_TOOL_MATCHERS,
+} from "./hosted-tools";
+
+export type { HostedToolKind, HostedToolMatcher } from "./hosted-tools";
+
+export {
+  convertResponsesApiJsonToAnthropicMessageResponse,
+  isOpenAIResponsesApiResultBody,
+} from "./adapters/openai-responses-to-anthropic-response";
+
 export type { ResponsesRequestEcho } from "../types";
 
 export {

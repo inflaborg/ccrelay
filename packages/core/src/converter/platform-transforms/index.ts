@@ -6,17 +6,29 @@ import type { AnthropicSseEventRow } from "./glm/anthropic-sse-emitter";
 
 import type { OpenAIMessage } from "../adapters/anthropic-to-openai-chat-request";
 import type { AnthropicContentBlock } from "../adapters/openai-chat-to-anthropic-response";
-import { hostnameMatchesDomain, normalizedHostnameFromBaseUrl } from "./hostname";
-import { PLATFORM_TRANSFORM_RULES, type HostedToolRule } from "./rules";
+import { normalizedHostnameFromBaseUrl } from "./hostname";
+import { ruleHostnameMatches } from "./ruleHostname";
+import {
+  PLATFORM_TRANSFORM_RULES,
+  type HostedToolRule,
+  type PlatformRequestOverrideResult,
+} from "./rules";
 import {
   MESSAGE_TRANSFORM_REGISTRY,
+  REQUEST_OVERRIDE_REGISTRY,
   RESPONSE_TRANSFORM_REGISTRY,
   TOOL_TRANSFORM_REGISTRY,
   ANTHROPIC_SSE_TRANSFORM_REGISTRY,
   passthroughTransform,
 } from "./registries";
 
-export type { HostedToolRule, PlatformTransformRule, PlatformMessageRule } from "./rules";
+export type {
+  HostedToolRule,
+  PlatformTransformRule,
+  PlatformMessageRule,
+  PlatformRequestOverrideResult,
+  PlatformRequestOverrideTransform,
+} from "./rules";
 
 export type {
   HostedToolTransform,
@@ -32,16 +44,27 @@ export {
   glmWebSearchResponseTransform,
   mimoAnnotationsWebSearchResponseTransform,
   mimoWebSearchTransform,
+  azureWebSearchRequestOverride,
+  azureResponsesWebSearchResponseTransform,
+  sanitizeAzureResponsesRequestTools,
+  mapAzureResponsesToolEntryForHostedWebSearch,
   passthroughTransform,
   isPlainObject,
   TOOL_TRANSFORM_REGISTRY,
   MESSAGE_TRANSFORM_REGISTRY,
+  REQUEST_OVERRIDE_REGISTRY,
   RESPONSE_TRANSFORM_REGISTRY,
   ANTHROPIC_SSE_TRANSFORM_REGISTRY,
   TRANSFORM_REGISTRY,
 } from "./registries";
 
-export { hostnameMatchesDomain, normalizedHostnameFromBaseUrl } from "./hostname";
+export {
+  hostnameMatchesDomain,
+  hostnameMatchesDomainOrSubdomain,
+  normalizedHostnameFromBaseUrl,
+} from "./hostname";
+
+export { ruleHostnameMatches } from "./ruleHostname";
 
 export {
   parseAnthropicSseRows,
@@ -63,10 +86,8 @@ export function matchHostedToolRuleForBaseUrl(baseUrl: string): HostedToolRule |
     return undefined;
   }
   for (const rule of PLATFORM_TRANSFORM_RULES) {
-    for (const host of rule.domains) {
-      if (hostnameMatchesDomain(hostname, host)) {
-        return rule;
-      }
+    if (ruleHostnameMatches(hostname, rule)) {
+      return rule;
     }
   }
   return undefined;
@@ -82,10 +103,8 @@ function matchPlatformResponseRule(baseUrl: string): HostedToolRule | undefined 
     if (!rule.responses) {
       continue;
     }
-    for (const host of rule.domains) {
-      if (hostnameMatchesDomain(hostname, host)) {
-        return rule;
-      }
+    if (ruleHostnameMatches(hostname, rule)) {
+      return rule;
     }
   }
   return undefined;
@@ -101,10 +120,25 @@ function matchPlatformMessageRule(baseUrl: string): HostedToolRule | undefined {
     if (!rule.messages) {
       continue;
     }
-    for (const host of rule.domains) {
-      if (hostnameMatchesDomain(hostname, host)) {
-        return rule;
-      }
+    if (ruleHostnameMatches(hostname, rule)) {
+      return rule;
+    }
+  }
+  return undefined;
+}
+
+/** Match first rule that declares `requestOverride` transforms. */
+function matchRequestOverrideRule(baseUrl: string): HostedToolRule | undefined {
+  const hostname = normalizedHostnameFromBaseUrl(baseUrl);
+  if (!hostname) {
+    return undefined;
+  }
+  for (const rule of PLATFORM_TRANSFORM_RULES) {
+    if (!rule.requestOverride) {
+      continue;
+    }
+    if (ruleHostnameMatches(hostname, rule)) {
+      return rule;
     }
   }
   return undefined;
@@ -120,10 +154,8 @@ export function matchAnthropicSseRule(baseUrl: string): HostedToolRule | undefin
     if (!rule.anthropicSse) {
       continue;
     }
-    for (const host of rule.domains) {
-      if (hostnameMatchesDomain(hostname, host)) {
-        return rule;
-      }
+    if (ruleHostnameMatches(hostname, rule)) {
+      return rule;
     }
   }
   return undefined;
@@ -172,6 +204,22 @@ export function applyPlatformToolTransforms(
   toolChoice?: unknown
 ): NormalizeToolsResult {
   return normalizeToolsForProvider(tools, baseUrl, toolChoice);
+}
+
+/**
+ * After generic Anthropic→OpenAI Chat conversion: apply hostname-specific body/path overrides.
+ */
+export function applyPlatformRequestOverride(
+  chatBody: Record<string, unknown>,
+  chatPath: string,
+  baseUrl: string
+): PlatformRequestOverrideResult | null {
+  const rule = matchRequestOverrideRule(baseUrl);
+  if (!rule?.requestOverride) {
+    return null;
+  }
+  const transform = REQUEST_OVERRIDE_REGISTRY[rule.requestOverride];
+  return transform?.(chatBody, chatPath) ?? null;
 }
 
 /** Apply per-provider outbound message transforms inside Chat bodies. */

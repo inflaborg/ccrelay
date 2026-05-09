@@ -71,6 +71,7 @@ For **hosted web search**, CCRelay applies **provider-specific** normalization s
 | Provider (target host) | **Anthropic** | **OpenAI-compatible** |
 | --- | --- | --- |
 | **Z.ai GLM** (`api.z.ai`, `open.bigmodel.cn`) | **Supported** | **Supported** |
+| **Azure OpenAI** (`*.cognitiveservices.azure.com`) | **Supported** — with `openaiCompat: azure_openai`, hosted web search is sent via the **Responses API** (Azure Chat Completions does not accept hosted `web_search`). | **Supported** — hosted web search is via **`/responses`** only, not Chat Completions. |
 | **Xiaomi MiMo** (`api.xiaomimimo.com`) | **Not supported** | **Supported** — **not on Token Plan**. See Xiaomi MiMo for which plans apply. |
 | *Other providers* | *TBD* | *TBD* |
 

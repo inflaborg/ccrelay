@@ -88,6 +88,9 @@ export class TaskExecutor {
         ? { originalResponsesEcho: bodyResult.originalResponsesEcho }
         : {}),
       ...(bodyResult.hasHostedWebSearch ? { hasHostedWebSearch: true } : {}),
+      ...(bodyResult.upstreamResponseFormat !== undefined
+        ? { upstreamResponseFormat: bodyResult.upstreamResponseFormat }
+        : {}),
     };
   }
 

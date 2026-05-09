@@ -2,7 +2,6 @@
 import { describe, expect, it } from "vitest";
 import type { AnthropicSseEventRow } from "@/converter/platform-transforms";
 import {
-  anthropicMessagesBodyHasHostedWebSearch,
   applyAnthropicSseRowsPlatformTransform,
   parseAnthropicSseRows,
   parseGlmToolResultAsSearchEntries,
@@ -153,40 +152,5 @@ describe("applyAnthropicSseRowsPlatformTransform", () => {
     const transformed = applyAnthropicSseRowsPlatformTransform(rows, "https://api.z.ai/v1");
     const cb = transformed[0].data.content_block as Record<string, unknown>;
     expect(cb.name).toBe("web_search");
-  });
-});
-
-describe("anthropicMessagesBodyHasHostedWebSearch", () => {
-  it("detects versioned web_search server tool", () => {
-    expect(
-      anthropicMessagesBodyHasHostedWebSearch({
-        tools: [{ type: "web_search_20250305", name: "web_search" }],
-      })
-    ).toBe(true);
-  });
-
-  it("is false without tools", () => {
-    expect(anthropicMessagesBodyHasHostedWebSearch({ model: "x" })).toBe(false);
-  });
-
-  it("is false when messages suggest search but tools[] is omitted", () => {
-    expect(
-      anthropicMessagesBodyHasHostedWebSearch({
-        model: "x",
-        messages: [
-          {
-            role: "assistant",
-            content: [
-              {
-                type: "server_tool_use",
-                id: "toolu_123",
-                name: "web_search",
-                input: { query: "q" },
-              },
-            ],
-          },
-        ],
-      })
-    ).toBe(false);
   });
 });

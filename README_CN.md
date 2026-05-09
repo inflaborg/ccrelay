@@ -71,6 +71,7 @@
 | 提供商（目标主机） | **Anthropic** | **OpenAI 兼容** |
 | --- | --- | --- |
 | **Z.ai GLM**（`api.z.ai`、`open.bigmodel.cn`） | **支持** | **支持** |
+| **Azure OpenAI**（`*.cognitiveservices.azure.com`） | **支持** — 配置 `openaiCompat: azure_openai` 时，托管网页搜索走 **Responses API**（Azure 的 Chat Completions 不接受托管 `web_search`）。 | **支持** — 托管网页搜索仅 **`/responses`**，非 Chat Completions。 |
 | **小米 MiMo**（`api.xiaomimimo.com`） | **不支持** | **支持** — **Token Plan 不适用**；请以小米 MiMo 官方说明为准。 |
 | *其余提供商* | *待补充* | *待补充* |
 

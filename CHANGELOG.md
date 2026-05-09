@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**Protocol/Conversion**
+
+- **Azure OpenAI** (with `openaiCompat: azure_openai`): Anthropic-inbound requests that use hosted web search are routed to the **Responses API** automatically, since Azure Chat Completions rejects hosted `web_search` tools.
+
 **Desktop**
 
 - Tauri desktop app: lightweight alternative to Electron using sidecar architecture (Rust shell + Node.js server process).
