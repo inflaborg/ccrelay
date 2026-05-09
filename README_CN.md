@@ -42,7 +42,7 @@
 **代理与路由**
 
 - 内置 HTTP 代理（默认 `http://127.0.0.1:7575`），支持基于路径的路由——转发到提供商、拦截返回自定义响应、或返回 404
-- 多协议：同一端口同时接受 **Anthropic**、**OpenAI Chat Completions** 和 **OpenAI Responses**（`/v1/responses`）
+- 多协议：同一端口同时接受 **Anthropic**、**OpenAI Chat Completions** 和 **OpenAI Responses API**（`/v1/responses`）
 - 客户端与上游协议不一致时自动进行跨协议转换
 - URL 前缀 `/openai/...` 和 `/anthropic/v1/...` 让不同客户端精确指定协议
 
@@ -68,12 +68,15 @@
 
 **托管网页搜索**时，CCRelay 会按**上游提供商**做归一化，使搜索在依赖 **Anthropic 风格**工具与展示的客户端里表现正确。**只认上游：**规则由路由里配置的 **provider 目标 URL（主机名）** 决定，与如何访问本地中继无关。
 
-| 提供商（目标主机） | **Anthropic** | **OpenAI 兼容** |
-| --- | --- | --- |
-| **Z.ai GLM**（`api.z.ai`、`open.bigmodel.cn`） | **支持** | **支持** |
-| **Azure OpenAI**（`*.cognitiveservices.azure.com`） | **支持** — 配置 `openaiCompat: azure_openai` 时，托管网页搜索走 **Responses API**（Azure 的 Chat Completions 不接受托管 `web_search`）。 | **支持** — 托管网页搜索仅 **`/responses`**，非 Chat Completions。 |
-| **小米 MiMo**（`api.xiaomimimo.com`） | **不支持** | **支持** — **Token Plan 不适用**；请以小米 MiMo 官方说明为准。 |
-| *其余提供商* | *待补充* | *待补充* |
+下表表示 CCRelay 是否支持将各**客户端协议**转发到该上游，以及**托管网页搜索**在上游的接入位置。**Azure OpenAI：**上游仅提供 **OpenAI Chat Completions** 与 **OpenAI Responses API**，**没有** Anthropic **`/v1/messages`** 接口。托管 **web search** **仅**适用于 **Responses API**，Chat Completions 不支持。将 Anthropic 风格客户端指向 Azure 时请配置 **`openaiCompat: azure_openai`**，以便托管工具正确映射。
+
+| 提供商（目标主机） | Anthropic `/v1/messages` | OpenAI `/chat/completions` | OpenAI `/v1/responses` | Web search |
+| --- | --- | --- | --- | --- |
+| **Z.ai GLM**（`api.z.ai`、`open.bigmodel.cn`） | 支持 | 支持 | 不支持 | 支持 |
+| **小米 MiMo**（`api.xiaomimimo.com`） | 支持 | 支持 | 不支持 | 仅 Chat |
+| **Google Gemini**（`generativelanguage.googleapis.com`，OpenAI 兼容） | 不支持 | 支持 | 不支持 | 不支持 |
+| **Azure OpenAI**（`*.cognitiveservices.azure.com`） | 不支持 | 支持 | 支持 | 仅 Responses API |
+| *其余提供商* | *视情况* | *视情况* | *视情况* | *—* |
 
 **截图示例（Claude Code 经 CCRelay）**
 

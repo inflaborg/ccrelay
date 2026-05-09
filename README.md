@@ -42,7 +42,7 @@
 **Proxy & Routing**
 
 - Built-in HTTP proxy (default `http://127.0.0.1:7575`) with path-based routing — forward to a provider, block with a custom response, or return 404
-- Multi-protocol: accepts **Anthropic**, **OpenAI Chat Completions**, and **OpenAI Responses** (`/v1/responses`) on the same port
+- Multi-protocol: accepts **Anthropic**, **OpenAI Chat Completions**, and **OpenAI Responses API** (`/v1/responses`) on the same port
 - Automatic cross-protocol conversion when client and upstream wire formats differ
 - URL prefixes `/openai/...` and `/anthropic/v1/...` let different clients target the right protocol explicitly
 
@@ -68,12 +68,15 @@
 
 For **hosted web search**, CCRelay applies **provider-specific** normalization so search shows up correctly for tools and UIs that expect **Anthropic-style** behavior. **Only the upstream matters:** rules are chosen from the route’s **provider target URL** (host). It does not depend on how you address the relay.
 
-| Provider (target host) | **Anthropic** | **OpenAI-compatible** |
-| --- | --- | --- |
-| **Z.ai GLM** (`api.z.ai`, `open.bigmodel.cn`) | **Supported** | **Supported** |
-| **Azure OpenAI** (`*.cognitiveservices.azure.com`) | **Supported** — with `openaiCompat: azure_openai`, hosted web search is sent via the **Responses API** (Azure Chat Completions does not accept hosted `web_search`). | **Supported** — hosted web search is via **`/responses`** only, not Chat Completions. |
-| **Xiaomi MiMo** (`api.xiaomimimo.com`) | **Not supported** | **Supported** — **not on Token Plan**. See Xiaomi MiMo for which plans apply. |
-| *Other providers* | *TBD* | *TBD* |
+The table below is whether CCRelay can route each **client wire** to that upstream, and where **hosted web search** is accepted. **Azure OpenAI:** the upstream exposes **OpenAI Chat Completions** and **OpenAI Responses API** only — **no** Anthropic **`/v1/messages`** endpoint. Hosted **web search** works **only** on the **Responses API**, not Chat Completions. Use **`openaiCompat: azure_openai`** when sending Anthropic-style clients to Azure so hosted tools map correctly.
+
+| Provider (target host) | Anthropic `/v1/messages` | OpenAI `/chat/completions` | OpenAI `/v1/responses` | Web search |
+| --- | --- | --- | --- | --- |
+| **Z.ai GLM** (`api.z.ai`, `open.bigmodel.cn`) | Supported | Supported | Not supported | Supported |
+| **Xiaomi MiMo** (`api.xiaomimimo.com`) | Supported | Supported | Not supported | Chat only |
+| **Google Gemini** (OpenAI-compatible, `generativelanguage.googleapis.com`) | Not supported | Supported | Not supported | Not supported |
+| **Azure OpenAI** (`*.cognitiveservices.azure.com`) | Not supported | Supported | Supported | Responses API only |
+| *Other providers* | *Varies* | *Varies* | *Varies* | *—* |
 
 **Screenshots (Claude Code through CCRelay)**
 
