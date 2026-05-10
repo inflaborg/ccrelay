@@ -247,6 +247,7 @@
       "glm": "智谱 GLM",
       "xiaomi": "小米 MiMo",
       "azure": "Azure OpenAI",
+      "minimax": "MiniMax",
       "geminiOpenai": "Gemini（OpenAI 兼容）"
     },
     "toggle": {
@@ -273,6 +274,8 @@
     "models": {
       "referenceTitle": "端点模型（对照）",
       "loading": "正在从端点获取模型列表…",
+      "fetchingHint": "正在获取端点模型…",
+      "fetchFailedHint": "无法获取端点模型",
       "success": "{{count}} 个模型可用",
       "authError": "鉴权失败（401/403），请检查 API Key。",
       "networkError": "无法连接端点，请检查 URL。",

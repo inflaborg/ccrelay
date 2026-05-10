@@ -247,6 +247,7 @@
       "glm": "Zhipu GLM",
       "xiaomi": "Xiaomi MiMo",
       "azure": "Azure OpenAI",
+      "minimax": "MiniMax",
       "geminiOpenai": "Gemini (OpenAI-compatible)"
     },
     "toggle": {
@@ -273,6 +274,8 @@
     "models": {
       "referenceTitle": "Endpoint models",
       "loading": "Fetching models from endpoint…",
+      "fetchingHint": "Fetching endpoint models…",
+      "fetchFailedHint": "Unable to fetch endpoint models",
       "success": "{{count}} models available",
       "authError": "Authentication failed (401/403). Check your API key.",
       "networkError": "Could not reach the endpoint. Check the URL.",

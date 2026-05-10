@@ -83,6 +83,7 @@ describe("executeWizardEndpointTest", () => {
     vi.mocked(fetch).mockResolvedValue({
       status: 401,
       headers: { get: () => "application/json" },
+      text: () => Promise.resolve('{"error":"unauthorized"}'),
     } as unknown as Response);
 
     const r = await executeWizardEndpointTest({

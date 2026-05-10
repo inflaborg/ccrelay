@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PartnerPreset } from "./types";
 import type { UpstreamModelsResult } from "./useUpstreamModels";
@@ -79,13 +79,22 @@ export function WizardCredentials({
 }: WizardCredentialsProps) {
   const { t } = useTranslation();
 
-  /** Custom list ON: show left reference only while loading or when fetch succeeded with ≥1 model */
+  /** Custom list ON: show left reference only when fetch succeeded with ≥1 model */
   const showUpstreamReferenceColumn =
     useCustomModels &&
-    (upstreamModels.loading ||
-      Boolean(
-        upstreamModels.models && upstreamModels.models.length > 0 && !upstreamModels.errorCode
-      ));
+    Boolean(
+      upstreamModels.models && upstreamModels.models.length > 0 && !upstreamModels.errorCode
+    );
+
+  /** Inline hint shown next to the model IDs label during/after upstream fetch */
+  const upstreamFetchHint: { icon: "spinner" | "warn"; text: string } | null = (() => {
+    if (!useCustomModels) return null;
+    if (upstreamModels.loading) return { icon: "spinner", text: t("wizard.models.fetchingHint") };
+    if (upstreamModels.errorCode) return { icon: "warn", text: t("wizard.models.fetchFailedHint") };
+    if (upstreamModels.models && upstreamModels.models.length === 0)
+      return { icon: "warn", text: t("wizard.models.fetchFailedHint") };
+    return null;
+  })();
 
   return (
     <div className="space-y-4">
@@ -244,8 +253,20 @@ export function WizardCredentials({
             </div>
           ) : null}
           <div className="min-w-0 space-y-1">
-            <label className="text-xs font-medium">
-              {t("wizard.field.models")} <span className="text-destructive">*</span>
+            <label className="text-xs font-medium flex items-center gap-2">
+              <span>
+                {t("wizard.field.models")} <span className="text-destructive">*</span>
+              </span>
+              {upstreamFetchHint ? (
+                <span className="inline-flex items-center gap-1 font-normal text-muted-foreground">
+                  {upstreamFetchHint.icon === "spinner" ? (
+                    <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                  ) : (
+                    <AlertCircle className="h-3 w-3 shrink-0" />
+                  )}
+                  {upstreamFetchHint.text}
+                </span>
+              ) : null}
             </label>
             <textarea
               className="min-h-[120px] w-full px-2 py-1.5 font-mono text-xs border rounded-md bg-background"
