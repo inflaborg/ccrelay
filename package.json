@@ -55,7 +55,10 @@
     "package:dev": "./scripts/package.sh dev",
     "package:prod": "./scripts/package.sh prod",
     "postinstall": "cd web && npm install",
-    "prepare": "husky"
+    "prepare": "husky",
+    "version:bump": "node scripts/bump-version.mjs",
+    "version:beta": "node scripts/version-beta.mjs",
+    "version:release": "node scripts/version-release.mjs"
   },
   "dependencies": {},
   "overrides": {
