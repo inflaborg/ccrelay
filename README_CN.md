@@ -131,7 +131,7 @@ npm run compile        # 或 npm run watch
 - 共用 `~/.ccrelay/` 配置、状态和 Leader 选举
 - 托盘菜单 → **打开控制台** 在应用窗口内加载 Web UI
 - 从 [GitHub Releases](https://github.com/inflaborg/ccrelay/releases) 下载：
-  - **macOS**: `CCRelay-<版本>-darwin-arm64.zip` 或 `-darwin-x64.zip`
+  - **macOS**: `CCRelay-<版本>-darwin-arm64.dmg` 或 `-darwin-x64.dmg`
   - **Windows**: `CCRelay-<版本>-win32-x64.exe` 或 `-win32-arm64.exe`
 
 ### macOS：首次打开
@@ -392,12 +392,6 @@ gemini:
 CCRelay 使用 `~/.ccrelay/config.yaml`（首次启动时自动创建）。启动时内置默认模板与你的文件合并——**你已写的值始终以你为准**，缺省的键用默认值补齐。列表类型（`routing.forward`、`routing.block`、`concurrency.routes`）按身份键合并，你的条目在前，新增的默认条目追加在末尾。整节不写则继承完整默认列表；显式设 `[]` 表示刻意为空。
 
 > YAML 配置同时支持 `camelCase` 和 `snake_case` 键名。
-
-### VS Code 设置
-
-| 设置 | 默认值 | 描述 |
-|------|--------|------|
-| `ccrelay.configPath` | `~/.ccrelay/config.yaml` | 配置文件路径 |
 
 ### 服务器
 

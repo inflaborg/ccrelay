@@ -1,6 +1,6 @@
 {
   "name": "ccrelay-desktop",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "description": "CCRelay desktop tray app",
   "license": "MIT",
@@ -62,7 +62,7 @@
       "category": "public.app-category.developer-tools",
       "identity": null,
       "target": [
-        "zip"
+        "dmg"
       ]
     },
     "win": {

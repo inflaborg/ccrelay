@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-05-10 (pre-release)
+
+Pre-release line for 0.2.2.
+
+### Changed
+
+**Desktop/CI**
+
+- macOS Electron packaging switched from `.zip` to `.dmg`; CI now runs a post-build integrity check (size + disk-image signature) before uploading.
+
+**Config**
+
+- Removed deprecated `ccrelay.configPath` VS Code setting from documentation; config file path is fixed at `~/.ccrelay/config.yaml`.
+
 ## [0.2.1] - 2026-05-09
 
 This release expands the web dashboard (logs, stats, provider wizard) and tightens protocol handling for Gemini, GLM, MiMo, and Azure. **Desktop:** optional Tauri build with secure dashboard auth.

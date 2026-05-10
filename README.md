@@ -130,7 +130,7 @@ An optional Electron desktop app (`packages/desktop`) runs the same core as the 
 - Shares `~/.ccrelay/` config, state, and Leader election with the extension
 - Tray menu → **Open Dashboard** loads the web UI in an app window
 - Download from [GitHub Releases](https://github.com/inflaborg/ccrelay/releases):
-  - **macOS**: `CCRelay-<version>-darwin-arm64.zip` or `-darwin-x64.zip`
+  - **macOS**: `CCRelay-<version>-darwin-arm64.dmg` or `-darwin-x64.dmg`
   - **Windows**: `CCRelay-<version>-win32-x64.exe` or `-win32-arm64.exe`
 
 ### macOS: First Launch
@@ -391,12 +391,6 @@ Built-in web dashboard accessible via Command Palette → `CCRelay: Open Dashboa
 CCRelay uses `~/.ccrelay/config.yaml` (auto-created on first launch). On startup the bundled defaults are merged with your file — **your values always win**, missing keys are filled from defaults. List sections (`routing.forward`, `routing.block`, `concurrency.routes`) merge by identity key, with your rows first and new defaults appended. Omit a list to inherit full defaults; set `[]` for intentionally empty.
 
 > YAML config supports both `camelCase` and `snake_case` keys.
-
-### VS Code Settings
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `ccrelay.configPath` | `~/.ccrelay/config.yaml` | Path to the YAML config file |
 
 ### Server
 
