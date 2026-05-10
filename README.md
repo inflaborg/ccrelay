@@ -27,6 +27,7 @@
   - [Model Mapping](#model-mapping)
   - [OpenAI Format Conversion](#openai-format-conversion)
   - [Web UI Dashboard](#web-ui-dashboard)
+- [External web search (Tavily)](#external-web-search-tavily)
 - [Configuration](#configuration)
 - [API Endpoints](#api-endpoints)
 - [Commands](#commands)
@@ -64,6 +65,10 @@
 - Web dashboard with provider management, settings, and i18n (English + Chinese)
 - Provider import/export as JSON
 
+**External web search**
+
+- Optional **Tavily**-backed handling of Anthropic-style **web search** tool traffic for provider IDs you allowlist; configure in `config.yaml` or the dashboard **Capabilities** tab
+
 ### Verified upstreams (by host)
 
 Relaying uses the **provider `baseUrl` hostname**. The rows below are **upstream endpoints we have validated** when you add them as a provider. Vendors may offer Anthropic APIs, OpenAI-compatible APIs, or both — but your **client protocol** and the **upstream protocol** are often not the same. When they differ, CCRelay applies **generic protocol conversion** first, then **hostname-specific alignment** where we maintain it. When the wire looks the same on both sides, **tooling still differs** by vendor (for example Web Search Server Tools, strict Chat schemas, or Responses-only tools).
@@ -72,19 +77,20 @@ Relaying uses the **provider `baseUrl` hostname**. The rows below are **upstream
 
 **Example — Azure OpenAI:** Upstream **Web Search Server Tools** exist **only** on the **Responses API** (hence “Responses API only” in the Web Search Server Tools column). You can still point clients at CCRelay using the **OpenAI Chat Completions** surface. After you set **Azure OpenAI** as the provider `baseUrl`, Chat-shaped calls that include Web Search Server Tools are **rewritten in the conversion layer** into upstream **Responses** requests so search keeps working—you do not need the client to call `/v1/responses` itself.
 
-| Provider (target host) | Anthropic `/v1/messages` | OpenAI `/chat/completions` | OpenAI `/v1/responses` | Web Search Server Tools |
-| --- | --- | --- | --- | --- |
-| **Z.ai GLM** (`api.z.ai`, `open.bigmodel.cn`) | Supported | Supported | Not supported | Supported |
-| **Xiaomi MiMo** (`api.xiaomimimo.com`) | Supported | Supported | Not supported | Chat only |
-| **Google Gemini** (OpenAI-compatible, `generativelanguage.googleapis.com`) | Not supported | Supported | Not supported | Not supported |
-| **Azure OpenAI** (`*.cognitiveservices.azure.com`) | Not supported | Supported | Supported | Responses API only |
-| *Other hosts* | *Varies* | *Varies* | *Varies* | Generic conversion only |
+| Provider (target host)                                                     | Anthropic `/v1/messages` | OpenAI `/chat/completions` | OpenAI `/v1/responses` | Web Search Server Tools |
+| -------------------------------------------------------------------------- | ------------------------ | -------------------------- | ---------------------- | ----------------------- |
+| **Z.ai GLM** (`api.z.ai`, `open.bigmodel.cn`)                              | Supported                | Supported                  | Not supported          | Supported               |
+| **Xiaomi MiMo** (`api.xiaomimimo.com`)                                     | Supported                | Supported                  | Not supported          | Chat only               |
+| **MiniMax** (`api.minimax.io`, `api.minimaxi.com`)                         | Supported                | Supported                  | Not supported          | Not supported           |
+| **Google Gemini** (OpenAI-compatible, `generativelanguage.googleapis.com`) | Not supported            | Supported                  | Not supported          | Not supported           |
+| **Azure OpenAI** (`*.cognitiveservices.azure.com`)                         | Not supported            | Supported                  | Supported              | Responses API only      |
+| _Other hosts_                                                              | _Varies_                 | _Varies_                   | _Varies_               | Generic conversion only |
 
 **Screenshots (Claude Code through CCRelay)**
 
-![Claude Code — GLM Web Search Server Tools](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-claude-glm-web-search.png)
+![Claude Code — GLM Web Search Server Tools](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-claude-glm-web-search.webp)
 
-![Claude Code — Xiaomi MiMo Web Search Server Tools](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-claude-xiaomi-mimo-web-search.png)
+![Claude Code — Xiaomi MiMo Web Search Server Tools](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-claude-xiaomi-mimo-web-search.webp)
 
 ---
 
@@ -235,11 +241,11 @@ You can also set these from the Web dashboard: **Client configuration** tab.
 
 CCRelay exposes both **Anthropic** and **OpenAI** compatible routes on the same port (default **7575**). Use URL prefixes to pick the right protocol:
 
-| Client | Protocol | Base URL |
-|--------|----------|----------|
-| **Claude Code** | Anthropic | `http://127.0.0.1:7575/anthropic` |
+| Client            | Protocol  | Base URL                          |
+| ----------------- | --------- | --------------------------------- |
+| **Claude Code**   | Anthropic | `http://127.0.0.1:7575/anthropic` |
 | **Claude Cowork** | Anthropic | `http://127.0.0.1:7575/anthropic` |
-| **Codex** | OpenAI | `http://127.0.0.1:7575/openai` |
+| **Codex**         | OpenAI    | `http://127.0.0.1:7575/openai`    |
 
 Legacy `/v1/...` paths still work when pointed at `http://127.0.0.1:7575` directly.
 
@@ -292,10 +298,10 @@ When multiple VS Code windows are open:
 
 ### Provider Modes
 
-| Mode | Auth behavior | Use case |
-|------|---------------|----------|
-| `passthrough` | Preserves original auth headers | Official Claude API with OAuth |
-| `inject` | Replaces auth with provider API key | Third-party providers (GLM, OpenRouter, etc.) |
+| Mode          | Auth behavior                       | Use case                                      |
+| ------------- | ----------------------------------- | --------------------------------------------- |
+| `passthrough` | Preserves original auth headers     | Official Claude API with OAuth                |
+| `inject`      | Replaces auth with provider API key | Third-party providers (GLM, OpenRouter, etc.) |
 
 ### Model Mapping
 
@@ -323,13 +329,13 @@ vlModelMap:
 
 CCRelay accepts three inbound protocols and converts when the upstream provider speaks a different wire:
 
-| Inbound path | Client protocol |
-|--------------|-----------------|
-| `/v1/messages`, `/anthropic/v1/messages` | Anthropic Messages |
+| Inbound path                                       | Client protocol         |
+| -------------------------------------------------- | ----------------------- |
+| `/v1/messages`, `/anthropic/v1/messages`           | Anthropic Messages      |
 | `/v1/chat/completions`, `/openai/chat/completions` | OpenAI Chat Completions |
-| `/v1/responses` | OpenAI Responses API |
-| `/v1/models`, `/openai/models` | OpenAI models list |
-| `/anthropic/v1/models` | Anthropic models list |
+| `/v1/responses`                                    | OpenAI Responses API    |
+| `/v1/models`, `/openai/models`                     | OpenAI models list      |
+| `/anthropic/v1/models`                             | Anthropic models list   |
 
 **Conversion rules**:
 
@@ -362,6 +368,7 @@ Built-in web dashboard accessible via Command Palette → `CCRelay: Open Dashboa
 
 - **Dashboard** — server status, current provider, token usage, performance metrics (TTFB, P50/P90 latency, output TPS) with time range selector
 - **Providers** — view, switch, duplicate, import/export providers
+- **Capabilities** — optional **Tavily** web search: API key, search depth, max results, and which providers answer web search locally
 - **Logs** — request/response log viewer with token columns, TTFB, output TPS, and model mapping display (hidden when logging is disabled)
 - **Settings** — manage YAML config in the UI; routing and concurrency hot-reload on save, server and logging changes require a restart
 - **Client configuration** — write Claude Code env vars and Codex config from the UI
@@ -370,19 +377,21 @@ Built-in web dashboard accessible via Command Palette → `CCRelay: Open Dashboa
 
 **Web UI**
 
-![Client configuration](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-setup-1.png)
+![Client configuration](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-setup-1.webp)
 
-![Configure default models](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-setup-2.png)
+![Configure default models](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-setup-2.webp)
 
-![Request Logs](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-1.png)
+![Capabilities — Tavily web search](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-capabilities-websearch-tavily.webp)
 
-![Log Details](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-3.png)
+![Request Logs](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-1.webp)
+
+![Log Details](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-3.webp)
 
 **Desktop app**
 
-![Desktop — Dashboard](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-desktop-1.png)
+![Desktop — Dashboard](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-desktop-1.webp)
 
-![Desktop — Provider list](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-desktop-2.png)
+![Desktop — Provider list](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-desktop-2.webp)
 
 ---
 
@@ -394,79 +403,104 @@ CCRelay uses `~/.ccrelay/config.yaml` (auto-created on first launch). On startup
 
 ### Server
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `server.port` | `7575` | Proxy server port |
-| `server.host` | `127.0.0.1` | Bind address |
-| `server.autoStart` | `true` | Auto-start server on extension load |
-| `server.locale` | `""` | Web UI language (`"en"` or `"zh"`). First visit shows a picker if unset. |
+| Setting            | Default     | Description                                                              |
+| ------------------ | ----------- | ------------------------------------------------------------------------ |
+| `server.port`      | `7575`      | Proxy server port                                                        |
+| `server.host`      | `127.0.0.1` | Bind address                                                             |
+| `server.autoStart` | `true`      | Auto-start server on extension load                                      |
+| `server.locale`    | `""`        | Web UI language (`"en"` or `"zh"`). First visit shows a picker if unset. |
 
 ### Providers
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `defaultProvider` | `official` | Default provider ID |
-| `providers` | `{...}` | Provider map (see below) |
+| Setting           | Default    | Description              |
+| ----------------- | ---------- | ------------------------ |
+| `defaultProvider` | `official` | Default provider ID      |
+| `providers`       | `{...}`    | Provider map (see below) |
 
 Each provider supports:
 
-| Field | Default | Description |
-|-------|---------|-------------|
-| `name` | — | Display name |
-| `baseUrl` | — | API base URL |
-| `mode` | `"passthrough"` | `passthrough` (keep auth) or `inject` (replace auth) |
-| `providerType` | `"anthropic"` | `"anthropic"`, `"openai"` (full passthrough), or `"openai_chat"` (Chat Completions only) |
-| `apiKey` | — | API key for inject mode. Supports `${ENV_VAR}`. |
-| `authHeader` | `"authorization"` | Auth header name |
-| `modelMap` | — | Model name mappings (`[{pattern, model}]`, wildcards supported) |
-| `vlModelMap` | — | Vision model mappings (for multimodal requests) |
-| `headers` | — | Custom request headers |
-| `enabled` | `true` | Enable/disable |
+| Field          | Default           | Description                                                                              |
+| -------------- | ----------------- | ---------------------------------------------------------------------------------------- |
+| `name`         | —                 | Display name                                                                             |
+| `baseUrl`      | —                 | API base URL                                                                             |
+| `mode`         | `"passthrough"`   | `passthrough` (keep auth) or `inject` (replace auth)                                     |
+| `providerType` | `"anthropic"`     | `"anthropic"`, `"openai"` (full passthrough), or `"openai_chat"` (Chat Completions only) |
+| `apiKey`       | —                 | API key for inject mode. Supports `${ENV_VAR}`.                                          |
+| `authHeader`   | `"authorization"` | Auth header name                                                                         |
+| `modelMap`     | —                 | Model name mappings (`[{pattern, model}]`, wildcards supported)                          |
+| `vlModelMap`   | —                 | Vision model mappings (for multimodal requests)                                          |
+| `headers`      | —                 | Custom request headers                                                                   |
+| `enabled`      | `true`            | Enable/disable                                                                           |
 
 ### Routing
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `configVersion` | `"0.2.0"` | Config schema version. Legacy configs auto-migrated. |
-| `routing.forward` | `[{path, provider}]` | Forward rules — first match wins. `provider: "auto"` = current provider. Unmatched → 404. |
-| `routing.block` | `[{path, response, code, condition?}]` | Block rules — return custom response. Optional `condition.providers` (allowlist) and `condition.providerNot` (exclusion list). |
+| Setting           | Default                                | Description                                                                                                                    |
+| ----------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `configVersion`   | `"0.2.0"`                              | Config schema version. Legacy configs auto-migrated.                                                                           |
+| `routing.forward` | `[{path, provider}]`                   | Forward rules — first match wins. `provider: "auto"` = current provider. Unmatched → 404.                                      |
+| `routing.block`   | `[{path, response, code, condition?}]` | Block rules — return custom response. Optional `condition.providers` (allowlist) and `condition.providerNot` (exclusion list). |
 
 ### Concurrency
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `concurrency.enabled` | `true` | Enable request queue |
-| `concurrency.maxWorkers` | `3` | Max concurrent requests |
-| `concurrency.maxQueueSize` | `100` | Max queued requests (0 = unlimited) |
-| `concurrency.requestTimeout` | `60` | Queue timeout in seconds (0 = unlimited) |
-| `concurrency.routes` | `[]` | Per-route queue config (by `pattern`) |
+| Setting                      | Default | Description                              |
+| ---------------------------- | ------- | ---------------------------------------- |
+| `concurrency.enabled`        | `true`  | Enable request queue                     |
+| `concurrency.maxWorkers`     | `3`     | Max concurrent requests                  |
+| `concurrency.maxQueueSize`   | `100`   | Max queued requests (0 = unlimited)      |
+| `concurrency.requestTimeout` | `60`    | Queue timeout in seconds (0 = unlimited) |
+| `concurrency.routes`         | `[]`    | Per-route queue config (by `pattern`)    |
 
 ### Logging
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `logging.enabled` | `false` | Enable request logging |
+| Setting                 | Default    | Description                |
+| ----------------------- | ---------- | -------------------------- |
+| `logging.enabled`       | `false`    | Enable request logging     |
 | `logging.database.type` | `"sqlite"` | `"sqlite"` or `"postgres"` |
 
 **SQLite:**
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `logging.database.path` | `""` | DB file path (empty = `~/.ccrelay/logs.db`) |
-| `logging.database.sqlite3_executable` | `""` | Path to `sqlite3` binary (empty = resolve from `PATH`) |
+| Setting                               | Default | Description                                            |
+| ------------------------------------- | ------- | ------------------------------------------------------ |
+| `logging.database.path`               | `""`    | DB file path (empty = `~/.ccrelay/logs.db`)            |
+| `logging.database.sqlite3_executable` | `""`    | Path to `sqlite3` binary (empty = resolve from `PATH`) |
 
 If `sqlite3` cannot be resolved, the proxy runs without log persistence (warning in logs).
 
 **PostgreSQL:**
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `logging.database.host` | `localhost` | Server host |
-| `logging.database.port` | `5432` | Server port |
-| `logging.database.name` | `ccrelay` | Database name |
-| `logging.database.user` | `""` | Username |
-| `logging.database.password` | `""` | Password (supports `${ENV_VAR}`) |
-| `logging.database.ssl` | `false` | Enable SSL |
+| Setting                     | Default     | Description                      |
+| --------------------------- | ----------- | -------------------------------- |
+| `logging.database.host`     | `localhost` | Server host                      |
+| `logging.database.port`     | `5432`      | Server port                      |
+| `logging.database.name`     | `ccrelay`   | Database name                    |
+| `logging.database.user`     | `""`        | Username                         |
+| `logging.database.password` | `""`        | Password (supports `${ENV_VAR}`) |
+| `logging.database.ssl`      | `false`     | Enable SSL                       |
+
+### External web search (Tavily)
+
+Optional **local handling** of Anthropic-style **web search** (server tool) requests for selected providers. When configured, CCRelay runs live retrieval through the **[Tavily](https://tavily.com/)** Search API and returns a synthesized assistant response for that turn, so the upstream model does not need to implement the tool itself.
+
+| Setting                        | Description                                                   |
+| ------------------------------ | ------------------------------------------------------------- |
+| `webSearch.tavily.apiKey`      | Tavily API key. Supports `${ENV_VAR}`.                        |
+| `webSearch.tavily.searchDepth` | `basic` or `advanced` (optional).                             |
+| `webSearch.tavily.maxResults`  | Number of results, 1–10 (optional).                           |
+| `webSearch.providers`          | Provider IDs (keys under `providers:`) that use this feature. |
+
+You may use the top-level key `web_search` instead of `webSearch` (same nested shape).
+
+```yaml
+webSearch:
+  tavily:
+    apiKey: "${TAVILY_API_KEY}"
+    searchDepth: basic
+    maxResults: 5
+  providers:
+    - glm
+```
+
+Edit the same fields from the dashboard **Capabilities** tab.
 
 ### Full Example
 
@@ -552,19 +586,19 @@ logging:
 
 Management endpoints at `/ccrelay/`:
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/ccrelay/api/status` | GET | Proxy status |
-| `/ccrelay/api/providers` | GET | List providers |
-| `/ccrelay/api/switch/{id}` | GET | Switch to provider |
-| `/ccrelay/api/switch` | POST | Switch provider (JSON body) |
-| `/ccrelay/api/providers/export` | POST | Export providers by ID |
-| `/ccrelay/api/providers/import` | POST | Import providers (merge by ID) |
-| `/ccrelay/api/queue` | GET | Queue statistics |
-| `/ccrelay/api/logs` | GET | Request logs |
-| `/ccrelay/api/config` | GET, PATCH | Read/write config sections |
-| `/ccrelay/ws` | WebSocket | Follower sync |
-| `/ccrelay/` | GET | Web UI dashboard |
+| Endpoint                        | Method     | Description                    |
+| ------------------------------- | ---------- | ------------------------------ |
+| `/ccrelay/api/status`           | GET        | Proxy status                   |
+| `/ccrelay/api/providers`        | GET        | List providers                 |
+| `/ccrelay/api/switch/{id}`      | GET        | Switch to provider             |
+| `/ccrelay/api/switch`           | POST       | Switch provider (JSON body)    |
+| `/ccrelay/api/providers/export` | POST       | Export providers by ID         |
+| `/ccrelay/api/providers/import` | POST       | Import providers (merge by ID) |
+| `/ccrelay/api/queue`            | GET        | Queue statistics               |
+| `/ccrelay/api/logs`             | GET        | Request logs                   |
+| `/ccrelay/api/config`           | GET, PATCH | Read/write config sections     |
+| `/ccrelay/ws`                   | WebSocket  | Follower sync                  |
+| `/ccrelay/`                     | GET        | Web UI dashboard               |
 
 All other requests are proxied to the current provider.
 
@@ -572,16 +606,16 @@ All other requests are proxied to the current provider.
 
 ## Commands
 
-| Command | ID | Description |
-|---------|-----|-------------|
-| CCRelay: Show Menu | `ccrelay.showMenu` | Show main menu |
-| CCRelay: Switch Provider | `ccrelay.switchProvider` | Provider picker |
-| CCRelay: Start Server | `ccrelay.startServer` | Start server |
-| CCRelay: Stop Server | `ccrelay.stopServer` | Stop server |
-| CCRelay: Open Settings | `ccrelay.openSettings` | Extension settings |
-| CCRelay: Show Logs | `ccrelay.showLogs` | Output logs |
-| CCRelay: Clear Logs | `ccrelay.clearLogs` | Clear output logs |
-| CCRelay: Open Dashboard | `ccrelay.openWebUI` | Web dashboard |
+| Command                  | ID                       | Description        |
+| ------------------------ | ------------------------ | ------------------ |
+| CCRelay: Show Menu       | `ccrelay.showMenu`       | Show main menu     |
+| CCRelay: Switch Provider | `ccrelay.switchProvider` | Provider picker    |
+| CCRelay: Start Server    | `ccrelay.startServer`    | Start server       |
+| CCRelay: Stop Server     | `ccrelay.stopServer`     | Stop server        |
+| CCRelay: Open Settings   | `ccrelay.openSettings`   | Extension settings |
+| CCRelay: Show Logs       | `ccrelay.showLogs`       | Output logs        |
+| CCRelay: Clear Logs      | `ccrelay.clearLogs`      | Clear output logs  |
+| CCRelay: Open Dashboard  | `ccrelay.openWebUI`      | Web dashboard      |
 
 ---
 
@@ -630,12 +664,12 @@ ccrelay/
 
 ## File Locations
 
-| File | Location | Description |
-|------|----------|-------------|
-| Config | `~/.ccrelay/config.yaml` | Main config (auto-created) |
-| State | `~/.ccrelay/state.json` | Active provider ID |
-| IPC lock | `~/.ccrelay/ccrelay-lock.sock` (Unix) / named pipe (Win) | Leader election |
-| Log DB | `~/.ccrelay/logs.db` | Request logs (Leader only) |
+| File     | Location                                                 | Description                |
+| -------- | -------------------------------------------------------- | -------------------------- |
+| Config   | `~/.ccrelay/config.yaml`                                 | Main config (auto-created) |
+| State    | `~/.ccrelay/state.json`                                  | Active provider ID         |
+| IPC lock | `~/.ccrelay/ccrelay-lock.sock` (Unix) / named pipe (Win) | Leader election            |
+| Log DB   | `~/.ccrelay/logs.db`                                     | Request logs (Leader only) |
 
 ---
 

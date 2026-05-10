@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**Config**
+
+- Optional **external web search**: set a **Tavily** API key and allowlist provider IDs so matching Anthropic-style web search tool calls are answered locally instead of being proxied to the upstream model.
+
+**UI**
+
+- Dashboard **Capabilities** tab for **Tavily** web search settings (API key, depth, max results, provider allowlist).
+
 ## [0.2.2] - 2026-05-10 (pre-release)
 
 Pre-release line for 0.2.2.
