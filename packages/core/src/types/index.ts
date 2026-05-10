@@ -217,6 +217,23 @@ export const LoggingConfigSchema = z.object({
 
 export type LoggingConfigInput = z.infer<typeof LoggingConfigSchema>;
 
+// Global web search configuration schema
+export const WebSearchConfigSchema = z.object({
+  tavily: z
+    .object({
+      apiKey: z.string().optional(),
+      api_key: z.string().optional(),
+      searchDepth: z.enum(["basic", "advanced"]).optional(),
+      search_depth: z.enum(["basic", "advanced"]).optional(),
+      maxResults: z.number().int().min(1).max(10).optional(),
+      max_results: z.number().int().min(1).max(10).optional(),
+    })
+    .optional(),
+  providers: z.array(z.string()).optional(),
+});
+
+export type WebSearchConfigInput = z.infer<typeof WebSearchConfigSchema>;
+
 // Full file configuration schema
 export const FileConfigSchema = z.object({
   configVersion: z.string().optional(),
@@ -226,6 +243,8 @@ export const FileConfigSchema = z.object({
   routing: RoutingConfigSchema.optional(),
   concurrency: ConcurrencyConfigSchema.optional(),
   logging: LoggingConfigSchema.optional(),
+  webSearch: WebSearchConfigSchema.optional(),
+  web_search: WebSearchConfigSchema.optional(),
 });
 
 export type FileConfigInput = z.infer<typeof FileConfigSchema>;
@@ -285,6 +304,17 @@ export interface Provider {
   openaiCompat?: OpenAICompat;
 }
 
+/** Global web search configuration shared across providers. */
+export interface WebSearchGlobalConfig {
+  tavily?: {
+    apiKey?: string;
+    searchDepth?: "basic" | "advanced";
+    maxResults?: number;
+  };
+  /** Provider IDs that have web search enabled. */
+  providers?: string[];
+}
+
 export interface RouterConfig {
   port: number;
   host: string;
@@ -305,6 +335,8 @@ export interface RouterConfig {
   };
   /** UI language locale; undefined means not yet chosen. */
   locale?: "en" | "zh";
+  /** Global web search config (Tavily API key, etc.) shared across providers. */
+  webSearch?: WebSearchGlobalConfig;
 }
 
 export interface RouterStatus {
@@ -352,7 +384,7 @@ export interface SwitchResponse {
 
 // Log-related types
 export type RequestStatus = "pending" | "completed";
-export type RouteType = "block" | "passthrough" | "router";
+export type RouteType = "block" | "passthrough" | "router" | "service";
 
 export interface RequestLogEntry {
   id: number;

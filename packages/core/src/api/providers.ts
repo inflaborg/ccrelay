@@ -51,6 +51,9 @@ export function handleListProviders(
   const currentId = router.getCurrentProviderId();
 
   // Return all providers (including disabled ones)
+  const webSearchProviders = config.webSearchConfig?.providers ?? [];
+
+  // Return all providers (including disabled ones)
   const providers = Object.values(config.providers).map(p => ({
     id: p.id,
     name: p.name,
@@ -64,6 +67,7 @@ export function handleListProviders(
     modelMappingEnabled: p.modelMappingEnabled !== false,
     useCustomModelsList: Boolean(p.useCustomModelsList),
     customModelsList: p.useCustomModelsList ? (p.customModelsList ?? []) : undefined,
+    webSearchEnabled: webSearchProviders.includes(p.id),
   }));
 
   const response: ProvidersResponse = {

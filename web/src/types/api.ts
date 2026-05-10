@@ -20,6 +20,8 @@ export interface Provider {
   modelMappingEnabled?: boolean;
   useCustomModelsList?: boolean;
   customModelsList?: string[];
+  /** Read-only: true when this provider ID is in the global webSearch.providers list. */
+  webSearchEnabled?: boolean;
 }
 
 export interface ProvidersResponse {
@@ -110,7 +112,7 @@ export interface ImportProvidersResponse {
 }
 
 export type RequestStatus = "pending" | "completed";
-export type RouteType = "block" | "passthrough" | "router";
+export type RouteType = "block" | "passthrough" | "router" | "service";
 
 export interface LogEntry {
   id: number;
@@ -253,8 +255,18 @@ export interface SettingsConfig {
   concurrency: ConcurrencySettings;
   server: ServerSettings;
   routing: RoutingSettings;
-  /** Bundled default forward/block (read-only preview + “restore defaults” in editor until Save). */
+  /** Bundled default forward/block (read-only preview + "restore defaults" in editor until Save). */
   routingDefaults?: RoutingSettings;
+  webSearch?: WebSearchSettings;
+}
+
+export interface WebSearchSettings {
+  tavily?: {
+    apiKey?: string;
+    searchDepth?: "basic" | "advanced";
+    maxResults?: number;
+  };
+  providers?: string[];
 }
 
 export interface LoggingSettings {

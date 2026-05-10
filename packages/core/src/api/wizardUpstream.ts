@@ -5,9 +5,12 @@
 /* eslint-disable @typescript-eslint/naming-convention -- upstream JSON bodies and HTTP header names */
 
 import * as http from "http";
+import { Logger } from "../utils/logger";
 import { parseJsonBody, sendJson } from "./httpJson";
 
-const REQUEST_TIMEOUT_MS = 5000;
+const log = Logger.getInstance();
+
+const REQUEST_TIMEOUT_MS = 30_000;
 
 export type WizardProviderType = "anthropic" | "openai" | "openai_chat";
 
@@ -40,6 +43,11 @@ export function parseModelsResponseBody(data: unknown): string[] | null {
     return null;
   }
   const root = data as { data?: unknown };
+  // Some providers (e.g. MiniMax) return {data: null} when no models are available
+  // rather than {data: []}. Treat null/undefined data as empty list, not an error.
+  if (root.data === null || root.data === undefined) {
+    return [];
+  }
   if (!Array.isArray(root.data)) {
     return null;
   }
@@ -89,15 +97,24 @@ export async function executeWizardProbeModels(
     headers.authorization = `Bearer ${apiKey.trim()}`;
   }
 
+  log.info(`[wizard/models] Probing ${providerType} GET ${url}`);
+
   let res: Response;
   try {
     res = await fetch(url, { method: "GET", headers });
-  } catch {
+  } catch (err) {
+    log.warn(`[wizard/models] Network error: ${err instanceof Error ? err.message : String(err)}`);
     return { ok: false, errorCode: "network" };
   }
 
   if (res.status === 401 || res.status === 403) {
+    log.warn(`[wizard/models] Auth error: HTTP ${res.status}`);
     return { ok: false, errorCode: "auth" };
+  }
+
+  if (res.status < 200 || res.status >= 300) {
+    log.warn(`[wizard/models] Non-2xx status: HTTP ${res.status}`);
+    return { ok: false, errorCode: "format" };
   }
 
   const text = await res.text();
@@ -105,14 +122,19 @@ export async function executeWizardProbeModels(
   try {
     json = text ? JSON.parse(text) : {};
   } catch {
+    log.warn(`[wizard/models] Response is not valid JSON: ${text.slice(0, 200)}`);
     return { ok: false, errorCode: "format" };
   }
 
   const ids = parseModelsResponseBody(json);
   if (ids === null) {
+    log.warn(
+      `[wizard/models] Response JSON missing {data:[{id}]} structure: ${text.slice(0, 300)}`
+    );
     return { ok: false, errorCode: "format" };
   }
 
+  log.info(`[wizard/models] OK: ${ids.length} models from ${providerType}`);
   return { ok: true, modelIds: ids };
 }
 
@@ -247,6 +269,7 @@ async function runSingleVariantTest(
   signal: AbortSignal
 ): Promise<{ pass: boolean; httpStatus?: number; detail?: string }> {
   if (!validateHttpsUrl(v.baseUrl)) {
+    log.warn(`[wizard/test] ${v.id}: invalid baseUrl "${v.baseUrl}"`);
     return { pass: false, detail: "format" };
   }
 
@@ -254,42 +277,72 @@ async function runSingleVariantTest(
   const headers = buildAuthHeaders(v.providerType, apiKey, v.authHeader);
   const body =
     v.providerType === "anthropic" ? anthropicStyleBody(modelId) : openAiStyleBody(modelId);
+  const start = Date.now();
+
+  log.info(`[wizard/test] ${v.id}: POST ${url} (timeout=${REQUEST_TIMEOUT_MS}ms)`);
 
   let res: Response;
   try {
     res = await fetch(url, { method: "POST", headers, body, signal });
   } catch (e) {
+    const elapsed = Date.now() - start;
     if (e instanceof Error && e.name === "AbortError") {
+      log.warn(`[wizard/test] ${v.id}: timeout after ${elapsed}ms`);
       return { pass: false, detail: "timeout" };
     }
+    log.warn(
+      `[wizard/test] ${v.id}: network error after ${elapsed}ms: ${e instanceof Error ? e.message : String(e)}`
+    );
     return { pass: false, detail: "network" };
   }
 
+  const elapsed = Date.now() - start;
   const ct = res.headers.get("content-type");
   const status = res.status;
 
   if (status === 401 || status === 403) {
+    const text = await res.text();
+    log.warn(
+      `[wizard/test] ${v.id}: auth error HTTP ${status} (${elapsed}ms): ${text.slice(0, 200)}`
+    );
     return { pass: false, httpStatus: status, detail: "auth" };
   }
 
   if (status >= 500) {
+    const text = await res.text();
+    log.warn(
+      `[wizard/test] ${v.id}: server error HTTP ${status} (${elapsed}ms): ${text.slice(0, 200)}`
+    );
     return { pass: false, httpStatus: status, detail: "server" };
   }
 
   if (status >= 400 && status < 500) {
+    const text = await res.text();
+    log.warn(
+      `[wizard/test] ${v.id}: client error HTTP ${status} (${elapsed}ms): ${text.slice(0, 200)}`
+    );
     return { pass: false, httpStatus: status, detail: "client" };
   }
 
   if (status >= 200 && status < 300) {
     if (isJsonContentType(ct)) {
+      log.info(`[wizard/test] ${v.id}: pass HTTP ${status} (${elapsed}ms)`);
       return { pass: true, httpStatus: status };
     }
+    const text = await res.text();
     if (ct?.toLowerCase().includes("text/html")) {
+      log.warn(
+        `[wizard/test] ${v.id}: got HTML response (${elapsed}ms), ct=${ct}: ${text.slice(0, 200)}`
+      );
       return { pass: false, httpStatus: status, detail: "html" };
     }
+    log.warn(
+      `[wizard/test] ${v.id}: unexpected content-type (${elapsed}ms), ct=${ct}: ${text.slice(0, 200)}`
+    );
     return { pass: false, httpStatus: status, detail: "format" };
   }
 
+  log.warn(`[wizard/test] ${v.id}: unexpected HTTP ${status} (${elapsed}ms), ct=${ct}`);
   return { pass: false, httpStatus: status, detail: "format" };
 }
 
@@ -321,6 +374,9 @@ export async function executeWizardEndpointTest(
       detail: r.detail,
     };
   });
+
+  const summary = lines.map(l => `${l.id}:${l.pass ? "pass" : (l.detail ?? "fail")}`).join(", ");
+  log.info(`[wizard/test] results: ${summary}`);
 
   return { ok: true, results: lines };
 }

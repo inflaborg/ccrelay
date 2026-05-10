@@ -55,6 +55,17 @@ export class ResponseWriter {
   }
 
   /**
+   * Write a non-proxy response (e.g. service interceptor) with explicit status, headers, and body.
+   */
+  writeRaw(statusCode: number, headers: Record<string, string>, body: string): void {
+    if (this.res.writableEnded) {
+      return;
+    }
+    this.res.writeHead(statusCode, headers);
+    this.res.end(body);
+  }
+
+  /**
    * Write blocked response
    */
   writeBlocked(response: string, statusCode: number = 200, clientId?: string): void {

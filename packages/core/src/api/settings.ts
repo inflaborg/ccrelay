@@ -15,7 +15,7 @@ export function setServer(server: ProxyServer): void {
   serverInstance = server;
 }
 
-const ALLOWED_SECTIONS = new Set(["logging", "concurrency", "server", "routing"]);
+const ALLOWED_SECTIONS = new Set(["logging", "concurrency", "server", "routing", "webSearch"]);
 
 /**
  * GET /ccrelay/api/config

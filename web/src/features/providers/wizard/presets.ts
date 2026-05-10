@@ -208,6 +208,59 @@ export const PARTNER_PRESETS: readonly PartnerPreset[] = [
     ],
   },
   {
+    id: "minimax",
+    nameKey: "wizard.brand.minimax",
+    mode: "inject",
+    idPrefix: "minimax",
+    namePrefix: "MiniMax",
+    defaultModelIds: ["MiniMax-M2.7"],
+    defaultCustomModels: true,
+    options: [
+      {
+        key: "region",
+        label: "wizard.option.region",
+        type: "select",
+        options: [
+          { value: "intl", label: "wizard.region.international" },
+          { value: "cn", label: "wizard.region.china" },
+        ],
+        defaultValue: "intl",
+      },
+    ],
+    segmentRules: [
+      {
+        segmentKey: "regionHost",
+        fromOption: "region",
+        map: {
+          intl: "https://api.minimax.io",
+          cn: "https://api.minimaxi.com",
+        },
+      },
+      {
+        segmentKey: "regionTag",
+        fromOption: "region",
+        map: {
+          intl: "intl",
+          cn: "cn",
+        },
+      },
+    ],
+    variants: [
+      {
+        providerType: "openai_chat",
+        urlTemplate: "{regionHost}/v1",
+        idSuffix: "{regionTag}-openai",
+        nameSuffix: "{regionTag}-OpenAI",
+      },
+      {
+        providerType: "anthropic",
+        urlTemplate: "{regionHost}/anthropic",
+        idSuffix: "{regionTag}-anthropic",
+        nameSuffix: "{regionTag}-Anthropic",
+      },
+    ],
+  },
+  {
     id: "gemini-openai",
     nameKey: "wizard.brand.geminiOpenai",
     mode: "inject",

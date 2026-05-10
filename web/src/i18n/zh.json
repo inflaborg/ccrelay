@@ -11,6 +11,7 @@
   "nav": {
     "dashboard": "仪表盘",
     "providers": "提供商",
+    "capabilities": "能力",
     "logs": "日志",
     "settings": "设置"
   },
@@ -247,6 +248,7 @@
       "glm": "智谱 GLM",
       "xiaomi": "小米 MiMo",
       "azure": "Azure OpenAI",
+      "minimax": "MiniMax",
       "geminiOpenai": "Gemini（OpenAI 兼容）"
     },
     "toggle": {
@@ -273,6 +275,8 @@
     "models": {
       "referenceTitle": "端点模型（对照）",
       "loading": "正在从端点获取模型列表…",
+      "fetchingHint": "正在获取端点模型…",
+      "fetchFailedHint": "无法获取端点模型",
       "success": "{{count}} 个模型可用",
       "authError": "鉴权失败（401/403），请检查 API Key。",
       "networkError": "无法连接端点，请检查 URL。",
@@ -347,7 +351,9 @@
       "routeType": {
         "block": "拦截",
         "pass": "透传",
-        "route": "路由"
+        "route": "路由",
+        "service": "服务",
+        "serviceHint": "由本地注册能力（拦截器）处理，未转发到上游。"
       },
       "status": {
         "pending": "等待中",
@@ -522,6 +528,25 @@
     },
     "providerOption": {
       "auto": "auto（当前）"
+    }
+  },
+  "capabilities": {
+    "title": "能力",
+    "subtitle": "为提供商配置额外的服务能力",
+    "webSearch": {
+      "title": "网络搜索",
+      "enable": "启用网络搜索",
+      "provider": "搜索服务商",
+      "apiKey": "API 密钥",
+      "apiKeyPlaceholder": "tvly-...",
+      "maxResults": "最大结果数",
+      "searchDepth": "搜索深度",
+      "depthBasic": "基础",
+      "depthAdvanced": "高级",
+      "providerAssignment": "提供商分配",
+      "providerAssignmentHint": "选择哪些 LLM 提供商启用网络搜索",
+      "noProviders": "暂无已配置的提供商",
+      "savedAndReloaded": "配置已保存并重新加载"
     }
   }
 }
