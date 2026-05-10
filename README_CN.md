@@ -131,7 +131,7 @@ npm run compile        # 或 npm run watch
 - 共用 `~/.ccrelay/` 配置、状态和 Leader 选举
 - 托盘菜单 → **打开控制台** 在应用窗口内加载 Web UI
 - 从 [GitHub Releases](https://github.com/inflaborg/ccrelay/releases) 下载：
-  - **macOS**: `CCRelay-<版本>-darwin-arm64.zip` 或 `-darwin-x64.zip`
+  - **macOS**: `CCRelay-<版本>-darwin-arm64.dmg` 或 `-darwin-x64.dmg`
   - **Windows**: `CCRelay-<版本>-win32-x64.exe` 或 `-win32-arm64.exe`
 
 ### macOS：首次打开

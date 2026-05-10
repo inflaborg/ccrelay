@@ -130,7 +130,7 @@ An optional Electron desktop app (`packages/desktop`) runs the same core as the 
 - Shares `~/.ccrelay/` config, state, and Leader election with the extension
 - Tray menu → **Open Dashboard** loads the web UI in an app window
 - Download from [GitHub Releases](https://github.com/inflaborg/ccrelay/releases):
-  - **macOS**: `CCRelay-<version>-darwin-arm64.zip` or `-darwin-x64.zip`
+  - **macOS**: `CCRelay-<version>-darwin-arm64.dmg` or `-darwin-x64.dmg`
   - **Windows**: `CCRelay-<version>-win32-x64.exe` or `-win32-arm64.exe`
 
 ### macOS: First Launch

@@ -272,12 +272,36 @@ jobs:
         run: npx electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never
         working-directory: packages/desktop
 
+      - name: Verify macOS dmg integrity
+        if: matrix.platform == 'mac'
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(packages/desktop/dist/*.dmg)
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "::error::No .dmg found in packages/desktop/dist"
+            exit 1
+          fi
+          for dmg in "${files[@]}"; do
+            size=$(stat -f%z "$dmg" 2>/dev/null || stat --printf="%s" "$dmg" 2>/dev/null)
+            if [[ "$size" -lt 1048576 ]]; then
+              echo "::error::$dmg is too small (${size} bytes) — likely corrupt"
+              exit 1
+            fi
+            filetype=$(file "$dmg")
+            if [[ "$filetype" != *"bzip2"* && "$filetype" != *"zlib"* && "$filetype" != *"UDIF"* && "$filetype" != *"Apple"* ]]; then
+              echo "::error::$dmg is not a valid disk image: $filetype"
+              exit 1
+            fi
+            echo "OK: $dmg (${size} bytes) — $filetype"
+          done
+
       - name: Upload desktop artifact
         uses: actions/upload-artifact@v4
         with:
           name: ccrelay-desktop-${{ matrix.platform }}-${{ matrix.arch }}-${{ needs.configure.outputs.version }}${{ inputs.suffix }}
           path: |
-            packages/desktop/dist/*.zip
+            packages/desktop/dist/*.dmg
             packages/desktop/dist/*.exe
           retention-days: ${{ inputs.retention_days }}
 
