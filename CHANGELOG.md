@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-05-10
+
+Release **0.2.2** adds optional **Tavily**-backed web search for allowlisted providers, improves log inspection for Anthropic streaming replies, and ships the macOS Electron build as a **DMG** with a stricter CI upload check.
+
 ### Added
 
 **Config**
@@ -16,10 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **UI**
 
 - Dashboard **Capabilities** tab for **Tavily** web search settings (API key, depth, max results, provider allowlist).
-
-## [0.2.2] - 2026-05-10 (pre-release)
-
-Pre-release line for 0.2.2.
+- Log detail **Response** analysis rebuilds Anthropic-style streaming bodies into a single merged **message** JSON for easier reading.
 
 ### Changed
 
@@ -30,6 +31,14 @@ Pre-release line for 0.2.2.
 **Config**
 
 - Removed deprecated `ccrelay.configPath` VS Code setting from documentation; config file path is fixed at `~/.ccrelay/config.yaml`.
+
+**Docs**
+
+- README and README_CN: Tavily web search configuration, **MiniMax** in the verified-upstreams table, screenshots as **WebP**, and a **Capabilities** / Tavily screenshot in the Web UI section.
+
+**Proxy**
+
+- When a built-in service handler claims a request (for example web search) but that work fails, the relay returns an error to the client instead of silently forwarding the same request upstream.
 
 ## [0.2.1] - 2026-05-09
 
