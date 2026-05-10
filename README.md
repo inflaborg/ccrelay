@@ -392,12 +392,6 @@ CCRelay uses `~/.ccrelay/config.yaml` (auto-created on first launch). On startup
 
 > YAML config supports both `camelCase` and `snake_case` keys.
 
-### VS Code Settings
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `ccrelay.configPath` | `~/.ccrelay/config.yaml` | Path to the YAML config file |
-
 ### Server
 
 | Setting | Default | Description |
