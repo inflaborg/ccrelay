@@ -523,7 +523,18 @@ export default function Logs() {
       header: t("logs.table.header.type"),
       cell: log => {
         if (!log.routeType) return <span className="text-[11px] text-muted-foreground">-</span>;
-        const typeMap = {
+        // Legacy DB rows used `web-search`; treat as `service` for display.
+        const raw = log.routeType as string;
+        const rt = raw === "web-search" ? "service" : raw;
+        const serviceBadge = (
+          <span
+            className="text-[11px] px-1.5 py-0 rounded bg-violet-500/10 text-violet-600 dark:text-violet-400"
+            title={t("logs.table.routeType.serviceHint")}
+          >
+            {t("logs.table.routeType.service")}
+          </span>
+        );
+        const typeMap: Record<string, React.ReactNode> = {
           block: (
             <span className="text-[11px] px-1.5 py-0 rounded bg-orange-500/10 text-orange-600">
               {t("logs.table.routeType.block")}
@@ -539,8 +550,9 @@ export default function Logs() {
               {t("logs.table.routeType.route")}
             </span>
           ),
+          service: serviceBadge,
         };
-        return typeMap[log.routeType] || <span className="text-[11px]">{log.routeType}</span>;
+        return typeMap[rt] || <span className="text-[11px]">{log.routeType}</span>;
       },
       width: 70,
     },

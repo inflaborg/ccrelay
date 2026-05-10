@@ -26,6 +26,7 @@ import {
   type BlockPattern,
   type ForwardRule,
   type BlockRule,
+  type WebSearchGlobalConfig,
 } from "../types";
 
 const CONFIG_VERSION = "0.2.0";
@@ -500,6 +501,7 @@ export function mergeFileConfigWithDefaults(
             (file.logging ?? {}) as Record<string, unknown>
           ) as unknown as FileConfigInput["logging"])
         : undefined,
+    webSearch: file.webSearch ?? file.web_search ?? defaults.webSearch,
   };
 
   return merged;
@@ -1157,6 +1159,28 @@ export class ConfigManager {
       this.writeServerBearerToDisk(apiBearerTok);
     }
 
+    // Build global web search config
+    const rawWebSearch = merged.webSearch ?? merged.web_search;
+    let webSearchConfig: WebSearchGlobalConfig | undefined;
+    if (rawWebSearch) {
+      const t = rawWebSearch.tavily;
+      const providers = Array.isArray(rawWebSearch.providers) ? rawWebSearch.providers : undefined;
+      if (t || providers) {
+        webSearchConfig = {
+          ...(t
+            ? {
+                tavily: {
+                  apiKey: t.apiKey ?? t.api_key,
+                  searchDepth: t.searchDepth ?? t.search_depth,
+                  maxResults: t.maxResults ?? t.max_results,
+                },
+              }
+            : {}),
+          ...(providers && providers.length > 0 ? { providers } : {}),
+        };
+      }
+    }
+
     return {
       port: merged.server?.port || 7575,
       host: merged.server?.host || "127.0.0.1",
@@ -1172,6 +1196,7 @@ export class ConfigManager {
         database,
       },
       locale: merged.server?.locale,
+      webSearch: webSearchConfig,
     };
   }
 
@@ -1290,6 +1315,10 @@ export class ConfigManager {
 
   get enableLogStorage(): boolean {
     return this.config.logging.enabled;
+  }
+
+  get webSearchConfig(): WebSearchGlobalConfig | undefined {
+    return this.config.webSearch;
   }
 
   /**
@@ -1546,6 +1575,7 @@ export class ConfigManager {
       concurrency: raw.concurrency ?? {},
       server: raw.server ?? {},
       routing: raw.routing ?? {},
+      webSearch: raw.webSearch ?? raw.web_search ?? {},
     };
   }
 
@@ -1555,7 +1585,7 @@ export class ConfigManager {
    * Only the four settings sections are allowed.
    */
   updateConfigSection(
-    section: "logging" | "concurrency" | "server" | "routing",
+    section: "logging" | "concurrency" | "server" | "routing" | "webSearch",
     data: Record<string, unknown>,
     options?: { merge?: boolean }
   ): { ok: boolean; error?: string } {

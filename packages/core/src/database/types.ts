@@ -9,9 +9,9 @@
 export type RequestStatus = "pending" | "completed" | "cancelled" | "timeout";
 
 /**
- * Route type
+ * Route type. `service` = handled locally by a registered service interceptor (not upstream proxy).
  */
-export type RouteType = "block" | "passthrough" | "router";
+export type RouteType = "block" | "passthrough" | "router" | "service";
 
 /**
  * Request log entry

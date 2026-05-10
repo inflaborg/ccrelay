@@ -6,7 +6,7 @@ import type * as http from "http";
 import type { RequestTask, ProxyResult } from "../../types";
 import type { RoutingContext, BodyProcessResult } from "./context";
 import type { ResponseWriter } from "../response";
-import type { LogDatabase, RequestStatus } from "../../database";
+import type { LogDatabase, RequestStatus, RouteType } from "../../database";
 import type { QueueManager } from "../queueManager";
 import type { ProxyExecutor } from "../proxy/executor";
 import { ScopedLogger } from "../../utils/logger";
@@ -97,10 +97,18 @@ export class TaskExecutor {
   /**
    * Insert pending log to database
    */
-  insertPendingLog(routing: RoutingContext, bodyResult: BodyProcessResult, clientId: string): void {
+  insertPendingLog(
+    routing: RoutingContext,
+    bodyResult: BodyProcessResult,
+    clientId: string,
+    options?: { routeType?: RouteType; targetUrl?: string }
+  ): void {
     if (!this.database.enabled) {
       return;
     }
+
+    const routeType: RouteType =
+      options?.routeType ?? (routing.isRouted ? "router" : "passthrough");
 
     this.database.insertLogPending({
       timestamp: Date.now(),
@@ -108,7 +116,7 @@ export class TaskExecutor {
       providerName: routing.provider.name,
       method: routing.method,
       path: routing.path,
-      targetUrl: routing.targetUrl,
+      targetUrl: options?.targetUrl ?? routing.targetUrl,
       requestBody: bodyResult.requestBodyLog,
       originalRequestBody: bodyResult.originalRequestBody,
       statusCode: undefined,
@@ -116,7 +124,7 @@ export class TaskExecutor {
       success: false,
       clientId,
       status: "pending",
-      routeType: routing.isRouted ? "router" : "passthrough",
+      routeType,
     });
   }
 

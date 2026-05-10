@@ -9,7 +9,7 @@ import * as zlib from "zlib";
 import { ScopedLogger } from "../utils/logger";
 import type { LogDatabase } from "../database";
 
-interface TokenUsage {
+export interface LogResponseTokenOverrides {
   inputTokens?: number;
   outputTokens?: number;
   cacheTokens?: number;
@@ -39,7 +39,7 @@ interface UsageFields {
 /**
  * Extract token usage from a response body (handles both JSON and SSE formats).
  */
-function extractTokenUsage(body: string | undefined): TokenUsage {
+function extractTokenUsage(body: string | undefined): LogResponseTokenOverrides {
   if (!body) {
     return {};
   }
@@ -53,7 +53,7 @@ function extractTokenUsage(body: string | undefined): TokenUsage {
   }
 
   // SSE format: scan data lines and accumulate usage
-  const result: TokenUsage = {};
+  const result: LogResponseTokenOverrides = {};
   for (const line of body.split("\n")) {
     if (!line.startsWith("data: ") || line === "data: [DONE]") {
       continue;
@@ -81,7 +81,7 @@ function extractTokenUsage(body: string | undefined): TokenUsage {
 /**
  * Extract usage from a parsed JSON object (Anthropic or OpenAI format).
  */
-function extractUsageFromObj(obj: UsageFields): TokenUsage {
+function extractUsageFromObj(obj: UsageFields): LogResponseTokenOverrides {
   const usage = obj.usage || obj.message?.usage;
   if (!usage) {
     return {};
@@ -133,7 +133,8 @@ export class ResponseLogger {
     responseChunks: Buffer[],
     errorMessage: string | undefined,
     originalResponseBody?: string,
-    ttfb?: number
+    ttfb?: number,
+    tokenOverrides?: LogResponseTokenOverrides
   ): void {
     if (!this.database.enabled) {
       this.log.info(`logResponse skipped - database not enabled. clientId=${clientId}`);
@@ -178,6 +179,15 @@ export class ResponseLogger {
     let tokens = extractTokenUsage(responseBodyLog);
     if (tokens.inputTokens === undefined && originalResponseBody) {
       tokens = extractTokenUsage(originalResponseBody);
+    }
+    if (tokenOverrides?.inputTokens !== undefined) {
+      tokens.inputTokens = tokenOverrides.inputTokens;
+    }
+    if (tokenOverrides?.outputTokens !== undefined) {
+      tokens.outputTokens = tokenOverrides.outputTokens;
+    }
+    if (tokenOverrides?.cacheTokens !== undefined) {
+      tokens.cacheTokens = tokenOverrides.cacheTokens;
     }
 
     this.database.updateLogCompleted(

@@ -31,6 +31,8 @@ import { ProxyExecutor } from "./proxy/executor";
 import { QueueManager } from "./queueManager";
 import { ResponseLogger } from "./responseLogger";
 import { RequestHandler } from "./request";
+import { InterceptorRegistry } from "./interceptor";
+import { WebSearchInterceptor } from "../services/web-search";
 import { WsBroadcaster, WsFollowerClient } from "./websocket";
 import {
   hasRequiredUiGateHeader,
@@ -75,6 +77,8 @@ export class ProxyServer {
   private wsBroadcaster: WsBroadcaster | null = null;
   private wsClient: WsFollowerClient | null = null;
 
+  private readonly interceptorRegistry: InterceptorRegistry;
+
   constructor(config: ConfigManager, leaderElection: LeaderElection | null = null) {
     this.config = config;
     this.router = new Router(config);
@@ -93,6 +97,9 @@ export class ProxyServer {
 
     // Initialize queue manager (executor set after construction to avoid circular dependency)
     this.queueManager = new QueueManager(config);
+
+    this.interceptorRegistry = new InterceptorRegistry();
+    this.interceptorRegistry.register(new WebSearchInterceptor(() => this.config.webSearchConfig));
 
     // Listen to Router's provider changes - this is the single source of truth
     // - For Leader: broadcasts to Followers via WebSocket
@@ -706,7 +713,9 @@ export class ProxyServer {
         this.router,
         this.queueManager,
         this.proxyExecutor,
-        this.database
+        this.database,
+        this.responseLogger,
+        this.interceptorRegistry
       );
     }
     return this._requestHandler;
