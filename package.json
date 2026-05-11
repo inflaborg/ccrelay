@@ -99,5 +99,14 @@
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-x64-gnu": "^4.58.0"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "prettier --write",
+      "eslint --max-warnings=0 --no-warn-ignored"
+    ],
+    "*.{json,mjs}": [
+      "prettier --write"
+    ]
   }
 }
