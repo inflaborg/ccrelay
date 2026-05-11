@@ -152,8 +152,7 @@ export function WizardEndpointTest({
       runWithModelId(pm[0]);
       return;
     }
-    const initial =
-      modalModelId && pm.includes(modalModelId) ? modalModelId : (pm[0] ?? "");
+    const initial = modalModelId && pm.includes(modalModelId) ? modalModelId : (pm[0] ?? "");
     setModalModelId(initial);
     setModelPickerOpen(true);
   }, [
@@ -254,7 +253,7 @@ export function WizardEndpointTest({
               </button>
             ))}
           </div>
-          <DialogFooter className="gap-2 sm:gap-2">
+          <DialogFooter className="gap-2 sm:justify-end">
             <Button
               type="button"
               variant="outline"

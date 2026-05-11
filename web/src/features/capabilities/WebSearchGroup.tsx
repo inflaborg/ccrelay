@@ -60,9 +60,7 @@ export default function WebSearchGroup() {
   // Initialize selectedProviders from provider webSearchEnabled flags on first load
   useEffect(() => {
     if (!providersQuery.data) return;
-    const enabledIds = providersQuery.data.providers
-      .filter(p => p.webSearchEnabled)
-      .map(p => p.id);
+    const enabledIds = providersQuery.data.providers.filter(p => p.webSearchEnabled).map(p => p.id);
     if (enabledIds.length > 0 && selectedProviders.size === 0) {
       setSelectedProviders(new Set(enabledIds));
       setEnabled(true);
@@ -75,7 +73,7 @@ export default function WebSearchGroup() {
     const origProviders = origWs?.providers ?? [];
     const origTavily = origWs?.tavily;
 
-    if (enabled !== (origProviders.length > 0)) return true;
+    if (enabled !== origProviders.length > 0) return true;
     if (Array.from(selectedProviders).sort().join(",") !== [...origProviders].sort().join(","))
       return true;
     if (maxResults !== (origTavily?.maxResults ?? 5)) return true;
@@ -85,8 +83,7 @@ export default function WebSearchGroup() {
   }, [enabled, selectedProviders, maxResults, searchDepth, apiKeyDirty, configQuery.data]);
 
   const mutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      api.patchConfig({ section: "webSearch", data }),
+    mutationFn: (data: Record<string, unknown>) => api.patchConfig({ section: "webSearch", data }),
     onSuccess: () => {
       setApiKeyDirty(false);
       api.reloadConfig().then(() => {
@@ -171,9 +168,7 @@ export default function WebSearchGroup() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-medium">
-                  {t("capabilities.webSearch.apiKey")}
-                </label>
+                <label className="text-xs font-medium">{t("capabilities.webSearch.apiKey")}</label>
                 <div className="relative">
                   {showApiKey ? (
                     <input
@@ -194,7 +189,9 @@ export default function WebSearchGroup() {
                       {apiKey ? (
                         <span className="text-muted-foreground">{maskKey(apiKey)}</span>
                       ) : (
-                        <span className="text-muted-foreground/50">{t("capabilities.webSearch.apiKeyPlaceholder")}</span>
+                        <span className="text-muted-foreground/50">
+                          {t("capabilities.webSearch.apiKeyPlaceholder")}
+                        </span>
                       )}
                     </div>
                   )}
@@ -203,7 +200,11 @@ export default function WebSearchGroup() {
                     className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     onClick={() => setShowApiKey(v => !v)}
                   >
-                    {showApiKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    {showApiKey ? (
+                      <EyeOff className="h-3.5 w-3.5" />
+                    ) : (
+                      <Eye className="h-3.5 w-3.5" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -230,9 +231,7 @@ export default function WebSearchGroup() {
                   <select
                     className="w-full h-8 px-2 text-xs border rounded-md bg-background"
                     value={searchDepth}
-                    onChange={e =>
-                      setSearchDepth(e.target.value as "basic" | "advanced")
-                    }
+                    onChange={e => setSearchDepth(e.target.value as "basic" | "advanced")}
                   >
                     <option value="basic">{t("capabilities.webSearch.depthBasic")}</option>
                     <option value="advanced">{t("capabilities.webSearch.depthAdvanced")}</option>
@@ -283,7 +282,7 @@ export default function WebSearchGroup() {
 
         {/* Save bar */}
         <div className="border-t pt-3 space-y-2">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-end gap-2">
             <Button
               size="sm"
               className="h-7 text-xs"
