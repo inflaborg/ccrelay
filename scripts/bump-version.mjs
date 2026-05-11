@@ -144,10 +144,30 @@ if (fs.existsSync(lockPath)) {
   writeJson(lockPath, lock);
 }
 
+// ---------- update Tauri config ----------
+
+const TAURI_CONF_PATH = "packages/desktop-tauri/src-tauri/tauri.conf.json";
+const tauriConfAbs = path.join(ROOT, TAURI_CONF_PATH);
+if (fs.existsSync(tauriConfAbs)) {
+  const conf = readJson(tauriConfAbs);
+  conf.version = newVersion;
+  writeJson(tauriConfAbs, conf);
+}
+
+// ---------- update Cargo.toml ----------
+
+const CARGO_TOML_PATH = "packages/desktop-tauri/src-tauri/Cargo.toml";
+const cargoAbs = path.join(ROOT, CARGO_TOML_PATH);
+if (fs.existsSync(cargoAbs)) {
+  let cargo = fs.readFileSync(cargoAbs, "utf-8");
+  cargo = cargo.replace(/^(version\s*=\s*)"[^"]*"/m, `$1"${newVersion}"`);
+  fs.writeFileSync(cargoAbs, cargo);
+}
+
 // ---------- done ----------
 
 console.log(`Version bumped: ${currentVersion} → ${newVersion}`);
 console.log("Updated files:");
-for (const relPath of [...PACKAGE_PATHS, "package-lock.json"]) {
+for (const relPath of [...PACKAGE_PATHS, "package-lock.json", TAURI_CONF_PATH, CARGO_TOML_PATH]) {
   console.log(`  ${relPath}`);
 }

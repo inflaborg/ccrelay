@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-05-11 (pre-release)
+
+Pre-release line for 0.2.3.
+
+### Fixed
+
+**Build**
+
+- Version bump scripts (`version:bump`, `version:beta`, `version:release`) now correctly update Tauri's `Cargo.toml` and `tauri.conf.json` alongside all other package files.
+
 ## [0.2.2] - 2026-05-10
 
 Release **0.2.2** adds optional **Tavily**-backed web search for allowlisted providers, improves log inspection for Anthropic streaming replies, and ships the macOS Electron build as a **DMG** with a stricter CI upload check.

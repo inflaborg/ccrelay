@@ -52,4 +52,20 @@ if (fs.existsSync(lockPath)) {
   fs.writeFileSync(lockPath, JSON.stringify(lock, null, 2) + "\n");
 }
 
+// Update Tauri config
+const tauriConfPath = path.join(ROOT, "packages/desktop-tauri/src-tauri/tauri.conf.json");
+if (fs.existsSync(tauriConfPath)) {
+  const conf = JSON.parse(fs.readFileSync(tauriConfPath, "utf-8"));
+  conf.version = releaseVersion;
+  fs.writeFileSync(tauriConfPath, JSON.stringify(conf, null, 2) + "\n");
+}
+
+// Update Cargo.toml
+const cargoPath = path.join(ROOT, "packages/desktop-tauri/src-tauri/Cargo.toml");
+if (fs.existsSync(cargoPath)) {
+  let cargo = fs.readFileSync(cargoPath, "utf-8");
+  cargo = cargo.replace(/^(version\s*=\s*)"[^"]*"/m, `$1"${releaseVersion}"`);
+  fs.writeFileSync(cargoPath, cargo);
+}
+
 console.log(`Release version: ${releaseVersion}`);
