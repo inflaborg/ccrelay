@@ -101,12 +101,20 @@
     "@rollup/rollup-linux-x64-gnu": "^4.58.0"
   },
   "lint-staged": {
-    "*.ts": [
+    "packages/**/*.ts": [
+      "prettier --write",
+      "eslint --max-warnings=0 --no-warn-ignored"
+    ],
+    "tests/**/*.ts": [
       "prettier --write",
       "eslint --max-warnings=0 --no-warn-ignored"
     ],
     "*.{json,mjs}": [
       "prettier --write"
+    ],
+    "web/**/*.{ts,tsx}": [
+      "prettier --write",
+      "node scripts/lint-staged-web-eslint.mjs"
     ]
   }
 }
