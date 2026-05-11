@@ -17,3 +17,4 @@ packages/core/src/api/version.generated.ts
 .DS_Store
 /dist
 /internal-docs
+/.claude/worktrees

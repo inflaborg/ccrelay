@@ -142,7 +142,7 @@ function SaveBar({
 }) {
   return (
     <div className="space-y-2 pt-2">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-end gap-2">
         <Button size="sm" className="h-7 text-xs" disabled={mutation.isPending} onClick={onSave}>
           {mutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
         </Button>
@@ -176,7 +176,7 @@ function RoutingSaveBar({
   const canSave = hasUnsavedChanges && !mutation.isPending;
   return (
     <div className="space-y-2 pt-2">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+      <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
         <div className="flex flex-wrap items-center gap-2 min-w-0">
           <Button
             size="sm"
@@ -864,7 +864,7 @@ function BlockRuleEditor({
             onChangeSkip={patchDraftSkip}
             providerIdOptions={providerIdOptions}
           />
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="gap-2 sm:justify-end">
             <Button
               type="button"
               variant="outline"

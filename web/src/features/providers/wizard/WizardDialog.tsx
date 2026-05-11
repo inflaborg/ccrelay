@@ -313,6 +313,7 @@ export function WizardDialog({
               type="button"
               variant="outline"
               size="sm"
+              className="ml-auto"
               onClick={() => handleOpenChange(false)}
               disabled={busy}
             >

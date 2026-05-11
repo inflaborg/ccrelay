@@ -82,9 +82,7 @@ export function WizardCredentials({
   /** Custom list ON: show left reference only when fetch succeeded with ≥1 model */
   const showUpstreamReferenceColumn =
     useCustomModels &&
-    Boolean(
-      upstreamModels.models && upstreamModels.models.length > 0 && !upstreamModels.errorCode
-    );
+    Boolean(upstreamModels.models && upstreamModels.models.length > 0 && !upstreamModels.errorCode);
 
   /** Inline hint shown next to the model IDs label during/after upstream fetch */
   const upstreamFetchHint: { icon: "spinner" | "warn"; text: string } | null = (() => {
