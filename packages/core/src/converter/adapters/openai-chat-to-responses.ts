@@ -107,17 +107,26 @@ function messageContentToString(message: OpenAIResponseMessage): string {
 
 function buildMessageOutputItems(message: OpenAIResponseMessage): unknown[] {
   const text = messageContentToString(message);
-  if (!text && !message.thinking) {
+  const reasoningFromThinking =
+    typeof message.thinking?.content === "string" && message.thinking.content.length > 0
+      ? message.thinking.content
+      : undefined;
+  const reasoningFromField =
+    typeof message.reasoning_content === "string" && message.reasoning_content.length > 0
+      ? message.reasoning_content
+      : undefined;
+  const reasoningText = reasoningFromThinking ?? reasoningFromField;
+  if (!text && !reasoningText) {
     return [];
   }
   const content: unknown[] = [];
   if (text) {
     content.push({ type: "output_text", text });
   }
-  if (message.thinking?.content) {
+  if (reasoningText) {
     content.push({
       type: "reasoning_text",
-      text: message.thinking.content,
+      text: reasoningText,
     });
   }
   if (content.length === 0) {

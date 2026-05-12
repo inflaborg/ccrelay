@@ -266,6 +266,11 @@ function convertAssistantContent(m: OpenAIMessage): string | ContentBlockParam[]
       thinking: m.thinking.content,
       signature: m.thinking.signature,
     });
+  } else if (typeof m.reasoning_content === "string" && m.reasoning_content.length > 0) {
+    blocks.push({
+      type: "thinking",
+      thinking: m.reasoning_content,
+    });
   }
   if (typeof m.content === "string" && m.content.length > 0) {
     blocks.push({ type: "text", text: m.content });

@@ -8,7 +8,12 @@ import {
 } from "@/converter/streaming/anthropic-sse-to-openai-chat";
 
 type ParsedChatChunkChoice = {
-  delta?: { content?: string; tool_calls?: unknown };
+  delta?: {
+    content?: string;
+    tool_calls?: unknown;
+    thinking?: { content?: string; signature?: string };
+    reasoning_content?: string;
+  };
   finish_reason?: string | null;
 };
 
@@ -155,6 +160,51 @@ describe("converter: anthropic SSE → OpenAI chat completion chunks", () => {
 
     const finish = findLastChunkWhere(chunks, ch => typeof ch?.finish_reason === "string");
     expect(finish && firstChoice(finish)?.finish_reason).toBe("stop");
+  });
+
+  it("streams thinking_delta with reasoning_content alongside thinking", () => {
+    const state = createAnthropicToOpenAISseState("claude-3");
+    const lines: string[] = [];
+    const feed = createAnthropicSseEnvelopeBuffer(env => {
+      lines.push(...processAnthropicStreamEnvelope(state, env));
+    });
+    feed.push(
+      `data: ${JSON.stringify({
+        type: "message_start",
+        message: { model: "claude-3" },
+      })}\n\n`
+    );
+    feed.push(
+      `data: ${JSON.stringify({
+        type: "content_block_start",
+        index: 0,
+        content_block: { type: "thinking" },
+      })}\n\n`
+    );
+    feed.push(
+      `data: ${JSON.stringify({
+        type: "content_block_delta",
+        index: 0,
+        delta: { type: "thinking_delta", thinking: "plan step" },
+      })}\n\n`
+    );
+    feed.push(
+      `data: ${JSON.stringify({
+        type: "message_delta",
+        delta: { stop_reason: "end_turn" },
+      })}\n\n`
+    );
+    feed.push(`data: ${JSON.stringify({ type: "message_stop" })}\n\n`);
+    feed.flush();
+
+    const deltas = lines
+      .filter(l => l.startsWith("data: ") && !l.includes("[DONE]"))
+      .map(l => JSON.parse(l.slice("data: ".length)) as Record<string, unknown>);
+    const chunk = deltas.find(d => firstChoice(d)?.delta?.reasoning_content !== undefined);
+    expect(chunk).toBeDefined();
+    const delta = firstChoice(chunk as Record<string, unknown>)?.delta;
+    expect(delta?.reasoning_content).toBe("plan step");
+    expect(delta?.thinking).toEqual({ content: "plan step" });
   });
 
   it("serializes server tool result block content as JSON text at content_block_stop", () => {

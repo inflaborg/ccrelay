@@ -230,7 +230,12 @@ export function processAnthropicStreamEnvelope(
               innerCh.signature = block.signature;
               sigEmitted = true;
             }
-            lines.push(pushChatChunk(state, { thinking: innerCh }));
+            lines.push(
+              pushChatChunk(state, {
+                thinking: innerCh,
+                reasoning_content: innerCh.content,
+              })
+            );
           }
           state.thinkingSignatureEmitted = sigEmitted;
         }

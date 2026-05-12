@@ -33,6 +33,8 @@ export interface OpenAIChoice {
   delta?: {
     role?: string;
     content?: string;
+    /** Non-standard (e.g. DeepSeek/MiMo); mirrored with Anthropic `thinking` in converters */
+    reasoning_content?: string;
     tool_calls?: OpenAIToolCall[];
     thinking?: {
       content?: string;
@@ -48,6 +50,8 @@ export interface OpenAIChoice {
 export interface OpenAIResponseMessage {
   role: string;
   content?: string;
+  /** Non-standard (e.g. DeepSeek/MiMo); maps to/from Anthropic `thinking` blocks */
+  reasoning_content?: string;
   tool_calls?: OpenAIToolCall[];
   thinking?: {
     content?: string;
@@ -237,12 +241,33 @@ export function convertResponseToAnthropic(
     }
   }
 
+  // Thinking: prefer message.thinking.content over reasoning_content when both exist (Gemini roundtrips)
+  const thinkingBodyForSignatureCase = (): string => {
+    const fromThinking = message.thinking?.content;
+    if (typeof fromThinking === "string" && fromThinking.length > 0) {
+      return fromThinking;
+    }
+    const rc = message.reasoning_content;
+    if (typeof rc === "string" && rc.length > 0) {
+      return rc;
+    }
+    return typeof fromThinking === "string" ? fromThinking : "";
+  };
+
   // Add thinking block first if signature exists
   if (thoughtSignature) {
     content.push({
       type: "thinking",
-      thinking: message.thinking?.content || "",
+      thinking: thinkingBodyForSignatureCase(),
       signature: thoughtSignature,
+    });
+  } else if (
+    typeof message.reasoning_content === "string" &&
+    message.reasoning_content.length > 0
+  ) {
+    content.push({
+      type: "thinking",
+      thinking: message.reasoning_content,
     });
   }
 

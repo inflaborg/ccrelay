@@ -1105,6 +1105,63 @@ describe("converter: anthropic-to-openai-chat-request", () => {
     });
   });
 
+  describe("assistant thinking block -> reasoning_content in request", () => {
+    it("sets reasoning_content on assistant message with thinking block (no signature)", () => {
+      const request: AnthropicMessageRequest = {
+        model: "mimo-v2.5-pro",
+        max_tokens: 4096,
+        messages: [
+          {
+            role: "assistant",
+            content: [
+              { type: "thinking", thinking: "Step-by-step reasoning" } as never,
+              { type: "text", text: "" },
+              {
+                type: "tool_use",
+                id: "call_abc",
+                name: "get_weather",
+                input: { city: "Beijing" },
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.messages[0].reasoning_content).toBe("Step-by-step reasoning");
+      expect(result.request.messages[0].tool_calls).toHaveLength(1);
+    });
+
+    it("sets reasoning_content alongside thinking when signature is present", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 4096,
+        messages: [
+          {
+            role: "assistant",
+            content: [
+              {
+                type: "thinking",
+                thinking: "Signed thinking",
+                signature: "sig123",
+              } as never,
+              { type: "text", text: "Answer" },
+            ],
+          },
+        ],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.messages[0].reasoning_content).toBe("Signed thinking");
+      expect(result.request.messages[0].thinking).toEqual({
+        content: "Signed thinking",
+        signature: "sig123",
+      });
+    });
+  });
+
   describe("special fields - top_p", () => {
     it("should pass through top_p when present", () => {
       const request: AnthropicMessageRequest = {
