@@ -18,6 +18,8 @@ import { mimoAnnotationsWebSearchResponseTransform } from "./xiaomimimo/response
 import type { PlatformRequestOverrideTransform } from "./rules";
 import { azureChatSanitize } from "./azure-openai/chat-sanitize";
 import { geminiChatSanitize } from "./gemini/request-sanitize";
+import { minimaxChatSanitize } from "./minimax/request-sanitize";
+import { minimaxReasoningDetailsResponseTransform } from "./minimax/response-reasoning";
 import { passthroughTransform } from "./passthrough";
 
 /** Outbound Chat `tools[]` entry (`type` keyed by rule). */
@@ -60,6 +62,7 @@ export const MESSAGE_TRANSFORM_REGISTRY: Readonly<Record<string, PlatformMessage
 export const RESPONSE_TRANSFORM_REGISTRY: Readonly<Record<string, PlatformResponseTransform>> = {
   "glm-web-search-response": glmWebSearchResponseTransform,
   "mimo-annotations-web-search": mimoAnnotationsWebSearchResponseTransform,
+  "minimax-reasoning-details": minimaxReasoningDetailsResponseTransform,
   "azure-responses-web-search": azureResponsesWebSearchResponseTransform,
 };
 
@@ -73,6 +76,7 @@ export const REQUEST_SANITIZE_REGISTRY: Readonly<Record<string, PlatformRequestS
   {
     "azure-chat-sanitize": azureChatSanitize,
     "gemini-chat-sanitize": geminiChatSanitize,
+    "minimax-chat-sanitize": minimaxChatSanitize,
   };
 
 export { passthroughTransform, isPlainObject } from "./passthrough";
@@ -89,6 +93,8 @@ export {
 } from "./azure-openai/responses-request-tools";
 export { azureChatSanitize } from "./azure-openai/chat-sanitize";
 export { geminiChatSanitize } from "./gemini/request-sanitize";
+export { minimaxChatSanitize } from "./minimax/request-sanitize";
+export { minimaxReasoningDetailsResponseTransform } from "./minimax/response-reasoning";
 
 /** @deprecated Prefer `TOOL_TRANSFORM_REGISTRY`. */
 export const TRANSFORM_REGISTRY = TOOL_TRANSFORM_REGISTRY;

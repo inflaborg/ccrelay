@@ -1,6 +1,6 @@
 /**
  * Layer 1: declarative hostname → platform transforms (tools, messages, responses).
- * Provider implementations live under `glm/`, `xiaomimimo/`, `azure-openai/`, `gemini/`.
+ * Provider implementations live under `glm/`, `xiaomimimo/`, `minimax/`, `azure-openai/`, `gemini/`.
  */
 
 /* eslint-disable @typescript-eslint/naming-convention -- wire tool.type literals */
@@ -66,6 +66,12 @@ export const PLATFORM_TRANSFORM_RULES: readonly PlatformTransformRule[] = [
     domains: ["api.xiaomimimo.com"],
     tools: { web_search: "mimo-web-search" },
     responses: "mimo-annotations-web-search",
+  },
+  {
+    provider: "minimax",
+    domains: ["api.minimax.io", "api.minimaxi.com"],
+    requestSanitize: "minimax-chat-sanitize",
+    responses: "minimax-reasoning-details",
   },
   {
     provider: "azure-openai",

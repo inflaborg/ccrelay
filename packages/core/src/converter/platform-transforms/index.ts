@@ -46,6 +46,8 @@ export {
   glmWebSearchResponseTransform,
   mimoAnnotationsWebSearchResponseTransform,
   mimoWebSearchTransform,
+  minimaxChatSanitize,
+  minimaxReasoningDetailsResponseTransform,
   azureWebSearchRequestOverride,
   azureResponsesWebSearchResponseTransform,
   sanitizeAzureResponsesRequestTools,
