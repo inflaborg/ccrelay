@@ -266,7 +266,16 @@ export interface WebSearchSettings {
     searchDepth?: "basic" | "advanced";
     maxResults?: number;
   };
+  glm?: {
+    apiKey?: string;
+    endpoint?: string;
+    protocol?: "anthropic" | "openai";
+    region?: "intl" | "cn";
+    coding?: boolean;
+    model?: string;
+  };
   providers?: string[];
+  defaultSearchBackend?: string;
 }
 
 export interface LoggingSettings {

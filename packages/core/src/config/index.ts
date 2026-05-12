@@ -1160,12 +1160,49 @@ export class ConfigManager {
     }
 
     // Build global web search config
+
+    function computeGlmEndpoint(
+      protocol: "anthropic" | "openai",
+      region: "intl" | "cn",
+      coding: boolean
+    ): string {
+      const host = region === "cn" ? "https://open.bigmodel.cn" : "https://api.z.ai";
+      if (protocol === "anthropic") {
+        return `${host}/api/anthropic`;
+      }
+      const planPath = coding ? "/api/coding/paas/v4" : "/api/paas/v4";
+      return `${host}${planPath}/chat/completions`;
+    }
+
     const rawWebSearch = merged.webSearch ?? merged.web_search;
     let webSearchConfig: WebSearchGlobalConfig | undefined;
     if (rawWebSearch) {
       const t = rawWebSearch.tavily;
+      const g = rawWebSearch.glm;
       const providers = Array.isArray(rawWebSearch.providers) ? rawWebSearch.providers : undefined;
-      if (t || providers) {
+      const defaultSearchBackend =
+        typeof rawWebSearch.defaultSearchBackend === "string"
+          ? rawWebSearch.defaultSearchBackend
+          : undefined;
+      if (t || g || providers || defaultSearchBackend) {
+        let glmConfig: WebSearchGlobalConfig["glm"] | undefined;
+        if (g) {
+          const protocol = g.protocol === "anthropic" ? "anthropic" : "openai";
+          const region = g.region === "cn" ? "cn" : "intl";
+          const coding = g.coding === true;
+          const computedEndpoint = computeGlmEndpoint(protocol, region, coding);
+          glmConfig = {
+            apiKey: g.apiKey ?? g.api_key,
+            endpoint:
+              typeof g.endpoint === "string" && g.endpoint.length > 0
+                ? g.endpoint
+                : computedEndpoint,
+            protocol,
+            region,
+            coding,
+            model: g.model,
+          };
+        }
         webSearchConfig = {
           ...(t
             ? {
@@ -1176,7 +1213,9 @@ export class ConfigManager {
                 },
               }
             : {}),
+          ...(glmConfig ? { glm: glmConfig } : {}),
           ...(providers && providers.length > 0 ? { providers } : {}),
+          ...(defaultSearchBackend ? { defaultSearchBackend } : {}),
         };
       }
     }

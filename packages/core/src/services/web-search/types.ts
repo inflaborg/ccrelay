@@ -11,6 +11,8 @@ export interface WebSearchDetection {
   model: string;
   /** The client API surface format. */
   clientSurface: ApiSurface;
+  /** Which search backend to use ("tavily" | "glm"). Resolved at detection time by executor. */
+  searchBackend?: string;
 }
 
 /** No interception needed — fall through to normal proxy. */

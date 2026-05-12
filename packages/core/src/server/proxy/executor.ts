@@ -1154,13 +1154,9 @@ export class ProxyExecutor {
         );
         if (responsesStreamRequested) {
           const sse = formatOpenAIResponsesSse(out);
-          // if (process.env.CCRELAY_LOG_RESPONSES_SSE === "1") {
-          const head = sse.split("\n\n").filter(Boolean).slice(0, 6).join(" | ");
-          log.info(
-            `[Chat->Responses] synthetic SSE: bytes=${sse.length} ` +
-              `data_lines~=${sse.split("\n\n").length} head=${head.slice(0, 2000)}`
+          log.debug(
+            `[Chat->Responses] synthetic SSE: bytes=${sse.length}, ~${sse.split("\n\n").filter(Boolean).length} events`
           );
-          // }
           ctx.responseChunks.push(Buffer.from(sse, "utf-8"));
           this.responseLogger.logResponse(
             clientId,
@@ -1244,7 +1240,7 @@ export class ProxyExecutor {
     const { provider, res: clientRes } = task;
 
     const sseHeaders = headersForResponsesSse(responseHeaders);
-    log.info(
+    log.debug(
       `[Chat->Responses SSE] Writing headers: status=${status} keys=${Object.keys(sseHeaders).join(",")}`
     );
     clientRes!.writeHead(status, sseHeaders);
@@ -1272,11 +1268,7 @@ export class ProxyExecutor {
       totalBytes += chunk.length;
       if (chunkCount === 1) {
         firstChunkTime = Date.now() - startTime;
-        const preview =
-          chunk.length > 200
-            ? `${chunk.slice(0, 200).toString("utf-8")}...`
-            : chunk.toString("utf-8");
-        log.info(`[Chat->Responses SSE] First chunk: ${chunk.length} bytes, preview="${preview}"`);
+        log.debug(`[Chat->Responses SSE] First chunk: ${chunk.length} bytes`);
       }
       lineBuffer.feed(chunk);
     });
@@ -1369,13 +1361,9 @@ export class ProxyExecutor {
         );
         if (responsesStreamRequested) {
           const sse = formatOpenAIResponsesSse(out);
-          // if (process.env.CCRELAY_LOG_RESPONSES_SSE === "1") {
-          const head = sse.split("\n\n").filter(Boolean).slice(0, 6).join(" | ");
-          log.info(
-            `[A->Responses] synthetic SSE: bytes=${sse.length} ` +
-              `data_lines~=${sse.split("\n\n").length} head=${head.slice(0, 2000)}`
+          log.debug(
+            `[A->Responses] synthetic SSE: bytes=${sse.length}, ~${sse.split("\n\n").filter(Boolean).length} events`
           );
-          // }
           ctx.responseChunks.push(Buffer.from(sse, "utf-8"));
           this.responseLogger.logResponse(
             clientId,

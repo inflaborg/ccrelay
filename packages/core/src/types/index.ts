@@ -229,7 +229,19 @@ export const WebSearchConfigSchema = z.object({
       max_results: z.number().int().min(1).max(10).optional(),
     })
     .optional(),
+  glm: z
+    .object({
+      apiKey: z.string().optional(),
+      api_key: z.string().optional(),
+      endpoint: z.string().optional(),
+      protocol: z.enum(["anthropic", "openai"]).optional(),
+      region: z.enum(["intl", "cn"]).optional(),
+      coding: z.boolean().optional(),
+      model: z.string().optional(),
+    })
+    .optional(),
   providers: z.array(z.string()).optional(),
+  defaultSearchBackend: z.string().optional(),
 });
 
 export type WebSearchConfigInput = z.infer<typeof WebSearchConfigSchema>;
@@ -311,8 +323,18 @@ export interface WebSearchGlobalConfig {
     searchDepth?: "basic" | "advanced";
     maxResults?: number;
   };
+  glm?: {
+    apiKey?: string;
+    endpoint?: string;
+    protocol?: "anthropic" | "openai";
+    region?: "intl" | "cn";
+    coding?: boolean;
+    model?: string;
+  };
   /** Provider IDs that have web search enabled. */
   providers?: string[];
+  /** Which search backend to use ("tavily" | "glm"). Defaults to "tavily". */
+  defaultSearchBackend?: string;
 }
 
 export interface RouterConfig {
