@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Pre-release line for 0.2.4.
 
+### Added
+
+**UI**
+
+- **Add provider** wizard: **DeepSeek** preset with OpenAI Chat and Anthropic endpoints and common v4 model IDs.
+
+**Protocol/Conversion**
+
+- **DeepSeek**: Chat Completions requests to the official API host receive a compatible thinking toggle and normalized reasoning effort for extended-thinking mode.
+
 ### Changed
 
 **Protocol/Conversion**

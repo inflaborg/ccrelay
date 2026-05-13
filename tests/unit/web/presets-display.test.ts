@@ -24,6 +24,11 @@ describe("upstreamModelIdToDisplayName", () => {
   it("formats Gemini preview ids", () => {
     expect(upstreamModelIdToDisplayName("gemini-3.1-pro-preview")).toBe("Gemini 3.1 Pro Preview");
   });
+
+  it("formats DeepSeek model ids", () => {
+    expect(upstreamModelIdToDisplayName("deepseek-v4-pro")).toBe("DeepSeek V4 Pro");
+    expect(upstreamModelIdToDisplayName("deepseek-v4-flash")).toBe("DeepSeek V4 Flash");
+  });
 });
 
 describe("defaultModelIdsAsText", () => {

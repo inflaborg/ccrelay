@@ -7,6 +7,7 @@ const VENDOR_DISPLAY: Record<string, string> = {
   mimo: "MiMo",
   minimax: "MiniMax",
   gemini: "Gemini",
+  deepseek: "DeepSeek",
   claude: "Claude",
 };
 
@@ -348,6 +349,32 @@ export const PARTNER_PRESETS: readonly PartnerPreset[] = [
         urlTemplate: "{fixedBaseUrl}",
         idSuffix: "openai",
         nameSuffix: "",
+      },
+    ],
+  },
+  {
+    id: "deepseek",
+    nameKey: "wizard.brand.deepseek",
+    mode: "inject",
+    idPrefix: "deepseek",
+    namePrefix: "DeepSeek",
+    defaultModelIds: ["deepseek-v4-pro", "deepseek-v4-flash"],
+    defaultCustomModels: true,
+    fixedBaseUrl: "https://api.deepseek.com/v1",
+    options: [],
+    segmentRules: [],
+    variants: [
+      {
+        providerType: "openai_chat",
+        urlTemplate: "{fixedBaseUrl}",
+        idSuffix: "openai",
+        nameSuffix: "-OpenAI",
+      },
+      {
+        providerType: "anthropic",
+        urlTemplate: "https://api.deepseek.com/anthropic",
+        idSuffix: "anthropic",
+        nameSuffix: "-Anthropic",
       },
     ],
   },
