@@ -230,10 +230,9 @@ export function convertResponsesRequestToChatCompletions(
   const reasoning = raw.reasoning;
   if (reasoning && typeof reasoning === "object") {
     const r = reasoning as { effort?: string; summary?: string };
-    out.reasoning = {
-      effort: r.effort,
-      enabled: r.effort !== "none",
-    };
+    if (typeof r.effort === "string") {
+      out.reasoning_effort = r.effort;
+    }
   }
 
   const tools = mapResponsesTools(raw.tools);

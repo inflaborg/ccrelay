@@ -238,7 +238,7 @@ describe("converter: openai-chat-to-anthropic-response", () => {
       ]);
     });
 
-    it("should extract thought_signature from tool_calls extra_content.google", () => {
+    it("does not read thought_signature from tool_calls extra_content.google", () => {
       const openai: OpenAIChatCompletionResponse = {
         id: "chatcmpl-abc123",
         object: "chat.completion",
@@ -274,9 +274,8 @@ describe("converter: openai-chat-to-anthropic-response", () => {
 
       expect(result.content).toEqual([
         {
-          type: "thinking",
-          thinking: "",
-          signature: "fromGemini123",
+          type: "text",
+          text: "",
         },
         {
           type: "tool_use",
@@ -287,7 +286,7 @@ describe("converter: openai-chat-to-anthropic-response", () => {
       ]);
     });
 
-    it("should extract thought_signature from tool_calls.function.thought_signature", () => {
+    it("does not read thought_signature from tool_calls.function", () => {
       const openai: OpenAIChatCompletionResponse = {
         id: "chatcmpl-abc123",
         object: "chat.completion",
@@ -319,9 +318,8 @@ describe("converter: openai-chat-to-anthropic-response", () => {
 
       expect(result.content).toEqual([
         {
-          type: "thinking",
-          thinking: "",
-          signature: "fromFunction123",
+          type: "text",
+          text: "",
         },
         {
           type: "tool_use",

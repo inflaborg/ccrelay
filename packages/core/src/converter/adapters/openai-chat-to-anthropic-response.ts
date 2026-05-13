@@ -197,8 +197,9 @@ export interface AnthropicUsage {
  *
  * Design principles:
  * 1. Preserves original tool_call.id as tool_use.id (no ID generation)
- * 2. Inlines thought_signature in thinking block (no external storage)
+ * 2. Inlines `message.thinking.signature` into Anthropic thinking blocks (no external storage)
  * 3. Stateless - no database required
+ * Gemini-native signatures on tool calls are handled by `platform-transforms/gemini` response transforms.
  */
 export function convertResponseToAnthropic(
   openai: OpenAIChatCompletionResponse,
@@ -221,24 +222,9 @@ export function convertResponseToAnthropic(
 
   const content: AnthropicContentBlock[] = [];
 
-  // Extract thought_signature from OpenAI response (Gemini format)
   let thoughtSignature: string | undefined;
-
-  // Try to get signature from message.thinking (unified format)
   if (message.thinking?.signature) {
     thoughtSignature = message.thinking.signature;
-  } else {
-    // Try to get signature from tool_calls extra_content (Gemini native format)
-    for (const tc of message.tool_calls || []) {
-      if (tc.extra_content?.google?.thought_signature) {
-        thoughtSignature = tc.extra_content.google.thought_signature;
-        break;
-      }
-      if (tc.function.thought_signature) {
-        thoughtSignature = tc.function.thought_signature;
-        break;
-      }
-    }
   }
 
   // Thinking: prefer message.thinking.content over reasoning_content when both exist (Gemini roundtrips)

@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Pre-release line for 0.2.4.
 
+### Changed
+
+**Protocol/Conversion**
+
+- Anthropic `thinking` / `output_config.effort` now maps to the standard Chat Completions `reasoning_effort` string instead of a nested `reasoning` object, improving compatibility with OpenAI, Gemini, Azure, and GLM upstreams.
+- OpenAI Chat `reasoning_effort` inbound converts to Anthropic `adaptive` thinking with `output_config.effort`, replacing the previous fixed `budget_tokens` mapping. `"none"` maps to `thinking.type: "disabled"`.
+- **GLM (Z.ai)**: outbound Chat bodies translate `reasoning_effort` to GLM's native `thinking: { type }` field so reasoning requests work without manual config.
+- Gemini-specific thought-signature handling moved out of the generic protocol adapters into dedicated Gemini platform transforms. No behavior change for end users; adapters now emit a single canonical OpenAI shape for all upstreams.
+
 ## [0.2.3] - 2026-05-12
 
 Cowork-safe model aliases with an optional client header, quick-fill for custom model lists, optional **GLM (Z.ai)** web search next to Tavily, and clearer **MiniMax** reasoning handling for Anthropic clients. Build scripts for desktop releases are fixed.

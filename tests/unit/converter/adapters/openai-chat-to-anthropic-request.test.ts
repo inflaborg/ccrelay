@@ -225,6 +225,64 @@ describe("convertOpenAIRequestToAnthropic", () => {
     expect(thinkingBlock!.thinking).toBe("Chain of thought");
   });
 
+  describe("reasoning_effort -> adaptive thinking + output_config", () => {
+    it("maps reasoning_effort none to thinking disabled without output_config", () => {
+      const { request } = convertOpenAIRequestToAnthropic(
+        {
+          model: "claude-opus-4-7",
+          max_tokens: 1024,
+          messages: [{ role: "user", content: "Hi" }],
+          reasoning_effort: "none",
+        },
+        "/v1/chat/completions"
+      );
+      expect(request.thinking).toEqual({ type: "disabled" });
+      expect(request.output_config).toBeUndefined();
+    });
+
+    it("maps reasoning_effort medium to adaptive + output_config medium", () => {
+      const { request } = convertOpenAIRequestToAnthropic(
+        {
+          model: "claude-opus-4-7",
+          max_tokens: 1024,
+          messages: [{ role: "user", content: "Hi" }],
+          reasoning_effort: "medium",
+        },
+        "/v1/chat/completions"
+      );
+      expect(request.thinking).toEqual({ type: "adaptive" });
+      expect(request.output_config).toEqual({ effort: "medium" });
+    });
+
+    it("maps reasoning_effort minimal to adaptive + low effort", () => {
+      const { request } = convertOpenAIRequestToAnthropic(
+        {
+          model: "claude-opus-4-7",
+          max_tokens: 1024,
+          messages: [{ role: "user", content: "Hi" }],
+          reasoning_effort: "minimal",
+        },
+        "/v1/chat/completions"
+      );
+      expect(request.thinking).toEqual({ type: "adaptive" });
+      expect(request.output_config).toEqual({ effort: "low" });
+    });
+
+    it("maps empty reasoning_effort to adaptive + high effort", () => {
+      const { request } = convertOpenAIRequestToAnthropic(
+        {
+          model: "claude-opus-4-7",
+          max_tokens: 1024,
+          messages: [{ role: "user", content: "Hi" }],
+          reasoning_effort: "",
+        },
+        "/v1/chat/completions"
+      );
+      expect(request.thinking).toEqual({ type: "adaptive" });
+      expect(request.output_config).toEqual({ effort: "high" });
+    });
+  });
+
   it("omits tool_choice when there are no tools (even if tool_choice was set)", () => {
     const { request } = convertOpenAIRequestToAnthropic(
       {

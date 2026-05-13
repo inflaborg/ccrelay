@@ -180,6 +180,10 @@ export function convertOpenAIMessageRequestToResponsesRequest(
     out.tool_choice = mappedChoice;
   }
 
+  if (typeof chat.reasoning_effort === "string" && chat.reasoning_effort.trim() !== "") {
+    out.reasoning = { effort: chat.reasoning_effort };
+  }
+
   return {
     request: out,
     newPath: "/responses",

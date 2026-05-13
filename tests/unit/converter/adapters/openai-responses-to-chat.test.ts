@@ -225,6 +225,19 @@ describe("convertResponsesRequestToChatCompletions", () => {
     expect(request.tools?.[0]).toMatchObject({ type: "function", function: { name: "fn" } });
     expect(request.tools?.[1]).toEqual({ type: "mcp", connector_id: "c" });
   });
+
+  it("maps Responses reasoning to chat reasoning_effort", () => {
+    const { request } = convertResponsesRequestToChatCompletions(
+      {
+        model: "gpt-5",
+        input: "hi",
+        reasoning: { effort: "medium", summary: "auto" },
+      },
+      "/v1/responses"
+    );
+    expect(request.reasoning_effort).toBe("medium");
+    expect("reasoning" in request).toBe(false);
+  });
 });
 
 describe("extractFunctionToolsForEcho", () => {

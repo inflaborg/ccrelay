@@ -67,12 +67,17 @@ export function convertOpenAIRequestToAnthropic(
   if (openai.stop !== undefined) {
     out.stop_sequences = Array.isArray(openai.stop) ? openai.stop : [openai.stop];
   }
-  if (openai.reasoning) {
-    const budget = effortToBudgetTokens(openai.reasoning.effort);
-    out.thinking = {
-      type: openai.reasoning.enabled === false ? "disabled" : "enabled",
-      budget_tokens: budget,
-    };
+  if (openai.reasoning_effort !== undefined) {
+    const effortStr =
+      typeof openai.reasoning_effort === "string" && openai.reasoning_effort.trim() !== ""
+        ? openai.reasoning_effort.toLowerCase()
+        : undefined;
+    if (effortStr === "none") {
+      out.thinking = { type: "disabled" };
+    } else {
+      out.thinking = { type: "adaptive" };
+      out.output_config = { effort: mapOpenAIEffortToAnthropic(effortStr) };
+    }
   }
 
   const newPath = mapOpenAiWirePathToAnthropicUpstream(originalPath, "POST");
@@ -97,21 +102,16 @@ function resolveMaxTokens(
   return 4096;
 }
 
-function effortToBudgetTokens(effort?: string): number | undefined {
+/** Map OpenAI `reasoning_effort` to Anthropic `output_config.effort` (adaptive mode). */
+function mapOpenAIEffortToAnthropic(effort?: string): string {
   if (!effort) {
-    return 2048;
+    return "high";
   }
   const e = effort.toLowerCase();
-  if (e === "low") {
-    return 1024;
+  if (e === "minimal") {
+    return "low";
   }
-  if (e === "medium") {
-    return 4096;
-  }
-  if (e === "high") {
-    return 16000;
-  }
-  return 2048;
+  return e;
 }
 
 function stringifyToolContent(rawContent: OpenAIMessage["content"]): string {

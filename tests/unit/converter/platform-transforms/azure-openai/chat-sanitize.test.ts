@@ -18,10 +18,11 @@ describe("Azure OpenAI platform rule", () => {
 });
 
 describe("azureChatSanitize", () => {
-  it("strips reasoning, cache_control, assistant thinking, and tool extra_content", () => {
+  it("strips legacy reasoning, preserves reasoning_effort, cache_control, assistant thinking, tool extra_content", () => {
     const body: Record<string, unknown> = {
       model: "gpt-4",
-      reasoning: { effort: "medium", enabled: true },
+      reasoning_effort: "medium",
+      reasoning: { effort: "should-strip" },
       messages: [
         {
           role: "system",
@@ -47,6 +48,7 @@ describe("azureChatSanitize", () => {
       ],
     };
     azureChatSanitize(body);
+    expect(body.reasoning_effort).toBe("medium");
     expect(body.reasoning).toBeUndefined();
     const sys = (body.messages as Record<string, unknown>[])[0];
     expect((sys.content as { cache_control?: unknown }[])[0].cache_control).toBeUndefined();
@@ -63,11 +65,11 @@ describe("applyPlatformRequestSanitize (Azure)", () => {
   it("invokes azure-chat-sanitize for Azure OpenAI base URL", () => {
     const body: Record<string, unknown> = {
       model: "gpt-4",
-      reasoning: { effort: "low", enabled: false },
+      reasoning_effort: "low",
       messages: [{ role: "assistant", content: "x", thinking: { content: "t" } }],
     };
     applyPlatformRequestSanitize(body, AZURE_BASE);
-    expect(body.reasoning).toBeUndefined();
+    expect(body.reasoning_effort).toBe("low");
     expect((body.messages as Record<string, unknown>[])[0].thinking).toBeUndefined();
   });
 });
