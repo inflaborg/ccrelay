@@ -56,6 +56,7 @@ export {
   azureChatSanitize,
   canGeminiDisableThinking,
   geminiChatSanitize,
+  geminiThoughtTagsResponseTransform,
   normalizeGeminiEffort,
   passthroughTransform,
   isPlainObject,

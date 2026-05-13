@@ -19,6 +19,7 @@ import type { PlatformRequestOverrideTransform } from "./rules";
 import { azureChatSanitize } from "./azure-openai/chat-sanitize";
 import { glmChatSanitize } from "./glm/request-sanitize";
 import { geminiChatSanitize } from "./gemini/request-sanitize";
+import { geminiThoughtTagsResponseTransform } from "./gemini/response-thoughts";
 import { minimaxChatSanitize } from "./minimax/request-sanitize";
 import { minimaxReasoningDetailsResponseTransform } from "./minimax/response-reasoning";
 import { passthroughTransform } from "./passthrough";
@@ -65,6 +66,7 @@ export const RESPONSE_TRANSFORM_REGISTRY: Readonly<Record<string, PlatformRespon
   "mimo-annotations-web-search": mimoAnnotationsWebSearchResponseTransform,
   "minimax-reasoning-details": minimaxReasoningDetailsResponseTransform,
   "azure-responses-web-search": azureResponsesWebSearchResponseTransform,
+  "gemini-thought-tags": geminiThoughtTagsResponseTransform,
 };
 
 export const ANTHROPIC_SSE_TRANSFORM_REGISTRY: Readonly<
@@ -100,6 +102,7 @@ export {
   geminiChatSanitize,
   normalizeGeminiEffort,
 } from "./gemini/request-sanitize";
+export { geminiThoughtTagsResponseTransform } from "./gemini/response-thoughts";
 export { minimaxChatSanitize } from "./minimax/request-sanitize";
 export { minimaxReasoningDetailsResponseTransform } from "./minimax/response-reasoning";
 

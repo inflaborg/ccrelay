@@ -86,5 +86,6 @@ export const PLATFORM_TRANSFORM_RULES: readonly PlatformTransformRule[] = [
     domains: ["generativelanguage.googleapis.com"],
     stripQuery: true,
     requestSanitize: "gemini-chat-sanitize",
+    responses: "gemini-thought-tags",
   },
 ];

@@ -13,11 +13,12 @@ import { describe, expect, it } from "vitest";
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai";
 
 describe("Gemini platform rule", () => {
-  it("matches generativelanguage.googleapis.com with stripQuery and requestSanitize", () => {
+  it("matches generativelanguage.googleapis.com with stripQuery, requestSanitize, and responses", () => {
     const r = matchHostedToolRuleForBaseUrl(`${GEMINI_BASE}/chat/completions`);
     expect(r?.provider).toBe("gemini");
     expect(r?.stripQuery).toBe(true);
     expect(r?.requestSanitize).toBe("gemini-chat-sanitize");
+    expect(r?.responses).toBe("gemini-thought-tags");
   });
 });
 
@@ -115,7 +116,7 @@ describe("normalizeGeminiEffort", () => {
 });
 
 describe("geminiChatSanitize", () => {
-  it("normalizes reasoning_effort and strips legacy reasoning", () => {
+  it("maps reasoning_effort to extra_body.google.thinking_config (3.x thinking_level) and strips legacy reasoning", () => {
     const body: Record<string, unknown> = {
       model: "gemini-pro",
       messages: [{ role: "assistant", content: "hi", thinking: { content: "x", signature: "s" } }],
@@ -129,24 +130,104 @@ describe("geminiChatSanitize", () => {
       tool_choice: "auto",
     };
     geminiChatSanitize(body);
-    expect(body.reasoning_effort).toBe("medium");
+    expect(body.reasoning_effort).toBeUndefined();
     expect(body.reasoning).toBeUndefined();
+    expect(body.google).toBeUndefined();
+    expect(body.extra_body).toEqual({
+      google: {
+        thinking_config: { thinking_level: "medium", include_thoughts: true },
+      },
+    });
     expect((body.messages as Record<string, unknown>[])[0].thinking).toBeUndefined();
     expect(body.tools).toHaveLength(1);
     expect((body.tools as Record<string, unknown>[])[0].type).toBe("function");
     expect(body.tool_choice).toBe("auto");
   });
 
-  it("does not add reasoning_effort when absent", () => {
+  it("maps 2.5 flash medium to thinking_budget", () => {
+    const body: Record<string, unknown> = {
+      model: "gemini-2.5-flash",
+      messages: [],
+      reasoning_effort: "medium",
+    };
+    geminiChatSanitize(body);
+    expect(body.reasoning_effort).toBeUndefined();
+    expect(body.google).toBeUndefined();
+    expect(body.extra_body).toEqual({
+      google: {
+        thinking_config: { thinking_budget: 8192, include_thoughts: true },
+      },
+    });
+  });
+
+  it("maps 2.5 flash low to 1024 budget", () => {
+    const body: Record<string, unknown> = {
+      model: "gemini-2.5-flash",
+      messages: [],
+      reasoning_effort: "low",
+    };
+    geminiChatSanitize(body);
+    expect(body.extra_body).toEqual({
+      google: {
+        thinking_config: { thinking_budget: 1024, include_thoughts: true },
+      },
+    });
+  });
+
+  it("maps 2.5-pro medium to thinking_budget (not reasoning_effort)", () => {
+    const body: Record<string, unknown> = {
+      model: "gemini-2.5-pro",
+      messages: [],
+      reasoning_effort: "medium",
+    };
+    geminiChatSanitize(body);
+    expect(body.reasoning_effort).toBeUndefined();
+    expect(body.extra_body).toEqual({
+      google: {
+        thinking_config: { thinking_budget: 8192, include_thoughts: true },
+      },
+    });
+  });
+
+  it("maps 3.x xhigh to thinking_level high", () => {
+    const body: Record<string, unknown> = {
+      model: "gemini-3-flash-preview",
+      messages: [],
+      reasoning_effort: "xhigh",
+    };
+    geminiChatSanitize(body);
+    expect(body.extra_body).toEqual({
+      google: {
+        thinking_config: { thinking_level: "high", include_thoughts: true },
+      },
+    });
+  });
+
+  it("maps 2.5 flash xhigh to max budget", () => {
+    const body: Record<string, unknown> = {
+      model: "gemini-2.5-flash",
+      messages: [],
+      reasoning_effort: "xhigh",
+    };
+    geminiChatSanitize(body);
+    expect(body.extra_body).toEqual({
+      google: {
+        thinking_config: { thinking_budget: 24576, include_thoughts: true },
+      },
+    });
+  });
+
+  it("does not add extra_body when reasoning_effort is absent", () => {
     const body: Record<string, unknown> = {
       model: "gemini-2.5-flash",
       messages: [],
     };
     geminiChatSanitize(body);
     expect(body.reasoning_effort).toBeUndefined();
+    expect(body.extra_body).toBeUndefined();
   });
 
-  it("strips legacy nested reasoning object without setting reasoning_effort", () => {
+  it("strips legacy nested reasoning object without setting extra_body", () => {
     const body: Record<string, unknown> = {
       model: "gemini-2.5-flash",
       messages: [],
@@ -155,20 +236,25 @@ describe("geminiChatSanitize", () => {
     geminiChatSanitize(body);
     expect(body.reasoning).toBeUndefined();
     expect(body.reasoning_effort).toBeUndefined();
+    expect(body.extra_body).toBeUndefined();
   });
 
-  it("passes none for 2.5-flash", () => {
+  it("sets thinking_budget 0 for none on 2.5-flash", () => {
     const body: Record<string, unknown> = {
       model: "gemini-2.5-flash",
       messages: [],
       reasoning_effort: "none",
     };
     geminiChatSanitize(body);
-    expect(body.reasoning_effort).toBe("none");
-    expect(body.reasoning).toBeUndefined();
+    expect(body.reasoning_effort).toBeUndefined();
+    expect(body.extra_body).toEqual({
+      google: {
+        thinking_config: { thinking_budget: 0 },
+      },
+    });
   });
 
-  it("omits reasoning_effort for none on 2.5-pro", () => {
+  it("omits thinking_config for none on 2.5-pro", () => {
     const body: Record<string, unknown> = {
       model: "gemini-2.5-pro",
       messages: [],
@@ -176,10 +262,10 @@ describe("geminiChatSanitize", () => {
     };
     geminiChatSanitize(body);
     expect(body.reasoning_effort).toBeUndefined();
-    expect(body.reasoning).toBeUndefined();
+    expect(body.extra_body).toBeUndefined();
   });
 
-  it("omits reasoning_effort for none on 3.x", () => {
+  it("omits thinking_config for none on 3.x", () => {
     const body: Record<string, unknown> = {
       model: "gemini-3-flash",
       messages: [],
@@ -187,21 +273,10 @@ describe("geminiChatSanitize", () => {
     };
     geminiChatSanitize(body);
     expect(body.reasoning_effort).toBeUndefined();
-    expect(body.reasoning).toBeUndefined();
+    expect(body.extra_body).toBeUndefined();
   });
 
-  it("maps xhigh to high", () => {
-    const body: Record<string, unknown> = {
-      model: "gemini-2.5-flash",
-      messages: [],
-      reasoning_effort: "xhigh",
-    };
-    geminiChatSanitize(body);
-    expect(body.reasoning_effort).toBe("high");
-    expect(body.reasoning).toBeUndefined();
-  });
-
-  it("omits reasoning_effort for bogus effort", () => {
+  it("omits extra_body for bogus effort", () => {
     const body: Record<string, unknown> = {
       model: "gemini-2.5-flash",
       messages: [],
@@ -209,7 +284,40 @@ describe("geminiChatSanitize", () => {
     };
     geminiChatSanitize(body);
     expect(body.reasoning_effort).toBeUndefined();
-    expect(body.reasoning).toBeUndefined();
+    expect(body.extra_body).toBeUndefined();
+  });
+
+  it("does not overwrite existing extra_body.google.thinking_config", () => {
+    const existing = { thinking_level: "low", include_thoughts: false };
+    const body: Record<string, unknown> = {
+      model: "gemini-2.5-flash",
+      messages: [],
+      reasoning_effort: "high",
+      extra_body: {
+        google: { thinking_config: existing, other: 1 },
+      },
+    };
+    geminiChatSanitize(body);
+    expect(body.reasoning_effort).toBeUndefined();
+    const google = (body.extra_body as Record<string, unknown>).google as Record<string, unknown>;
+    expect(google.thinking_config).toBe(existing);
+    expect(google.other).toBe(1);
+  });
+
+  it("merges thinking_config into existing extra_body without clobbering keys", () => {
+    const body: Record<string, unknown> = {
+      model: "gemini-pro",
+      messages: [],
+      reasoning_effort: "low",
+      extra_body: { client_tag: "keep" },
+    };
+    geminiChatSanitize(body);
+    expect(body.extra_body).toEqual({
+      client_tag: "keep",
+      google: {
+        thinking_config: { thinking_level: "low", include_thoughts: true },
+      },
+    });
   });
 
   it("drops tools and tool_choice when no function tools remain", () => {
@@ -223,6 +331,65 @@ describe("geminiChatSanitize", () => {
     expect(body.tools).toBeUndefined();
     expect(body.tool_choice).toBeUndefined();
   });
+
+  it("migrates assistant thinking.signature onto each tool_call extra_content before stripping thinking", () => {
+    const body: Record<string, unknown> = {
+      model: "gemini-2.5-flash",
+      messages: [
+        {
+          role: "assistant",
+          content: "",
+          thinking: { content: "internal", signature: "sig-1" },
+          tool_calls: [
+            {
+              id: "call_a",
+              type: "function",
+              function: { name: "f", arguments: "{}" },
+            },
+          ],
+        },
+      ],
+    };
+    geminiChatSanitize(body);
+    const msg = (body.messages as Record<string, unknown>[])[0];
+    expect(msg.thinking).toBeUndefined();
+    expect(msg.tool_calls).toEqual([
+      {
+        id: "call_a",
+        type: "function",
+        function: { name: "f", arguments: "{}" },
+        extra_content: { google: { thought_signature: "sig-1" } },
+      },
+    ]);
+  });
+
+  it("merges thought_signature into existing tool_call extra_content.google", () => {
+    const body: Record<string, unknown> = {
+      model: "gemini-2.5-flash",
+      messages: [
+        {
+          role: "assistant",
+          thinking: { content: "c", signature: "sig-2" },
+          tool_calls: [
+            {
+              id: "c1",
+              type: "function",
+              function: { name: "fn", arguments: "{}" },
+              extra_content: { google: { other: 1 }, client: "x" },
+            },
+          ],
+        },
+      ],
+    };
+    geminiChatSanitize(body);
+    const tc = (
+      (body.messages as Record<string, unknown>[])[0].tool_calls as Record<string, unknown>[]
+    )[0];
+    expect(tc.extra_content).toEqual({
+      google: { other: 1, thought_signature: "sig-2" },
+      client: "x",
+    });
+  });
 });
 
 describe("applyPlatformRequestSanitize", () => {
@@ -233,7 +400,12 @@ describe("applyPlatformRequestSanitize", () => {
       messages: [],
     };
     applyPlatformRequestSanitize(body, `${GEMINI_BASE}/`);
-    expect(body.reasoning_effort).toBe("low");
+    expect(body.reasoning_effort).toBeUndefined();
+    expect(body.extra_body).toEqual({
+      google: {
+        thinking_config: { thinking_budget: 1024, include_thoughts: true },
+      },
+    });
     expect(body.reasoning).toBeUndefined();
   });
 

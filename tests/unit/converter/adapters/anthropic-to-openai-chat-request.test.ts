@@ -1124,7 +1124,7 @@ describe("converter: anthropic-to-openai-chat-request", () => {
       });
     });
 
-    it("should attach thought_signature for Gemini models", () => {
+    it("emits message.thinking with signature for downstream Gemini sanitization", () => {
       const request: AnthropicMessageRequest = {
         model: "gemini-2.0-flash-exp",
         max_tokens: 4096,
@@ -1149,6 +1149,10 @@ describe("converter: anthropic-to-openai-chat-request", () => {
 
       const result = convertRequestToOpenAI(request, basePath);
 
+      expect(result.request.messages[0].thinking).toEqual({
+        content: "",
+        signature: "abc123signature",
+      });
       expect(result.request.messages[0].tool_calls).toEqual([
         {
           id: "toolu_abc123",
@@ -1156,11 +1160,6 @@ describe("converter: anthropic-to-openai-chat-request", () => {
           function: {
             name: "browser_search",
             arguments: '{"query":"test"}',
-          },
-          extra_content: {
-            google: {
-              thought_signature: "abc123signature",
-            },
           },
         },
       ]);

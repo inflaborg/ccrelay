@@ -174,8 +174,3 @@ export {
   openaiChatUsesMaxCompletionTokens,
   type OpenAiChatMaxOutputTarget,
 } from "./rules/openai-chat-model-rules";
-
-export {
-  isGeminiOpenAiModel,
-  withOptionalGeminiThoughtSignature,
-} from "./rules/openai-chat-platform-transforms";

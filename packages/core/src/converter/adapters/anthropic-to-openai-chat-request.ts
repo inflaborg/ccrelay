@@ -15,10 +15,6 @@ import {
   type AnthropicServerToolDef,
   isServerToolResultBlock,
 } from "../../types";
-import {
-  isGeminiOpenAiModel,
-  withOptionalGeminiThoughtSignature,
-} from "../rules/openai-chat-platform-transforms";
 import { assignOpenAiChatMaxOutput } from "../rules/openai-chat-model-rules";
 import { mapAnthropicWirePathToOpenAiUpstream } from "../paths";
 import { anthropicServerToolDefToOpenAIHosted } from "../tool-schema-conversion";
@@ -178,12 +174,6 @@ export interface OpenAIToolCall {
     name: string;
     arguments: string;
   };
-  // Gemini-specific: thought_signature for extended thinking
-  extra_content?: {
-    google?: {
-      thought_signature?: string;
-    };
-  };
 }
 
 /**
@@ -246,9 +236,8 @@ export function convertRequestToOpenAI(
 
   // Convert each message - a single Anthropic message may produce multiple OpenAI messages
   const requestMessages = anthropic.messages || [];
-  const targetModel = openai.model;
   for (const msg of requestMessages) {
-    const converted = convertMessage(msg, targetModel);
+    const converted = convertMessage(msg);
     messages.push(...converted);
   }
 
@@ -355,7 +344,7 @@ function getThinkLevel(budgetTokens?: number): string {
  * - user message with text/image blocks → single {role:"user"} message
  * - assistant message → joins text into string, extracts tool_calls, extracts thinking
  */
-function convertMessage(msg: MessageParam, targetModel: string): OpenAIMessage[] {
+function convertMessage(msg: MessageParam): OpenAIMessage[] {
   const content = msg.content;
 
   // If content is a string, simple conversion
@@ -383,7 +372,7 @@ function convertMessage(msg: MessageParam, targetModel: string): OpenAIMessage[]
   }
 
   // === ASSISTANT MESSAGES ===
-  return [convertAssistantMessage(content, targetModel)];
+  return [convertAssistantMessage(content)];
 }
 
 /**
@@ -477,16 +466,14 @@ function convertUserMessage(content: ContentBlockParam[]): OpenAIMessage[] {
  * Convert assistant message content blocks to a single OpenAI message.
  * - Joins text blocks into a single string for content
  * - Extracts tool_use blocks into tool_calls
- * - For Gemini: attaches thought_signature to each tool_call function part
- * - For non-Gemini: extracts thinking block as standalone thinking field
+ * - When extended-thinking signatures are present, emits `message.thinking` for upstream transforms
+ *   (e.g. Gemini request sanitization moves signatures onto tool calls).
  */
-function convertAssistantMessage(content: ContentBlockParam[], targetModel: string): OpenAIMessage {
+function convertAssistantMessage(content: ContentBlockParam[]): OpenAIMessage {
   const assistantMessage: OpenAIMessage = {
     role: "assistant",
     content: "",
   };
-
-  const gemini = isGeminiOpenAiModel(targetModel);
 
   // Extract thinking blocks (may be multiple; merge content, use last non-empty signature)
   let thoughtSignature: string | undefined;
@@ -543,7 +530,7 @@ function convertAssistantMessage(content: ContentBlockParam[], targetModel: stri
     assistantMessage.tool_calls = toolCallParts.map(tool => {
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- Type narrowing after filter
       const block = tool as Extract<ContentBlockParam, { type: "tool_use" }>;
-      const base: OpenAIToolCall = {
+      return {
         id: block.id,
         type: "function" as const,
         function: {
@@ -551,15 +538,12 @@ function convertAssistantMessage(content: ContentBlockParam[], targetModel: stri
           arguments: JSON.stringify(block.input || {}),
         },
       };
-      return withOptionalGeminiThoughtSignature(base, gemini, thoughtSignature);
     });
   }
 
-  // For non-Gemini: keep thinking as standalone field
-  // For Gemini: signature is already attached to tool_calls above
-  if (!gemini && combinedThinkingContent && thoughtSignature) {
+  if (thoughtSignature && thinkingParts.length > 0) {
     assistantMessage.thinking = {
-      content: combinedThinkingContent,
+      content: combinedThinkingContent ?? "",
       signature: thoughtSignature,
     };
   }
