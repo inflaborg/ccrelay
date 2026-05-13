@@ -7,29 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-05-12
+
+Custom model list with Cowork alias support, quick-fill UI for manual provider setup, and build tooling fixes.
+
 ### Added
 
 **UI**
 
 - Manual **Add provider** flow: **Quick fill custom models** builds the custom model list and model map from upstream model rows (optional display names) and can seed from the current textarea.
 
+**Protocol**
+
+- Custom model list lines support display names and per-model aliases (triple format). Synthesized model list and detail responses return real wire ids by default, or alias ids when the client sends the `x-ccrelay-model-alias` header.
+
 **Docs**
 
-- README and README_CN: WebP screenshots for custom model configuration, quick-fill, and Cowork **Gateway extra headers** (`x-ccrelay-model-alias`).
+- README and README_CN: WebP screenshots for custom model configuration, quick-fill, and Cowork **Gateway extra headers**.
 
 ### Changed
 
 **UI**
 
 - Add-provider dialog is wider so long model-ID labels wrap cleanly. Provider wizard help text is shorter; the Cowork / Claude Code / Codex option is relabeled and clarified; hash-based aliases in the generated custom list apply only when that option is on.
-
-**Protocol**
-
-- Custom model list lines can carry display names and per-model aliases. Synthesized model list and detail responses return real wire ids by default, or alias ids when the client sends the optional header documented for Cowork.
-
-## [0.2.3] - 2026-05-11 (pre-release)
-
-Pre-release line for 0.2.3.
 
 ### Fixed
 
