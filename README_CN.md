@@ -367,6 +367,20 @@ glm:
 
 内置向导会生成 `真实id;展示名;claude-{hash}` 行及对应 `modelMap`。Cowork 请在 Claude Desktop 中配置该请求头；其他环境可不配置。
 
+#### 自定义模型列表配置界面
+
+![自定义模型列表](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/provider-custom-model-1.webp)
+
+使用**自定义模型快捷填写**，以结构化表单输入上游模型 ID 与展示名，自动生成自定义模型列表和模型映射。
+
+![自定义模型快捷填写](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/provider-custom-model-2.webp)
+
+#### 在 Claude Cowork 中启用别名
+
+在 Claude Desktop 的 **Configure third-party inference** 面板中，将 `x-ccrelay-model-alias` 添加到 **Gateway extra headers**，使模型列表返回别名而非真实 ID。
+
+![Cowork gateway extra headers](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/cowork-ccrelay-model-alias.webp)
+
 ### OpenAI 格式转换
 
 CCRelay 接受三种入站协议，当上游提供商使用不同协议时自动转换：

@@ -366,6 +366,20 @@ With this configuration:
 
 The built-in wizard writes `realId;displayName;claude-{hash}` lines and matching `modelMap` entries. Add `x-ccrelay-model-alias` in Claude Desktop for Cowork; omit it elsewhere.
 
+#### Custom model list configuration UI
+
+![Custom model list](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/provider-custom-model-1.webp)
+
+Use **Quick fill custom models** to enter upstream model IDs and display names in a structured form; the custom model list and model map are generated automatically.
+
+![Quick fill custom models](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/provider-custom-model-2.webp)
+
+#### Enabling alias in Claude Cowork
+
+In Claude Desktop's **Configure third-party inference** panel, add `x-ccrelay-model-alias` to **Gateway extra headers** so that the model list returns aliases instead of real IDs.
+
+![Cowork gateway extra headers](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/cowork-ccrelay-model-alias.webp)
+
 ### OpenAI Format Conversion
 
 CCRelay accepts three inbound protocols and converts when the upstream provider speaks a different wire:
