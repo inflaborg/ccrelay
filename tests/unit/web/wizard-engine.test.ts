@@ -84,6 +84,20 @@ describe("buildModelConfig", () => {
     expect(c.modelMap.some((m: ModelMapEntry) => m.pattern === "claude-*")).toBe(true);
     const c2 = buildModelConfig(["m"], false, true);
     expect(c2.modelMap.some((m: ModelMapEntry) => m.pattern === "claude-*")).toBe(false);
+    expect(c2.modelMap).toEqual([]);
+    expect(c2.useCustomModelsList).toBe(true);
+    if (c2.useCustomModelsList) {
+      expect(c2.customModelsList).toEqual(["m"]);
+    }
+  });
+
+  it("no alias in customModelsList when claudeSupport is off but useCustomModels is on", () => {
+    const c = buildModelConfig(["glm-5.1;GLM 5.1"], false, true);
+    expect(c.useCustomModelsList).toBe(true);
+    if (c.useCustomModelsList) {
+      expect(c.customModelsList).toEqual(["glm-5.1;GLM 5.1"]);
+    }
+    expect(c.modelMap).toEqual([]);
   });
 
   it("disables custom list but keeps identity mappings when useCustomModels is false", () => {

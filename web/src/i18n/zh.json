@@ -270,7 +270,7 @@
       "baseUrl": "端点 URL",
       "models": "上游模型 ID",
       "customModels": "自定义模型列表",
-      "claudeSupport": "支持 Claude Code / Codex"
+      "claudeSupport": "支持 Claude Cowork / Claude Code / Codex"
     },
     "models": {
       "referenceTitle": "端点模型（对照）",
@@ -309,8 +309,8 @@
       "azureEndpoint": "Azure OpenAI 基础 URL，例如 https://…cognitiveservices.azure.com/openai/v1",
       "customEndpoint": "填写上游基础 URL（需与所选协议一致：OpenAI Chat 或 Anthropic Messages）。",
       "presetEndpointDefault": "默认为官方 API 地址；若使用其它网关或代理请修改。",
-      "models": "每行一个上游模型 id，或 id;展示名（仅第一个分号）。未开启自定义列表时，映射使用 anthropic/{id}；开启后 YAML 中每行为 `真实id;展示;claude-{hash}`，GET /models 默认返回真实 id，客户端带请求头 `x-ccrelay-model-alias` 时对外 id 为别名；modelMap 将 claude-{hash} 指向上游 id。",
-      "claudeSupport": "将 claude-* 与 gpt-* 映射到第一个模型，供 Claude Code 与 Codex 使用。"
+      "models": "每行一个上游模型 id。使用 id;展示名 可设置自定义显示名（分号分隔 id 与名称）。",
+      "claudeSupport": "为 Cowork 客户端启用别名映射：每个模型在列表中获得 claude-{hash} 别名；发送 x-ccrelay-model-alias 头的客户端将看到别名而非真实 id。同时添加 claude-* 与 gpt-* 通配映射到第一个模型，供 Claude Code 和 Codex 使用。"
     },
     "confirm": {
       "lead": "将创建以下提供商：",

@@ -270,7 +270,7 @@
       "baseUrl": "Endpoint URL",
       "models": "Upstream model IDs",
       "customModels": "Custom model list",
-      "claudeSupport": "Support Claude Code / Codex"
+      "claudeSupport": "Support Claude Cowork / Claude Code / Codex"
     },
     "models": {
       "referenceTitle": "Endpoint models",
@@ -309,8 +309,8 @@
       "azureEndpoint": "Your Azure OpenAI base URL, e.g. https://…cognitiveservices.azure.com/openai/v1",
       "customEndpoint": "Paste your upstream base URL (must match the protocol you chose: OpenAI Chat or Anthropic Messages).",
       "presetEndpointDefault": "Official API URL by default; edit if you use another host or proxy.",
-      "models": "One upstream model id per line, or id;display name (first semicolon only). Without custom list, model map uses anthropic/{id}. With custom list, YAML stores realId;display;claude-{hash} per line; GET /models returns real ids unless the client sends header x-ccrelay-model-alias (then wire id is the alias). modelMap maps claude-{hash} to the upstream id.",
-      "claudeSupport": "Adds claude-* and gpt-* patterns mapped to the first model for Claude Code and Codex."
+      "models": "One upstream model id per line. Use id;display name to set a custom display name (semicolon separates id from name).",
+      "claudeSupport": "Enables alias mapping for Cowork clients: each model gets a claude-{hash} alias in the model list; clients sending x-ccrelay-model-alias header will see aliases instead of real ids. Also adds claude-* and gpt-* wildcard patterns mapped to the first model for Claude Code and Codex."
     },
     "confirm": {
       "lead": "These providers will be created:",

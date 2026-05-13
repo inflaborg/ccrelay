@@ -136,22 +136,35 @@ export function buildModelConfig(
   const modelMap: ModelMapEntry[] = [];
 
   if (useCustomModels) {
-    parsed.forEach(m => {
-      const alias = `claude-${stableModelHash(m.upstreamId)}`;
-      modelMap.push({ pattern: alias, model: m.upstreamId });
-    });
-    if (claudeSupport && parsed.length > 0) {
-      const first = parsed[0].upstreamId;
-      modelMap.push({ pattern: "claude-*", model: first }, { pattern: "gpt-*", model: first });
+    if (claudeSupport) {
+      parsed.forEach(m => {
+        const alias = `claude-${stableModelHash(m.upstreamId)}`;
+        modelMap.push({ pattern: alias, model: m.upstreamId });
+      });
+      if (parsed.length > 0) {
+        const first = parsed[0].upstreamId;
+        modelMap.push({ pattern: "claude-*", model: first }, { pattern: "gpt-*", model: first });
+      }
+      const customModelsList = parsed.map(m => {
+        const alias = `claude-${stableModelHash(m.upstreamId)}`;
+        const real = m.upstreamId;
+        const dn = m.displayName;
+        if (dn === real) {
+          return `${real};;${alias}`;
+        }
+        return `${real};${dn};${alias}`;
+      });
+      return {
+        useCustomModelsList: true,
+        customModelsList,
+        modelMap,
+        modelMappingEnabled: true,
+      };
     }
     const customModelsList = parsed.map(m => {
-      const alias = `claude-${stableModelHash(m.upstreamId)}`;
       const real = m.upstreamId;
       const dn = m.displayName;
-      if (dn === real) {
-        return `${real};;${alias}`;
-      }
-      return `${real};${dn};${alias}`;
+      return dn === real ? real : `${real};${dn}`;
     });
     return {
       useCustomModelsList: true,
