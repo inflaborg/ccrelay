@@ -100,6 +100,56 @@ export function stableModelHash(upstreamId: string): string {
   return fnv1a32(upstreamId).toString(16).padStart(8, "0").slice(-6);
 }
 
+/**
+ * Parse one `customModelsList` line into real id + display name for editor UI (alias segment ignored).
+ * Supports `id`, `id;display`, `id;display;alias`, and `id;;alias`. Aligns with server `parseCustomModelLine`.
+ */
+export function parseCustomModelLineForUi(
+  line: string
+): { realId: string; displayName: string } | null {
+  const s = line.trim();
+  if (!s) {
+    return null;
+  }
+  const i1 = s.indexOf(";");
+  if (i1 === -1) {
+    return { realId: s, displayName: "" };
+  }
+  const id = s.slice(0, i1).trim();
+  if (!id) {
+    return null;
+  }
+  const rest = s.slice(i1 + 1);
+  const i2 = rest.indexOf(";");
+  let resolvedDisplay: string;
+  if (i2 === -1) {
+    const displayPart = rest.trim();
+    resolvedDisplay = displayPart.length > 0 ? displayPart : id;
+  } else {
+    const displayPart = rest.slice(0, i2).trim();
+    resolvedDisplay = displayPart.length > 0 ? displayPart : id;
+  }
+  return { realId: id, displayName: resolvedDisplay === id ? "" : resolvedDisplay };
+}
+
+/** Non-empty lines from custom models textarea → rows for Cowork alias helper seed. */
+export function helperRowsSeedFromCustomModelsText(
+  text: string
+): { realId: string; displayName: string }[] {
+  const lines = text
+    .split("\n")
+    .map(l => l.trim())
+    .filter(l => l.length > 0);
+  const out: { realId: string; displayName: string }[] = [];
+  for (const line of lines) {
+    const p = parseCustomModelLineForUi(line);
+    if (p) {
+      out.push(p);
+    }
+  }
+  return out;
+}
+
 /** Split wizard model line on first `;` (id;display name; empty right falls back to id). */
 function parseWizardModelLine(line: string): { upstreamId: string; displayName: string } {
   const s = line.trim();

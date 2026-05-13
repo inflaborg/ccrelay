@@ -976,6 +976,7 @@ export default function Providers() {
       <CoworkAliasHelper
         key={coworkHelperKey}
         open={coworkHelperOpen}
+        initialCustomModelsText={customModelsText}
         onOpenChange={setCoworkHelperOpen}
         onApply={handleCoworkHelperApply}
       />

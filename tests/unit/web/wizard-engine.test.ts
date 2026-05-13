@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildModelConfig,
   generateProviders,
+  helperRowsSeedFromCustomModelsText,
   initSelections,
+  parseCustomModelLineForUi,
   stableModelHash,
 } from "../../../web/src/features/providers/wizard/engine";
 import {
@@ -22,6 +24,48 @@ describe("stableModelHash", () => {
 
   it("returns 6 lowercase hex chars", () => {
     expect(stableModelHash("x")).toMatch(/^[0-9a-f]{6}$/);
+  });
+});
+
+describe("parseCustomModelLineForUi", () => {
+  it("parses plain id", () => {
+    expect(parseCustomModelLineForUi("glm-5.1")).toEqual({ realId: "glm-5.1", displayName: "" });
+  });
+
+  it("parses id;display", () => {
+    expect(parseCustomModelLineForUi("glm-5.1;GLM 5.1")).toEqual({
+      realId: "glm-5.1",
+      displayName: "GLM 5.1",
+    });
+  });
+
+  it("parses id;;alias as display equals id", () => {
+    expect(parseCustomModelLineForUi(`glm-5.1;;claude-${stableModelHash("glm-5.1")}`)).toEqual({
+      realId: "glm-5.1",
+      displayName: "",
+    });
+  });
+
+  it("parses triple with display and alias", () => {
+    expect(parseCustomModelLineForUi("gpt-5.4;GPT 5.4;claude-abc001")).toEqual({
+      realId: "gpt-5.4",
+      displayName: "GPT 5.4",
+    });
+  });
+
+  it("returns null for blank", () => {
+    expect(parseCustomModelLineForUi("   ")).toBeNull();
+    expect(parseCustomModelLineForUi(";x")).toBeNull();
+  });
+});
+
+describe("helperRowsSeedFromCustomModelsText", () => {
+  it("maps non-empty lines to seed rows", () => {
+    expect(helperRowsSeedFromCustomModelsText("a\nb;B\n\n  glm-5.1;GLM 5.1;claude-x  ")).toEqual([
+      { realId: "a", displayName: "" },
+      { realId: "b", displayName: "B" },
+      { realId: "glm-5.1", displayName: "GLM 5.1" },
+    ]);
   });
 });
 

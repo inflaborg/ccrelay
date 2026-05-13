@@ -12,10 +12,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import type { ModelMapEntry } from "@/types/api";
-import { buildModelConfig } from "./wizard/engine";
+import { buildModelConfig, helperRowsSeedFromCustomModelsText } from "./wizard/engine";
 
 export interface CoworkAliasHelperProps {
   open: boolean;
+  /** Current custom models textarea value; used to seed rows when the dialog mounts. */
+  initialCustomModelsText: string;
   onOpenChange: (open: boolean) => void;
   onApply: (result: { customModelsList: string[]; modelMap: ModelMapEntry[] }) => void;
 }
@@ -26,9 +28,26 @@ function newRow(): HelperRow {
   return { id: crypto.randomUUID(), realId: "", displayName: "" };
 }
 
-export function CoworkAliasHelper({ open, onOpenChange, onApply }: CoworkAliasHelperProps) {
+function rowsFromSeed(text: string): HelperRow[] {
+  const seed = helperRowsSeedFromCustomModelsText(text);
+  if (seed.length === 0) {
+    return [newRow()];
+  }
+  return seed.map(s => ({
+    id: crypto.randomUUID(),
+    realId: s.realId,
+    displayName: s.displayName,
+  }));
+}
+
+export function CoworkAliasHelper({
+  open,
+  initialCustomModelsText,
+  onOpenChange,
+  onApply,
+}: CoworkAliasHelperProps) {
   const { t } = useTranslation();
-  const [rows, setRows] = useState<HelperRow[]>([newRow()]);
+  const [rows, setRows] = useState<HelperRow[]>(() => rowsFromSeed(initialCustomModelsText));
   const lastRealIdInputRef = useRef<HTMLInputElement | null>(null);
 
   const preview = useMemo(() => {
