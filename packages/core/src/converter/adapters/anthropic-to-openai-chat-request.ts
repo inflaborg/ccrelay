@@ -40,6 +40,11 @@ export interface AnthropicMessageRequest {
   thinking?: {
     type: string;
     budget_tokens?: number;
+    display?: string;
+  };
+  output_config?: {
+    effort?: string;
+    format?: Record<string, unknown>;
   };
 }
 
@@ -84,10 +89,8 @@ export interface OpenAIMessageRequest {
   tools?: OpenAITool[];
   tool_choice?: OpenAIToolChoice;
   stop?: string | string[];
-  reasoning?: {
-    effort?: string;
-    enabled?: boolean;
-  };
+  /** Chat Completions wire: top-level string (OpenAI / Azure / Gemini compat). */
+  reasoning_effort?: string;
 }
 
 /**
@@ -289,14 +292,20 @@ export function convertRequestToOpenAI(
     openai.stop = anthropic.stop_sequences;
   }
 
-  // thinking -> reasoning (conditionally, based on target model)
-  // Gemini's OpenAI-compatible API rejects unknown fields like "reasoning",
-  // so only include it for providers that support it.
-  if (anthropic.thinking && !isGeminiOpenAiModel(openai.model)) {
-    openai.reasoning = {
-      effort: getThinkLevel(anthropic.thinking.budget_tokens),
-      enabled: anthropic.thinking.type === "enabled",
-    };
+  // thinking + output_config.effort -> top-level `reasoning_effort` (Chat Completions wire shape).
+  // Gemini: `geminiChatSanitize` may normalize the string per model rules.
+  if (anthropic.thinking) {
+    const t = anthropic.thinking.type?.toLowerCase() ?? "";
+    if (t === "disabled") {
+      // omit reasoning_effort — upstream has thinking turned off
+    } else if (t === "adaptive") {
+      openai.reasoning_effort =
+        mapAnthropicEffortToOpenAI(anthropic.output_config?.effort) ?? "high";
+    } else {
+      // `enabled`, empty/unknown type: prefer output_config.effort, else budget_tokens heuristic
+      const fromConfig = mapAnthropicEffortToOpenAI(anthropic.output_config?.effort);
+      openai.reasoning_effort = fromConfig ?? getThinkLevel(anthropic.thinking.budget_tokens);
+    }
   }
 
   const newPath = mapAnthropicWirePathToOpenAiUpstream(originalPath, "POST");
@@ -306,6 +315,18 @@ export function convertRequestToOpenAI(
     originalPath,
     newPath,
   };
+}
+
+/** Map Anthropic `output_config.effort` to OpenAI `reasoning_effort` (OpenAI has no `max`). */
+function mapAnthropicEffortToOpenAI(effort?: string): string | undefined {
+  if (effort === undefined || effort === "") {
+    return undefined;
+  }
+  const e = effort.toLowerCase();
+  if (e === "max") {
+    return "high";
+  }
+  return e;
 }
 
 /**

@@ -33,8 +33,8 @@ function sanitizeMessageRecord(msg: Record<string, unknown>): void {
 }
 
 /**
- * Strip top-level `reasoning`, message `thinking`, `cache_control` on content parts,
- * and `extra_content` on tool_calls — fields Azure OpenAI Chat rejects from bridged requests.
+ * Strip legacy nested `reasoning`, message `thinking`, `cache_control` on content parts,
+ * and `extra_content` on tool_calls. Top-level `reasoning_effort` (Chat Completions wire) is kept.
  */
 export function azureChatSanitize(data: Record<string, unknown>): void {
   delete data.reasoning;

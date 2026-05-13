@@ -8,7 +8,7 @@
  * - User with text/image → single user message
  * - Assistant → joins text blocks, extracts tool_calls, extracts thinking
  * - System supports both string and array forms
- * - OpenAI compatibility: handles reasoning for Gemini models
+ * - OpenAI compatibility: handles reasoning_effort for Gemini models
  */
 
 import { describe, it, expect } from "vitest";
@@ -976,8 +976,8 @@ describe("converter: anthropic-to-openai-chat-request", () => {
     });
   });
 
-  describe("thinking -> reasoning conversion", () => {
-    it("should add reasoning field for non-Gemini models", () => {
+  describe("thinking -> reasoning_effort conversion", () => {
+    it("should add reasoning_effort for non-Gemini models", () => {
       const request: AnthropicMessageRequest = {
         model: "claude-3-5-sonnet-20241022",
         max_tokens: 4096,
@@ -987,13 +987,10 @@ describe("converter: anthropic-to-openai-chat-request", () => {
 
       const result = convertRequestToOpenAI(request, basePath);
 
-      expect(result.request.reasoning).toEqual({
-        effort: "high",
-        enabled: true,
-      });
+      expect(result.request.reasoning_effort).toBe("high");
     });
 
-    it("should not add reasoning field for Gemini models", () => {
+    it("should add reasoning_effort for Gemini models (sanitizer may normalize)", () => {
       const request: AnthropicMessageRequest = {
         model: "gemini-2.0-flash-exp",
         max_tokens: 4096,
@@ -1003,23 +1000,88 @@ describe("converter: anthropic-to-openai-chat-request", () => {
 
       const result = convertRequestToOpenAI(request, basePath);
 
-      expect(result.request.reasoning).toBeUndefined();
+      expect(result.request.reasoning_effort).toBe("high");
     });
 
-    it("should default reasoning effort to medium when budget_tokens is undefined", () => {
+    it("should default reasoning_effort to medium when budget_tokens is undefined", () => {
       const request: AnthropicMessageRequest = {
         model: "claude-3-5-sonnet-20241022",
         max_tokens: 4096,
-        thinking: { type: "enabled", budget_tokens: 5000 },
+        thinking: { type: "enabled" },
         messages: [],
       };
 
       const result = convertRequestToOpenAI(request, basePath);
 
-      expect(result.request.reasoning).toEqual({
-        effort: "high",
-        enabled: true,
-      });
+      expect(result.request.reasoning_effort).toBe("medium");
+    });
+
+    it("maps adaptive thinking with output_config.effort medium to reasoning_effort medium", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-opus-4-7",
+        max_tokens: 4096,
+        thinking: { type: "adaptive" },
+        output_config: { effort: "medium" },
+        messages: [],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.reasoning_effort).toBe("medium");
+    });
+
+    it("maps adaptive thinking without output_config to reasoning_effort high", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-opus-4-7",
+        max_tokens: 4096,
+        thinking: { type: "adaptive" },
+        messages: [],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.reasoning_effort).toBe("high");
+    });
+
+    it("maps output_config effort max to reasoning_effort high", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-opus-4-7",
+        max_tokens: 4096,
+        thinking: { type: "adaptive" },
+        output_config: { effort: "max" },
+        messages: [],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.reasoning_effort).toBe("high");
+    });
+
+    it("maps output_config effort xhigh through to reasoning_effort", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-opus-4-7",
+        max_tokens: 4096,
+        thinking: { type: "adaptive" },
+        output_config: { effort: "xhigh" },
+        messages: [],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.reasoning_effort).toBe("xhigh");
+    });
+
+    it("does not add reasoning_effort when thinking.type is disabled", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 4096,
+        thinking: { type: "disabled" },
+        messages: [],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.reasoning_effort).toBeUndefined();
     });
   });
 
@@ -1200,7 +1262,7 @@ describe("converter: anthropic-to-openai-chat-request", () => {
 
       const result = convertRequestToOpenAI(request, basePath);
 
-      expect(result.request.reasoning?.effort).toBe("low");
+      expect(result.request.reasoning_effort).toBe("low");
     });
 
     it("should map budget_tokens <= 8192 to medium effort", () => {
@@ -1213,7 +1275,7 @@ describe("converter: anthropic-to-openai-chat-request", () => {
 
       const result = convertRequestToOpenAI(request, basePath);
 
-      expect(result.request.reasoning?.effort).toBe("medium");
+      expect(result.request.reasoning_effort).toBe("medium");
     });
 
     it("should map budget_tokens > 8192 to high effort", () => {
@@ -1226,7 +1288,7 @@ describe("converter: anthropic-to-openai-chat-request", () => {
 
       const result = convertRequestToOpenAI(request, basePath);
 
-      expect(result.request.reasoning?.effort).toBe("high");
+      expect(result.request.reasoning_effort).toBe("high");
     });
 
     it("should default to medium when budget_tokens is undefined", () => {
@@ -1239,12 +1301,12 @@ describe("converter: anthropic-to-openai-chat-request", () => {
 
       const result = convertRequestToOpenAI(request, basePath);
 
-      expect(result.request.reasoning?.effort).toBe("medium");
+      expect(result.request.reasoning_effort).toBe("medium");
     });
   });
 
   describe("Gemini model detection", () => {
-    it("should not add reasoning field for gemini-2.0-flash-exp", () => {
+    it("should add reasoning_effort for gemini-2.0-flash-exp", () => {
       const request: AnthropicMessageRequest = {
         model: "gemini-2.0-flash-exp",
         max_tokens: 4096,
@@ -1254,10 +1316,10 @@ describe("converter: anthropic-to-openai-chat-request", () => {
 
       const result = convertRequestToOpenAI(request, basePath);
 
-      expect(result.request.reasoning).toBeUndefined();
+      expect(result.request.reasoning_effort).toBe("high");
     });
 
-    it("should not add reasoning field for GEMINI-2.0-flash (uppercase)", () => {
+    it("should add reasoning_effort for GEMINI-2.0-flash (uppercase)", () => {
       const request: AnthropicMessageRequest = {
         model: "GEMINI-2.0-flash",
         max_tokens: 4096,
@@ -1267,10 +1329,10 @@ describe("converter: anthropic-to-openai-chat-request", () => {
 
       const result = convertRequestToOpenAI(request, basePath);
 
-      expect(result.request.reasoning).toBeUndefined();
+      expect(result.request.reasoning_effort).toBe("high");
     });
 
-    it("should not add reasoning field for gemini-pro", () => {
+    it("should add reasoning_effort for gemini-pro", () => {
       const request: AnthropicMessageRequest = {
         model: "gemini-pro",
         max_tokens: 4096,
@@ -1280,10 +1342,10 @@ describe("converter: anthropic-to-openai-chat-request", () => {
 
       const result = convertRequestToOpenAI(request, basePath);
 
-      expect(result.request.reasoning).toBeUndefined();
+      expect(result.request.reasoning_effort).toBe("high");
     });
 
-    it("should add reasoning field for non-Gemini models", () => {
+    it("should add reasoning_effort for non-Gemini models", () => {
       const request: AnthropicMessageRequest = {
         model: "claude-3-5-sonnet-20241022",
         max_tokens: 4096,
@@ -1293,8 +1355,7 @@ describe("converter: anthropic-to-openai-chat-request", () => {
 
       const result = convertRequestToOpenAI(request, basePath);
 
-      expect(result.request.reasoning).toBeDefined();
-      expect(result.request.reasoning?.enabled).toBe(true);
+      expect(result.request.reasoning_effort).toBe("high");
     });
   });
 

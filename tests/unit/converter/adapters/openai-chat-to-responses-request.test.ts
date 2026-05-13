@@ -74,4 +74,14 @@ describe("convertOpenAIMessageRequestToResponsesRequest", () => {
     const r = convertOpenAIMessageRequestToResponsesRequest(chat);
     expect(r.request.instructions).toBe("You are helpful.");
   });
+
+  it("maps reasoning_effort to Responses reasoning.effort", () => {
+    const chat: OpenAIMessageRequest = {
+      model: "gpt-5",
+      messages: [{ role: "user", content: "Hi" }],
+      reasoning_effort: "medium",
+    };
+    const r = convertOpenAIMessageRequestToResponsesRequest(chat);
+    expect(r.request.reasoning).toEqual({ effort: "medium" });
+  });
 });

@@ -13,7 +13,7 @@ export function isGeminiOpenAiModel(model: string): boolean {
 
 /**
  * Gemini OpenAI-compat expects extended-thinking signatures on tool calls, not a top-level
- * `reasoning` field or a standalone assistant `thinking` blob.
+ * `reasoning_effort` field or a standalone assistant `thinking` blob.
  */
 export function withOptionalGeminiThoughtSignature(
   toolCall: OpenAIToolCall,

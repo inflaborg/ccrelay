@@ -60,6 +60,7 @@ export const PLATFORM_TRANSFORM_RULES: readonly PlatformTransformRule[] = [
     messages: "glm-flatten-content",
     responses: "glm-web-search-response",
     anthropicSse: "glm-web-search-prime-normalize",
+    requestSanitize: "glm-chat-sanitize",
   },
   {
     provider: "xiaomimimo",

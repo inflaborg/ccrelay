@@ -17,6 +17,7 @@ import { mimoWebSearchTransform } from "./xiaomimimo/tools";
 import { mimoAnnotationsWebSearchResponseTransform } from "./xiaomimimo/responses";
 import type { PlatformRequestOverrideTransform } from "./rules";
 import { azureChatSanitize } from "./azure-openai/chat-sanitize";
+import { glmChatSanitize } from "./glm/request-sanitize";
 import { geminiChatSanitize } from "./gemini/request-sanitize";
 import { minimaxChatSanitize } from "./minimax/request-sanitize";
 import { minimaxReasoningDetailsResponseTransform } from "./minimax/response-reasoning";
@@ -76,6 +77,7 @@ export const REQUEST_SANITIZE_REGISTRY: Readonly<Record<string, PlatformRequestS
   {
     "azure-chat-sanitize": azureChatSanitize,
     "gemini-chat-sanitize": geminiChatSanitize,
+    "glm-chat-sanitize": glmChatSanitize,
     "minimax-chat-sanitize": minimaxChatSanitize,
   };
 
@@ -92,7 +94,12 @@ export {
   sanitizeAzureResponsesRequestTools,
 } from "./azure-openai/responses-request-tools";
 export { azureChatSanitize } from "./azure-openai/chat-sanitize";
-export { geminiChatSanitize } from "./gemini/request-sanitize";
+export { glmChatSanitize } from "./glm/request-sanitize";
+export {
+  canGeminiDisableThinking,
+  geminiChatSanitize,
+  normalizeGeminiEffort,
+} from "./gemini/request-sanitize";
 export { minimaxChatSanitize } from "./minimax/request-sanitize";
 export { minimaxReasoningDetailsResponseTransform } from "./minimax/response-reasoning";
 
