@@ -7,15 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-05-13 (pre-release)
+
+Pre-release line for 0.2.4.
+
 ## [0.2.3] - 2026-05-12
 
-Custom model list with Cowork alias support, quick-fill UI for manual provider setup, and build tooling fixes.
+Cowork-safe model aliases with an optional client header, quick-fill for custom model lists, optional **GLM (Z.ai)** web search next to Tavily, and clearer **MiniMax** reasoning handling for Anthropic clients. Build scripts for desktop releases are fixed.
 
 ### Added
 
 **UI**
 
 - Manual **Add provider** flow: **Quick fill custom models** builds the custom model list and model map from upstream model rows (optional display names) and can seed from the current textarea.
+
+**Config**
+
+- Built-in web search adds a **GLM (Z.ai)** backend alongside Tavily: set API key, endpoint, OpenAI Chat or Anthropic protocol, region, and optional default search backend in **Capabilities** (or YAML).
 
 **Protocol**
 
@@ -32,6 +40,10 @@ Custom model list with Cowork alias support, quick-fill UI for manual provider s
 - Add-provider dialog is wider so long model-ID labels wrap cleanly. Provider wizard help text is shorter; the Cowork / Claude Code / Codex option is relabeled and clarified; hash-based aliases in the generated custom list apply only when that option is on.
 
 ### Fixed
+
+**Protocol**
+
+- **MiniMax**: upstream reasoning output maps to Anthropic-style thinking blocks more reliably for streamed and non-streamed replies.
 
 **Build**
 

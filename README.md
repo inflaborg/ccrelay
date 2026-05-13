@@ -28,7 +28,7 @@
   - [Claude Desktop / Cowork Model ID Restrictions](#claude-desktop--cowork-model-id-restrictions)
   - [OpenAI Format Conversion](#openai-format-conversion)
   - [Web UI Dashboard](#web-ui-dashboard)
-- [External web search (Tavily)](#external-web-search-tavily)
+- [External web search](#external-web-search)
 - [Configuration](#configuration)
 - [API Endpoints](#api-endpoints)
 - [Commands](#commands)
@@ -68,7 +68,7 @@
 
 **External web search**
 
-- Optional **Tavily**-backed handling of Anthropic-style **web search** tool traffic for provider IDs you allowlist; configure in `config.yaml` or the dashboard **Capabilities** tab
+- Optional local handling of Anthropic-style **web search** tool traffic for provider IDs you allowlist, using **Tavily** or **GLM (Z.ai)** as the retrieval backend; configure in `config.yaml` or the dashboard **Capabilities** tab
 
 ### Verified upstreams (by host)
 
@@ -334,7 +334,7 @@ The alias must be `claude-` followed by a single token **without additional hyph
 
 **Custom model list** (`customModelsList`): each line is `realModelId;displayName;alias` (or `realModelId;;alias` when display equals the real id). The real id is what upstream expects; `alias` is the Cowork-safe id.
 
-**Cowork**: In Claude Desktop, add a custom request header `x-ccrelay-model-alias` (any value except `false` / `0` / `no`). With this header, `GET /models` and `GET /models/{id}` return **alias** as the wire `id`. Without the header, the same list returns **real** model ids (for other clients).
+**Cowork**: In Claude Desktop, add a custom request header `x-ccrelay-model-alias` with any value (for example `1`). With this header, `GET /models` and `GET /models/{id}` return **alias** as the wire `id`. Without the header, the same list returns **real** model ids (for other clients).
 
 **Model mapping** (`modelMap`): map each alias to the real upstream model id. Place specific rules before wildcard `claude-*` / `gpt-*` catch-alls.
 
@@ -423,7 +423,7 @@ Built-in web dashboard accessible via Command Palette → `CCRelay: Open Dashboa
 
 - **Dashboard** — server status, current provider, token usage, performance metrics (TTFB, P50/P90 latency, output TPS) with time range selector
 - **Providers** — view, switch, duplicate, import/export providers
-- **Capabilities** — optional **Tavily** web search: API key, search depth, max results, and which providers answer web search locally
+- **Capabilities** — optional web search backends (**Tavily** and/or **GLM (Z.ai)**): API keys, GLM endpoint and protocol, default backend, and which providers answer web search locally
 - **Logs** — request/response log viewer with token columns, TTFB, output TPS, and model mapping display (hidden when logging is disabled)
 - **Settings** — manage YAML config in the UI; routing and concurrency hot-reload on save, server and logging changes require a restart
 - **Client configuration** — write Claude Code env vars and Codex config from the UI
@@ -532,16 +532,33 @@ If `sqlite3` cannot be resolved, the proxy runs without log persistence (warning
 | `logging.database.password` | `""`        | Password (supports `${ENV_VAR}`) |
 | `logging.database.ssl`      | `false`     | Enable SSL                       |
 
-### External web search (Tavily)
+### External web search
 
-Optional **local handling** of Anthropic-style **web search** (server tool) requests for selected providers. When configured, CCRelay runs live retrieval through the **[Tavily](https://tavily.com/)** Search API and returns a synthesized assistant response for that turn, so the upstream model does not need to implement the tool itself.
+Optional **local handling** of Anthropic-style **web search** (server tool) requests for selected providers. CCRelay can run live retrieval through **[Tavily](https://tavily.com/)** or through a **GLM (Z.ai)** search-capable model endpoint, then return a synthesized assistant response for that turn so the upstream chat model does not need to implement the tool itself.
 
-| Setting                        | Description                                                   |
-| ------------------------------ | ------------------------------------------------------------- |
-| `webSearch.tavily.apiKey`      | Tavily API key. Supports `${ENV_VAR}`.                        |
+| Setting                         | Description                                                                 |
+| ------------------------------- | ----------------------------------------------------------------------------- |
+| `webSearch.providers`           | Provider IDs (keys under `providers:`) that use this feature.               |
+| `webSearch.defaultSearchBackend` | Optional: `tavily` or `glm` (defaults when not inferred per request).        |
+
+#### Tavily
+
+| Setting                         | Description                                                   |
+| ------------------------------- | ------------------------------------------------------------- |
+| `webSearch.tavily.apiKey`       | Tavily API key. Supports `${ENV_VAR}`.                        |
 | `webSearch.tavily.searchDepth` | `basic` or `advanced` (optional).                             |
 | `webSearch.tavily.maxResults`  | Number of results, 1–10 (optional).                           |
-| `webSearch.providers`          | Provider IDs (keys under `providers:`) that use this feature. |
+
+#### GLM (Z.ai)
+
+| Setting                      | Description                                                                 |
+| ---------------------------- | ----------------------------------------------------------------------------- |
+| `webSearch.glm.apiKey`       | Z.ai API key. Supports `${ENV_VAR}`.                                         |
+| `webSearch.glm.endpoint`     | Optional override; otherwise derived from `protocol`, `region`, and `coding`. |
+| `webSearch.glm.protocol`     | `openai` (Chat Completions) or `anthropic` (Messages).                       |
+| `webSearch.glm.region`     | `intl` or `cn`.                                                               |
+| `webSearch.glm.coding`     | Optional: prefer coding-oriented GLM host when the default endpoint is used. |
+| `webSearch.glm.model`      | Optional model id (defaults apply when omitted).                            |
 
 You may use the top-level key `web_search` instead of `webSearch` (same nested shape).
 
@@ -551,6 +568,11 @@ webSearch:
     apiKey: "${TAVILY_API_KEY}"
     searchDepth: basic
     maxResults: 5
+  glm:
+    apiKey: "${GLM_API_KEY}"
+    protocol: openai
+    region: intl
+  defaultSearchBackend: tavily
   providers:
     - glm
 ```
