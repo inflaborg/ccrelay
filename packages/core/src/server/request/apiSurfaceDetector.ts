@@ -37,6 +37,9 @@ export function detectApiSurface(method: string, path: string): ApiSurface | nul
   if (p === "/v1/models" && m === "GET") {
     return "openai";
   }
+  if (m === "GET" && p.startsWith("/v1/models/") && p.length > "/v1/models/".length) {
+    return "openai";
+  }
   if (p === "/v1/responses" && m === "POST") {
     return "openai_responses";
   }
@@ -54,6 +57,9 @@ export function detectApiSurface(method: string, path: string): ApiSurface | nul
   if (p === "/openai/models" && m === "GET") {
     return "openai";
   }
+  if (m === "GET" && p.startsWith("/openai/models/") && p.length > "/openai/models/".length) {
+    return "openai";
+  }
   if (p === "/openai/responses" && m === "POST") {
     return "openai_responses";
   }
@@ -63,6 +69,13 @@ export function detectApiSurface(method: string, path: string): ApiSurface | nul
     return "anthropic";
   }
   if (p === "/anthropic/v1/models" && m === "GET") {
+    return "anthropic";
+  }
+  if (
+    m === "GET" &&
+    p.startsWith("/anthropic/v1/models/") &&
+    p.length > "/anthropic/v1/models/".length
+  ) {
     return "anthropic";
   }
   if (p === "/anthropic/v1/messages/count_tokens" && m === "POST") {

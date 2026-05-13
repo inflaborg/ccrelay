@@ -850,7 +850,7 @@ export default function Providers() {
                     <label className="text-xs font-medium">{t("providers.modal.modelIds")}</label>
                     <textarea
                       className="w-full px-2 py-1 text-xs border rounded-md bg-background font-mono"
-                      placeholder={"claude-3-5-sonnet-20241022\ngpt-4"}
+                      placeholder={"claude-3-5-sonnet-20241022;Sonnet 3.5\ngpt-4"}
                       rows={5}
                       value={customModelsText}
                       onChange={e => setCustomModelsText(e.target.value)}

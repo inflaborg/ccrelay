@@ -47,6 +47,33 @@ describe("BodyProcessor cross-protocol upstream path", () => {
     expect(routing.targetUrl).toBe("https://example.com/v1/models");
   });
 
+  it("rewrites anthropic GET /v1/models/{id} to OpenAI upstream /models/{id}", () => {
+    const routing = makeRouting({
+      path: "/anthropic/v1/models/gpt-4",
+      targetUrl: "https://example.com/v1/v1/models/gpt-4",
+      targetPath: "/v1/models/gpt-4",
+    });
+    const proc = new BodyProcessor();
+    proc.process(Buffer.alloc(0), routing, false);
+    expect(routing.targetPath).toBe("/models/gpt-4");
+    expect(routing.targetUrl).toBe("https://example.com/v1/models/gpt-4");
+  });
+
+  it("rewrites OpenAI GET /models/{id} to anthropic upstream /v1/models/{id}", () => {
+    const routing = makeRouting({
+      path: "/openai/models/claude-3",
+      provider: anthropicUpstream,
+      targetPath: "/models/claude-3",
+      targetUrl: "https://api.anthropic.com/models/claude-3",
+      isOpenAIProvider: false,
+      clientSurface: "openai",
+    });
+    const proc = new BodyProcessor();
+    proc.process(Buffer.alloc(0), routing, false);
+    expect(routing.targetPath).toBe("/v1/models/claude-3");
+    expect(routing.targetUrl).toBe("https://api.anthropic.com/v1/models/claude-3");
+  });
+
   it("rewrites OpenAI GET /models to anthropic upstream /v1/models", () => {
     const routing = makeRouting({
       path: "/openai/models",

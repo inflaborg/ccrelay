@@ -35,6 +35,9 @@ export function mapAnthropicWirePathToOpenAiUpstream(path: string, method: strin
   if (m === "GET" && p === "/v1/models") {
     return "/models";
   }
+  if (m === "GET" && p.startsWith("/v1/models/") && p.length > "/v1/models/".length) {
+    return `/models${p.slice("/v1/models".length)}`;
+  }
   if (m === "POST" && p === "/v1/messages") {
     return "/chat/completions";
   }
@@ -51,6 +54,9 @@ export function mapOpenAiWirePathToAnthropicUpstream(path: string, method: strin
   const p = pathOnly(path);
   if (m === "GET" && p === "/models") {
     return "/v1/models";
+  }
+  if (m === "GET" && p.startsWith("/models/") && p.length > "/models/".length) {
+    return `/v1/models${p.slice("/models".length)}`;
   }
   if (m === "POST" && isOpenAIChatCompletionsWirePath(p)) {
     return "/v1/messages";

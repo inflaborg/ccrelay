@@ -46,6 +46,12 @@ describe("detectApiSurface", () => {
     expect(detectApiSurface("POST", "/v1/responses")).toBe("openai_responses");
   });
 
+  it("detects GET model detail paths", () => {
+    expect(detectApiSurface("GET", "/v1/models/claude-3")).toBe("openai");
+    expect(detectApiSurface("GET", "/openai/models/gpt-4")).toBe("openai");
+    expect(detectApiSurface("GET", "/anthropic/v1/models/claude-opus-4")).toBe("anthropic");
+  });
+
   it("returns null for unknown paths", () => {
     expect(detectApiSurface("GET", "/v1/unknown")).toBeNull();
   });
@@ -66,6 +72,16 @@ describe("resolveInboundClientSurface", () => {
       resolveInboundClientSurface(
         "GET",
         "/anthropic/v1/models",
+        p({ id: "a", providerType: "openai" })
+      )
+    ).toBe("anthropic");
+  });
+
+  it("GET /anthropic/v1/models/{id} uses anthropic surface", () => {
+    expect(
+      resolveInboundClientSurface(
+        "GET",
+        "/anthropic/v1/models/claude-3",
         p({ id: "a", providerType: "openai" })
       )
     ).toBe("anthropic");

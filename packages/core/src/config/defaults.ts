@@ -54,6 +54,8 @@ routing:
       provider: "auto"
     - path: "/v1/models"
       provider: "auto"
+    - path: "/v1/models/*"
+      provider: "auto"
     - path: "/v1/messages/count_tokens"
       provider: "auto"
     # OpenAI-prefixed — base URL e.g. http://127.0.0.1:7575/openai (SDK path rewritten upstream)
@@ -63,10 +65,14 @@ routing:
       provider: "auto"
     - path: "/openai/models"
       provider: "auto"
+    - path: "/openai/models/*"
+      provider: "auto"
     # Anthropic-prefixed — base URL e.g. http://127.0.0.1:7575/anthropic
     - path: "/anthropic/v1/messages"
       provider: "auto"
     - path: "/anthropic/v1/models"
+      provider: "auto"
+    - path: "/anthropic/v1/models/*"
       provider: "auto"
     - path: "/anthropic/v1/messages/count_tokens"
       provider: "auto"

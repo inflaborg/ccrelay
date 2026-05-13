@@ -82,6 +82,36 @@ export function buildTemplateValues(
   return values;
 }
 
+/** 32-bit FNV-1a hash (unsigned) for stable short ids. */
+function fnv1a32(str: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+/**
+ * Stable 6-char lowercase hex suffix for wizard `claude-{hash}` aliases.
+ * Derived only from upstream model id (no index) so clients see a single hyphenated segment.
+ */
+export function stableModelHash(upstreamId: string): string {
+  return fnv1a32(upstreamId).toString(16).padStart(8, "0").slice(-6);
+}
+
+/** Split wizard model line on first `;` (id;display name; empty right falls back to id). */
+function parseWizardModelLine(line: string): { upstreamId: string; displayName: string } {
+  const s = line.trim();
+  const i = s.indexOf(";");
+  if (i === -1) {
+    return { upstreamId: s, displayName: s };
+  }
+  const upstreamId = s.slice(0, i).trim();
+  const dn = s.slice(i + 1).trim();
+  return { upstreamId, displayName: dn.length > 0 ? dn : upstreamId };
+}
+
 export function buildModelConfig(
   modelIds: string[],
   claudeSupport: boolean,
@@ -98,25 +128,45 @@ export function buildModelConfig(
       modelMap: ModelMapEntry[];
       modelMappingEnabled: true;
     } {
-  const trimmed = modelIds.map(s => s.trim()).filter(s => s.length > 0);
+  const parsed = modelIds
+    .map(s => s.trim())
+    .filter(s => s.length > 0)
+    .map(parseWizardModelLine);
 
   const modelMap: ModelMapEntry[] = [];
-  if (claudeSupport && trimmed.length > 0) {
-    const first = trimmed[0];
-    modelMap.push({ pattern: "claude-*", model: first }, { pattern: "gpt-*", model: first });
-  }
-  for (const id of trimmed) {
-    modelMap.push({ pattern: `anthropic/${id}`, model: id });
-  }
 
   if (useCustomModels) {
-    const customModelsList = trimmed.map(id => `anthropic/${id}`);
+    parsed.forEach(m => {
+      const alias = `claude-${stableModelHash(m.upstreamId)}`;
+      modelMap.push({ pattern: alias, model: m.upstreamId });
+    });
+    if (claudeSupport && parsed.length > 0) {
+      const first = parsed[0].upstreamId;
+      modelMap.push({ pattern: "claude-*", model: first }, { pattern: "gpt-*", model: first });
+    }
+    const customModelsList = parsed.map(m => {
+      const alias = `claude-${stableModelHash(m.upstreamId)}`;
+      const real = m.upstreamId;
+      const dn = m.displayName;
+      if (dn === real) {
+        return `${real};;${alias}`;
+      }
+      return `${real};${dn};${alias}`;
+    });
     return {
       useCustomModelsList: true,
       customModelsList,
       modelMap,
       modelMappingEnabled: true,
     };
+  }
+
+  if (claudeSupport && parsed.length > 0) {
+    const first = parsed[0].upstreamId;
+    modelMap.push({ pattern: "claude-*", model: first }, { pattern: "gpt-*", model: first });
+  }
+  for (const m of parsed) {
+    modelMap.push({ pattern: `anthropic/${m.upstreamId}`, model: m.upstreamId });
   }
 
   return {

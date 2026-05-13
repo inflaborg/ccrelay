@@ -6,6 +6,10 @@ describe("resolveUpstreamPath", () => {
     expect(resolveUpstreamPath("GET", "/anthropic/v1/models")).toBe("/v1/models");
   });
 
+  it("strips /anthropic and preserves /v1/models/{id} for Anthropic wire", () => {
+    expect(resolveUpstreamPath("GET", "/anthropic/v1/models/foo")).toBe("/v1/models/foo");
+  });
+
   it("strips /anthropic for other Anthropic routes", () => {
     expect(resolveUpstreamPath("POST", "/anthropic/v1/messages")).toBe("/v1/messages");
   });
@@ -17,6 +21,9 @@ describe("resolveUpstreamPath", () => {
     it("maps /openai/models to /models", () => {
       expect(resolveUpstreamPath("GET", "/openai/models")).toBe("/models");
     });
+    it("maps GET /openai/models/{id} to /models/{id}", () => {
+      expect(resolveUpstreamPath("GET", "/openai/models/gpt-4")).toBe("/models/gpt-4");
+    });
     it("maps /openai/responses to /responses", () => {
       expect(resolveUpstreamPath("POST", "/openai/responses")).toBe("/responses");
     });
@@ -25,6 +32,9 @@ describe("resolveUpstreamPath", () => {
   describe("Legacy relay root: OpenAI-wire /v1/... to canonical OpenAI paths", () => {
     it("maps GET /v1/models to /models", () => {
       expect(resolveUpstreamPath("GET", "/v1/models")).toBe("/models");
+    });
+    it("maps GET /v1/models/{id} to /models/{id}", () => {
+      expect(resolveUpstreamPath("GET", "/v1/models/gpt-4o")).toBe("/models/gpt-4o");
     });
     it("maps POST /v1/chat/completions to /chat/completions", () => {
       expect(resolveUpstreamPath("POST", "/v1/chat/completions")).toBe("/chat/completions");
@@ -48,6 +58,9 @@ describe("resolveUpstreamPath", () => {
   describe("/openai + mistaken /v1 segment (normalize to OpenAI wire if mapping matches)", () => {
     it("GET /openai/v1/models -> /models", () => {
       expect(resolveUpstreamPath("GET", "/openai/v1/models")).toBe("/models");
+    });
+    it("maps GET /openai/v1/models/{id} to /models/{id}", () => {
+      expect(resolveUpstreamPath("GET", "/openai/v1/models/x")).toBe("/models/x");
     });
     it("POST /openai/v1/chat/completions -> /chat/completions", () => {
       expect(resolveUpstreamPath("POST", "/openai/v1/chat/completions")).toBe("/chat/completions");

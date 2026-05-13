@@ -35,16 +35,29 @@ export {
 
 export {
   isModelsListUpstreamPath,
+  isModelDetailUpstreamPath,
+  extractModelIdFromDetailPath,
   isOpenAIModelsListJson,
   isAnthropicModelsListJson,
+  isOpenAIModelEntryJson,
+  isAnthropicModelInfoJson,
   convertOpenAIModelsToAnthropic,
   convertAnthropicModelsToOpenAI,
+  convertOpenAISingleModelToAnthropic,
+  convertAnthropicSingleModelToOpenAI,
   parseModelsListLimitFromTargetUrl,
+  parseCustomModelLine,
+  collectParsedCustomModelsDeduped,
   buildOpenAIModelsListFromIds,
   openAiModelsPageToAnthropicModelsList,
   synthesizeCustomModelsListBody,
+  synthesizeCustomModelDetailBody,
+  synthesizeModelNotFoundBody,
+  CCRELAY_MODEL_ALIAS_HEADER,
+  readUseModelAliasFromHeaders,
   type OpenAIModelsListResponse,
   type AnthropicModelsListResponse,
+  type ParsedCustomModelLine,
 } from "./models-fallback";
 
 export {

@@ -239,7 +239,15 @@ export function WizardDialog({
       .split("\n")
       .map(l => l.trim())
       .find(l => l.length > 0);
-    return first ?? null;
+    if (!first) {
+      return null;
+    }
+    const i = first.indexOf(";");
+    if (i === -1) {
+      return first;
+    }
+    const id = first.slice(0, i).trim();
+    return id.length > 0 ? id : null;
   }, [modelIdsText]);
 
   const testVariants: TestVariantInput[] | null = useMemo(() => {

@@ -5,6 +5,7 @@ export {
   PARTNER_PRESETS,
   getPresetById,
   defaultModelIdsAsText,
+  upstreamModelIdToDisplayName,
 } from "./presets";
 export type { PartnerPreset, WizardOption, WizardInput } from "./types";
 export {
@@ -14,4 +15,5 @@ export {
   buildTemplateValues,
   initSelections,
   stringifySelectionValue,
+  stableModelHash,
 } from "./engine";

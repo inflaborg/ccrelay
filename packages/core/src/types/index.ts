@@ -72,7 +72,9 @@ export const ProviderConfigSchema = z.object({
   enabled: z.boolean().optional(),
   useCustomModelsList: z.boolean().optional(),
   use_custom_models_list: z.boolean().optional(),
+  /** Each entry: `realId`, `realId;displayName`, or `realId;displayName;alias` (see Provider `customModelsList`). */
   customModelsList: z.array(z.string()).optional(),
+  /** @see customModelsList */
   custom_models_list: z.array(z.string()).optional(),
   openaiCompat: OpenAICompatSchema.optional(),
   openai_compat: OpenAICompatSchema.optional(),
@@ -307,7 +309,13 @@ export interface Provider {
   enabled?: boolean;
   /** When true, GET /models is served locally from {@link Provider.customModelsList} (no upstream). */
   useCustomModelsList?: boolean;
-  /** Model ids exposed when {@link Provider.useCustomModelsList} is true. */
+  /**
+   * When {@link useCustomModelsList} is true: one entry per logical model.
+   * - `realId` — all three fields default to this value.
+   * - `realId;displayName` — display label; alias defaults to realId (GET /models returns real id unless client sends `x-ccrelay-model-alias`).
+   * - `realId;displayName;alias` — Cowork-safe wire id when client sends `x-ccrelay-model-alias` (non-empty); otherwise list uses realId.
+   * - `realId;;alias` — displayName falls back to realId.
+   */
   customModelsList?: string[];
   /**
    * Legacy YAML/API field; parsed for backward compatibility but **ignored** at runtime.
@@ -386,6 +394,7 @@ export interface ProviderInfo {
   modelMap?: ModelMapEntry[];
   modelMappingEnabled?: boolean;
   useCustomModelsList?: boolean;
+  /** @see Provider.customModelsList */
   customModelsList?: string[];
 }
 

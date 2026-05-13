@@ -192,8 +192,8 @@
       "apiKeyHelpEdit": "API Key cannot be modified. To change, delete and recreate the provider.",
       "apiKeyHelpAdd": "Supports ${ENV_VAR} syntax. Cannot be modified after creation.",
       "useCustomModelsList": "Use custom models list",
-      "customModelsListHelp": "When enabled, GET /models is answered locally from this list (no upstream). Optional query limit truncates the returned page; Anthropic-shaped responses set has_more accordingly.",
-      "modelIds": "Model ids (one per line)",
+      "customModelsListHelp": "When enabled, GET /models is answered locally from this list (no upstream). Each line: real model id, or realId;display name, or realId;display name;alias (use realId;;alias when display equals id). Without HTTP header x-ccrelay-model-alias, list/detail return the real id; with that header, wire id is the alias segment. Optional query limit truncates the returned page; Anthropic-shaped responses set has_more accordingly.",
+      "modelIds": "Model ids (one per line; realId or realId;display or realId;display;alias)",
       "enableModelMapping": "Enable model mapping",
       "modelMappingHelp": "When off, the YAML below is kept in config but not applied (requests, model lists, and response model stay unmapped).",
       "modelMap": "Model Map (YAML)",
@@ -303,13 +303,13 @@
       "formatError": "Unexpected response format"
     },
     "placeholder": {
-      "models": "glm-5.1\nglm-4.7"
+      "models": "glm-5.1;GLM 5.1\nglm-4.7;GLM 4.7"
     },
     "help": {
       "azureEndpoint": "Your Azure OpenAI base URL, e.g. https://…cognitiveservices.azure.com/openai/v1",
       "customEndpoint": "Paste your upstream base URL (must match the protocol you chose: OpenAI Chat or Anthropic Messages).",
       "presetEndpointDefault": "Official API URL by default; edit if you use another host or proxy.",
-      "models": "One model id per line. Each becomes anthropic/{id} in the local model list.",
+      "models": "One upstream model id per line, or id;display name (first semicolon only). Without custom list, model map uses anthropic/{id}. With custom list, YAML stores realId;display;claude-{hash} per line; GET /models returns real ids unless the client sends header x-ccrelay-model-alias (then wire id is the alias). modelMap maps claude-{hash} to the upstream id.",
       "claudeSupport": "Adds claude-* and gpt-* patterns mapped to the first model for Claude Code and Codex."
     },
     "confirm": {

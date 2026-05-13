@@ -4,21 +4,79 @@ import {
   buildModelConfig,
   generateProviders,
   initSelections,
+  stableModelHash,
 } from "../../../web/src/features/providers/wizard/engine";
-import { getPresetById } from "../../../web/src/features/providers/wizard/presets";
+import {
+  defaultModelIdsAsText,
+  getPresetById,
+} from "../../../web/src/features/providers/wizard/presets";
+
+describe("stableModelHash", () => {
+  it("is deterministic for the same upstream id", () => {
+    expect(stableModelHash("glm-5.1")).toBe(stableModelHash("glm-5.1"));
+  });
+
+  it("differs for different upstream ids", () => {
+    expect(stableModelHash("glm-5.1")).not.toBe(stableModelHash("glm-4.7"));
+  });
+
+  it("returns 6 lowercase hex chars", () => {
+    expect(stableModelHash("x")).toMatch(/^[0-9a-f]{6}$/);
+  });
+});
 
 describe("buildModelConfig", () => {
-  it("prefixes custom list and adds exact and fallback mappings", () => {
+  it("prefill from GLM defaultModelIdsAsText yields claude lines with display names", () => {
+    const preset = getPresetById("glm");
+    expect(preset).toBeDefined();
+    const lines = defaultModelIdsAsText(preset!);
+    const c = buildModelConfig(
+      lines.split("\n").filter(l => l.trim().length > 0),
+      true,
+      true
+    );
+    expect(c.useCustomModelsList).toBe(true);
+    if (c.useCustomModelsList) {
+      expect(c.customModelsList).toEqual([
+        `glm-5.1;GLM 5.1;claude-${stableModelHash("glm-5.1")}`,
+        `glm-5-turbo;GLM 5 Turbo;claude-${stableModelHash("glm-5-turbo")}`,
+        `glm-4.7;GLM 4.7;claude-${stableModelHash("glm-4.7")}`,
+      ]);
+    }
+  });
+
+  it("uses claude-{hash} list and maps before claude or gpt wildcards", () => {
     const c = buildModelConfig(["glm-5.1", "glm-4.7"], true, true);
     expect(c.useCustomModelsList).toBe(true);
     expect(c.modelMappingEnabled).toBe(true);
     if (c.useCustomModelsList) {
-      expect(c.customModelsList).toEqual(["anthropic/glm-5.1", "anthropic/glm-4.7"]);
+      expect(c.customModelsList).toEqual([
+        `glm-5.1;;claude-${stableModelHash("glm-5.1")}`,
+        `glm-4.7;;claude-${stableModelHash("glm-4.7")}`,
+      ]);
     }
-    expect(c.modelMap[0]).toEqual({ pattern: "claude-*", model: "glm-5.1" });
-    expect(c.modelMap[1]).toEqual({ pattern: "gpt-*", model: "glm-5.1" });
-    expect(c.modelMap[2]).toEqual({ pattern: "anthropic/glm-5.1", model: "glm-5.1" });
-    expect(c.modelMap[3]).toEqual({ pattern: "anthropic/glm-4.7", model: "glm-4.7" });
+    expect(c.modelMap[0]).toEqual({
+      pattern: `claude-${stableModelHash("glm-5.1")}`,
+      model: "glm-5.1",
+    });
+    expect(c.modelMap[1]).toEqual({
+      pattern: `claude-${stableModelHash("glm-4.7")}`,
+      model: "glm-4.7",
+    });
+    expect(c.modelMap[2]).toEqual({ pattern: "claude-*", model: "glm-5.1" });
+    expect(c.modelMap[3]).toEqual({ pattern: "gpt-*", model: "glm-5.1" });
+  });
+
+  it("includes display name in custom list line when different from upstream id", () => {
+    const c = buildModelConfig(["glm-5.1;GLM 5.1"], true, true);
+    expect(c.useCustomModelsList).toBe(true);
+    if (c.useCustomModelsList) {
+      expect(c.customModelsList).toEqual([`glm-5.1;GLM 5.1;claude-${stableModelHash("glm-5.1")}`]);
+    }
+    expect(c.modelMap[0]).toEqual({
+      pattern: `claude-${stableModelHash("glm-5.1")}`,
+      model: "glm-5.1",
+    });
   });
 
   it("skips fallbacks when claudeSupport is off", () => {
@@ -37,6 +95,11 @@ describe("buildModelConfig", () => {
       { pattern: "gpt-*", model: "glm-5.1" },
       { pattern: "anthropic/glm-5.1", model: "glm-5.1" },
     ]);
+  });
+
+  it("parses semicolon for anthropic pattern when custom list off", () => {
+    const c = buildModelConfig(["glm-5.1;Label"], false, false);
+    expect(c.modelMap).toEqual([{ pattern: "anthropic/glm-5.1", model: "glm-5.1" }]);
   });
 
   it("returns empty model map when useCustomModels is false and no model ids", () => {

@@ -41,6 +41,11 @@ describe("crossProtocol upstream path mapping", () => {
     it("maps GET /v1/models to /models", () => {
       expect(mapAnthropicWirePathToOpenAiUpstream("/v1/models", "GET")).toBe("/models");
     });
+    it("maps GET /v1/models/{id} to /models/{id}", () => {
+      expect(mapAnthropicWirePathToOpenAiUpstream("/v1/models/claude-3", "GET")).toBe(
+        "/models/claude-3"
+      );
+    });
     it("maps POST /v1/messages to /chat/completions", () => {
       expect(mapAnthropicWirePathToOpenAiUpstream("/v1/messages", "POST")).toBe(
         "/chat/completions"
@@ -57,6 +62,9 @@ describe("crossProtocol upstream path mapping", () => {
   describe("mapOpenAiWirePathToAnthropicUpstream", () => {
     it("maps GET /models to /v1/models", () => {
       expect(mapOpenAiWirePathToAnthropicUpstream("/models", "GET")).toBe("/v1/models");
+    });
+    it("maps GET /models/{id} to /v1/models/{id}", () => {
+      expect(mapOpenAiWirePathToAnthropicUpstream("/models/gpt-4", "GET")).toBe("/v1/models/gpt-4");
     });
     it("maps POST /chat/completions and /v1/chat/completions to /v1/messages", () => {
       expect(mapOpenAiWirePathToAnthropicUpstream("/chat/completions", "POST")).toBe(
