@@ -198,7 +198,15 @@
       "modelMappingHelp": "When off, the YAML below is kept in config but not applied (requests, model lists, and response model stay unmapped).",
       "modelMap": "Model Map (YAML)",
       "modelMapHelp": "Optional. Leave empty to pass models through without remapping.",
-      "submitAdd": "Add Provider"
+      "submitAdd": "Add Provider",
+      "coworkHelper": "Cowork Alias Helper",
+      "coworkHelperDesc": "Enter real model IDs and optional display names. Aliases (claude-{hash}) and model mappings are generated automatically.",
+      "coworkHelperRealId": "Real Model ID",
+      "coworkHelperDisplayName": "Display Name (optional)",
+      "coworkHelperAdd": "Add row",
+      "coworkHelperPreview": "Preview",
+      "coworkHelperApply": "Apply",
+      "coworkHelperRemoveRow": "Remove row"
     },
     "validation": {
       "mustBeYamlArray": "Must be a YAML array",
@@ -209,7 +217,8 @@
       "id": "e.g., my_provider",
       "name": "e.g., My Custom Provider",
       "baseUrl": "e.g., https://api.example.com",
-      "apiKey": "e.g., ${API_KEY} or sk-..."
+      "apiKey": "e.g., ${API_KEY} or sk-...",
+      "customModelsList": "claude-sonnet-4-6;Claude Sonnet 4.6\ngpt-5.4;GPT 5.4;claude-abc001"
     },
     "deleteDialog": {
       "title": "Delete provider?",

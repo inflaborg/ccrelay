@@ -32,6 +32,7 @@ import { Select } from "@/components/ui/select";
 import { api } from "@/api/client";
 import type { AddProviderRequest, Provider, ModelMapEntry } from "@/types/api";
 import { WizardDialog } from "./wizard/WizardDialog";
+import { CoworkAliasHelper } from "./CoworkAliasHelper";
 
 const PROVIDER_PROTOCOL_LABEL: Record<string, { label: string; className: string }> = {
   anthropic: { label: "providers.protocol.anthropic", className: "bg-indigo-500 text-white" },
@@ -61,6 +62,8 @@ export default function Providers() {
   const queryClient = useQueryClient();
   const [showWizard, setShowWizard] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [coworkHelperOpen, setCoworkHelperOpen] = useState(false);
+  const [coworkHelperKey, setCoworkHelperKey] = useState(0);
   const [formData, setFormData] = useState<AddProviderRequest>(DEFAULT_FORM);
   const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
@@ -374,6 +377,25 @@ export default function Providers() {
     setFormData(prev => ({ ...prev, [key]: value }));
   };
 
+  const handleCoworkHelperApply = useCallback(
+    (result: { customModelsList: string[]; modelMap: ModelMapEntry[] }) => {
+      if (modelMapTimerRef.current) {
+        clearTimeout(modelMapTimerRef.current);
+        modelMapTimerRef.current = null;
+      }
+      setCustomModelsText(result.customModelsList.join("\n"));
+      setModelMapText(yaml.dump(result.modelMap, { indent: 2, lineWidth: -1 }));
+      setModelMapError(null);
+      setFormData(prev => ({
+        ...prev,
+        useCustomModelsList: true,
+        modelMappingEnabled: true,
+        modelMap: result.modelMap,
+      }));
+    },
+    []
+  );
+
   const providers = (providersData?.providers || []).sort((a, b) => {
     const sortGroup = (p: Provider) => {
       if (p.id === "official") {
@@ -669,7 +691,7 @@ export default function Providers() {
       {showAddModal && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <Card
-            className="w-full max-w-[500px] max-h-[90vh] flex flex-col"
+            className="w-full max-w-2xl max-h-[90vh] flex flex-col"
             key={editingProvider ? `edit-${editingProvider.id}` : "add-provider"}
           >
             {/* Modal Header */}
@@ -847,10 +869,26 @@ export default function Providers() {
                 </p>
                 {formData.useCustomModelsList ? (
                   <div className="space-y-1">
-                    <label className="text-xs font-medium">{t("providers.modal.modelIds")}</label>
+                    <div className="flex items-start justify-between gap-2">
+                      <label className="text-xs font-medium min-w-0 flex-1 leading-snug">
+                        {t("providers.modal.modelIds")}
+                      </label>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 shrink-0 px-1.5 text-[10px] mt-0.5"
+                        onClick={() => {
+                          setCoworkHelperKey(k => k + 1);
+                          setCoworkHelperOpen(true);
+                        }}
+                      >
+                        {t("providers.modal.coworkHelper")}
+                      </Button>
+                    </div>
                     <textarea
                       className="w-full px-2 py-1 text-xs border rounded-md bg-background font-mono"
-                      placeholder={"claude-3-5-sonnet-20241022;Sonnet 3.5\ngpt-4"}
+                      placeholder={t("providers.placeholder.customModelsList")}
                       rows={5}
                       value={customModelsText}
                       onChange={e => setCustomModelsText(e.target.value)}
@@ -934,6 +972,13 @@ export default function Providers() {
           </Card>
         </div>
       )}
+
+      <CoworkAliasHelper
+        key={coworkHelperKey}
+        open={coworkHelperOpen}
+        onOpenChange={setCoworkHelperOpen}
+        onApply={handleCoworkHelperApply}
+      />
 
       <AlertDialog
         open={deleteConfirmOpen}

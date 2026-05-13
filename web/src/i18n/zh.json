@@ -198,7 +198,15 @@
       "modelMappingHelp": "关闭后，下方 YAML 仍保留在配置中但不会应用（请求、模型列表和响应模型均不映射）。",
       "modelMap": "模型映射（YAML）",
       "modelMapHelp": "可选。留空则透传模型名称不做重映射。",
-      "submitAdd": "添加提供商"
+      "submitAdd": "添加提供商",
+      "coworkHelper": "Cowork 别名助手",
+      "coworkHelperDesc": "输入真实模型 ID 和可选的显示名称。别名（claude-{hash}）和模型映射将自动生成。",
+      "coworkHelperRealId": "真实模型 ID",
+      "coworkHelperDisplayName": "显示名称（可选）",
+      "coworkHelperAdd": "添加一行",
+      "coworkHelperPreview": "预览",
+      "coworkHelperApply": "应用",
+      "coworkHelperRemoveRow": "删除此行"
     },
     "validation": {
       "mustBeYamlArray": "必须是 YAML 数组",
@@ -209,7 +217,8 @@
       "id": "例如 my_provider",
       "name": "例如 My Custom Provider",
       "baseUrl": "例如 https://api.example.com",
-      "apiKey": "例如 ${API_KEY} 或 sk-..."
+      "apiKey": "例如 ${API_KEY} 或 sk-...",
+      "customModelsList": "claude-sonnet-4-6;Claude Sonnet 4.6\ngpt-5.4;GPT 5.4;claude-abc001"
     },
     "deleteDialog": {
       "title": "删除提供商？",
