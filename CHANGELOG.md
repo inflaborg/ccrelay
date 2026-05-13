@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-05-13 (pre-release)
+
+Pre-release line for 0.2.4.
+
 ## [0.2.3] - 2026-05-12
 
 Cowork-safe model aliases with an optional client header, quick-fill for custom model lists, optional **GLM (Z.ai)** web search next to Tavily, and clearer **MiniMax** reasoning handling for Anthropic clients. Build scripts for desktop releases are fixed.
