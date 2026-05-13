@@ -72,7 +72,9 @@ export const ProviderConfigSchema = z.object({
   enabled: z.boolean().optional(),
   useCustomModelsList: z.boolean().optional(),
   use_custom_models_list: z.boolean().optional(),
+  /** Each entry: `realId`, `realId;displayName`, or `realId;displayName;alias` (see Provider `customModelsList`). */
   customModelsList: z.array(z.string()).optional(),
+  /** @see customModelsList */
   custom_models_list: z.array(z.string()).optional(),
   openaiCompat: OpenAICompatSchema.optional(),
   openai_compat: OpenAICompatSchema.optional(),
@@ -229,7 +231,19 @@ export const WebSearchConfigSchema = z.object({
       max_results: z.number().int().min(1).max(10).optional(),
     })
     .optional(),
+  glm: z
+    .object({
+      apiKey: z.string().optional(),
+      api_key: z.string().optional(),
+      endpoint: z.string().optional(),
+      protocol: z.enum(["anthropic", "openai"]).optional(),
+      region: z.enum(["intl", "cn"]).optional(),
+      coding: z.boolean().optional(),
+      model: z.string().optional(),
+    })
+    .optional(),
   providers: z.array(z.string()).optional(),
+  defaultSearchBackend: z.string().optional(),
 });
 
 export type WebSearchConfigInput = z.infer<typeof WebSearchConfigSchema>;
@@ -295,7 +309,13 @@ export interface Provider {
   enabled?: boolean;
   /** When true, GET /models is served locally from {@link Provider.customModelsList} (no upstream). */
   useCustomModelsList?: boolean;
-  /** Model ids exposed when {@link Provider.useCustomModelsList} is true. */
+  /**
+   * When {@link useCustomModelsList} is true: one entry per logical model.
+   * - `realId` — all three fields default to this value.
+   * - `realId;displayName` — display label; alias defaults to realId (GET /models returns real id unless client sends `x-ccrelay-model-alias`).
+   * - `realId;displayName;alias` — Cowork-safe wire id when client sends `x-ccrelay-model-alias` (non-empty); otherwise list uses realId.
+   * - `realId;;alias` — displayName falls back to realId.
+   */
   customModelsList?: string[];
   /**
    * Legacy YAML/API field; parsed for backward compatibility but **ignored** at runtime.
@@ -311,8 +331,18 @@ export interface WebSearchGlobalConfig {
     searchDepth?: "basic" | "advanced";
     maxResults?: number;
   };
+  glm?: {
+    apiKey?: string;
+    endpoint?: string;
+    protocol?: "anthropic" | "openai";
+    region?: "intl" | "cn";
+    coding?: boolean;
+    model?: string;
+  };
   /** Provider IDs that have web search enabled. */
   providers?: string[];
+  /** Which search backend to use ("tavily" | "glm"). Defaults to "tavily". */
+  defaultSearchBackend?: string;
 }
 
 export interface RouterConfig {
@@ -364,6 +394,7 @@ export interface ProviderInfo {
   modelMap?: ModelMapEntry[];
   modelMappingEnabled?: boolean;
   useCustomModelsList?: boolean;
+  /** @see Provider.customModelsList */
   customModelsList?: string[];
 }
 

@@ -19,7 +19,7 @@ export interface WebSearchOrchestrationResult {
 
 /**
  * Pure detection: whether this request should be handled by the web-search interceptor
- * (wire shape + provider allowlist + Tavily configured). No I/O.
+ * (wire shape + provider allowlist + search backend configured). No I/O.
  *
  * Returns `WebSearchDetection` when this interceptor should claim the request; `null` otherwise.
  */
@@ -53,13 +53,14 @@ export function detectWebSearchInterception(
     return null;
   }
 
-  const provider = createSearchProvider(undefined, globalConfig ?? {});
+  const searchBackend = globalConfig?.defaultSearchBackend ?? "tavily";
+  const provider = createSearchProvider(searchBackend, globalConfig ?? {});
   if (!provider) {
-    log.info("[web-search] No search provider configured, not intercepting");
+    log.info(`[web-search] Search backend "${searchBackend}" not configured, not intercepting`);
     return null;
   }
 
-  return detection;
+  return { ...detection, searchBackend };
 }
 
 /**
@@ -69,9 +70,9 @@ export async function executeWebSearchQuery(
   detection: WebSearchDetection,
   globalConfig: WebSearchGlobalConfig
 ): Promise<WebSearchOrchestrationResult> {
-  const provider = createSearchProvider(undefined, globalConfig);
+  const provider = createSearchProvider(detection.searchBackend, globalConfig);
   if (!provider) {
-    throw new Error("Web search provider not configured");
+    throw new Error(`Web search provider "${detection.searchBackend}" not configured`);
   }
 
   const searchResult = await provider.search(detection.query);

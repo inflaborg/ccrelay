@@ -20,10 +20,19 @@ import {
   isOpenAIResponsesApiResultBody,
   convertOpenAIModelsToAnthropic,
   convertAnthropicModelsToOpenAI,
+  convertOpenAISingleModelToAnthropic,
+  convertAnthropicSingleModelToOpenAI,
   isAnthropicModelsListJson,
+  isAnthropicModelInfoJson,
   isModelsListUpstreamPath,
+  isModelDetailUpstreamPath,
+  extractModelIdFromDetailPath,
   isOpenAIModelsListJson,
+  isOpenAIModelEntryJson,
   synthesizeCustomModelsListBody,
+  synthesizeCustomModelDetailBody,
+  synthesizeModelNotFoundBody,
+  readUseModelAliasFromHeaders,
   isOpenAIType,
   createStreamingState,
   processStreamingChunk,
@@ -161,11 +170,13 @@ export class ProxyExecutor {
     ) {
       const synthStart = Date.now();
       const ids = provider.customModelsList ?? [];
+      const useAlias = readUseModelAliasFromHeaders(taskHeaders);
       const body = synthesizeCustomModelsListBody({
         clientSurface: task.clientSurface,
-        fullModelIds: ids,
+        fullModelLines: ids,
         targetUrl,
         provider,
+        useAlias,
       });
       const chunks = [Buffer.from(body, "utf-8")];
       const duration = Date.now() - synthStart;
@@ -190,6 +201,71 @@ export class ProxyExecutor {
       });
     }
 
+    if (
+      provider.useCustomModelsList &&
+      method === "GET" &&
+      isModelDetailUpstreamPath(task.requestPath)
+    ) {
+      const synthStart = Date.now();
+      const modelId = extractModelIdFromDetailPath(task.requestPath);
+      const ids = provider.customModelsList ?? [];
+      const useAlias = readUseModelAliasFromHeaders(taskHeaders);
+      const detailBody =
+        modelId !== null
+          ? synthesizeCustomModelDetailBody({
+              clientSurface: task.clientSurface,
+              modelId,
+              fullModelLines: ids,
+              useAlias,
+            })
+          : null;
+      const duration = Date.now() - synthStart;
+      if (detailBody === null) {
+        const notFoundId = modelId ?? "unknown";
+        const errBody = synthesizeModelNotFoundBody(task.clientSurface, notFoundId);
+        const chunks = [Buffer.from(errBody, "utf-8")];
+        log.info(
+          `[${clientId}] GET /models/{id}: useCustomModelsList for ${provider.id}, not_found=${notFoundId}`
+        );
+        this.responseLogger.logResponse(
+          clientId,
+          duration,
+          404,
+          chunks,
+          undefined,
+          undefined,
+          undefined
+        );
+        return Promise.resolve({
+          statusCode: 404,
+          headers: { "content-type": "application/json; charset=utf-8" },
+          body: errBody,
+          duration,
+          responseBodyChunks: chunks,
+        });
+      }
+      const chunks = [Buffer.from(detailBody, "utf-8")];
+      log.info(
+        `[${clientId}] GET /models/{id}: useCustomModelsList for ${provider.id}, model=${modelId}`
+      );
+      this.responseLogger.logResponse(
+        clientId,
+        duration,
+        200,
+        chunks,
+        undefined,
+        undefined,
+        undefined
+      );
+      return Promise.resolve({
+        statusCode: 200,
+        headers: { "content-type": "application/json; charset=utf-8" },
+        body: detailBody,
+        duration,
+        responseBodyChunks: chunks,
+      });
+    }
+
     const maxRetries = 2;
     const urlParsed = url.parse(targetUrl);
     const isHttps = urlParsed.protocol === "https:";
@@ -198,6 +274,11 @@ export class ProxyExecutor {
     // Disable compression to avoid gzip response issues when logging to database
     const requestHeaders: Record<string, string> = { ...taskHeaders };
     requestHeaders["accept-encoding"] = "identity";
+    for (const k of Object.keys(requestHeaders)) {
+      if (k.toLowerCase() === "x-ccrelay-model-alias") {
+        delete requestHeaders[k];
+      }
+    }
 
     // Use task's abortController if provided by ConcurrencyManager (queue mode),
     // otherwise create a local AbortController (non-queue mode)
@@ -342,7 +423,8 @@ export class ProxyExecutor {
 
     /** Do not route through chat completion / Responses JSON converters — use buffered handlers + GET /models list conversion. */
     const skipStructuredChatJsonConverters =
-      task.method === "GET" && isModelsListUpstreamPath(task.requestPath);
+      task.method === "GET" &&
+      (isModelsListUpstreamPath(task.requestPath) || isModelDetailUpstreamPath(task.requestPath));
 
     if (
       !skipStructuredChatJsonConverters &&
@@ -1154,13 +1236,9 @@ export class ProxyExecutor {
         );
         if (responsesStreamRequested) {
           const sse = formatOpenAIResponsesSse(out);
-          // if (process.env.CCRELAY_LOG_RESPONSES_SSE === "1") {
-          const head = sse.split("\n\n").filter(Boolean).slice(0, 6).join(" | ");
-          log.info(
-            `[Chat->Responses] synthetic SSE: bytes=${sse.length} ` +
-              `data_lines~=${sse.split("\n\n").length} head=${head.slice(0, 2000)}`
+          log.debug(
+            `[Chat->Responses] synthetic SSE: bytes=${sse.length}, ~${sse.split("\n\n").filter(Boolean).length} events`
           );
-          // }
           ctx.responseChunks.push(Buffer.from(sse, "utf-8"));
           this.responseLogger.logResponse(
             clientId,
@@ -1244,7 +1322,7 @@ export class ProxyExecutor {
     const { provider, res: clientRes } = task;
 
     const sseHeaders = headersForResponsesSse(responseHeaders);
-    log.info(
+    log.debug(
       `[Chat->Responses SSE] Writing headers: status=${status} keys=${Object.keys(sseHeaders).join(",")}`
     );
     clientRes!.writeHead(status, sseHeaders);
@@ -1272,11 +1350,7 @@ export class ProxyExecutor {
       totalBytes += chunk.length;
       if (chunkCount === 1) {
         firstChunkTime = Date.now() - startTime;
-        const preview =
-          chunk.length > 200
-            ? `${chunk.slice(0, 200).toString("utf-8")}...`
-            : chunk.toString("utf-8");
-        log.info(`[Chat->Responses SSE] First chunk: ${chunk.length} bytes, preview="${preview}"`);
+        log.debug(`[Chat->Responses SSE] First chunk: ${chunk.length} bytes`);
       }
       lineBuffer.feed(chunk);
     });
@@ -1369,13 +1443,9 @@ export class ProxyExecutor {
         );
         if (responsesStreamRequested) {
           const sse = formatOpenAIResponsesSse(out);
-          // if (process.env.CCRELAY_LOG_RESPONSES_SSE === "1") {
-          const head = sse.split("\n\n").filter(Boolean).slice(0, 6).join(" | ");
-          log.info(
-            `[A->Responses] synthetic SSE: bytes=${sse.length} ` +
-              `data_lines~=${sse.split("\n\n").length} head=${head.slice(0, 2000)}`
+          log.debug(
+            `[A->Responses] synthetic SSE: bytes=${sse.length}, ~${sse.split("\n\n").filter(Boolean).length} events`
           );
-          // }
           ctx.responseChunks.push(Buffer.from(sse, "utf-8"));
           this.responseLogger.logResponse(
             clientId,
@@ -1723,13 +1793,14 @@ export class ProxyExecutor {
       let outStatus = status;
       const outHeaders: Record<string, string | string[]> = { ...responseHeaders };
 
-      // GET /models: convert list shape only when entry path protocol differs from provider upstream wire
+      // GET /models (list or single): convert shape only when entry path protocol differs from provider upstream wire
       const upstreamWireFmt: ApiSurface = isOpenAIType(task.provider.providerType)
         ? "openai"
         : "anthropic";
       const modelsCrossProtocolConversion =
         task.method === "GET" &&
-        isModelsListUpstreamPath(task.requestPath) &&
+        (isModelsListUpstreamPath(task.requestPath) ||
+          isModelDetailUpstreamPath(task.requestPath)) &&
         outStatus === 200 &&
         (task.clientSurface === "openai" || task.clientSurface === "anthropic") &&
         task.clientSurface !== upstreamWireFmt &&
@@ -1767,6 +1838,30 @@ export class ProxyExecutor {
             log.info(
               `[${clientId}] GET /models: entry OpenAI vs Anthropic upstream; converted models list shape`
             );
+          } else if (clientAnthropicUpstreamOpenai && isOpenAIModelEntryJson(parsed)) {
+            const anthropicOne = convertOpenAISingleModelToAnthropic(
+              parsed as unknown as Parameters<typeof convertOpenAISingleModelToAnthropic>[0]
+            );
+            ctx.responseChunks = [Buffer.from(JSON.stringify(anthropicOne), "utf-8")];
+            outHeaders["content-type"] = "application/json";
+            if ("Content-Length" in outHeaders) {
+              delete outHeaders["Content-Length"];
+            }
+            log.info(
+              `[${clientId}] GET /models/{id}: entry anthropic vs OpenAI upstream; converted model detail shape`
+            );
+          } else if (clientOpenaiUpstreamAnthropic && isAnthropicModelInfoJson(parsed)) {
+            const openaiOne = convertAnthropicSingleModelToOpenAI(
+              parsed as unknown as Parameters<typeof convertAnthropicSingleModelToOpenAI>[0]
+            );
+            ctx.responseChunks = [Buffer.from(JSON.stringify(openaiOne), "utf-8")];
+            outHeaders["content-type"] = "application/json";
+            if ("Content-Length" in outHeaders) {
+              delete outHeaders["Content-Length"];
+            }
+            log.info(
+              `[${clientId}] GET /models/{id}: entry OpenAI vs Anthropic upstream; converted model detail shape`
+            );
           }
         } catch {
           /* parse failed — keep original */
@@ -1778,7 +1873,11 @@ export class ProxyExecutor {
         task.originalModel &&
         providerHasConfigurableModelMap(task.provider) &&
         ctx.responseChunks.length > 0 &&
-        !(task.method === "GET" && isModelsListUpstreamPath(task.requestPath))
+        !(
+          task.method === "GET" &&
+          (isModelsListUpstreamPath(task.requestPath) ||
+            isModelDetailUpstreamPath(task.requestPath))
+        )
       ) {
         try {
           const bodyStr = Buffer.concat(ctx.responseChunks).toString("utf-8");

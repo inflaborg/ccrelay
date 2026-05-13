@@ -19,6 +19,7 @@ export interface Provider {
   /** When false, model maps are kept but not applied. Default true (omit = enabled). */
   modelMappingEnabled?: boolean;
   useCustomModelsList?: boolean;
+  /** Each entry: `realId`, `realId;displayName`, or `realId;displayName;alias` (see Provider.customModelsList). */
   customModelsList?: string[];
   /** Read-only: true when this provider ID is in the global webSearch.providers list. */
   webSearchEnabled?: boolean;
@@ -67,6 +68,7 @@ export interface AddProviderRequest {
   modelMappingEnabled?: boolean;
   headers?: Record<string, string>;
   useCustomModelsList?: boolean;
+  /** Each entry: `realId`, `realId;displayName`, or `realId;displayName;alias` (see Provider.customModelsList). */
   customModelsList?: string[];
 }
 
@@ -266,7 +268,16 @@ export interface WebSearchSettings {
     searchDepth?: "basic" | "advanced";
     maxResults?: number;
   };
+  glm?: {
+    apiKey?: string;
+    endpoint?: string;
+    protocol?: "anthropic" | "openai";
+    region?: "intl" | "cn";
+    coding?: boolean;
+    model?: string;
+  };
   providers?: string[];
+  defaultSearchBackend?: string;
 }
 
 export interface LoggingSettings {

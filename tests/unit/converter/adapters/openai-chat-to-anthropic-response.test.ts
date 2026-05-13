@@ -331,6 +331,96 @@ describe("converter: openai-chat-to-anthropic-response", () => {
         },
       ]);
     });
+
+    it("maps reasoning_content to Anthropic thinking without signature", () => {
+      const openai: OpenAIChatCompletionResponse = {
+        id: "chatcmpl-rc",
+        object: "chat.completion",
+        created: 1234567890,
+        model: "deepseek-reasoner",
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: "assistant",
+              reasoning_content: "Step-by-step reasoning",
+              content: "Final answer",
+            },
+            finish_reason: "stop",
+          },
+        ],
+      };
+
+      const result = convertResponseToAnthropic(openai, originalModel);
+
+      expect(result.content).toEqual([
+        { type: "thinking", thinking: "Step-by-step reasoning" },
+        { type: "text", text: "Final answer" },
+      ]);
+    });
+
+    it("fills signed thinking body from reasoning_content when thinking.content is absent", () => {
+      const openai: OpenAIChatCompletionResponse = {
+        id: "chatcmpl-rc2",
+        object: "chat.completion",
+        created: 1234567890,
+        model: "gemini",
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: "assistant",
+              thinking: { signature: "sig_only" },
+              reasoning_content: "Reasoning from alternate field",
+              content: "Out",
+            },
+            finish_reason: "stop",
+          },
+        ],
+      };
+
+      const result = convertResponseToAnthropic(openai, originalModel);
+
+      expect(result.content[0]).toEqual({
+        type: "thinking",
+        thinking: "Reasoning from alternate field",
+        signature: "sig_only",
+      });
+      expect(result.content[1]).toEqual({ type: "text", text: "Out" });
+    });
+
+    it("prefers message.thinking.content over reasoning_content when both are set", () => {
+      const openai: OpenAIChatCompletionResponse = {
+        id: "chatcmpl-rc3",
+        object: "chat.completion",
+        created: 1234567890,
+        model: "gpt-4",
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: "assistant",
+              thinking: {
+                signature: "s",
+                content: "Primary",
+              },
+              reasoning_content: "Secondary",
+              content: "Text",
+            },
+            finish_reason: "stop",
+          },
+        ],
+      };
+
+      const result = convertResponseToAnthropic(openai, originalModel);
+
+      expect(result.content[0]).toEqual({
+        type: "thinking",
+        thinking: "Primary",
+        signature: "s",
+      });
+      expect(result.content[1]).toEqual({ type: "text", text: "Text" });
+    });
   });
 
   describe("web_search annotations", () => {

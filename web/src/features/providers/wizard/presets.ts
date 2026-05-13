@@ -1,8 +1,79 @@
 import type { PartnerPreset } from "./types";
 
+/** Known vendor tokens → preferred display casing */
+const VENDOR_DISPLAY: Record<string, string> = {
+  glm: "GLM",
+  gpt: "GPT",
+  mimo: "MiMo",
+  minimax: "MiniMax",
+  gemini: "Gemini",
+  claude: "Claude",
+};
+
+/**
+ * Turn an upstream model id (hyphen-separated) into a human display name:
+ * hyphen → space; known vendors (glm, gpt, …) use brand casing; numeric / version-like segments kept readable.
+ */
+export function upstreamModelIdToDisplayName(upstreamId: string): string {
+  const id = upstreamId.trim();
+  if (!id) {
+    return id;
+  }
+  return id
+    .split("-")
+    .map(part => displayNameSegment(part))
+    .filter(s => s.length > 0)
+    .join(" ");
+}
+
+function displayNameSegment(part: string): string {
+  const trimmed = part.trim();
+  if (!trimmed) {
+    return "";
+  }
+  if (/^[\d.]+$/.test(trimmed)) {
+    return trimmed;
+  }
+  if (/^v[\d.]+$/i.test(trimmed)) {
+    return "V" + trimmed.slice(1).toLowerCase();
+  }
+  if (/[a-z][A-Z]/.test(trimmed)) {
+    return trimmed;
+  }
+  const lower = trimmed.toLowerCase();
+  if (VENDOR_DISPLAY[lower]) {
+    return VENDOR_DISPLAY[lower];
+  }
+  if (/^[a-z]+$/i.test(trimmed)) {
+    return lower.charAt(0).toUpperCase() + lower.slice(1);
+  }
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
+}
+
+/** One wizard textarea line: ensure `id;display` with generated display when display is empty. */
+function expandWizardModelLineDefault(line: string): string {
+  const s = line.trim();
+  if (!s) {
+    return s;
+  }
+  const i = s.indexOf(";");
+  if (i === -1) {
+    return `${s};${upstreamModelIdToDisplayName(s)}`;
+  }
+  const id = s.slice(0, i).trim();
+  const dn = s.slice(i + 1).trim();
+  if (!id) {
+    return s;
+  }
+  if (dn.length === 0) {
+    return `${id};${upstreamModelIdToDisplayName(id)}`;
+  }
+  return `${id};${dn}`;
+}
+
 /** Newline-separated default model list for textarea value / placeholder */
 export function defaultModelIdsAsText(preset: PartnerPreset): string {
-  return preset.defaultModelIds.join("\n");
+  return preset.defaultModelIds.map(expandWizardModelLineDefault).join("\n");
 }
 
 /** OpenAI official Chat API base + Anthropic official API base (editable; defaults prefilled). */

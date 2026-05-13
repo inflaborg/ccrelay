@@ -93,6 +93,7 @@ function buildOpenAIMessageFromContent(blocks: AnthropicContentBlock[]): OpenAIR
         content: b.thinking,
         signature: b.signature,
       };
+      message.reasoning_content = b.thinking;
     } else if (b.type === "tool_use") {
       toolCalls.push({
         id: b.id,

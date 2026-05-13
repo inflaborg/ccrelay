@@ -96,7 +96,7 @@ export async function handlePatchConfig(
     }
 
     const result = configManager.updateConfigSection(
-      section as "logging" | "concurrency" | "server" | "routing",
+      section as "logging" | "concurrency" | "server" | "routing" | "webSearch",
       body.data
     );
 

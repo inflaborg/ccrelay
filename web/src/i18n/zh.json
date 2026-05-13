@@ -192,13 +192,21 @@
       "apiKeyHelpEdit": "API 密钥无法修改。如需更改，请删除后重新创建提供商。",
       "apiKeyHelpAdd": "支持 ${ENV_VAR} 语法。创建后无法修改。",
       "useCustomModelsList": "使用自定义模型列表",
-      "customModelsListHelp": "启用后，GET /models 将从此列表本地响应（不请求上游）。可选的查询限制会截断返回页；Anthropic 格式的响应会相应设置 has_more。",
-      "modelIds": "模型 ID（每行一个）",
+      "customModelsListHelp": "启用后，GET /models 将从此列表本地响应（不请求上游）。每行：真实模型 id，或 `真实id;展示名`，或 `真实id;展示名;别名`（展示名与 id 相同时可写 `真实id;;别名`）。未带 HTTP 头 `x-ccrelay-model-alias` 时列表/详情返回真实 id；带上该头时对外 `id` 为别名段。可选的查询限制会截断返回页；Anthropic 格式的响应会相应设置 has_more。",
+      "modelIds": "模型 ID（每行一个；真实id 或 真实id;展示 或 真实id;展示;别名）",
       "enableModelMapping": "启用模型映射",
       "modelMappingHelp": "关闭后，下方 YAML 仍保留在配置中但不会应用（请求、模型列表和响应模型均不映射）。",
       "modelMap": "模型映射（YAML）",
       "modelMapHelp": "可选。留空则透传模型名称不做重映射。",
-      "submitAdd": "添加提供商"
+      "submitAdd": "添加提供商",
+      "coworkHelper": "自定义模型快捷填写",
+      "coworkHelperDesc": "输入上游模型 ID 与可选展示名，一步生成自定义模型列表与对应的模型映射。",
+      "coworkHelperRealId": "真实模型 ID",
+      "coworkHelperDisplayName": "显示名称（可选）",
+      "coworkHelperAdd": "添加一行",
+      "coworkHelperPreview": "预览",
+      "coworkHelperApply": "应用",
+      "coworkHelperRemoveRow": "删除此行"
     },
     "validation": {
       "mustBeYamlArray": "必须是 YAML 数组",
@@ -209,7 +217,8 @@
       "id": "例如 my_provider",
       "name": "例如 My Custom Provider",
       "baseUrl": "例如 https://api.example.com",
-      "apiKey": "例如 ${API_KEY} 或 sk-..."
+      "apiKey": "例如 ${API_KEY} 或 sk-...",
+      "customModelsList": "claude-sonnet-4-6;Claude Sonnet 4.6\ngpt-5.4;GPT 5.4;claude-abc001"
     },
     "deleteDialog": {
       "title": "删除提供商？",
@@ -270,7 +279,7 @@
       "baseUrl": "端点 URL",
       "models": "上游模型 ID",
       "customModels": "自定义模型列表",
-      "claudeSupport": "支持 Claude Code / Codex"
+      "claudeSupport": "支持 Claude Cowork / Claude Code / Codex"
     },
     "models": {
       "referenceTitle": "端点模型（对照）",
@@ -303,14 +312,14 @@
       "formatError": "响应格式异常"
     },
     "placeholder": {
-      "models": "glm-5.1\nglm-4.7"
+      "models": "glm-5.1;GLM 5.1\nglm-4.7;GLM 4.7"
     },
     "help": {
       "azureEndpoint": "Azure OpenAI 基础 URL，例如 https://…cognitiveservices.azure.com/openai/v1",
       "customEndpoint": "填写上游基础 URL（需与所选协议一致：OpenAI Chat 或 Anthropic Messages）。",
       "presetEndpointDefault": "默认为官方 API 地址；若使用其它网关或代理请修改。",
-      "models": "每行一个模型 ID。将写入为 anthropic/{id} 出现在本地模型列表。",
-      "claudeSupport": "将 claude-* 与 gpt-* 映射到第一个模型，供 Claude Code 与 Codex 使用。"
+      "models": "每行一个上游模型 id。使用 id;展示名 可设置自定义显示名（分号分隔 id 与名称）。",
+      "claudeSupport": "为 Cowork 客户端启用别名映射：每个模型在列表中获得 claude-{hash} 别名；发送 x-ccrelay-model-alias 头的客户端将看到别名而非真实 id。同时添加 claude-* 与 gpt-* 通配映射到第一个模型，供 Claude Code 和 Codex 使用。"
     },
     "confirm": {
       "lead": "将创建以下提供商：",
@@ -536,6 +545,7 @@
     "webSearch": {
       "title": "网络搜索",
       "enable": "启用网络搜索",
+      "searchBackend": "搜索引擎",
       "provider": "搜索服务商",
       "apiKey": "API 密钥",
       "apiKeyPlaceholder": "tvly-...",
@@ -543,6 +553,15 @@
       "searchDepth": "搜索深度",
       "depthBasic": "基础",
       "depthAdvanced": "高级",
+      "glmApiKey": "GLM API 密钥",
+      "glmApiKeyPlaceholder": "输入您的智谱 API 密钥",
+      "glmProtocol": "API 协议",
+      "glmRegion": "区域",
+      "glmRegionIntl": "国际",
+      "glmRegionCn": "中国",
+      "glmCoding": "Coding 计划",
+      "glmModel": "模型",
+      "glmModelPlaceholder": "glm-4.7",
       "providerAssignment": "提供商分配",
       "providerAssignmentHint": "选择哪些 LLM 提供商启用网络搜索",
       "noProviders": "暂无已配置的提供商",

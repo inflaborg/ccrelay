@@ -96,6 +96,8 @@ export interface OpenAIMessageRequest {
 export interface OpenAIMessage {
   role: "system" | "user" | "assistant" | "tool" | "developer";
   content: string | OpenAIContent[];
+  /** Non-standard (DeepSeek/MiMo); carries reasoning text in multi-turn tool-call flows */
+  reasoning_content?: string;
   tool_calls?: OpenAIToolCall[];
   tool_call_id?: string;
   thinking?: {
@@ -539,6 +541,12 @@ function convertAssistantMessage(content: ContentBlockParam[], targetModel: stri
       content: combinedThinkingContent,
       signature: thoughtSignature,
     };
+  }
+
+  // reasoning_content: DeepSeek/MiMo require this field on assistant messages in multi-turn
+  // tool-call flows. Set it whenever thinking content exists, regardless of signature.
+  if (combinedThinkingContent) {
+    assistantMessage.reasoning_content = combinedThinkingContent;
   }
 
   return assistantMessage;

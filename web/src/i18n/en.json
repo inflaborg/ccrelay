@@ -192,13 +192,21 @@
       "apiKeyHelpEdit": "API Key cannot be modified. To change, delete and recreate the provider.",
       "apiKeyHelpAdd": "Supports ${ENV_VAR} syntax. Cannot be modified after creation.",
       "useCustomModelsList": "Use custom models list",
-      "customModelsListHelp": "When enabled, GET /models is answered locally from this list (no upstream). Optional query limit truncates the returned page; Anthropic-shaped responses set has_more accordingly.",
-      "modelIds": "Model ids (one per line)",
+      "customModelsListHelp": "When enabled, GET /models is answered locally from this list (no upstream). Each line: real model id, or realId;display name, or realId;display name;alias (use realId;;alias when display equals id). Without HTTP header x-ccrelay-model-alias, list/detail return the real id; with that header, wire id is the alias segment. Optional query limit truncates the returned page; Anthropic-shaped responses set has_more accordingly.",
+      "modelIds": "Model ids (one per line; realId or realId;display or realId;display;alias)",
       "enableModelMapping": "Enable model mapping",
       "modelMappingHelp": "When off, the YAML below is kept in config but not applied (requests, model lists, and response model stay unmapped).",
       "modelMap": "Model Map (YAML)",
       "modelMapHelp": "Optional. Leave empty to pass models through without remapping.",
-      "submitAdd": "Add Provider"
+      "submitAdd": "Add Provider",
+      "coworkHelper": "Quick fill custom models",
+      "coworkHelperDesc": "Enter upstream model IDs and optional display names. Generates the custom model list and matching model map in one step.",
+      "coworkHelperRealId": "Real Model ID",
+      "coworkHelperDisplayName": "Display Name (optional)",
+      "coworkHelperAdd": "Add row",
+      "coworkHelperPreview": "Preview",
+      "coworkHelperApply": "Apply",
+      "coworkHelperRemoveRow": "Remove row"
     },
     "validation": {
       "mustBeYamlArray": "Must be a YAML array",
@@ -209,7 +217,8 @@
       "id": "e.g., my_provider",
       "name": "e.g., My Custom Provider",
       "baseUrl": "e.g., https://api.example.com",
-      "apiKey": "e.g., ${API_KEY} or sk-..."
+      "apiKey": "e.g., ${API_KEY} or sk-...",
+      "customModelsList": "claude-sonnet-4-6;Claude Sonnet 4.6\ngpt-5.4;GPT 5.4;claude-abc001"
     },
     "deleteDialog": {
       "title": "Delete provider?",
@@ -270,7 +279,7 @@
       "baseUrl": "Endpoint URL",
       "models": "Upstream model IDs",
       "customModels": "Custom model list",
-      "claudeSupport": "Support Claude Code / Codex"
+      "claudeSupport": "Support Claude Cowork / Claude Code / Codex"
     },
     "models": {
       "referenceTitle": "Endpoint models",
@@ -303,14 +312,14 @@
       "formatError": "Unexpected response format"
     },
     "placeholder": {
-      "models": "glm-5.1\nglm-4.7"
+      "models": "glm-5.1;GLM 5.1\nglm-4.7;GLM 4.7"
     },
     "help": {
       "azureEndpoint": "Your Azure OpenAI base URL, e.g. https://…cognitiveservices.azure.com/openai/v1",
       "customEndpoint": "Paste your upstream base URL (must match the protocol you chose: OpenAI Chat or Anthropic Messages).",
       "presetEndpointDefault": "Official API URL by default; edit if you use another host or proxy.",
-      "models": "One model id per line. Each becomes anthropic/{id} in the local model list.",
-      "claudeSupport": "Adds claude-* and gpt-* patterns mapped to the first model for Claude Code and Codex."
+      "models": "One upstream model id per line. Use id;display name to set a custom display name (semicolon separates id from name).",
+      "claudeSupport": "Enables alias mapping for Cowork clients: each model gets a claude-{hash} alias in the model list; clients sending x-ccrelay-model-alias header will see aliases instead of real ids. Also adds claude-* and gpt-* wildcard patterns mapped to the first model for Claude Code and Codex."
     },
     "confirm": {
       "lead": "These providers will be created:",
@@ -536,6 +545,7 @@
     "webSearch": {
       "title": "Web Search",
       "enable": "Enable web search",
+      "searchBackend": "Search Backend",
       "provider": "Search Provider",
       "apiKey": "API Key",
       "apiKeyPlaceholder": "tvly-...",
@@ -543,6 +553,15 @@
       "searchDepth": "Search Depth",
       "depthBasic": "Basic",
       "depthAdvanced": "Advanced",
+      "glmApiKey": "GLM API Key",
+      "glmApiKeyPlaceholder": "Enter your GLM/Zhipu API key",
+      "glmProtocol": "API Protocol",
+      "glmRegion": "Region",
+      "glmRegionIntl": "International",
+      "glmRegionCn": "China",
+      "glmCoding": "Coding Plan",
+      "glmModel": "Model",
+      "glmModelPlaceholder": "glm-4.7",
       "providerAssignment": "Provider Assignment",
       "providerAssignmentHint": "Select which LLM providers should have web search enabled",
       "noProviders": "No providers configured",

@@ -192,6 +192,39 @@ describe("convertOpenAIRequestToAnthropic", () => {
     ]);
   });
 
+  it("converts assistant reasoning_content to Anthropic thinking block", () => {
+    const { request } = convertOpenAIRequestToAnthropic(
+      {
+        model: "m",
+        max_tokens: 1,
+        messages: [
+          {
+            role: "assistant",
+            content: "Answer",
+            reasoning_content: "Chain of thought",
+            tool_calls: [
+              {
+                id: "call_1",
+                type: "function",
+                function: { name: "f", arguments: "{}" },
+              },
+            ],
+          },
+          { role: "tool", content: "result", tool_call_id: "call_1" },
+          { role: "user", content: "Follow up" },
+        ],
+      },
+      "/v1/chat/completions"
+    );
+    const assistantMsg = request.messages.find(m => m.role === "assistant");
+    expect(assistantMsg).toBeDefined();
+    expect(Array.isArray(assistantMsg!.content)).toBe(true);
+    const blocks = assistantMsg!.content as { type: string; thinking?: string }[];
+    const thinkingBlock = blocks.find(b => b.type === "thinking");
+    expect(thinkingBlock).toBeDefined();
+    expect(thinkingBlock!.thinking).toBe("Chain of thought");
+  });
+
   it("omits tool_choice when there are no tools (even if tool_choice was set)", () => {
     const { request } = convertOpenAIRequestToAnthropic(
       {

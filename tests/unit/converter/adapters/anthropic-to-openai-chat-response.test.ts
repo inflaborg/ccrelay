@@ -33,6 +33,23 @@ describe("convertAnthropicResponseToOpenAI", () => {
     expect(o.usage?.completion_tokens).toBe(5);
   });
 
+  it("maps thinking block to message.reasoning_content for DeepSeek-style clients", () => {
+    const anthropic: AnthropicMessageResponse = {
+      ...base,
+      content: [
+        { type: "thinking", thinking: "Internal chain", signature: "sig1" },
+        { type: "text", text: "Hello" },
+      ],
+    };
+    const o = convertAnthropicResponseToOpenAI(anthropic, "claude-3");
+    expect(o.choices[0].message.thinking).toEqual({
+      content: "Internal chain",
+      signature: "sig1",
+    });
+    expect(o.choices[0].message.reasoning_content).toBe("Internal chain");
+    expect(o.choices[0].message.content).toBe("Hello");
+  });
+
   it("isAnthropicMessageResponse recognizes message type", () => {
     expect(isAnthropicMessageResponse(base)).toBe(true);
     expect(isAnthropicMessageResponse({ type: "error" })).toBe(false);

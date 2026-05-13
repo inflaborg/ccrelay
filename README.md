@@ -25,6 +25,7 @@
   - [Multi-Instance Mode](#multi-instance-mode)
   - [Provider Modes](#provider-modes)
   - [Model Mapping](#model-mapping)
+  - [Claude Desktop / Cowork Model ID Restrictions](#claude-desktop--cowork-model-id-restrictions)
   - [OpenAI Format Conversion](#openai-format-conversion)
   - [Web UI Dashboard](#web-ui-dashboard)
 - [External web search (Tavily)](#external-web-search-tavily)
@@ -324,6 +325,60 @@ vlModelMap:
 ```
 
 `modelMap` applies only to request bodies (`model` field). `GET /models` responses are not rewritten.
+
+### Claude Desktop / Cowork Model ID Restrictions
+
+Starting from Claude Desktop 1.7196.0, the client rejects model IDs that contain third-party keywords such as `qwen`, `glm`, `kimi`, `deepseek`, etc. If you use third-party upstream models, map them to `claude-` prefixed aliases for Cowork only.
+
+The alias must be `claude-` followed by a single token **without additional hyphens** (e.g. `claude-a1`, not `claude-my-model`), because multi-hyphen names are parsed as Anthropic model versions.
+
+**Custom model list** (`customModelsList`): each line is `realModelId;displayName;alias` (or `realModelId;;alias` when display equals the real id). The real id is what upstream expects; `alias` is the Cowork-safe id.
+
+**Cowork**: In Claude Desktop, add a custom request header `x-ccrelay-model-alias` (any value except `false` / `0` / `no`). With this header, `GET /models` and `GET /models/{id}` return **alias** as the wire `id`. Without the header, the same list returns **real** model ids (for other clients).
+
+**Model mapping** (`modelMap`): map each alias to the real upstream model id. Place specific rules before wildcard `claude-*` / `gpt-*` catch-alls.
+
+**Example** -- two GLM models; Cowork uses aliases via the header above:
+
+```yaml
+glm:
+  name: "GLM"
+  baseUrl: "https://api.z.ai/api/paas/v4"
+  providerType: "openai_chat"
+  mode: "inject"
+  apiKey: "${GLM_API_KEY}"
+  useCustomModelsList: true
+  customModelsList:
+    - "glm-5.1;GLM 5.1;claude-a1"
+    - "glm-4.7;GLM 4.7;claude-a2"
+  modelMap:
+    - { pattern: "claude-a1", model: "glm-5.1" }
+    - { pattern: "claude-a2", model: "glm-4.7" }
+    - { pattern: "claude-*", model: "glm-5.1" }
+    - { pattern: "gpt-*", model: "glm-5.1" }
+```
+
+With this configuration:
+
+- **Without** `x-ccrelay-model-alias`: `GET /models` returns `glm-5.1` and `glm-4.7` (with display names when they differ from the id).
+- **With** `x-ccrelay-model-alias`: `GET /models` returns `claude-a1` / `claude-a2` as ids; Cowork selects those; CCRelay maps them to real upstream ids via `modelMap`.
+- The `claude-*` and `gpt-*` wildcards catch any other model names the client may send and route them to the first model.
+
+The built-in wizard writes `realId;displayName;claude-{hash}` lines and matching `modelMap` entries. Add `x-ccrelay-model-alias` in Claude Desktop for Cowork; omit it elsewhere.
+
+#### Custom model list configuration UI
+
+![Custom model list](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/provider-custom-model-1.webp)
+
+Use **Quick fill custom models** to enter upstream model IDs and display names in a structured form; the custom model list and model map are generated automatically.
+
+![Quick fill custom models](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/provider-custom-model-2.webp)
+
+#### Enabling alias in Claude Cowork
+
+In Claude Desktop's **Configure third-party inference** panel, add `x-ccrelay-model-alias` to **Gateway extra headers** so that the model list returns aliases instead of real IDs.
+
+![Cowork gateway extra headers](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/cowork-ccrelay-model-alias.webp)
 
 ### OpenAI Format Conversion
 

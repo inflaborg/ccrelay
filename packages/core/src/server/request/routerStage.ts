@@ -34,6 +34,9 @@ function legacyV1ToOpenAiWireCanonical(method: string, path: string): string | n
   if (path === "/v1/models" && m === "GET") {
     return "/models";
   }
+  if (m === "GET" && path.startsWith("/v1/models/") && path.length > "/v1/models/".length) {
+    return `/models${path.slice("/v1/models".length)}`;
+  }
   if (path === "/v1/chat/completions" && m === "POST") {
     return "/chat/completions";
   }

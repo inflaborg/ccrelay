@@ -105,6 +105,20 @@ describe("matchHostedToolRuleForBaseUrl", () => {
     expect(r?.tools?.web_search).toBe("mimo-web-search");
   });
 
+  it("hits MiniMax rule for api.minimax.io", () => {
+    const r = matchHostedToolRuleForBaseUrl("https://api.minimax.io/v1/chat/completions");
+    expect(r?.provider).toBe("minimax");
+    expect(r?.requestSanitize).toBe("minimax-chat-sanitize");
+    expect(r?.responses).toBe("minimax-reasoning-details");
+  });
+
+  it("hits MiniMax rule for api.minimaxi.com", () => {
+    const r = matchHostedToolRuleForBaseUrl("https://api.minimaxi.com/v1/chat/completions");
+    expect(r?.provider).toBe("minimax");
+    expect(r?.requestSanitize).toBe("minimax-chat-sanitize");
+    expect(r?.responses).toBe("minimax-reasoning-details");
+  });
+
   it("does not match MiMo for token-plan-sgp host (no web_search)", () => {
     expect(
       matchHostedToolRuleForBaseUrl("https://token-plan-sgp.xiaomimimo.com/v1/chat/completions")

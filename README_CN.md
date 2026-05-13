@@ -25,6 +25,7 @@
   - [多实例模式](#多实例模式)
   - [Provider 模式](#provider-模式)
   - [模型映射](#模型映射)
+  - [Claude Desktop / Cowork 模型 ID 限制](#claude-desktop--cowork-模型-id-限制)
   - [OpenAI 格式转换](#openai-格式转换)
   - [Web UI 管理界面](#web-ui-管理界面)
 - [外部联网搜索（Tavily）](#外部联网搜索tavily)
@@ -325,6 +326,60 @@ vlModelMap:
 ```
 
 `modelMap` 仅作用于请求体中的 `model` 字段。`GET /models` 响应不会被改写。
+
+### Claude Desktop / Cowork 模型 ID 限制
+
+Claude Desktop 1.7196.0 版本起，客户端会屏蔽包含第三方关键词（如 `qwen`、`glm`、`kimi`、`deepseek` 等）的模型 ID。若使用第三方上游模型，仅在 Cowork 场景下需将其映射为 `claude-` 前缀的别名。
+
+别名必须是 `claude-` 加上一段**不含额外连字符**的字符串（如 `claude-a1`，而非 `claude-my-model`），因为多连字符名称会被解析为 Anthropic 模型版本号。
+
+**自定义模型列表**（`customModelsList`）：每行为 `真实模型id;展示名;别名`（展示名与真实 id 相同时可写 `真实id;;别名`）。真实 id 为上游实际模型名；`别名` 为 Cowork 可用的对外 id。
+
+**Cowork**：在 Claude Desktop 中为请求添加自定义头 `x-ccrelay-model-alias`（任意非 `false` / `0` / `no` 的值）。带上该头时，`GET /models` 与 `GET /models/{id}` 的 wire `id` 为**别名**；不带该头时，同一列表返回**真实**模型 id（供其他客户端使用）。
+
+**模型映射**（`modelMap`）：将每个别名映射到真实上游模型 ID。具体规则需排在 `claude-*` / `gpt-*` 等通配规则之前。
+
+**示例** -- 两个 GLM 模型；Cowork 通过上述请求头启用别名：
+
+```yaml
+glm:
+  name: "GLM"
+  baseUrl: "https://api.z.ai/api/paas/v4"
+  providerType: "openai_chat"
+  mode: "inject"
+  apiKey: "${GLM_API_KEY}"
+  useCustomModelsList: true
+  customModelsList:
+    - "glm-5.1;GLM 5.1;claude-a1"
+    - "glm-4.7;GLM 4.7;claude-a2"
+  modelMap:
+    - { pattern: "claude-a1", model: "glm-5.1" }
+    - { pattern: "claude-a2", model: "glm-4.7" }
+    - { pattern: "claude-*", model: "glm-5.1" }
+    - { pattern: "gpt-*", model: "glm-5.1" }
+```
+
+配置效果：
+
+- **未带** `x-ccrelay-model-alias`：`GET /models` 返回 `glm-5.1`、`glm-4.7`（展示名与 id 不同时附带展示名）。
+- **带上** `x-ccrelay-model-alias`：`GET /models` 的 id 为 `claude-a1` / `claude-a2`；Cowork 选择后由 CCRelay 经 `modelMap` 映射到真实上游 ID。
+- `claude-*` 与 `gpt-*` 通配规则兜底，将客户端可能发送的其他模型名路由到第一个模型。
+
+内置向导会生成 `真实id;展示名;claude-{hash}` 行及对应 `modelMap`。Cowork 请在 Claude Desktop 中配置该请求头；其他环境可不配置。
+
+#### 自定义模型列表配置界面
+
+![自定义模型列表](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/provider-custom-model-1.webp)
+
+使用**自定义模型快捷填写**，以结构化表单输入上游模型 ID 与展示名，自动生成自定义模型列表和模型映射。
+
+![自定义模型快捷填写](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/provider-custom-model-2.webp)
+
+#### 在 Claude Cowork 中启用别名
+
+在 Claude Desktop 的 **Configure third-party inference** 面板中，将 `x-ccrelay-model-alias` 添加到 **Gateway extra headers**，使模型列表返回别名而非真实 ID。
+
+![Cowork gateway extra headers](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/cowork-ccrelay-model-alias.webp)
 
 ### OpenAI 格式转换
 
