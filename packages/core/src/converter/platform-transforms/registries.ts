@@ -20,6 +20,7 @@ import { azureChatSanitize } from "./azure-openai/chat-sanitize";
 import { glmChatSanitize } from "./glm/request-sanitize";
 import { geminiChatSanitize } from "./gemini/request-sanitize";
 import { geminiThoughtTagsResponseTransform } from "./gemini/response-thoughts";
+import { deepseekChatSanitize } from "./deepseek/request-sanitize";
 import { minimaxChatSanitize } from "./minimax/request-sanitize";
 import { minimaxReasoningDetailsResponseTransform } from "./minimax/response-reasoning";
 import { passthroughTransform } from "./passthrough";
@@ -78,6 +79,7 @@ export const ANTHROPIC_SSE_TRANSFORM_REGISTRY: Readonly<
 export const REQUEST_SANITIZE_REGISTRY: Readonly<Record<string, PlatformRequestSanitizeTransform>> =
   {
     "azure-chat-sanitize": azureChatSanitize,
+    "deepseek-chat-sanitize": deepseekChatSanitize,
     "gemini-chat-sanitize": geminiChatSanitize,
     "glm-chat-sanitize": glmChatSanitize,
     "minimax-chat-sanitize": minimaxChatSanitize,
@@ -96,6 +98,7 @@ export {
   sanitizeAzureResponsesRequestTools,
 } from "./azure-openai/responses-request-tools";
 export { azureChatSanitize } from "./azure-openai/chat-sanitize";
+export { deepseekChatSanitize, normalizeDeepseekEffort } from "./deepseek/request-sanitize";
 export { glmChatSanitize } from "./glm/request-sanitize";
 export {
   canGeminiDisableThinking,

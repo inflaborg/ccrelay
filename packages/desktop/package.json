@@ -60,10 +60,14 @@
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
-      "identity": null,
       "target": [
         "dmg"
-      ]
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "packaging/entitlements.mac.plist",
+      "entitlementsInherit": "packaging/entitlements.mac.inherit.plist",
+      "notarize": true
     },
     "win": {
       "target": [

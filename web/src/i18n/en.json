@@ -258,7 +258,8 @@
       "xiaomi": "Xiaomi MiMo",
       "azure": "Azure OpenAI",
       "minimax": "MiniMax",
-      "geminiOpenai": "Gemini (OpenAI-compatible)"
+      "geminiOpenai": "Gemini (OpenAI-compatible)",
+      "deepseek": "DeepSeek"
     },
     "toggle": {
       "off": "No",

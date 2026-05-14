@@ -258,7 +258,8 @@
       "xiaomi": "小米 MiMo",
       "azure": "Azure OpenAI",
       "minimax": "MiniMax",
-      "geminiOpenai": "Gemini（OpenAI 兼容）"
+      "geminiOpenai": "Gemini（OpenAI 兼容）",
+      "deepseek": "DeepSeek（深度求索）"
     },
     "toggle": {
       "off": "否",

@@ -18,3 +18,7 @@ packages/core/src/api/version.generated.ts
 /dist
 /internal-docs
 /.claude/worktrees
+
+# Signing certificates (never commit)
+signing/
+*.p12

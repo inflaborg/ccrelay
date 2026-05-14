@@ -35,6 +35,11 @@
       "nsis": {
         "installMode": "currentUser"
       }
+    },
+    "macOS": {
+      "entitlements": "entitlements.plist",
+      "signingIdentity": null,
+      "minimumSystemVersion": "10.13"
     }
   }
 }

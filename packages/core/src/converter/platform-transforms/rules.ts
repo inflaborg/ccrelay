@@ -1,6 +1,6 @@
 /**
  * Layer 1: declarative hostname → platform transforms (tools, messages, responses).
- * Provider implementations live under `glm/`, `xiaomimimo/`, `minimax/`, `azure-openai/`, `gemini/`.
+ * Provider implementations live under `glm/`, `xiaomimimo/`, `minimax/`, `azure-openai/`, `gemini/`, `deepseek/`.
  */
 
 /* eslint-disable @typescript-eslint/naming-convention -- wire tool.type literals */
@@ -87,5 +87,10 @@ export const PLATFORM_TRANSFORM_RULES: readonly PlatformTransformRule[] = [
     stripQuery: true,
     requestSanitize: "gemini-chat-sanitize",
     responses: "gemini-thought-tags",
+  },
+  {
+    provider: "deepseek",
+    domains: ["api.deepseek.com"],
+    requestSanitize: "deepseek-chat-sanitize",
   },
 ];

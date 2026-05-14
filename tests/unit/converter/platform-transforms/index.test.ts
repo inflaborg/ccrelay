@@ -128,6 +128,12 @@ describe("matchHostedToolRuleForBaseUrl", () => {
   it("does not match MiMo for other xiaomimimo.com hosts", () => {
     expect(matchHostedToolRuleForBaseUrl("https://staging.xiaomimimo.com/v1")).toBeUndefined();
   });
+
+  it("hits DeepSeek rule for api.deepseek.com", () => {
+    const r = matchHostedToolRuleForBaseUrl("https://api.deepseek.com/v1/chat/completions");
+    expect(r?.provider).toBe("deepseek");
+    expect(r?.requestSanitize).toBe("deepseek-chat-sanitize");
+  });
 });
 
 describe("normalizeToolForProvider", () => {

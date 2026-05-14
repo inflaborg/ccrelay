@@ -49,6 +49,8 @@ export {
   mimoWebSearchTransform,
   minimaxChatSanitize,
   minimaxReasoningDetailsResponseTransform,
+  deepseekChatSanitize,
+  normalizeDeepseekEffort,
   azureWebSearchRequestOverride,
   azureResponsesWebSearchResponseTransform,
   sanitizeAzureResponsesRequestTools,
