@@ -22,6 +22,7 @@
     "desktop:build": "node scripts/generate-version.mjs && node scripts/build-config.mjs && npm run build:web:desktop && npm run bundle:desktop",
     "desktop:start": "npm run desktop:build && npm run start -w ccrelay-desktop",
     "desktop:pack:mac": "npm run desktop:build && npm run pack:mac -w ccrelay-desktop",
+    "desktop:pack:mac:signed": "bash scripts/pack-mac-signed.sh",
     "desktop:pack:win": "npm run desktop:build && npm run pack:win -w ccrelay-desktop",
     "bundle:tauri": "node scripts/esbuild.tauri.mjs",
     "build:web:tauri": "npx shx rm -rf packages/desktop-tauri/web && cd web && npm run build && npx shx mkdir -p ../packages/desktop-tauri && npx shx cp -r dist ../packages/desktop-tauri/web",

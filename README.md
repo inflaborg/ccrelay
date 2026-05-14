@@ -34,7 +34,6 @@
 - [Commands](#commands)
 - [Development](#development)
 - [File Locations](#file-locations)
-- [TODO](#todo)
 - [License](#license)
 
 ---
@@ -139,16 +138,6 @@ An optional Electron desktop app (`packages/desktop`) runs the same core as the 
 - Download from [GitHub Releases](https://github.com/inflaborg/ccrelay/releases):
   - **macOS**: `CCRelay-<version>-darwin-arm64.dmg` or `-darwin-x64.dmg`
   - **Windows**: `CCRelay-<version>-win32-x64.exe` or `-win32-arm64.exe`
-
-### macOS: First Launch
-
-Release builds are not Apple-notarized. If Gatekeeper blocks the app:
-
-```bash
-xattr -cr /path/to/CCRelay.app
-```
-
-Or **Control-click** the app → **Open** the first time.
 
 ---
 
@@ -747,13 +736,6 @@ ccrelay/
 | State    | `~/.ccrelay/state.json`                                  | Active provider ID         |
 | IPC lock | `~/.ccrelay/ccrelay-lock.sock` (Unix) / named pipe (Win) | Leader election            |
 | Log DB   | `~/.ccrelay/logs.db`                                     | Request logs (Leader only) |
-
----
-
-## TODO
-
-- macOS: Apple Developer ID signing + notarization in CI to remove Gatekeeper prompts
-- Re-enable DMG packaging once signing works
 
 ---
 

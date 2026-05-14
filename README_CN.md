@@ -34,7 +34,6 @@
 - [命令](#命令)
 - [开发](#开发)
 - [文件位置](#文件位置)
-- [TODO](#todo)
 - [许可证](#许可证)
 
 ---
@@ -140,16 +139,6 @@ npm run compile        # 或 npm run watch
 - 从 [GitHub Releases](https://github.com/inflaborg/ccrelay/releases) 下载：
   - **macOS**: `CCRelay-<版本>-darwin-arm64.dmg` 或 `-darwin-x64.dmg`
   - **Windows**: `CCRelay-<版本>-win32-x64.exe` 或 `-win32-arm64.exe`
-
-### macOS：首次打开
-
-发布版本未经 Apple 公证。如果 Gatekeeper 阻止打开：
-
-```bash
-xattr -cr /path/to/CCRelay.app
-```
-
-或 **按住 Control 点击** 应用 → **打开**。
 
 ---
 
@@ -748,13 +737,6 @@ ccrelay/
 | 状态       | `~/.ccrelay/state.json`                                 | 当前激活的提供商 ID        |
 | IPC 锁     | `~/.ccrelay/ccrelay-lock.sock`（Unix）/ 命名管道（Win） | Leader 选举                |
 | 日志数据库 | `~/.ccrelay/logs.db`                                    | 请求日志（仅 Leader 写入） |
-
----
-
-## TODO
-
-- macOS：在 CI 中配置 Apple Developer ID 签名 + 公证，移除 Gatekeeper 提示
-- 签名完成后恢复 DMG 打包
 
 ---
 
