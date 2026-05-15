@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use tauri::{
     menu::{MenuBuilder, MenuItem, PredefinedMenuItem},
     tray::{TrayIcon, TrayIconBuilder},
-    AppHandle,
+    AppHandle, Manager,
 };
 
 use crate::sidecar;

@@ -62,11 +62,9 @@ pub async fn start_server(app: &AppHandle) -> Result<(), String> {
                     }
                 }
                 // Once we have port, host, and token — server is fully ready
-                if let (Some(port), Some(host), Some(token)) = (
-                    port_found,
-                    host_found.clone(),
-                    token_found.clone(),
-                ) {
+                if let (Some(port), Some(host), Some(token)) =
+                    (port_found, host_found.clone(), token_found.clone())
+                {
                     let state = app.state::<Mutex<SidecarState>>();
                     if let Ok(mut s) = state.lock() {
                         s.port = Some(port);
@@ -120,7 +118,9 @@ pub fn stop_server(app: &AppHandle) -> Result<(), String> {
     let mut s = state.lock().map_err(|e| e.to_string())?;
     let was_leader = s.is_leader;
     if let Some(child) = s.child.take() {
-        child.kill().map_err(|e| format!("Failed to kill sidecar: {e}"))?;
+        child
+            .kill()
+            .map_err(|e| format!("Failed to kill sidecar: {e}"))?;
     }
     s.port = None;
     s.host = None;
