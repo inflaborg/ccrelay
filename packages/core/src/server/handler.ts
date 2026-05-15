@@ -509,6 +509,11 @@ export class ProxyServer {
         this.handleRequest(req, res);
       });
 
+      // Node defaults include keepAliveTimeout=5000ms, which can drop SSE / slow-upstream
+      // client connections while waiting for the first upstream byte (notably on macOS 26).
+      this.server.timeout = 0;
+      this.server.keepAliveTimeout = 0;
+
       const host = this.config.host;
       const port = this.config.port;
 

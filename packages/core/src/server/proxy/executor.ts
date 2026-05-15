@@ -93,6 +93,22 @@ const EXCLUDED_HEADERS = new Set([
 const RETRYABLE_CODES = ["ECONNREFUSED", "ECONNRESET", "ENOTFOUND", "ETIMEDOUT"];
 
 /**
+ * Dedicated upstream agents avoid Node/Electron globalAgent defaults (notably short idle
+ * timeouts on some macOS 26 + Electron combinations) and keep long-lived LLM streams stable.
+ */
+const upstreamHttpProxyAgent = new http.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 30_000,
+  timeout: 0,
+});
+
+const upstreamHttpsProxyAgent = new https.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 30_000,
+  timeout: 0,
+});
+
+/**
  * Context for tracking request execution state
  */
 interface ExecutionContext {
@@ -292,6 +308,7 @@ export class ProxyExecutor {
       method,
       headers: requestHeaders,
       signal: abortSignal,
+      agent: isHttps ? upstreamHttpsProxyAgent : upstreamHttpProxyAgent,
     };
 
     const ctx: ExecutionContext = {

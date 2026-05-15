@@ -64,4 +64,3 @@ jobs:
       suffix: ${{ needs.prepare.outputs.suffix }}
       skip_tests: ${{ inputs.skip_tests }}
     secrets: inherit
-    secrets: inherit

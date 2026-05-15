@@ -47,6 +47,10 @@
         "title": "CCRelay: Open Config File"
       },
       {
+        "command": "ccrelay.exportLogs",
+        "title": "CCRelay: Open Logs Folder"
+      },
+      {
         "command": "ccrelay.showLogs",
         "title": "CCRelay: Show Logs",
         "icon": "$(output)"

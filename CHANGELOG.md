@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**Diagnostics**
+
+- Runtime messages (startup, configuration, proxy lifecycle, errors) are appended to dated log files under `~/.ccrelay/logs/`; files rotate daily and older ones are removed after about a week. This is separate from dashboard **request** history stored in the logging database.
+
+**Desktop**
+
+- Tray: **Open Logs Folder** (Electron and Tauri) opens `~/.ccrelay/logs/` in the system file manager.
+
+**VS Code**
+
+- **CCRelay: Open Logs Folder** command opens the same runtime log folder.
+
+### Fixed
+
+**Desktop**
+
+- macOS Tahoe (26): Electron and Tauri signed builds include local-network usage text and networking entitlements so the app can bind the relay and reach upstreams without spurious permission or connectivity failures.
+
+**Proxy**
+
+- macOS Tahoe (26): long proxy waits and streaming responses no longer drop after a few seconds when using the desktop apps or the VS Code extension.
+
 ## [0.2.4] - 2026-05-13 (pre-release)
 
 Pre-release line for 0.2.4.
