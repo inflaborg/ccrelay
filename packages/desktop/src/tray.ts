@@ -4,7 +4,7 @@
 
 import { Tray, Menu, shell, nativeImage, app } from "electron";
 import * as path from "path";
-import type { ProxyServer, ConfigManager } from "@ccrelay/core";
+import { getLogDir, type ConfigManager, type ProxyServer } from "@ccrelay/core";
 import { setOpenAtLogin, getOpenAtLogin } from "./autoLaunch";
 import { dashboardWebUrl, showDashboardWindow } from "./window";
 
@@ -101,6 +101,12 @@ export function createTray(server: ProxyServer, config: ConfigManager): Tray {
         label: "Open Config File",
         click: (): void => {
           void shell.openPath(config.getConfigPath());
+        },
+      },
+      {
+        label: "Open Logs Folder",
+        click: (): void => {
+          void shell.openPath(getLogDir());
         },
       },
       { type: "separator" },

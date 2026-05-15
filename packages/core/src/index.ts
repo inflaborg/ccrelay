@@ -17,7 +17,7 @@ export { setWebDistPath } from "./server/static";
 export { getUiAccessToken } from "./server/httpAccessGate";
 export { CCRELAY_UI_HEADER_NAME, CCRELAY_UI_HEADER_VALUE } from "./server/internalUiHeaders";
 
-export { Logger, ScopedLogger, LogLevel } from "./utils/logger";
+export { Logger, ScopedLogger, LogLevel, getLogDir } from "./utils/logger";
 
 export * as Api from "./api/index";
 

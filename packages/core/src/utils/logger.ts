@@ -3,6 +3,10 @@
  * Supports both VSCode environment and Worker threads
  */
 
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+
 // Check if vscode is available (not available in worker threads)
 let vscode: typeof import("vscode") | null = null;
 try {
@@ -41,6 +45,114 @@ const LOG_LEVEL_MAP: Record<string, LogLevel> = {
   ERROR: LogLevel.ERROR,
 };
 
+/** Retention for daily runtime log files under {@link getLogDir} (UTC calendar days). */
+const RUNTIME_LOG_RETENTION_DAYS = 7;
+
+function utcDateString(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Directory for CCRelay **runtime** text logs (`ccrelay-YYYY-MM-DD.log`).
+ * This is separate from `~/.ccrelay/logs.db`, which stores proxied **request/response** rows for the dashboard.
+ */
+export function getLogDir(): string {
+  return path.join(os.homedir(), ".ccrelay", "logs");
+}
+
+function isNodeMainThread(): boolean {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const wt = require("worker_threads") as typeof import("worker_threads");
+    return wt.isMainThread;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Append-only daily log files with rotation (UTC) and old-file cleanup.
+ * Disabled in Node worker threads to avoid concurrent writers on the same files.
+ */
+class FileTransport {
+  private stream: fs.WriteStream | null = null;
+  private currentDate = "";
+  private readonly logDir = getLogDir();
+  private writeFailedLogged = false;
+
+  write(line: string): void {
+    try {
+      this.ensureStream();
+      if (this.stream && !this.stream.destroyed) {
+        this.stream.write(`${line}\n`, err => {
+          if (err && !this.writeFailedLogged) {
+            this.writeFailedLogged = true;
+            console.error("[CCRelay] File log write failed:", err.message);
+          }
+        });
+      }
+    } catch (e) {
+      if (!this.writeFailedLogged) {
+        this.writeFailedLogged = true;
+        console.error("[CCRelay] File log transport error:", e);
+      }
+    }
+  }
+
+  private ensureStream(): void {
+    const today = utcDateString(new Date());
+    if (this.stream && !this.stream.destroyed && today === this.currentDate) {
+      return;
+    }
+
+    fs.mkdirSync(this.logDir, { recursive: true });
+    this.cleanupOldLogs();
+
+    if (this.stream && !this.stream.destroyed) {
+      this.stream.end();
+    }
+
+    this.currentDate = today;
+    const filePath = path.join(this.logDir, `ccrelay-${today}.log`);
+    this.stream = fs.createWriteStream(filePath, { flags: "a" });
+  }
+
+  private cleanupOldLogs(): void {
+    let entries: string[];
+    try {
+      entries = fs.readdirSync(this.logDir);
+    } catch {
+      return;
+    }
+
+    const cutoff = new Date();
+    cutoff.setUTCDate(cutoff.getUTCDate() - RUNTIME_LOG_RETENTION_DAYS);
+    const cutoffStr = utcDateString(cutoff);
+
+    for (const name of entries) {
+      const m = /^ccrelay-(\d{4}-\d{2}-\d{2})\.log$/.exec(name);
+      if (!m) {
+        continue;
+      }
+      const fileDay = m[1];
+      if (fileDay < cutoffStr) {
+        try {
+          fs.unlinkSync(path.join(this.logDir, name));
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  }
+
+  dispose(): void {
+    if (this.stream && !this.stream.destroyed) {
+      this.stream.end();
+    }
+    this.stream = null;
+  }
+}
+
 // Type definition for build config
 interface BuildConfig {
   // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -76,8 +188,11 @@ export class Logger {
   private minLevel: LogLevel = getDefaultLogLevel();
 
   private isDisposed: boolean = false;
+  private readonly fileTransport: FileTransport | null;
 
   private constructor() {
+    this.fileTransport = isNodeMainThread() ? new FileTransport() : null;
+
     if (vscode) {
       try {
         this.outputChannel = vscode.window.createOutputChannel("CCRelay");
@@ -117,6 +232,8 @@ export class Logger {
     if (this.logBuffer.length > this.maxBufferSize) {
       this.logBuffer.shift();
     }
+
+    this.fileTransport?.write(formatted);
 
     // Output to VSCode channel or console (for worker threads)
     if (this.outputChannel && !this.isDisposed) {
@@ -212,6 +329,7 @@ export class Logger {
 
   dispose(): void {
     this.isDisposed = true;
+    this.fileTransport?.dispose();
     if (this.outputChannel) {
       try {
         this.outputChannel.dispose();

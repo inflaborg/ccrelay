@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**Diagnostics**
+
+- Runtime messages (startup, configuration, proxy lifecycle, errors) are appended to dated log files under `~/.ccrelay/logs/`; files rotate daily and older ones are removed after about a week. This is separate from dashboard **request** history stored in the logging database.
+
+**Desktop**
+
+- Tray: **Open Logs Folder** (Electron and Tauri) opens `~/.ccrelay/logs/` in the system file manager.
+
+**VS Code**
+
+- **CCRelay: Open Logs Folder** command opens the same runtime log folder.
+
 ### Fixed
 
 **Desktop**

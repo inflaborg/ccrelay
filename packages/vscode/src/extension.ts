@@ -5,6 +5,7 @@ import {
   BUILD_HASH,
   BUILD_VERSION,
   ConfigManager,
+  getLogDir,
   GIT_HASH,
   LeaderElection,
   Logger,
@@ -124,6 +125,15 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
+  const exportLogsCommand = vscode.commands.registerCommand("ccrelay.exportLogs", async () => {
+    const logDir = getLogDir();
+    const uri = vscode.Uri.file(logDir);
+    const ok = await vscode.env.openExternal(uri);
+    if (!ok) {
+      vscode.window.showErrorMessage(`Could not open logs folder: ${logDir}`);
+    }
+  });
+
   const showLogsCommand = vscode.commands.registerCommand("ccrelay.showLogs", () => {
     logger?.show();
   });
@@ -160,6 +170,7 @@ export function activate(context: vscode.ExtensionContext) {
     startServerCommand,
     stopServerCommand,
     openSettingsCommand,
+    exportLogsCommand,
     showLogsCommand,
     clearLogsCommand,
     openWebUICommand,
