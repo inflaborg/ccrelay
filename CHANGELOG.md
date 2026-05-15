@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+**Desktop**
+
+- macOS Tahoe (26): Electron and Tauri signed builds include local-network usage text and networking entitlements so the app can bind the relay and reach upstreams without spurious permission or connectivity failures.
+
+**Proxy**
+
+- macOS Tahoe (26): long proxy waits and streaming responses no longer drop after a few seconds when using the desktop apps or the VS Code extension.
+
 ## [0.2.4] - 2026-05-13 (pre-release)
 
 Pre-release line for 0.2.4.
