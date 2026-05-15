@@ -59,6 +59,9 @@
       "out/database-worker.cjs"
     ],
     "mac": {
+      "extendInfo": {
+        "NSLocalNetworkUsageDescription": "CCRelay needs local network access to proxy API requests between your IDE and AI services."
+      },
       "category": "public.app-category.developer-tools",
       "target": [
         "dmg"
