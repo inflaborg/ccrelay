@@ -353,6 +353,54 @@ export const PARTNER_PRESETS: readonly PartnerPreset[] = [
     ],
   },
   {
+    id: "astraflow",
+    nameKey: "wizard.brand.astraflow",
+    mode: "inject",
+    idPrefix: "astraflow",
+    namePrefix: "Astraflow",
+    defaultModelIds: [],
+    defaultCustomModels: true,
+    authHeader: "authorization",
+    options: [
+      {
+        key: "region",
+        label: "wizard.option.region",
+        type: "select",
+        options: [
+          { value: "intl", label: "wizard.region.international" },
+          { value: "cn", label: "wizard.region.china" },
+        ],
+        defaultValue: "intl",
+      },
+    ],
+    segmentRules: [
+      {
+        segmentKey: "regionHost",
+        fromOption: "region",
+        map: {
+          intl: "https://api-us-ca.umodelverse.ai",
+          cn: "https://api.modelverse.cn",
+        },
+      },
+      {
+        segmentKey: "regionTag",
+        fromOption: "region",
+        map: {
+          intl: "intl",
+          cn: "cn",
+        },
+      },
+    ],
+    variants: [
+      {
+        providerType: "openai_chat",
+        urlTemplate: "{regionHost}/v1",
+        idSuffix: "{regionTag}-openai",
+        nameSuffix: "{regionTag}-OpenAI",
+      },
+    ],
+  },
+  {
     id: "deepseek",
     nameKey: "wizard.brand.deepseek",
     mode: "inject",

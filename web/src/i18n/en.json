@@ -259,7 +259,8 @@
       "azure": "Azure OpenAI",
       "minimax": "MiniMax",
       "geminiOpenai": "Gemini (OpenAI-compatible)",
-      "deepseek": "DeepSeek"
+      "deepseek": "DeepSeek",
+      "astraflow": "Astraflow (UCloud)"
     },
     "toggle": {
       "off": "No",
