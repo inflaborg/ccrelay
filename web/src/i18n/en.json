@@ -76,7 +76,7 @@
   },
   "clientConfig": {
     "title": "Client configuration",
-    "description": "Check Claude Code ({{claudePath}}) and Codex ({{codexPath}}) configs point to this CCRelay instance (port {{port}}).",
+    "description": "Check Claude Desktop, Claude Code ({{claudePath}}), and Codex ({{codexPath}}) configs point to this CCRelay instance (port {{port}}).",
     "status": {
       "ok": "OK",
       "notSet": "Not set",
@@ -94,6 +94,13 @@
         "suggested": "Suggested:"
       },
       "configureModels": "Configure default models",
+      "restore": "Restore",
+      "upToDate": "Up to date",
+      "apply": "Apply CCRelay settings"
+    },
+    "claudeDesktop": {
+      "name": "Claude Desktop",
+      "expected": "Expected:",
       "restore": "Restore",
       "upToDate": "Up to date",
       "apply": "Apply CCRelay settings"
@@ -121,10 +128,14 @@
       "replaceCodex": {
         "title": "Replace Codex config?"
       },
+      "replaceClaudeDesktop": {
+        "title": "Overwrite Claude Desktop config?"
+      },
       "restore": {
         "title": "Restore {{name}} config?",
         "claudeDescription": "This will remove CCRelay-injected keys (ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, etc.) from settings.json. Other settings are preserved.",
         "codexDescription": "This will remove the CCRelay model provider section from config.toml and reset the model to the default.",
+        "claudeDesktopDescription": "This will remove CCRelay config files from the Claude-3p directory, revert deploymentMode to 1p, and delete developer_settings.json.",
         "action": "Restore"
       }
     },

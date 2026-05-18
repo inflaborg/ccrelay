@@ -1,7 +1,15 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileCode2, Loader2, RotateCcw, SlidersHorizontal, Terminal, X } from "lucide-react";
+import {
+  FileCode2,
+  Loader2,
+  Monitor,
+  RotateCcw,
+  SlidersHorizontal,
+  Terminal,
+  X,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -58,8 +66,12 @@ export default function ClientConfigStatus() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [pendingTarget, setPendingTarget] = useState<"claudeCode" | "codex" | null>(null);
-  const [applyingTo, setApplyingTo] = useState<"claudeCode" | "codex" | null>(null);
+  const [pendingTarget, setPendingTarget] = useState<
+    "claudeCode" | "codex" | "claudeDesktop" | null
+  >(null);
+  const [applyingTo, setApplyingTo] = useState<"claudeCode" | "codex" | "claudeDesktop" | null>(
+    null
+  );
   const [modelModalOpen, setModelModalOpen] = useState(false);
   const [opus, setOpus] = useState("");
   const [sonnet, setSonnet] = useState("");
@@ -68,7 +80,9 @@ export default function ClientConfigStatus() {
   const [codexModalMode, setCodexModalMode] = useState<"apply" | "configure">("apply");
   const [codexModel, setCodexModel] = useState("");
   const [pendingCodexModel, setPendingCodexModel] = useState<string | undefined>(undefined);
-  const [restoreTarget, setRestoreTarget] = useState<"claudeCode" | "codex" | null>(null);
+  const [restoreTarget, setRestoreTarget] = useState<
+    "claudeCode" | "codex" | "claudeDesktop" | null
+  >(null);
   const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
@@ -78,7 +92,7 @@ export default function ClientConfigStatus() {
   });
 
   const applyMutation = useMutation({
-    mutationFn: (args: { target: "claudeCode" | "codex"; overwrite: boolean }) =>
+    mutationFn: (args: { target: "claudeCode" | "codex" | "claudeDesktop"; overwrite: boolean }) =>
       api.applyClientConfig(args),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clientConfig"] });
@@ -117,7 +131,7 @@ export default function ClientConfigStatus() {
   });
 
   const restoreMutation = useMutation({
-    mutationFn: (target: "claudeCode" | "codex") =>
+    mutationFn: (target: "claudeCode" | "codex" | "claudeDesktop") =>
       api.applyClientConfig({ target, restore: true }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clientConfig"] });
@@ -129,13 +143,22 @@ export default function ClientConfigStatus() {
     },
   });
 
-  const runApply = (target: "claudeCode" | "codex", overwrite: boolean, model?: string) => {
+  const runApply = (
+    target: "claudeCode" | "codex" | "claudeDesktop",
+    overwrite: boolean,
+    model?: string
+  ) => {
     setApplyingTo(target);
     applyMutation.mutate({ target, overwrite, ...(model ? { model } : {}) });
   };
 
-  const onConfigureClick = (target: "claudeCode" | "codex") => {
-    const item = target === "claudeCode" ? data?.claudeCode : data?.codex;
+  const onConfigureClick = (target: "claudeCode" | "codex" | "claudeDesktop") => {
+    const item =
+      target === "claudeCode"
+        ? data?.claudeCode
+        : target === "codex"
+          ? data?.codex
+          : data?.claudeDesktop;
     if (!item) {
       return;
     }
@@ -168,7 +191,9 @@ export default function ClientConfigStatus() {
       ? data?.claudeCode
       : pendingTarget === "codex"
         ? data?.codex
-        : null;
+        : pendingTarget === "claudeDesktop"
+          ? data?.claudeDesktop
+          : null;
 
   return (
     <>
@@ -191,6 +216,77 @@ export default function ClientConfigStatus() {
             <div className="h-16 animate-pulse bg-muted rounded" />
           ) : (
             <>
+              {data?.claudeDesktop && (
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-md border border-border/60 p-2.5">
+                  <div className="flex items-start gap-2 min-w-0">
+                    <Monitor className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-medium">
+                          {t("clientConfig.claudeDesktop.name")}
+                        </span>
+                        {statusBadge(data.claudeDesktop.status, t)}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground font-mono truncate mt-0.5">
+                        {data.claudeDesktop.filePath}
+                      </p>
+                      {data.claudeDesktop.currentValue && (
+                        <p className="text-[10px] text-muted-foreground truncate">
+                          inferenceGatewayBaseUrl: {data.claudeDesktop.currentValue}
+                        </p>
+                      )}
+                      {data.claudeDesktop.message && data.claudeDesktop.status !== "ok" && (
+                        <p className="text-[10px] text-amber-600 dark:text-amber-500 mt-0.5">
+                          {data.claudeDesktop.message}
+                        </p>
+                      )}
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        {t("clientConfig.claudeDesktop.expected")}{" "}
+                        <span className="font-mono">{data?.expectedAnthropicBase ?? "—"}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 sm:pl-2 gap-1">
+                    {data.claudeDesktop.status === "ok" && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-xs gap-1 text-muted-foreground hover:text-destructive"
+                        disabled={restoreMutation.isPending}
+                        onClick={() => {
+                          setRestoreTarget("claudeDesktop");
+                          setRestoreConfirmOpen(true);
+                        }}
+                      >
+                        {restoreMutation.isPending && applyingTo === "claudeDesktop" ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <RotateCcw className="h-3 w-3" />
+                        )}
+                        <span className="hidden sm:inline">
+                          {t("clientConfig.claudeDesktop.restore")}
+                        </span>
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant={data.claudeDesktop.status === "ok" ? "outline" : "default"}
+                      className="h-7 text-xs"
+                      disabled={data.claudeDesktop.status === "ok" || applyMutation.isPending}
+                      onClick={() => onConfigureClick("claudeDesktop")}
+                    >
+                      {applyMutation.isPending && applyingTo === "claudeDesktop" ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : data.claudeDesktop.status === "ok" ? (
+                        t("clientConfig.claudeDesktop.upToDate")
+                      ) : (
+                        t("clientConfig.claudeDesktop.apply")
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-md border border-border/60 p-2.5">
                 <div className="flex items-start gap-2 min-w-0">
                   <FileCode2 className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
@@ -444,13 +540,17 @@ export default function ClientConfigStatus() {
                 name:
                   restoreTarget === "codex"
                     ? t("clientConfig.codex.name")
-                    : t("clientConfig.claudeCode.name"),
+                    : restoreTarget === "claudeDesktop"
+                      ? t("clientConfig.claudeDesktop.name")
+                      : t("clientConfig.claudeCode.name"),
               })}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {restoreTarget === "codex"
                 ? t("clientConfig.dialog.restore.codexDescription")
-                : t("clientConfig.dialog.restore.claudeDescription")}
+                : restoreTarget === "claudeDesktop"
+                  ? t("clientConfig.dialog.restore.claudeDesktopDescription")
+                  : t("clientConfig.dialog.restore.claudeDescription")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -489,7 +589,9 @@ export default function ClientConfigStatus() {
             <AlertDialogTitle>
               {pendingTarget === "codex"
                 ? t("clientConfig.dialog.replaceCodex.title")
-                : t("clientConfig.dialog.overwrite.title")}
+                : pendingTarget === "claudeDesktop"
+                  ? t("clientConfig.dialog.replaceClaudeDesktop.title")
+                  : t("clientConfig.dialog.overwrite.title")}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {pendingTarget === "codex" ? (
@@ -499,6 +601,15 @@ export default function ClientConfigStatus() {
                   <strong>replace the file</strong> with the CCRelay template (model{" "}
                   <span className="font-mono">{pendingCodexModel || CODEX_DEFAULT_MODEL}</span>,
                   provider <span className="font-mono">ccrelay</span>).
+                </>
+              ) : pendingTarget === "claudeDesktop" ? (
+                <>
+                  Your Claude Desktop config points to{" "}
+                  <span className="font-mono">{pendingItem?.currentValue ?? "another URL"}</span>.
+                  Applying will merge CCRelay settings into the Claude-3p config directory.
+                  {pendingItem?.status === "invalid" && (
+                    <> {t("clientConfig.dialog.overwrite.invalidJson")}</>
+                  )}
                 </>
               ) : (
                 <>

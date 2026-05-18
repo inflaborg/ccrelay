@@ -76,7 +76,7 @@
   },
   "clientConfig": {
     "title": "客户端配置",
-    "description": "检查 Claude Code（{{claudePath}}）和 Codex（{{codexPath}}）配置是否指向此 CCRelay 实例（端口 {{port}}）。",
+    "description": "检查 Claude Desktop、Claude Code（{{claudePath}}）和 Codex（{{codexPath}}）配置是否指向此 CCRelay 实例（端口 {{port}}）。",
     "status": {
       "ok": "正常",
       "notSet": "未设置",
@@ -94,6 +94,13 @@
         "suggested": "建议："
       },
       "configureModels": "配置默认模型",
+      "restore": "还原",
+      "upToDate": "已是最新",
+      "apply": "应用 CCRelay 设置"
+    },
+    "claudeDesktop": {
+      "name": "Claude Desktop",
+      "expected": "期望值:",
       "restore": "还原",
       "upToDate": "已是最新",
       "apply": "应用 CCRelay 设置"
@@ -121,10 +128,14 @@
       "replaceCodex": {
         "title": "替换 Codex 配置？"
       },
+      "replaceClaudeDesktop": {
+        "title": "覆盖 Claude Desktop 配置？"
+      },
       "restore": {
         "title": "还原 {{name}} 配置？",
         "claudeDescription": "将从 settings.json 中移除 CCRelay 注入的键（ANTHROPIC_BASE_URL、ANTHROPIC_AUTH_TOKEN 等）。其他设置不受影响。",
         "codexDescription": "将从 config.toml 中移除 CCRelay 的 model_provider 配置段，并将 model 重置为默认值。",
+        "claudeDesktopDescription": "将从 Claude-3p 目录中移除 CCRelay 配置文件，将 deploymentMode 还原为 1p，并删除 developer_settings.json。",
         "action": "还原"
       }
     },
