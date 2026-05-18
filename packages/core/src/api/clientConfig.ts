@@ -3,6 +3,7 @@
  * GET/POST /ccrelay/api/client-config
  */
 
+import * as crypto from "crypto";
 import * as fs from "fs";
 import * as http from "http";
 import * as os from "os";
@@ -41,6 +42,17 @@ export function setServer(server: ProxyServer | null): void {
 const CLAUDE_SETTINGS = () => path.join(os.homedir(), ".claude", "settings.json");
 const CODEX_CONFIG = () => path.join(os.homedir(), ".codex", "config.toml");
 
+function claudeDesktopDir(): string | null {
+  const p = os.platform();
+  if (p === "darwin") {
+    return path.join(os.homedir(), "Library", "Application Support", "Claude-3p");
+  }
+  if (p === "win32") {
+    return path.join(os.homedir(), "AppData", "Local", "Claude-3p");
+  }
+  return null;
+}
+
 export type ClientConfigItemStatus = "ok" | "missing" | "wrong_target" | "invalid";
 
 export interface ClientConfigItem {
@@ -68,6 +80,7 @@ export interface ClientConfigGetResponse {
   port: number;
   claudeCode: ClientConfigItem;
   codex: ClientConfigItem;
+  claudeDesktop: ClientConfigItem | null;
   /** Parsed from settings.json env when file is readable */
   claudeDefaultModels: ClaudeDefaultModels;
 }
@@ -274,6 +287,64 @@ function detectCodex(codexPath: string, port: number): ClientConfigItem {
   return { status: "wrong_target", filePath, currentValue: baseUrl, modelProvider, model };
 }
 
+interface ClaudeDesktopMeta {
+  appliedId: string;
+  entries: Array<{ id: string; name: string }>;
+}
+
+function readClaudeDesktopMeta(dir: string): ClaudeDesktopMeta | null {
+  const metaPath = path.join(dir, "configLibrary", "_meta.json");
+  if (!fs.existsSync(metaPath)) {
+    return null;
+  }
+  try {
+    const raw = fs.readFileSync(metaPath, "utf-8");
+    const parsed = JSON.parse(raw) as ClaudeDesktopMeta;
+    if (typeof parsed.appliedId === "string" && parsed.appliedId.trim()) {
+      return parsed;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function detectClaudeDesktop(dir: string | null, port: number): ClientConfigItem | null {
+  if (!dir) {
+    return null;
+  }
+  const filePath = path.join(dir, "configLibrary");
+  if (!fs.existsSync(dir)) {
+    return { status: "missing", filePath };
+  }
+  const meta = readClaudeDesktopMeta(dir);
+  if (!meta) {
+    return { status: "missing", filePath: path.join(filePath, "_meta.json") };
+  }
+  const configPath = path.join(filePath, `${meta.appliedId}.json`);
+  if (!fs.existsSync(configPath)) {
+    return { status: "missing", filePath: configPath };
+  }
+  try {
+    const raw = fs.readFileSync(configPath, "utf-8");
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const baseUrl = parsed.inferenceGatewayBaseUrl;
+    if (typeof baseUrl !== "string" || !baseUrl.trim()) {
+      return {
+        status: "missing",
+        filePath: configPath,
+        message: "inferenceGatewayBaseUrl not set",
+      };
+    }
+    if (isLocalProxyAnthropicBase(baseUrl.trim(), port)) {
+      return { status: "ok", filePath: configPath, currentValue: baseUrl.trim() };
+    }
+    return { status: "wrong_target", filePath: configPath, currentValue: baseUrl.trim() };
+  } catch {
+    return { status: "invalid", filePath: configPath, message: "Invalid JSON" };
+  }
+}
+
 /**
  * GET /ccrelay/api/client-config
  */
@@ -292,12 +363,13 @@ export function handleGetClientConfig(_req: http.IncomingMessage, res: http.Serv
     port,
     claudeCode: detectClaude(claudePath, port),
     codex: detectCodex(CODEX_CONFIG(), port),
+    claudeDesktop: detectClaudeDesktop(claudeDesktopDir(), port),
     claudeDefaultModels: readClaudeDefaultModelsFromFile(claudePath),
   };
   sendJson(res, 200, body);
 }
 
-type ApplyTarget = "claudeCode" | "codex";
+type ApplyTarget = "claudeCode" | "codex" | "claudeDesktop";
 
 /**
  * POST /ccrelay/api/client-config/apply
@@ -329,8 +401,11 @@ export async function handleApplyClientConfig(
     }>(req);
     const target = body.target;
     const overwrite = Boolean(body.overwrite);
-    if (target !== "claudeCode" && target !== "codex") {
-      sendJson(res, 400, { status: "error", message: "target must be claudeCode or codex" });
+    if (target !== "claudeCode" && target !== "codex" && target !== "claudeDesktop") {
+      sendJson(res, 400, {
+        status: "error",
+        message: "target must be claudeCode, codex, or claudeDesktop",
+      });
       return;
     }
 
@@ -411,6 +486,49 @@ export async function handleApplyClientConfig(
         sendJson(res, 200, {
           status: "ok",
           message: `Removed CCRelay provider from ${codexPath}`,
+        });
+        return;
+      }
+
+      if (target === "claudeDesktop") {
+        const dir = claudeDesktopDir();
+        if (!dir || !fs.existsSync(dir)) {
+          sendJson(res, 200, { status: "ok", message: "No Claude-3p directory to clean up" });
+          return;
+        }
+        const meta = readClaudeDesktopMeta(dir);
+        if (meta) {
+          const configPath = path.join(dir, "configLibrary", `${meta.appliedId}.json`);
+          if (fs.existsSync(configPath)) {
+            fs.unlinkSync(configPath);
+          }
+          const metaPath = path.join(dir, "configLibrary", "_meta.json");
+          if (fs.existsSync(metaPath)) {
+            fs.unlinkSync(metaPath);
+          }
+        }
+        // Change deploymentMode from "3p" back to "1p"
+        const desktopConfigPath = path.join(dir, "claude_desktop_config.json");
+        if (fs.existsSync(desktopConfigPath)) {
+          try {
+            const cfg = JSON.parse(fs.readFileSync(desktopConfigPath, "utf-8")) as Record<
+              string,
+              unknown
+            >;
+            cfg.deploymentMode = "1p";
+            fs.writeFileSync(desktopConfigPath, `${JSON.stringify(cfg, null, 2)}\n`, "utf-8");
+          } catch {
+            // ignore invalid JSON
+          }
+        }
+        // Remove developer_settings.json
+        const devSettingsPath = path.join(dir, "developer_settings.json");
+        if (fs.existsSync(devSettingsPath)) {
+          fs.unlinkSync(devSettingsPath);
+        }
+        sendJson(res, 200, {
+          status: "ok",
+          message: `Removed CCRelay config from ${dir}`,
         });
         return;
       }
@@ -539,6 +657,112 @@ export async function handleApplyClientConfig(
           : CODEX_DEFAULT_MODEL;
       fs.writeFileSync(codexPath, buildCodexTemplate(port, codexModel), "utf-8");
       sendJson(res, 200, { status: "ok", message: `Updated ${codexPath}` });
+      return;
+    }
+
+    if (target === "claudeDesktop") {
+      const dir = claudeDesktopDir();
+      if (!dir) {
+        sendJson(res, 400, {
+          status: "error",
+          message: "Claude Desktop configuration is not supported on this platform.",
+        });
+        return;
+      }
+      const existing = detectClaudeDesktop(dir, port);
+      if (
+        existing &&
+        (existing.status === "wrong_target" || existing.status === "invalid") &&
+        !overwrite
+      ) {
+        sendJson(res, 409, {
+          status: "error",
+          code: "NEEDS_OVERWRITE",
+          message:
+            existing.status === "invalid"
+              ? "Claude Desktop config file is not valid JSON. Confirm overwrite."
+              : "Claude Desktop config points to a different base URL. Confirm overwrite.",
+        });
+        return;
+      }
+
+      const configLibDir = path.join(dir, "configLibrary");
+      if (!fs.existsSync(configLibDir)) {
+        fs.mkdirSync(configLibDir, { recursive: true });
+      }
+
+      // 1. developer_settings.json — merge
+      /* eslint-disable @typescript-eslint/naming-convention -- Claude Desktop settings keys */
+      const devSettingsPath = path.join(dir, "developer_settings.json");
+      let devSettings: Record<string, unknown> = {};
+      if (fs.existsSync(devSettingsPath)) {
+        try {
+          devSettings = JSON.parse(fs.readFileSync(devSettingsPath, "utf-8")) as Record<
+            string,
+            unknown
+          >;
+        } catch {
+          devSettings = {};
+        }
+      }
+      devSettings.allowDevTools = true;
+      fs.writeFileSync(devSettingsPath, `${JSON.stringify(devSettings, null, 2)}\n`, "utf-8");
+
+      // 2. claude_desktop_config.json — merge
+      const desktopConfigPath = path.join(dir, "claude_desktop_config.json");
+      let desktopConfig: Record<string, unknown> = {};
+      if (fs.existsSync(desktopConfigPath)) {
+        try {
+          desktopConfig = JSON.parse(fs.readFileSync(desktopConfigPath, "utf-8")) as Record<
+            string,
+            unknown
+          >;
+        } catch {
+          desktopConfig = {};
+        }
+      }
+      desktopConfig.deploymentMode = "3p";
+      fs.writeFileSync(desktopConfigPath, `${JSON.stringify(desktopConfig, null, 2)}\n`, "utf-8");
+
+      // 3. configLibrary/_meta.json — reuse existing appliedId or generate new one
+      const metaPath = path.join(configLibDir, "_meta.json");
+      const existingMeta = readClaudeDesktopMeta(dir);
+      const appliedId = existingMeta?.appliedId ?? crypto.randomUUID();
+      const meta = {
+        appliedId,
+        entries: [
+          {
+            id: appliedId,
+            name: "CCRelay",
+          },
+        ],
+      };
+      fs.writeFileSync(metaPath, `${JSON.stringify(meta, null, 2)}\n`, "utf-8");
+
+      // 4. configLibrary/{appliedId}.json — merge
+      const configPath = path.join(configLibDir, `${appliedId}.json`);
+      let ccConfig: Record<string, unknown> = {};
+      if (fs.existsSync(configPath)) {
+        try {
+          ccConfig = JSON.parse(fs.readFileSync(configPath, "utf-8")) as Record<string, unknown>;
+        } catch {
+          ccConfig = {};
+        }
+      }
+      ccConfig.coworkEgressAllowedHosts = ["*"];
+      ccConfig.disableDeploymentModeChooser = true;
+      ccConfig.inferenceProvider = "gateway";
+      ccConfig.inferenceGatewayBaseUrl = `http://127.0.0.1:${port}/anthropic`;
+      ccConfig.inferenceGatewayApiKey = "1";
+      ccConfig.inferenceGatewayHeaders = {
+        "x-ccrelay-model-alias": "1",
+      };
+      ccConfig.disableEssentialTelemetry = true;
+      ccConfig.disableNonessentialTelemetry = true;
+      /* eslint-enable @typescript-eslint/naming-convention */
+      fs.writeFileSync(configPath, `${JSON.stringify(ccConfig, null, 2)}\n`, "utf-8");
+
+      sendJson(res, 200, { status: "ok", message: `Updated Claude Desktop config in ${dir}` });
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

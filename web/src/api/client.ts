@@ -181,7 +181,7 @@ export const api = {
     fetchAPI<ClientConfigGetResponse>("/client-config"),
 
   applyClientConfig: async (body: {
-    target: "claudeCode" | "codex";
+    target: "claudeCode" | "codex" | "claudeDesktop";
     overwrite?: boolean;
     model?: string;
     restore?: boolean;

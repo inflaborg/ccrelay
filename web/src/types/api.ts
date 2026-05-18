@@ -246,6 +246,7 @@ export interface ClientConfigGetResponse {
   expectedAnthropicBase: string;
   expectedCodexBaseUrl: string;
   port: number;
+  claudeDesktop: ClientConfigItem | null;
   claudeCode: ClientConfigItem;
   codex: ClientConfigItem;
   claudeDefaultModels: ClaudeDefaultModels;
