@@ -24,6 +24,16 @@ providers:
     providerType: "anthropic"   # anthropic | openai | openai_chat
     enabled: true
 
+  # Example: Astraflow (UCloud) — OpenAI-compatible, 200+ models
+  # astraflow:
+  #   name: "Astraflow Global"
+  #   baseUrl: "https://api-us-ca.umodelverse.ai/v1"   # China: https://api.modelverse.cn/v1
+  #   mode: "inject"
+  #   providerType: "openai_chat"
+  #   apiKey: "\${ASTRAFLOW_API_KEY}"                  # China: \${ASTRAFLOW_CN_API_KEY}
+  #   authHeader: "authorization"
+  #   enabled: true
+
   # Example: Custom provider
   # custom:
   #   name: "Custom Provider"

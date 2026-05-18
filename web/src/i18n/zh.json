@@ -259,7 +259,8 @@
       "azure": "Azure OpenAI",
       "minimax": "MiniMax",
       "geminiOpenai": "Gemini（OpenAI 兼容）",
-      "deepseek": "DeepSeek（深度求索）"
+      "deepseek": "DeepSeek（深度求索）",
+      "astraflow": "Astraflow（优刻得）"
     },
     "toggle": {
       "off": "否",
