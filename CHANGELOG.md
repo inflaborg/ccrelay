@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**UI**
+
+- Dashboard **Client configuration** section now detects and manages **Claude Desktop** (macOS and Windows) alongside Claude Code and Codex. Apply writes CCRelay proxy settings to the platform-specific `Claude-3p` config directory; Restore removes them and reverts the deployment mode.
+
 **Diagnostics**
 
 - Runtime messages (startup, configuration, proxy lifecycle, errors) are appended to dated log files under `~/.ccrelay/logs/`; files rotate daily and older ones are removed after about a week. This is separate from dashboard **request** history stored in the logging database.
