@@ -1,0 +1,7 @@
+---
+description: Web admin UI layout conventions
+globs: web/**/*.{tsx,ts}
+alwaysApply: false
+---
+
+For right-aligned save/action rows in `web/`, follow [web/DESIGN.md](../../web/DESIGN.md): short hints left of the button, primary button `shrink-0` anchored on the right.

@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **UI**
 
+- Settings and Capabilities save rows: success and status hints no longer appear to the right of the Save button, so the button no longer shifts horizontally when feedback shows.
 - Request logs: manual refresh on the Logs page now always fetches the latest entries from the server instead of reusing a short-lived cached list.
 
 **Desktop**

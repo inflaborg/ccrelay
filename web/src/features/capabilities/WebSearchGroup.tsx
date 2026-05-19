@@ -448,19 +448,21 @@ export default function WebSearchGroup() {
         {/* Save bar */}
         <div className="border-t pt-3 space-y-2">
           <div className="flex items-center justify-end gap-2">
+            <div className="flex-1 min-w-0 min-h-[1.25rem] flex items-center justify-end text-right">
+              {mutation.isSuccess && !hasUnsavedChanges && (
+                <span className="text-[10px] text-green-600 dark:text-green-500">
+                  {t("capabilities.webSearch.savedAndReloaded")}
+                </span>
+              )}
+            </div>
             <Button
               size="sm"
-              className="h-7 text-xs"
+              className="h-7 shrink-0 text-xs"
               disabled={!hasUnsavedChanges || mutation.isPending}
               onClick={handleSave}
             >
               {mutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : t("common.save")}
             </Button>
-            {mutation.isSuccess && !hasUnsavedChanges && (
-              <span className="text-[10px] text-green-600 dark:text-green-500">
-                {t("capabilities.webSearch.savedAndReloaded")}
-              </span>
-            )}
           </div>
           {mutation.isError && (
             <p className="text-[10px] text-destructive">{(mutation.error as Error).message}</p>

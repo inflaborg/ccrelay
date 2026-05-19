@@ -140,19 +140,29 @@ function SaveBar({
   onSave: () => void;
   restartRequired?: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-2 pt-2">
       <div className="flex items-center justify-end gap-2">
-        <Button size="sm" className="h-7 text-xs" disabled={mutation.isPending} onClick={onSave}>
-          {mutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+        <div className="flex-1 min-w-0 min-h-[1.25rem] flex items-center justify-end text-right">
+          {mutation.isSuccess && !restartRequired && (
+            <span className="text-[10px] text-green-600 dark:text-green-500">
+              {t("settings.saved")}
+            </span>
+          )}
+        </div>
+        <Button
+          size="sm"
+          className="h-7 shrink-0 text-xs"
+          disabled={mutation.isPending}
+          onClick={onSave}
+        >
+          {mutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : t("common.save")}
         </Button>
-        {mutation.isSuccess && !restartRequired && (
-          <span className="text-[10px] text-green-600 dark:text-green-500">Saved</span>
-        )}
       </div>
       {mutation.isSuccess && restartRequired && (
         <p className="text-[10px] text-amber-600 dark:text-amber-500">
-          Changes saved. A server restart is required for these settings to take effect.
+          {t("settings.restartRequired")}
         </p>
       )}
       {mutation.isError && (
@@ -173,30 +183,37 @@ function RoutingSaveBar({
   hasUnsavedChanges: boolean;
   rightSlot?: ReactNode;
 }) {
+  const { t } = useTranslation();
   const canSave = hasUnsavedChanges && !mutation.isPending;
   return (
     <div className="space-y-2 pt-2">
       <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
-        <div className="flex flex-wrap items-center gap-2 min-w-0">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+          <div className="flex min-h-[1.25rem] min-w-0 flex-1 items-center justify-end text-right">
+            {hasUnsavedChanges ? (
+              <span className="text-[10px] text-amber-600 dark:text-amber-500">
+                {t("settings.routing.unsavedChanges")}
+              </span>
+            ) : (
+              <span className="text-[10px] text-muted-foreground">
+                {t("settings.routing.matchesConfig")}
+              </span>
+            )}
+          </div>
           <Button
             size="sm"
-            className="h-7 text-xs min-w-[7rem]"
+            className="h-7 shrink-0 text-xs min-w-[7rem]"
             disabled={!canSave}
             onClick={onSave}
           >
             {mutation.isPending ? (
               <Loader2 className="h-3 w-3 animate-spin" />
             ) : hasUnsavedChanges ? (
-              "Save routing"
+              t("settings.routing.saveRouting")
             ) : (
-              "Up to date"
+              t("common.upToDate")
             )}
           </Button>
-          {hasUnsavedChanges ? (
-            <span className="text-[10px] text-amber-600 dark:text-amber-500">Unsaved changes</span>
-          ) : (
-            <span className="text-[10px] text-muted-foreground">Matches saved config</span>
-          )}
         </div>
         {rightSlot != null ? <div className="flex shrink-0 items-center">{rightSlot}</div> : null}
       </div>
