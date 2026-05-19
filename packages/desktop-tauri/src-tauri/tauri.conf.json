@@ -26,12 +26,12 @@
       "icons/icon.ico"
     ],
     "externalBin": ["binaries/ccrelay-server"],
-    "resources": [
-      "../web/**/*",
-      "../out/ccrelay-server.js",
-      "../out/database-worker.cjs",
-      "../out/native/node_modules/better-sqlite3/**/*"
-    ],
+    "resources": {
+      "../web/": "web/",
+      "../out/ccrelay-server.js": "out/ccrelay-server.js",
+      "../out/database-worker.cjs": "out/database-worker.cjs",
+      "../out/native/": "native/"
+    },
     "windows": {
       "webviewInstallMode": {
         "silent": true,
