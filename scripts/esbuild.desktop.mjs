@@ -16,7 +16,7 @@ if (!fs.existsSync(outDir)) {
 const commonOptions = {
   bundle: true,
   platform: "node",
-  target: "node18",
+  target: "node22",
   format: "cjs",
   external: [
     "electron",

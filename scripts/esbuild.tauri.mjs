@@ -21,8 +21,9 @@ if (!fs.existsSync(binariesDir)) {
 const commonOptions = {
   bundle: true,
   platform: "node",
-  target: "node20",
+  target: "node22",
   format: "cjs",
+  external: ["better-sqlite3", "bindings", "file-uri-to-path"],
   sourcemap: false,
   minify: false,
 };
@@ -41,71 +42,40 @@ await esbuild.build({
   outfile: path.join(outDir, "database-worker.cjs"),
 });
 
-// Create sidecar binary in src-tauri/binaries/ with target triple suffix
+// Copy better-sqlite3 native addon for sidecar (resolved via NODE_PATH at runtime)
+function resolveBetterSqlite3Dir() {
+  const candidates = [
+    path.join(tauriDir, "node_modules/better-sqlite3"),
+    path.join(rootDir, "node_modules/better-sqlite3"),
+    path.join(coreDir, "node_modules/better-sqlite3"),
+  ];
+  for (const dir of candidates) {
+    if (fs.existsSync(path.join(dir, "package.json"))) {
+      return dir;
+    }
+  }
+  throw new Error(
+    "better-sqlite3 not found. Run npm install from the repo root (desktop-tauri depends on it)."
+  );
+}
+
+execSync("npm rebuild better-sqlite3", { cwd: rootDir, stdio: "inherit" });
+
+const betterSqlite3Src = resolveBetterSqlite3Dir();
+const betterSqlite3Dest = path.join(outDir, "native/node_modules/better-sqlite3");
+fs.mkdirSync(path.dirname(betterSqlite3Dest), { recursive: true });
+fs.cpSync(betterSqlite3Src, betterSqlite3Dest, { recursive: true });
+
+// Sidecar binary: copy Node executable (Tauri externalBin)
 const targetTriple = execSync("rustc --print host-tuple").toString().trim();
 const ext = process.platform === "win32" ? ".exe" : "";
 const sidecarBinaryName = `ccrelay-server-${targetTriple}${ext}`;
 const sidecarBinaryPath = path.join(binariesDir, sidecarBinaryName);
 
-const isSea = process.env.CCRELAY_SEA === "1";
-
-if (isSea) {
-  // Node.js SEA (Single Executable Application) for production
-  const seaConfigPath = path.join(outDir, "sea-config.json");
-  const seaBlobPath = path.join(outDir, "sea-prep.blob");
-
-  fs.writeFileSync(
-    seaConfigPath,
-    JSON.stringify(
-      {
-        main: "ccrelay-server.js",
-        output: "sea-prep.blob",
-        disableExperimentalSEAWarning: true,
-        useCodeCache: true,
-      },
-      null,
-      2
-    )
-  );
-
-  execSync(`node --experimental-sea-config ${seaConfigPath}`, {
-    cwd: outDir,
-    stdio: "inherit",
-  });
-
-  // Copy node binary and inject SEA blob (use execPath: Windows is node.exe, not `node`)
-  const nodePath = process.execPath;
-  fs.copyFileSync(nodePath, sidecarBinaryPath);
+fs.copyFileSync(process.execPath, sidecarBinaryPath);
+if (process.platform !== "win32") {
   fs.chmodSync(sidecarBinaryPath, 0o755);
-
-  if (process.platform === "darwin") {
-    execSync(`codesign --remove-signature "${sidecarBinaryPath}"`, {
-      stdio: "inherit",
-    });
-  }
-
-  const machoFlag = process.platform === "darwin" ? " --macho-segment-name NODE_SEA" : "";
-  execSync(
-    `npx postject "${sidecarBinaryPath}" NODE_SEA_BLOB "${seaBlobPath}" --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2${machoFlag}`,
-    { stdio: "inherit" }
-  );
-
-  if (process.platform === "darwin") {
-    execSync(`codesign --sign - "${sidecarBinaryPath}"`, {
-      stdio: "inherit",
-    });
-  }
-
-  console.log(`SEA binary created: ${sidecarBinaryPath}`);
-} else {
-  // Development: create a wrapper script that runs node with the bundle
-  const nodePath = process.execPath;
-  const wrapperScript = `#!/bin/sh
-exec "${nodePath}" "${outDir}/ccrelay-server.js" "$@"
-`;
-  fs.writeFileSync(sidecarBinaryPath, wrapperScript);
-  fs.chmodSync(sidecarBinaryPath, 0o755);
-  console.log(`Dev sidecar wrapper created: ${sidecarBinaryPath}`);
 }
 
+console.log(`Sidecar Node binary created: ${sidecarBinaryPath}`);
 console.log("Tauri sidecar + database worker bundles created successfully");

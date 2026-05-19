@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Desktop**
 
 - Request log storage uses an in-process SQLite driver on Electron for lower latency than the CLI subprocess backend. After upgrading, run `npm install` so the native module is rebuilt for your Electron version.
+- **Tauri** sidecar ships a bundled Node runtime with `better-sqlite3` in app resources (replacing the previous SEA single-executable approach). CI builds use Node 22 consistently.
 - Tray: **Open Logs Folder** (Electron and Tauri) opens `~/.ccrelay/logs/` in the system file manager.
 
 **VS Code**

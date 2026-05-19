@@ -5,12 +5,14 @@
   "description": "CCRelay desktop app (Tauri)",
   "scripts": {
     "build": "node ../../scripts/esbuild.tauri.mjs",
+    "postinstall": "npm rebuild better-sqlite3",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build"
   },
   "dependencies": {
-    "@ccrelay/core": "*"
+    "@ccrelay/core": "*",
+    "better-sqlite3": "12.9.0"
   },
   "devDependencies": {
     "@tauri-apps/api": "^2",

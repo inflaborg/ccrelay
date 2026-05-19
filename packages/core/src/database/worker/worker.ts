@@ -11,6 +11,8 @@
 
 import { parentPort } from "worker_threads";
 import { createSqliteDriver } from "../drivers/sqlite/factory";
+import { SqliteCliDriver } from "../drivers/sqlite/cli";
+import { Logger } from "../../utils/logger";
 import type {
   RequestLog,
   LogFilter,
@@ -55,6 +57,8 @@ interface WorkerResponse {
 // Driver instance
 let driver: DatabaseDriver | null = null;
 
+const log = Logger.getInstance();
+
 /**
  * Handle incoming message from main thread
  */
@@ -68,11 +72,23 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
           config: SqliteDriverConfig;
           migrationChoice?: LogDbMigrationChoice;
         };
-        driver = createSqliteDriver(p.config);
         const initOptions: DatabaseInitializeOptions = {
           migrationChoice: p.migrationChoice ?? "migrate",
         };
-        await driver.initialize(initOptions);
+        driver = createSqliteDriver(p.config);
+        try {
+          await driver.initialize(initOptions);
+        } catch (err) {
+          if (p.config.driver !== "auto") {
+            throw err;
+          }
+          const detail = err instanceof Error ? err.message : String(err);
+          log.warn(
+            `[DatabaseWorker] Native driver failed to initialize, falling back to CLI: ${detail}`
+          );
+          driver = new SqliteCliDriver(p.config);
+          await driver.initialize(initOptions);
+        }
         return { id, success: true };
       }
 

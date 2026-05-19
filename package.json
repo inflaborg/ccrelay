@@ -39,7 +39,7 @@
     "build": "npm run clean && npm run build:web && npm run bundle:vscode",
     "build:dev": "node scripts/build-config.mjs dev && npm run build",
     "build:prod": "node scripts/build-config.mjs prod && npm run build",
-    "compile": "tsc --noEmit -p packages/core/tsconfig.json && tsc --noEmit -p packages/vscode/tsconfig.json && tsc --noEmit -p packages/desktop/tsconfig.json && tsc --noEmit -p tsconfig.json",
+    "compile": "tsc --noEmit -p packages/core/tsconfig.json && tsc --noEmit -p packages/vscode/tsconfig.json && tsc --noEmit -p packages/desktop/tsconfig.json && tsc --noEmit -p packages/desktop-tauri/tsconfig.json && tsc --noEmit -p tsconfig.json",
     "type-check": "npm run compile",
     "lint": "npm run type-check && eslint packages/core/src packages/vscode/src packages/desktop/src tests --max-warnings=0",
     "lint:fix": "eslint packages/core/src packages/vscode/src packages/desktop/src tests --fix",

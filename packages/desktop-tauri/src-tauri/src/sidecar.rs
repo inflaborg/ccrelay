@@ -1,8 +1,51 @@
+use std::path::PathBuf;
 use std::sync::Mutex;
+use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_shell::{process::CommandChild, ShellExt};
 
 use crate::tray;
+
+fn dev_js_entry_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../out/ccrelay-server.js")
+}
+
+fn dev_native_modules_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../out/native/node_modules")
+}
+
+/// Packaged app uses Resource paths; `tauri dev` keeps bundles under `packages/desktop-tauri/out/`.
+fn resolve_sidecar_paths(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
+    let js_resource = app
+        .path()
+        .resolve("out/ccrelay-server.js", BaseDirectory::Resource)
+        .map_err(|e| format!("Failed to resolve sidecar JS entry: {e}"))?;
+    let native_resource = app
+        .path()
+        .resolve("native/node_modules", BaseDirectory::Resource)
+        .map_err(|e| format!("Failed to resolve native modules path: {e}"))?;
+
+    if js_resource.is_file() {
+        let native = if native_resource.is_dir() {
+            native_resource
+        } else {
+            dev_native_modules_path()
+        };
+        return Ok((js_resource, native));
+    }
+
+    let js_dev = dev_js_entry_path();
+    let native_dev = dev_native_modules_path();
+    if js_dev.is_file() {
+        return Ok((js_dev, native_dev));
+    }
+
+    Err(format!(
+        "Sidecar JS not found at {} or {} (run npm run bundle:tauri)",
+        js_resource.display(),
+        js_dev.display()
+    ))
+}
 
 pub struct SidecarState {
     pub child: Option<CommandChild>,
@@ -17,10 +60,14 @@ pub async fn start_server(app: &AppHandle) -> Result<(), String> {
     // Stop any existing sidecar before starting a new one
     let _ = stop_server(app);
 
+    let (js_entry, native_modules) = resolve_sidecar_paths(app)?;
+
     let sidecar_command = app
         .shell()
         .sidecar("ccrelay-server")
-        .map_err(|e| format!("Failed to create sidecar command: {e}"))?;
+        .map_err(|e| format!("Failed to create sidecar command: {e}"))?
+        .args([js_entry.to_string_lossy().as_ref()])
+        .env("NODE_PATH", native_modules.to_string_lossy().as_ref());
 
     let (mut rx, child) = sidecar_command
         .spawn()

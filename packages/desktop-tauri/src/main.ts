@@ -17,23 +17,23 @@ import {
   Logger,
   ProxyServer,
   getUiAccessToken,
+  loggingDatabaseConfigToDriver,
+  setLogDatabaseDriverConfigResolver,
   setWebDistPath,
 } from "@ccrelay/core";
 
 function resolveWebDist(): string {
-  // 1. SEA binary: web/ is a sibling of the executable
-  const exeDir = path.dirname(process.execPath);
-  const exeWebDir = path.join(exeDir, "web");
+  // Bundled resources: __dirname is resources/out/, web/ is resources/web/
+  const resourceWebDir = path.join(__dirname, "..", "web");
+  if (fs.existsSync(path.join(resourceWebDir, "index.html"))) {
+    return resourceWebDir;
+  }
+  // Fallback: web/ next to the Node sidecar binary (binaries/)
+  const exeWebDir = path.join(path.dirname(process.execPath), "web");
   if (fs.existsSync(path.join(exeWebDir, "index.html"))) {
     return exeWebDir;
   }
-  // 2. Dev mode: __dirname is out/, web/ is a sibling
-  const devWebDir = path.join(__dirname, "..", "web");
-  if (fs.existsSync(path.join(devWebDir, "index.html"))) {
-    return devWebDir;
-  }
-  // Fallback
-  return exeWebDir;
+  return resourceWebDir;
 }
 
 function parseHostFromUrl(url: string): string {
@@ -60,10 +60,10 @@ function fetchLeaderUiToken(leaderUrl: string, bearerToken: string): Promise<str
     const req = http.get(
       url,
       {
-        headers: { Authorization: `Bearer ${bearerToken}` },
+        headers: { ["Authorization"]: `Bearer ${bearerToken}` },
         timeout: 3000,
       },
-      (res) => {
+      res => {
         let body = "";
         res.on("data", (chunk: Buffer) => {
           body += chunk.toString();
@@ -97,10 +97,16 @@ async function main(): Promise<void> {
 
   const configManager = new ConfigManager();
 
-  const leaderElection = new LeaderElection(
-    configManager.port,
-    configManager.host,
-    () => configManager.getApiBearerToken()
+  setLogDatabaseDriverConfigResolver(() => {
+    const base = loggingDatabaseConfigToDriver(configManager.configValue.logging.database);
+    if (base?.type === "sqlite") {
+      return { ...base, driver: base.driver === "cli" ? "cli" : "native" };
+    }
+    return base;
+  });
+
+  const leaderElection = new LeaderElection(configManager.port, configManager.host, () =>
+    configManager.getApiBearerToken()
   );
   const server = new ProxyServer(configManager, leaderElection);
 
@@ -138,10 +144,7 @@ async function main(): Promise<void> {
   if (role === "follower" && leaderUrl) {
     // Follower: fetch the leader's UI token so the Tauri WebView can authenticate
     try {
-      const leaderToken = await fetchLeaderUiToken(
-        leaderUrl,
-        configManager.getApiBearerToken()
-      );
+      const leaderToken = await fetchLeaderUiToken(leaderUrl, configManager.getApiBearerToken());
       process.stdout.write(`CCRELAY_UI_TOKEN=${leaderToken}\n`);
     } catch {
       logger.warn("[Sidecar] Failed to fetch leader UI token, using local token");
@@ -165,7 +168,7 @@ async function main(): Promise<void> {
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
 }
 
-main().catch((err) => {
+main().catch(err => {
   console.error("[Sidecar] Fatal error:", err);
   process.exit(1);
 });
