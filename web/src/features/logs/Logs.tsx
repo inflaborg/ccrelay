@@ -16,7 +16,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { SelectField } from "@/components/select-field";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -724,7 +726,7 @@ export default function Logs() {
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <Select
+          <SelectField
             value={(filter.providerId as string) || ""}
             options={[
               { value: "", label: t("logs.filter.allProviders") },
@@ -733,7 +735,7 @@ export default function Logs() {
             onChange={value => handleFilterChange("providerId", value || undefined)}
             className="h-7 w-auto min-w-[100px]"
           />
-          <Select
+          <SelectField
             value={(filter.method as string) || ""}
             options={[
               { value: "", label: t("logs.filter.allMethods") },
@@ -751,15 +753,19 @@ export default function Logs() {
             onChange={e => handleFilterChange("pathPattern", e.target.value || undefined)}
             className="h-7 w-auto max-w-[140px]"
           />
-          <label className="flex items-center gap-1.5 cursor-pointer">
-            <input
-              type="checkbox"
+          <div className="flex items-center gap-1.5">
+            <Checkbox
+              id="logs-errors-only"
               checked={(filter.hasError as boolean) || false}
-              onChange={e => handleFilterChange("hasError", e.target.checked ? true : undefined)}
-              className="rounded h-3 w-3"
+              onCheckedChange={checked =>
+                handleFilterChange("hasError", checked === true ? true : undefined)
+              }
+              className="size-3.5"
             />
-            {t("logs.filter.errorsOnly")}
-          </label>
+            <Label htmlFor="logs-errors-only" className="cursor-pointer text-xs font-normal">
+              {t("logs.filter.errorsOnly")}
+            </Label>
+          </div>
           <span className="ml-auto text-muted-foreground">{`${totalCount} ${t("logs.filter.logCount")}`}</span>
         </div>
       </div>

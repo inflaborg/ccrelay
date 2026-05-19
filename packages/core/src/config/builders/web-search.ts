@@ -25,7 +25,15 @@ export function buildWebSearchConfig(
   const providers = Array.isArray(raw.providers) ? raw.providers : undefined;
   const defaultSearchBackend =
     typeof raw.defaultSearchBackend === "string" ? raw.defaultSearchBackend : undefined;
-  if (!t && !g && !providers && !defaultSearchBackend) {
+  const hasExplicitEnabled = typeof raw.enabled === "boolean";
+  const enabled = hasExplicitEnabled ? raw.enabled === true : (providers?.length ?? 0) > 0;
+  const hasContent =
+    Boolean(t) ||
+    Boolean(g) ||
+    providers !== undefined ||
+    defaultSearchBackend !== undefined ||
+    hasExplicitEnabled;
+  if (!hasContent) {
     return undefined;
   }
 
@@ -57,7 +65,8 @@ export function buildWebSearchConfig(
         }
       : {}),
     ...(glmConfig ? { glm: glmConfig } : {}),
-    ...(providers && providers.length > 0 ? { providers } : {}),
+    ...(providers !== undefined ? { providers } : {}),
     ...(defaultSearchBackend ? { defaultSearchBackend } : {}),
+    enabled,
   };
 }

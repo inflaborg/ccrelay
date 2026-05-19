@@ -34,6 +34,10 @@ When editing README.md, README_CN.md, or CHANGELOG.md, follow these rules:
 - **Merge related items**: 3 SQLite fixes → 1 bullet with sub-items. 5 routing changes → 1 bullet.
 - **Summary paragraph** at the top of a release: 2-3 short sentences covering the major themes, not a single dense 60-word sentence.
 
+## Web UI
+
+- Follow [web/DESIGN.md](web/DESIGN.md) for layout and shadcn/ui form primitives (`npx shadcn@latest add` in `web/`); do not add hand-rolled components under `components/ui/`.
+
 ## Language and style
 
 - No emoji in documentation unless the user explicitly asks.

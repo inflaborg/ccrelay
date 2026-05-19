@@ -177,6 +177,11 @@
       "disabled": "已禁用",
       "active": "当前使用"
     },
+    "badgeShort": {
+      "mappingOff": "映射关",
+      "disabled": "禁用",
+      "active": "在用"
+    },
     "card": {
       "id": "ID",
       "mode": "模式",
@@ -558,6 +563,7 @@
     "webSearch": {
       "title": "网络搜索",
       "enable": "启用网络搜索",
+      "disabledHint": "网络搜索已关闭。提供商分配与搜索设置会保留，重新启用后即可生效。",
       "searchBackend": "搜索引擎",
       "provider": "搜索服务商",
       "apiKey": "API 密钥",
@@ -577,6 +583,8 @@
       "glmModelPlaceholder": "glm-4.7",
       "providerAssignment": "提供商分配",
       "providerAssignmentHint": "选择哪些 LLM 提供商启用网络搜索",
+      "selectAll": "全选",
+      "invertSelection": "反选",
       "noProviders": "暂无已配置的提供商",
       "savedAndReloaded": "配置已保存并重新加载"
     }

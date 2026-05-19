@@ -23,6 +23,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { api } from "@/api/client";
 import { CLAUDE_CODE_DEFAULT_MODELS, CODEX_DEFAULT_MODEL } from "@/constants/claudeCodeDefaults";
 import type { ClientConfigItem, ClientConfigItemStatus } from "@/types/api";
@@ -665,12 +667,12 @@ export default function ClientConfigStatus() {
             </CardHeader>
             <CardContent className="p-4 space-y-2">
               <div className="space-y-1">
-                <label className="text-xs font-medium">
+                <Label className="text-xs font-medium">
                   {t("clientConfig.codexModelModal.label")}
-                </label>
-                <input
+                </Label>
+                <Input
                   type="text"
-                  className="w-full h-8 px-2 text-xs border rounded-md bg-background font-mono"
+                  className="h-8 font-mono text-xs"
                   value={codexModel}
                   onChange={e => setCodexModel(e.target.value)}
                   placeholder={CODEX_DEFAULT_MODEL}
@@ -763,32 +765,32 @@ export default function ClientConfigStatus() {
             </CardHeader>
             <CardContent className="p-4 space-y-2">
               <div className="space-y-1">
-                <label className="text-xs font-medium">{t("clientConfig.modelsModal.opus")}</label>
-                <input
+                <Label className="text-xs font-medium">{t("clientConfig.modelsModal.opus")}</Label>
+                <Input
                   type="text"
-                  className="w-full h-8 px-2 text-xs border rounded-md bg-background font-mono"
+                  className="h-8 font-mono text-xs"
                   value={opus}
                   onChange={e => setOpus(e.target.value)}
                   placeholder={CLAUDE_CODE_DEFAULT_MODELS.opus}
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-medium">
+                <Label className="text-xs font-medium">
                   {t("clientConfig.modelsModal.sonnet")}
-                </label>
-                <input
+                </Label>
+                <Input
                   type="text"
-                  className="w-full h-8 px-2 text-xs border rounded-md bg-background font-mono"
+                  className="h-8 font-mono text-xs"
                   value={sonnet}
                   onChange={e => setSonnet(e.target.value)}
                   placeholder={CLAUDE_CODE_DEFAULT_MODELS.sonnet}
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-medium">{t("clientConfig.modelsModal.haiku")}</label>
-                <input
+                <Label className="text-xs font-medium">{t("clientConfig.modelsModal.haiku")}</Label>
+                <Input
                   type="text"
-                  className="w-full h-8 px-2 text-xs border rounded-md bg-background font-mono"
+                  className="h-8 font-mono text-xs"
                   value={haiku}
                   onChange={e => setHaiku(e.target.value)}
                   placeholder={CLAUDE_CODE_DEFAULT_MODELS.haiku}

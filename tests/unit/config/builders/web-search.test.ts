@@ -71,6 +71,22 @@ describe("buildWebSearchConfig", () => {
     });
     expect(c?.providers).toEqual(["a", "b"]);
     expect(c?.defaultSearchBackend).toBe("glm");
+    expect(c?.enabled).toBe(true);
+  });
+
+  it("preserves providers when enabled is false", () => {
+    const c = buildWebSearchConfig({
+      enabled: false,
+      providers: ["a", "b"],
+      defaultSearchBackend: "tavily",
+    });
+    expect(c?.enabled).toBe(false);
+    expect(c?.providers).toEqual(["a", "b"]);
+  });
+
+  it("legacy config without enabled uses non-empty providers as on", () => {
+    expect(buildWebSearchConfig({ providers: ["x"] })?.enabled).toBe(true);
+    expect(buildWebSearchConfig({ providers: [] })?.enabled).toBe(false);
   });
 });
 /* eslint-enable @typescript-eslint/naming-convention */

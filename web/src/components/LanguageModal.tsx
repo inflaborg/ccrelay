@@ -23,8 +23,8 @@ export function LanguageModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={() => {}}>
-      <DialogContent className="sm:max-w-xs">
+    <Dialog open={open} onOpenChange={next => next && onOpenChange(next)}>
+      <DialogContent className="sm:max-w-xs" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>{t("language.title")}</DialogTitle>
           <DialogDescription>{t("language.description")}</DialogDescription>

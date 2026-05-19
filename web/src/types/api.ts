@@ -264,6 +264,8 @@ export interface SettingsConfig {
 }
 
 export interface WebSearchSettings {
+  /** Master switch; when omitted, legacy behavior uses non-empty `providers` as enabled. */
+  enabled?: boolean;
   tavily?: {
     apiKey?: string;
     searchDepth?: "basic" | "advanced";
