@@ -7,14 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-05-19
+
+Admin UI on shadcn/ui, Claude Desktop and Web search controls, and **DeepSeek** / **Astraflow (UCloud)** add-provider presets. Request logs move to a compact v2 table with automatic migration; desktop apps use in-process SQLite and Tauri bundles a Node sidecar. Reasoning-effort mapping updates and macOS Tahoe fixes for desktop, VS Code, and proxy streaming.
+
 ### Added
 
 **UI**
 
-- Admin UI form controls and overlays use [shadcn/ui](https://ui.shadcn.com) (Radix) primitives; layout and form conventions are documented in `web/DESIGN.md`.
-- Capabilities **Web search**: **Select all** and **Invert selection** for provider assignment.
-- Capabilities **Web search**: separate **Enable** toggle so you can turn the feature off without clearing the provider preset list.
-- Dashboard **Client configuration** section now detects and manages **Claude Desktop** (macOS and Windows) alongside Claude Code and Codex. Apply writes CCRelay proxy settings to the platform-specific `Claude-3p` config directory; Restore removes them and reverts the deployment mode.
+- Capabilities **Web search**: **Enable** toggle, **Select all**, and **Invert selection** for provider assignment.
+- Dashboard **Client configuration**: **Claude Desktop** (macOS and Windows) with Claude Code and Codex; Apply/Restore for proxy settings in the platform `Claude-3p` config directory.
+- **Add provider** wizard presets: **DeepSeek** (OpenAI Chat and Anthropic endpoints, common v4 model IDs) and **Astraflow (UCloud)** (international and China API hosts, OpenAI Chat, custom model list).
 
 **Config**
 
@@ -22,56 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Diagnostics**
 
-- Runtime messages (startup, configuration, proxy lifecycle, errors) are appended to dated log files under `~/.ccrelay/logs/`; files rotate daily and older ones are removed after about a week. This is separate from dashboard **request** history stored in the logging database.
+- Dated runtime log files under `~/.ccrelay/logs/` (daily rotation, about one week retention), separate from dashboard request history.
+- **Open Logs Folder** from the desktop tray (Electron and Tauri) or the VS Code command opens that directory.
 
 **Desktop**
 
-- Request log storage uses an in-process SQLite driver on Electron for lower latency than the CLI subprocess backend. After upgrading, run `npm install` so the native module is rebuilt for your Electron version.
-- **Tauri** sidecar ships a bundled Node runtime with `better-sqlite3` in app resources (replacing the previous SEA single-executable approach). CI builds use Node 22 consistently.
-- Tray: **Open Logs Folder** (Electron and Tauri) opens `~/.ccrelay/logs/` in the system file manager.
-
-**VS Code**
-
-- **CCRelay: Open Logs Folder** command opens the same runtime log folder.
-
-### Changed
-
-**Logging database**
-
-- Request log bodies are stored as binary BLOBs in a new `request_logs_v2` table (~33% smaller than the previous Base64-in-TEXT format). On first start, legacy rows in `request_logs` are migrated automatically into v2. The sqlite3 CLI backend still encodes BLOBs only for its pipe transport.
-
-**UI**
-
-- Replaced hand-rolled UI primitives with shadcn/ui across Settings, Providers, Capabilities, Logs, and Dashboard.
-- Provider cards: protocol and status labels stay on one row (full protocol names such as **OpenAI Chat**); name truncates when space is tight. Tag padding increased; square corners on header tags.
-
-### Fixed
-
-**UI**
-
-- Admin UI theme and density after shadcn adoption: restored dark semantic colors (HSL tokens), compact typography, and clearer default borders on inputs and selects.
-- Settings and Capabilities save rows: status hints sit left of **Save** so the button no longer shifts when feedback appears.
-- Provider cards: header labels no longer overflow the card boundary.
-- Request logs: manual refresh on the Logs page always fetches the latest entries instead of reusing a short-lived cached list.
-
-**Desktop**
-
-- macOS Tahoe (26): Electron and Tauri signed builds include local-network usage text and networking entitlements so the app can bind the relay and reach upstreams without spurious permission or connectivity failures.
-- Request log list empty while the total count still showed a value when using the sqlite3 CLI storage backend (including the VS Code extension). Lists and detail views load correctly again.
-
-**Proxy**
-
-- macOS Tahoe (26): long proxy waits and streaming responses no longer drop after a few seconds when using the desktop apps or the VS Code extension.
-
-## [0.2.4] - 2026-05-13 (pre-release)
-
-Pre-release line for 0.2.4.
-
-### Added
-
-**UI**
-
-- **Add provider** wizard: **DeepSeek** preset with OpenAI Chat and Anthropic endpoints and common v4 model IDs.
+- In-process SQLite for request logs on Electron and Tauri (faster than the CLI subprocess backend; the VS Code extension may still use the sqlite3 CLI). After upgrading Electron from source, run `npm install` to rebuild the native module.
+- **Tauri** installer bundles a Node.js runtime and server assets (replacing the previous single-executable sidecar); end users do not install Node separately.
 
 **Protocol/Conversion**
 
@@ -79,12 +39,33 @@ Pre-release line for 0.2.4.
 
 ### Changed
 
+**Logging database**
+
+- Request log bodies in `request_logs_v2` as binary BLOBs (~33% smaller than Base64-in-TEXT), with automatic migration from legacy rows. The sqlite3 CLI backend encodes BLOBs only for pipe transport.
+
+**UI**
+
+- Admin UI migrated to [shadcn/ui](https://ui.shadcn.com) across Settings, Providers, Capabilities, Logs, and Dashboard; layout conventions in `web/DESIGN.md`.
+- Provider cards: protocol and status on one row (e.g. **OpenAI Chat**), name truncation when space is tight, updated tag padding and square header corners.
+
 **Protocol/Conversion**
 
-- Anthropic `thinking` / `output_config.effort` now maps to the standard Chat Completions `reasoning_effort` string instead of a nested `reasoning` object, improving compatibility with OpenAI, Gemini, Azure, and GLM upstreams.
-- OpenAI Chat `reasoning_effort` inbound converts to Anthropic `adaptive` thinking with `output_config.effort`, replacing the previous fixed `budget_tokens` mapping. `"none"` maps to `thinking.type: "disabled"`.
-- **GLM (Z.ai)**: outbound Chat bodies translate `reasoning_effort` to GLM's native `thinking: { type }` field so reasoning requests work without manual config.
-- Gemini-specific thought-signature handling moved out of the generic protocol adapters into dedicated Gemini platform transforms. No behavior change for end users; adapters now emit a single canonical OpenAI shape for all upstreams.
+- **Reasoning effort**: Anthropic thinking/output effort and inbound OpenAI Chat map to standard `reasoning_effort` (better OpenAI, Gemini, Azure, and GLM compatibility); GLM outbound uses native thinking fields; `"none"` disables Anthropic thinking.
+- **Gemini**: thought-signature handling in dedicated platform transforms; adapters emit one canonical OpenAI shape.
+
+### Fixed
+
+**UI**
+
+- Admin UI theme and density after shadcn migration: restored dark semantic colors, compact typography, clearer control borders.
+- Settings and Capabilities: save status hints sit left of **Save** so the button no longer shifts.
+- Provider cards: header labels no longer overflow the card.
+- Request logs: manual refresh always loads the latest entries.
+
+**Desktop & platform**
+
+- **macOS Tahoe (26)**: signed Electron and Tauri builds include local-network entitlements; long proxy waits and streaming no longer drop (desktop apps and VS Code extension).
+- Request log list empty while the total count was non-zero with the sqlite3 CLI backend (including VS Code); list and detail views work again.
 
 ## [0.2.3] - 2026-05-12
 

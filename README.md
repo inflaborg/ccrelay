@@ -134,7 +134,8 @@ npm run compile        # or npm run watch
 An optional Electron desktop app (`packages/desktop`) runs the same core as the VS Code extension:
 
 - Shares `~/.ccrelay/` config, state, and Leader election with the extension
-- Tray menu → **Open Dashboard** loads the web UI in an app window
+- Stores request logs with in-process SQLite (no system `sqlite3` binary required for the default desktop build)
+- Tray menu → **Open Dashboard** loads the web UI in an app window; **Open Logs Folder** opens runtime diagnostics under `~/.ccrelay/logs/`
 - Download from [GitHub Releases](https://github.com/inflaborg/ccrelay/releases):
   - **macOS**: `CCRelay-<version>-darwin-arm64.dmg` or `-darwin-x64.dmg`
   - **Windows**: `CCRelay-<version>-win32-x64.exe` or `-win32-arm64.exe`
@@ -146,19 +147,22 @@ An optional Electron desktop app (`packages/desktop`) runs the same core as the 
 A lightweight Tauri desktop app (`packages/desktop-tauri`) runs the same core as the VS Code extension and Electron app:
 
 - Shares `~/.ccrelay/` config, state, and Leader election with all other instances
-- Uses a sidecar architecture: Rust shell manages a Node.js server process
-- Tray menu with Start/Stop Server and Open Dashboard
+- **Sidecar layout**: the Rust shell starts a **bundled Node.js runtime** shipped inside the installer (server scripts and native SQLite support live in app resources). End users do not install Node separately.
+- Same in-process SQLite request logging as the Electron desktop app
+- Tray menu with Start/Stop Server, **Open Dashboard**, and **Open Logs Folder**
 - Download from [GitHub Releases](https://github.com/inflaborg/ccrelay/releases):
-  - Installer names follow the Electron desktop pattern (`CCRelay-<version>-<platform>-<arch>.<ext>`) with **`tauri`** added after the version (for example `CCRelay-0.2.1-tauri-darwin-arm64.dmg`, `CCRelay-0.2.1-tauri-win32-x64.exe`). Windows ships **NSIS `.exe`** only (no MSI).
+  - Installer names follow the Electron desktop pattern (`CCRelay-<version>-<platform>-<arch>.<ext>`) with **`tauri`** added after the version (for example `CCRelay-0.2.4-tauri-darwin-arm64.dmg`, `CCRelay-0.2.4-tauri-win32-x64.exe`). Windows ships **NSIS `.exe`** only (no MSI).
 
 ### Development
 
 ```bash
 npm install
-npm run tauri:dev         # Dev mode with hot reload
-npm run tauri:pack:mac    # Build macOS app
-npm run tauri:pack:win    # Build Windows app
+npm run tauri:dev         # Builds web UI + Node sidecar, then runs Tauri dev
+npm run tauri:pack:mac    # Production macOS installer
+npm run tauri:pack:win    # Production Windows installer
 ```
+
+`npm run tauri:build` (run automatically before pack/dev) bundles the sidecar JavaScript, copies the native SQLite module, and places a Node binary next to the Tauri external sidecar slot. Use **Node.js 22** when building from source (matches CI).
 
 ---
 
