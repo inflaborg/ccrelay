@@ -278,6 +278,10 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Rebuild native modules for Electron
+        run: npx electron-builder install-app-deps --arch ${{ matrix.arch }}
+        working-directory: packages/desktop
+
       - name: Build desktop
         run: npm run desktop:build
 
