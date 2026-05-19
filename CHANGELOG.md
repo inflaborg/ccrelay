@@ -35,6 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+**Logging database**
+
+- Request log bodies are stored as binary BLOBs in a new `request_logs_v2` table (~33% smaller than the previous Base64-in-TEXT format). On first start, legacy rows in `request_logs` are migrated automatically into v2. The sqlite3 CLI backend still encodes BLOBs only for its pipe transport.
+
 **UI**
 
 - Replaced hand-rolled UI primitives with shadcn/ui across Settings, Providers, Capabilities, Logs, and Dashboard.
@@ -52,6 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Desktop**
 
 - macOS Tahoe (26): Electron and Tauri signed builds include local-network usage text and networking entitlements so the app can bind the relay and reach upstreams without spurious permission or connectivity failures.
+- Request log list empty while the total count still showed a value when using the sqlite3 CLI storage backend (including the VS Code extension). Lists and detail views load correctly again.
 
 **Proxy**
 

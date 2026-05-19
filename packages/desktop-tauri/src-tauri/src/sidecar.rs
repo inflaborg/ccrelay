@@ -98,8 +98,14 @@ pub async fn start_server(app: &AppHandle) -> Result<(), String> {
             CommandEvent::Error(err) => {
                 eprintln!("[sidecar error] {err}");
                 let state = app.state::<Mutex<SidecarState>>();
-                if let Ok(s) = state.lock() {
-                    if s.is_leader {
+                if let Ok(mut s) = state.lock() {
+                    let was_leader = s.is_leader;
+                    s.child = None;
+                    s.port = None;
+                    s.host = None;
+                    s.ui_token = None;
+                    s.is_leader = false;
+                    if was_leader {
                         tray::set_server_running(app, false);
                     }
                 }

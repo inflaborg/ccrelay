@@ -5,7 +5,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as cp from "child_process";
-import { SqliteCliDriver, resolveSqlite3ExecutableFromEnv } from "@/database/drivers/sqlite-cli";
+import { SqliteCliDriver, resolveSqlite3ExecutableFromEnv } from "@/database/drivers/sqlite/cli";
 
 // Mock vscode
 vi.mock("vscode", () => ({

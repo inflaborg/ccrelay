@@ -1,70 +1,54 @@
+/* eslint-disable @typescript-eslint/naming-convention -- mock class names match driver exports */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockNativeInitialize, mockCliInitialize } = vi.hoisted(() => ({
-  mockNativeInitialize: vi.fn(),
-  mockCliInitialize: vi.fn(),
-}));
-
-vi.mock("@/database/drivers/sqlite-native", () => {
+vi.mock("@/database/drivers/sqlite/native", () => {
   class MockSqliteNativeDriver {
-    initialize = mockNativeInitialize;
+    initialize = vi.fn().mockResolvedValue(undefined);
     enabled = true;
     close = vi.fn().mockResolvedValue(undefined);
   }
-  return { SqliteNativeDriver: MockSqliteNativeDriver }; // eslint-disable-line @typescript-eslint/naming-convention -- matches export name
+  return { SqliteNativeDriver: MockSqliteNativeDriver };
 });
 
-vi.mock("@/database/drivers/sqlite-cli", () => {
+vi.mock("@/database/drivers/sqlite/cli", () => {
   class MockSqliteCliDriver {
-    initialize = mockCliInitialize;
+    initialize = vi.fn().mockResolvedValue(undefined);
     enabled = true;
     close = vi.fn().mockResolvedValue(undefined);
   }
-  return { SqliteCliDriver: MockSqliteCliDriver }; // eslint-disable-line @typescript-eslint/naming-convention -- matches export name
+  return { SqliteCliDriver: MockSqliteCliDriver };
 });
 
 describe("createSqliteDriver", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
-    mockNativeInitialize.mockResolvedValue(undefined);
-    mockCliInitialize.mockResolvedValue(undefined);
   });
 
   it("uses CLI driver when driver is cli", async () => {
-    const { createSqliteDriver } = await import("@/database/create-sqlite-driver");
+    const { createSqliteDriver } = await import("@/database/drivers/sqlite/factory");
+    const { SqliteCliDriver } = await import("@/database/drivers/sqlite/cli");
 
-    await createSqliteDriver({ type: "sqlite", path: "/tmp/x.db", driver: "cli" });
+    const driver = createSqliteDriver({ type: "sqlite", path: "/tmp/x.db", driver: "cli" });
 
-    expect(mockCliInitialize).toHaveBeenCalled();
-    expect(mockNativeInitialize).not.toHaveBeenCalled();
+    expect(driver).toBeInstanceOf(SqliteCliDriver);
   });
 
   it("uses native driver when driver is native", async () => {
-    const { createSqliteDriver } = await import("@/database/create-sqlite-driver");
+    const { createSqliteDriver } = await import("@/database/drivers/sqlite/factory");
+    const { SqliteNativeDriver } = await import("@/database/drivers/sqlite/native");
 
-    await createSqliteDriver({ type: "sqlite", path: "/tmp/x.db", driver: "native" });
+    const driver = createSqliteDriver({ type: "sqlite", path: "/tmp/x.db", driver: "native" });
 
-    expect(mockNativeInitialize).toHaveBeenCalled();
-    expect(mockCliInitialize).not.toHaveBeenCalled();
+    expect(driver).toBeInstanceOf(SqliteNativeDriver);
   });
 
-  it("auto: falls back to CLI when native initialize fails", async () => {
-    mockNativeInitialize.mockRejectedValueOnce(new Error("Cannot find module 'better-sqlite3'"));
-    const { createSqliteDriver } = await import("@/database/create-sqlite-driver");
+  it("auto: returns a driver instance without initializing", async () => {
+    const { createSqliteDriver } = await import("@/database/drivers/sqlite/factory");
 
-    await createSqliteDriver({ type: "sqlite", path: "/tmp/x.db", driver: "auto" });
+    const driver = createSqliteDriver({ type: "sqlite", path: "/tmp/x.db", driver: "auto" });
 
-    expect(mockNativeInitialize).toHaveBeenCalled();
-    expect(mockCliInitialize).toHaveBeenCalled();
-  });
-
-  it("native: propagates initialize failure", async () => {
-    mockNativeInitialize.mockRejectedValueOnce(new Error("native broken"));
-    const { createSqliteDriver } = await import("@/database/create-sqlite-driver");
-
-    await expect(
-      createSqliteDriver({ type: "sqlite", path: "/tmp/x.db", driver: "native" })
-    ).rejects.toThrow("native broken");
+    expect(driver).toBeDefined();
+    expect(typeof driver.initialize).toBe("function");
   });
 });

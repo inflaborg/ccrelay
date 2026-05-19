@@ -12,8 +12,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { LogDatabase, getDatabase, type RequestLog, type LogFilter } from "@/database";
 
 // Mock sqlite-cli driver
-vi.mock("@/database/drivers/sqlite-cli", async importOriginal => {
-  const actual = await importOriginal<typeof import("@/database/drivers/sqlite-cli")>();
+vi.mock("@/database/drivers/sqlite/cli", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/database/drivers/sqlite/cli")>();
   return {
     ...actual,
     // eslint-disable-next-line @typescript-eslint/naming-convention

@@ -10,7 +10,7 @@
  */
 
 import { parentPort } from "worker_threads";
-import { createSqliteDriver } from "./create-sqlite-driver";
+import { createSqliteDriver } from "../drivers/sqlite/factory";
 import type {
   RequestLog,
   LogFilter,
@@ -18,7 +18,9 @@ import type {
   SqliteDriverConfig,
   StatsQuery,
   DatabaseDriver,
-} from "./types";
+  DatabaseInitializeOptions,
+  LogDbMigrationChoice,
+} from "../types";
 
 // Message types
 type WorkerMessageType =
@@ -62,8 +64,15 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
   try {
     switch (type) {
       case "init": {
-        const config = payload as SqliteDriverConfig;
-        driver = await createSqliteDriver(config);
+        const p = payload as {
+          config: SqliteDriverConfig;
+          migrationChoice?: LogDbMigrationChoice;
+        };
+        driver = createSqliteDriver(p.config);
+        const initOptions: DatabaseInitializeOptions = {
+          migrationChoice: p.migrationChoice ?? "migrate",
+        };
+        await driver.initialize(initOptions);
         return { id, success: true };
       }
 

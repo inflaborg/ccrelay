@@ -4,8 +4,9 @@
  */
 
 import type { DatabaseDriver, DatabaseDriverConfig } from "./types";
-import { SqliteCliDriver, PostgresDriver } from "./drivers";
-import { DatabaseWorkerClient } from "./database-worker-client";
+import { SqliteCliDriver } from "./drivers/sqlite";
+import { PostgresDriver } from "./drivers/postgres";
+import { DatabaseWorkerClient } from "./worker/client";
 
 // Check if running in test environment (vitest sets this)
 const isTestEnvironment = process.env.VITEST === "true" || process.env.NODE_ENV === "test";
