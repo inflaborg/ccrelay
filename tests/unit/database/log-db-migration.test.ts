@@ -1,14 +1,19 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
-const hasBetterSqlite3 = ((): boolean => {
+/** Skips when better-sqlite3 was rebuilt for Electron (e.g. after desktop postinstall). */
+function isBetterSqlite3AvailableForNode(): boolean {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require("better-sqlite3");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/naming-convention
+    const BetterSqlite3Ctor = require("better-sqlite3") as new (path: string) => { close(): void };
+    const db = new BetterSqlite3Ctor(":memory:");
+    db.close();
     return true;
   } catch {
     return false;
   }
-})();
+}
+
+const nativeForNode = isBetterSqlite3AvailableForNode();
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
@@ -18,7 +23,7 @@ function encodeForStorageLegacy(value: string): string {
   return "B64:" + Buffer.from(value, "utf-8").toString("base64");
 }
 
-describe.skipIf(!hasBetterSqlite3)("log-db-migration", () => {
+describe.skipIf(!nativeForNode)("log-db-migration", () => {
   let tmpDir: string;
   let dbPath: string;
 
