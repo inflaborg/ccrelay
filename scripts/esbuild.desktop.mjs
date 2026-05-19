@@ -20,6 +20,7 @@ const commonOptions = {
   format: "cjs",
   external: [
     "electron",
+    "better-sqlite3",
     "pg",
     "pg-*",
     "pgpass",

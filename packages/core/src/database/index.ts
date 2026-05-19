@@ -226,6 +226,11 @@ export function setLogDatabaseDriverConfigResolver(
   logDatabaseDriverResolver = fn;
 }
 
+/** True when a host (e.g. desktop) registered a driver resolver before {@link ProxyServer} starts. */
+export function hasLogDatabaseDriverConfigResolver(): boolean {
+  return logDatabaseDriverResolver !== undefined;
+}
+
 /**
  * Get the database singleton (uses default SQLite ~/.ccrelay/logs.db unless resolver was set).
  */

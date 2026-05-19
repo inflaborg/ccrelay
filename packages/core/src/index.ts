@@ -30,3 +30,9 @@ export {
 } from "./api/version.generated";
 
 export * from "./types";
+
+export {
+  setLogDatabaseDriverConfigResolver,
+  hasLogDatabaseDriverConfigResolver,
+  loggingDatabaseConfigToDriver,
+} from "./database";

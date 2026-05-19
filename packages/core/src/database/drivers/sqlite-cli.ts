@@ -20,6 +20,14 @@ import type {
   RequestStatus,
   StatsQuery,
 } from "../types";
+import {
+  MAX_LOG_ROWS,
+  MAX_LOG_AGE_DAYS,
+  encodeForStorage,
+  buildInsertSql,
+  dbRowToLogWithoutBody,
+  dbRowToLog,
+} from "./sqlite-utils";
 
 /** Thrown when the `sqlite3` executable is absent; callers may degrade to disabled log storage. */
 export const SQLITE_CLI_NOT_FOUND_MESSAGE = "sqlite3 CLI not found. Please install SQLite3.";
@@ -55,36 +63,6 @@ export function resolveSqlite3ExecutableFromEnv(): string | null {
   } catch {
     return null;
   }
-}
-
-const MAX_LOG_ROWS = 10000;
-const MAX_LOG_AGE_DAYS = 30;
-
-/**
- * Base64 encoding helpers for storage
- * Uses a prefix to distinguish encoded data from legacy plain text
- */
-const BASE64_PREFIX = "B64:";
-
-function encodeForStorage(value: string | undefined): string | null {
-  if (value === undefined || value === null) {
-    return null;
-  }
-  return BASE64_PREFIX + Buffer.from(value, "utf-8").toString("base64");
-}
-
-function decodeFromStorage(value: string | undefined): string | undefined {
-  if (!value) {
-    return undefined;
-  }
-  if (value.startsWith(BASE64_PREFIX)) {
-    try {
-      return Buffer.from(value.slice(BASE64_PREFIX.length), "base64").toString("utf-8");
-    } catch {
-      return value; // Fallback if decode fails
-    }
-  }
-  return value; // Return as-is (legacy plain text)
 }
 
 /**
@@ -156,199 +134,6 @@ function interpolateSql(
   }
 
   return result;
-}
-
-/**
- * Build an INSERT SQL statement for a RequestLog
- */
-function buildInsertSql(
-  log: RequestLog,
-  status: string = "completed"
-): {
-  sql: string;
-  params: (string | number | boolean | null | undefined)[];
-} {
-  return {
-    sql: `INSERT INTO request_logs (
-      timestamp, provider_id, provider_name, method, path, target_url,
-      request_body, response_body, original_request_body, original_response_body,
-      status_code, duration, success, error_message, client_id, status, route_type,
-      input_tokens, output_tokens, cache_tokens, ttfb
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    params: [
-      log.timestamp,
-      log.providerId,
-      log.providerName,
-      log.method,
-      log.path,
-      log.targetUrl ?? null,
-      encodeForStorage(log.requestBody),
-      encodeForStorage(log.responseBody),
-      encodeForStorage(log.originalRequestBody),
-      encodeForStorage(log.originalResponseBody),
-      log.statusCode ?? null,
-      log.duration,
-      log.success ? 1 : 0,
-      encodeForStorage(log.errorMessage),
-      log.clientId ?? null,
-      status,
-      log.routeType ?? null,
-      log.inputTokens ?? null,
-      log.outputTokens ?? null,
-      log.cacheTokens ?? null,
-      log.ttfb ?? null,
-    ],
-  };
-}
-
-/**
- * Extract model name from a JSON body that may be truncated.
- * Tries JSON.parse first; falls back to regex for partial JSON.
- */
-function extractModelFromPartialJson(body: string): string | undefined {
-  try {
-    const parsed = JSON.parse(body) as { model?: string; data?: { model?: string } };
-    return (typeof parsed.model === "string" && parsed.model) || parsed.data?.model || undefined;
-  } catch {
-    // Truncated JSON — extract "model":"value" via regex
-    const match = body.match(/"model"\s*:\s*"([^"]+)"/);
-    return match?.[1];
-  }
-}
-
-/**
- * Convert a database row to RequestLog (without body fields for list view)
- */
-function dbRowToLogWithoutBody(row: Record<string, unknown>): RequestLog {
-  const log: RequestLog = {
-    id: row.id as number,
-    timestamp: row.timestamp as number,
-    providerId: row.provider_id as string,
-    providerName: row.provider_name as string,
-    method: row.method as string,
-    path: row.path as string,
-    statusCode: row.status_code as number | undefined,
-    duration: row.duration as number,
-    success: (row.success as number) !== 0,
-    errorMessage: row.error_message as string | undefined,
-    clientId: row.client_id as string | undefined,
-    status: row.status as RequestLog["status"],
-    routeType: row.route_type as RequestLog["routeType"],
-    inputTokens: row.input_tokens as number | undefined,
-    outputTokens: row.output_tokens as number | undefined,
-    cacheTokens: row.cache_tokens as number | undefined,
-    ttfb: row.ttfb as number | undefined,
-  };
-
-  if (log.errorMessage) {
-    log.errorMessage = decodeFromStorage(log.errorMessage);
-  }
-
-  // Extract original model (what the client sent) from original_request_body
-  const rawOriginalBody = row.original_request_body as string | undefined;
-  if (rawOriginalBody) {
-    const originalBody = decodeFromStorage(rawOriginalBody);
-    if (originalBody) {
-      log.model = extractModelFromPartialJson(originalBody);
-    }
-  }
-
-  // Extract mapped model (what was sent upstream) from request_body
-  const rawRequestBody = row.request_body as string | undefined;
-  if (rawRequestBody) {
-    const requestBody = decodeFromStorage(rawRequestBody);
-    if (requestBody) {
-      const model = extractModelFromPartialJson(requestBody);
-      if (model) {
-        log.mappedModel = model;
-        if (!log.model) {
-          log.model = model;
-        }
-      }
-    }
-  }
-
-  if (!log.model) {
-    const pathModelMatch = log.path.match(/\/models\/([^\/\?]+)/);
-    if (pathModelMatch) {
-      log.model = pathModelMatch[1];
-    }
-  }
-
-  return log;
-}
-
-/**
- * Shared helper: populate model/mappedModel from stored bodies
- */
-function extractModelsFromBodies(
-  row: Record<string, unknown>
-): Pick<RequestLog, "model" | "mappedModel"> {
-  const result: Pick<RequestLog, "model" | "mappedModel"> = {};
-
-  const rawOriginalBody = row.original_request_body as string | undefined;
-  if (rawOriginalBody) {
-    const originalBody = decodeFromStorage(rawOriginalBody);
-    if (originalBody) {
-      result.model = extractModelFromPartialJson(originalBody);
-    }
-  }
-
-  const rawRequestBody = row.request_body as string | undefined;
-  if (rawRequestBody) {
-    const requestBody = decodeFromStorage(rawRequestBody);
-    if (requestBody) {
-      const model = extractModelFromPartialJson(requestBody);
-      if (model) {
-        result.mappedModel = model;
-        if (!result.model) {
-          result.model = model;
-        }
-      }
-    }
-  }
-
-  if (!result.model) {
-    const path = (row.path as string) || "";
-    const pathModelMatch = path.match(/\/models\/([^\/\?]+)/);
-    if (pathModelMatch) {
-      result.model = pathModelMatch[1];
-    }
-  }
-
-  return result;
-}
-
-/**
- * Convert database row to RequestLog (with body fields for detail view)
- */
-function dbRowToLog(row: Record<string, unknown>): RequestLog {
-  const models = extractModelsFromBodies(row);
-  return {
-    id: row.id as number,
-    timestamp: row.timestamp as number,
-    providerId: row.provider_id as string,
-    providerName: row.provider_name as string,
-    method: row.method as string,
-    path: row.path as string,
-    targetUrl: row.target_url as string | undefined,
-    requestBody: decodeFromStorage(row.request_body as string | undefined),
-    responseBody: decodeFromStorage(row.response_body as string | undefined),
-    originalRequestBody: decodeFromStorage(row.original_request_body as string | undefined),
-    originalResponseBody: decodeFromStorage(row.original_response_body as string | undefined),
-    statusCode: row.status_code as number | undefined,
-    duration: row.duration as number,
-    success: (row.success as number) !== 0,
-    errorMessage: decodeFromStorage(row.error_message as string | undefined),
-    clientId: row.client_id as string | undefined,
-    status: row.status as RequestLog["status"],
-    routeType: row.route_type as RequestLog["routeType"],
-    inputTokens: row.input_tokens as number | undefined,
-    outputTokens: row.output_tokens as number | undefined,
-    cacheTokens: row.cache_tokens as number | undefined,
-    ttfb: row.ttfb as number | undefined,
-    ...models,
-  };
 }
 
 interface PendingQuery {

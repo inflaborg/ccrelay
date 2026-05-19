@@ -29,6 +29,13 @@ describe("loggingDatabaseConfigToDriver", () => {
     });
   });
 
+  it("sqlite: passes driver when set", () => {
+    expect(loggingDatabaseConfigToDriver({ type: "sqlite", driver: "cli" })).toMatchObject({
+      type: "sqlite",
+      driver: "cli",
+    });
+  });
+
   it("postgres: maps name -> database field", () => {
     expect(
       loggingDatabaseConfigToDriver({

@@ -21,6 +21,7 @@ import { ScopedLogger } from "../utils/logger";
 import {
   getDatabase,
   LogDatabase,
+  hasLogDatabaseDriverConfigResolver,
   setLogDatabaseDriverConfigResolver,
   loggingDatabaseConfigToDriver,
 } from "../database";
@@ -82,9 +83,11 @@ export class ProxyServer {
   constructor(config: ConfigManager, leaderElection: LeaderElection | null = null) {
     this.config = config;
     this.router = new Router(config);
-    setLogDatabaseDriverConfigResolver(() =>
-      loggingDatabaseConfigToDriver(this.config.configValue.logging.database)
-    );
+    if (!hasLogDatabaseDriverConfigResolver()) {
+      setLogDatabaseDriverConfigResolver(() =>
+        loggingDatabaseConfigToDriver(this.config.configValue.logging.database)
+      );
+    }
     this.database = getDatabase();
     this.leaderElection = leaderElection;
     this.instanceId = `Server-${process.pid}-${Math.random().toString(36).substring(2, 6)}`;

@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Desktop**
 
+- Request log storage uses an in-process SQLite driver on Electron for lower latency than the CLI subprocess backend. After upgrading, run `npm install` so the native module is rebuilt for your Electron version.
 - Tray: **Open Logs Folder** (Electron and Tauri) opens `~/.ccrelay/logs/` in the system file manager.
 
 **VS Code**
@@ -26,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CCRelay: Open Logs Folder** command opens the same runtime log folder.
 
 ### Fixed
+
+**UI**
+
+- Request logs: manual refresh on the Logs page now always fetches the latest entries from the server instead of reusing a short-lived cached list.
 
 **Desktop**
 

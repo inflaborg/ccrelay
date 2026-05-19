@@ -40,9 +40,14 @@ export function loggingDatabaseConfigToDriver(
   const raw = ldb.path?.trim();
   const dbPath = raw ? expandLoggingDbPath(raw) : defaultPath;
   const exe = ldb.sqlite3Executable?.trim();
+  const driver =
+    ldb.driver === "auto" || ldb.driver === "native" || ldb.driver === "cli"
+      ? ldb.driver
+      : undefined;
   return {
     type: "sqlite",
     path: dbPath,
     ...(exe ? { sqlite3Executable: exe } : {}),
+    ...(driver ? { driver } : {}),
   };
 }

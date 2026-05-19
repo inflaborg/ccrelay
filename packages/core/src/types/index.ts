@@ -186,6 +186,8 @@ export const SqliteConfigSchema = z.object({
   path: z.string().optional(),
   /** Optional path to sqlite3 CLI; empty/not set resolves `sqlite3` from PATH only. */
   sqlite3Executable: z.string().optional(),
+  /** SQLite backend: auto (native with CLI fallback), native (better-sqlite3), or cli (sqlite3 subprocess). */
+  driver: z.enum(["auto", "native", "cli"]).optional(),
 });
 
 export type SqliteConfigInput = z.infer<typeof SqliteConfigSchema>;
@@ -271,6 +273,8 @@ export interface SqliteDatabaseConfig {
   path?: string;
   /** Optional absolute or relative path to the sqlite3 executable; omit to use PATH. */
   sqlite3Executable?: string;
+  /** SQLite backend: auto (native with CLI fallback), native (better-sqlite3), or cli (sqlite3 subprocess). */
+  driver?: "auto" | "native" | "cli";
 }
 
 /**

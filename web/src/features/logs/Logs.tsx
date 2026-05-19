@@ -158,6 +158,7 @@ export default function Logs() {
     "analysis"
   );
   const [responseTab, setResponseTab] = useState<"analysis" | "converted" | "original">("analysis");
+  const [refreshing, setRefreshing] = useState(false);
 
   // Use ref for stable data access in callbacks
   const stateRef = useRef({
@@ -214,7 +215,44 @@ export default function Logs() {
       });
     },
     enabled: currentOffset === 0,
+    staleTime: 0,
   });
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    setState(state => ({
+      ...state,
+      allLogs: [],
+      totalCount: 0,
+      lastLogId: null,
+      isLoadingMore: false,
+    }));
+    try {
+      await queryClient.invalidateQueries({ queryKey: ["logs"] });
+      const result = await queryClient.fetchQuery({
+        queryKey: ["logs", filter, 0],
+        queryFn: () =>
+          api.getLogs({
+            ...filter,
+            limit: PAGE_SIZE,
+            offset: 0,
+          }),
+        staleTime: 0,
+      });
+      setState(state => ({
+        ...state,
+        allLogs: result.logs,
+        totalCount: result.total,
+        lastLogId: result.logs[result.logs.length - 1]?.id ?? null,
+        isLoadingMore: false,
+      }));
+      await queryClient.invalidateQueries({ queryKey: ["stats"] });
+    } catch (error) {
+      console.error("[Logs] Refresh failed:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [filter, queryClient]);
 
   // Append new logs when data changes
   useEffect(() => {
@@ -671,13 +709,14 @@ export default function Logs() {
               variant="outline"
               size="sm"
               className="h-7 text-xs"
-              onClick={() => {
-                setState(state => ({ ...state, allLogs: [], totalCount: 0, lastLogId: null }));
-                queryClient.refetchQueries({ queryKey: ["logs"] });
-                queryClient.refetchQueries({ queryKey: ["stats"] });
-              }}
+              onClick={() => void handleRefresh()}
+              disabled={refreshing}
             >
-              <RefreshCw className="h-3 w-3 mr-1" />
+              {refreshing ? (
+                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3 w-3 mr-1" />
+              )}
               {t("common.refresh")}
             </Button>
           </div>
