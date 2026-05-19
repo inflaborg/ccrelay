@@ -10,6 +10,8 @@ import {
   LeaderElection,
   Logger,
   ProxyServer,
+  loggingDatabaseConfigToDriver,
+  setLogDatabaseDriverConfigResolver,
   setWebDistPath,
 } from "@ccrelay/core";
 import { StatusBarManager } from "./vscode/statusBar";
@@ -60,6 +62,14 @@ export function activate(context: vscode.ExtensionContext) {
   logger.info(
     `[Extension:${instanceId}] LeaderElection initialized in ${Date.now() - leaderElectionStart}ms`
   );
+
+  setLogDatabaseDriverConfigResolver(() => {
+    const base = loggingDatabaseConfigToDriver(cm.configValue.logging.database);
+    if (base?.type === "sqlite") {
+      return { ...base, driver: base.driver ?? "cli" };
+    }
+    return base;
+  });
 
   const serverStart = Date.now();
   server = new ProxyServer(configManager, leaderElection);

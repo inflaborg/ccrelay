@@ -115,6 +115,8 @@ export interface SqliteDriverConfig {
   readonly type: "sqlite";
   readonly path: string;
   readonly sqlite3Executable?: string;
+  /** Driver selection: "auto" (default) prefers native, falls back to CLI; "native" forces better-sqlite3; "cli" forces sqlite3 CLI. */
+  readonly driver?: "auto" | "native" | "cli";
 }
 
 /**

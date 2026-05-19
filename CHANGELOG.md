@@ -9,12 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**UI**
+
+- Dashboard **Client configuration** section now detects and manages **Claude Desktop** (macOS and Windows) alongside Claude Code and Codex. Apply writes CCRelay proxy settings to the platform-specific `Claude-3p` config directory; Restore removes them and reverts the deployment mode.
+
 **Diagnostics**
 
 - Runtime messages (startup, configuration, proxy lifecycle, errors) are appended to dated log files under `~/.ccrelay/logs/`; files rotate daily and older ones are removed after about a week. This is separate from dashboard **request** history stored in the logging database.
 
 **Desktop**
 
+- Request log storage uses an in-process SQLite driver on Electron for lower latency than the CLI subprocess backend. After upgrading, run `npm install` so the native module is rebuilt for your Electron version.
 - Tray: **Open Logs Folder** (Electron and Tauri) opens `~/.ccrelay/logs/` in the system file manager.
 
 **VS Code**
@@ -22,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CCRelay: Open Logs Folder** command opens the same runtime log folder.
 
 ### Fixed
+
+**UI**
+
+- Request logs: manual refresh on the Logs page now always fetches the latest entries from the server instead of reusing a short-lived cached list.
 
 **Desktop**
 

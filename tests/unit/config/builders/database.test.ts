@@ -23,6 +23,15 @@ describe("buildDatabaseConfig", () => {
     ).toEqual({ type: "sqlite", path: "/tmp/x.db", sqlite3Executable: "/bin/sqlite3" });
   });
 
+  it("builds sqlite config with driver", () => {
+    expect(
+      buildDatabaseConfig({
+        enabled: true,
+        database: { type: "sqlite", driver: "native" },
+      })
+    ).toEqual({ type: "sqlite", path: undefined, driver: "native" });
+  });
+
   it("builds postgres with defaults", () => {
     expect(
       buildDatabaseConfig({

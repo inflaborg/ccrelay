@@ -19,9 +19,12 @@ export function buildDatabaseConfig(
     };
   }
   const exe = typeof db.sqlite3Executable === "string" ? db.sqlite3Executable.trim() : "";
+  const driver =
+    db.driver === "auto" || db.driver === "native" || db.driver === "cli" ? db.driver : undefined;
   return {
     type: "sqlite",
     path: db.path || undefined,
     ...(exe ? { sqlite3Executable: exe } : {}),
+    ...(driver ? { driver } : {}),
   };
 }

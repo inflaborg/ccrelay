@@ -10,8 +10,15 @@
  */
 
 import { parentPort } from "worker_threads";
-import { SqliteCliDriver } from "./drivers/sqlite-cli";
-import type { RequestLog, LogFilter, RequestStatus, SqliteDriverConfig, StatsQuery } from "./types";
+import { createSqliteDriver } from "./create-sqlite-driver";
+import type {
+  RequestLog,
+  LogFilter,
+  RequestStatus,
+  SqliteDriverConfig,
+  StatsQuery,
+  DatabaseDriver,
+} from "./types";
 
 // Message types
 type WorkerMessageType =
@@ -44,7 +51,7 @@ interface WorkerResponse {
 }
 
 // Driver instance
-let driver: SqliteCliDriver | null = null;
+let driver: DatabaseDriver | null = null;
 
 /**
  * Handle incoming message from main thread
@@ -56,9 +63,7 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
     switch (type) {
       case "init": {
         const config = payload as SqliteDriverConfig;
-        const d = new SqliteCliDriver(config);
-        await d.initialize();
-        driver = d;
+        driver = await createSqliteDriver(config);
         return { id, success: true };
       }
 

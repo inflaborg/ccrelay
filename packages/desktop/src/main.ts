@@ -12,6 +12,8 @@ import {
   LeaderElection,
   Logger,
   ProxyServer,
+  loggingDatabaseConfigToDriver,
+  setLogDatabaseDriverConfigResolver,
   setWebDistPath,
 } from "@ccrelay/core";
 import { createTray } from "./tray";
@@ -72,6 +74,13 @@ void app.whenReady().then(async () => {
   setWebDistPath(resolveWebDist());
 
   const configManager = new ConfigManager();
+  setLogDatabaseDriverConfigResolver(() => {
+    const base = loggingDatabaseConfigToDriver(configManager.configValue.logging.database);
+    if (base?.type === "sqlite") {
+      return { ...base, driver: base.driver === "cli" ? "cli" : "native" };
+    }
+    return base;
+  });
   const leaderElection = new LeaderElection(configManager.port, configManager.host, () =>
     configManager.getApiBearerToken()
   );
