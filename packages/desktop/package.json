@@ -12,11 +12,11 @@
     "postinstall": "electron-rebuild -f -w better-sqlite3",
     "build": "node ../../scripts/esbuild.desktop.mjs",
     "start": "electron .",
-    "pack": "electron-builder --publish never",
-    "pack:mac": "electron-builder --mac --publish never",
-    "pack:mac:all": "electron-builder --mac --x64 --arm64 --publish never",
-    "pack:win": "electron-builder --win --publish never",
-    "pack:win:all": "electron-builder --win --x64 --arm64 --publish never"
+    "pack": "electron-rebuild -f -w better-sqlite3 && electron-builder --publish never",
+    "pack:mac": "electron-rebuild -f -w better-sqlite3 && electron-builder --mac --publish never",
+    "pack:mac:all": "electron-rebuild -f -w better-sqlite3 && electron-builder --mac --x64 --arm64 --publish never",
+    "pack:win": "electron-rebuild -f -w better-sqlite3 && electron-builder --win --publish never",
+    "pack:win:all": "electron-rebuild -f -w better-sqlite3 && electron-builder --win --x64 --arm64 --publish never"
   },
   "dependencies": {
     "@ccrelay/core": "*",
