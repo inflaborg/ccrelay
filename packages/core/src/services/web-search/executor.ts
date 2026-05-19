@@ -11,6 +11,22 @@ import type { WebSearchDetection } from "./types";
 
 const log = Logger.getInstance();
 
+/** Whether global web search interception is active (legacy YAML: enabled when providers list is non-empty). */
+export function isWebSearchFeatureEnabled(
+  globalConfig: WebSearchGlobalConfig | undefined
+): boolean {
+  if (!globalConfig) {
+    return false;
+  }
+  if (globalConfig.enabled === false) {
+    return false;
+  }
+  if (globalConfig.enabled === true) {
+    return true;
+  }
+  return (globalConfig.providers?.length ?? 0) > 0;
+}
+
 /** Successful web-search synthesis (caller applies headers and body to the HTTP response). */
 export interface WebSearchOrchestrationResult {
   body: string;
@@ -44,6 +60,11 @@ export function detectWebSearchInterception(
   log.info(
     `[web-search] Detection hit: query="${detection.query}" model=${detection.model} stream=${detection.stream} provider=${providerId}`
   );
+
+  if (!isWebSearchFeatureEnabled(globalConfig)) {
+    log.info("[web-search] Feature disabled in config (enabled=false or empty legacy config)");
+    return null;
+  }
 
   const enabledProviders = globalConfig?.providers;
   if (!enabledProviders || !enabledProviders.includes(providerId)) {

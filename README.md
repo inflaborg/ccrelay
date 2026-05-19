@@ -527,7 +527,8 @@ Optional **local handling** of Anthropic-style **web search** (server tool) requ
 
 | Setting                         | Description                                                                 |
 | ------------------------------- | ----------------------------------------------------------------------------- |
-| `webSearch.providers`           | Provider IDs (keys under `providers:`) that use this feature.               |
+| `webSearch.enabled`             | Master switch (`true` / `false`). When omitted, non-empty `providers` means on. |
+| `webSearch.providers`           | Provider IDs (keys under `providers:`) assigned to web search (kept when disabled). |
 | `webSearch.defaultSearchBackend` | Optional: `tavily` or `glm` (defaults when not inferred per request).        |
 
 #### Tavily
@@ -562,9 +563,12 @@ webSearch:
     protocol: openai
     region: intl
   defaultSearchBackend: tavily
+  enabled: true
   providers:
     - glm
 ```
+
+Set `enabled: false` to turn off web search without clearing the `providers` preset list.
 
 Edit the same fields from the dashboard **Capabilities** tab.
 

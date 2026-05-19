@@ -27,8 +27,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ContextMenuWrapper } from "@/components/ui/context-menu";
-import { Select } from "@/components/ui/select";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import { SelectField } from "@/components/select-field";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { api } from "@/api/client";
 import type { AddProviderRequest, Provider, ModelMapEntry } from "@/types/api";
 import { WizardDialog } from "./wizard/WizardDialog";
@@ -520,7 +528,7 @@ export default function Providers() {
       </div>
 
       {/* Providers List - Compact grid */}
-      <div className="grid gap-2 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+      <div className="grid min-w-0 gap-2 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
         {isLoading ? (
           <>
             <Card className="p-0">
@@ -536,110 +544,118 @@ export default function Providers() {
           </>
         ) : (
           providers.map(provider => (
-            <ContextMenuWrapper
-              key={provider.id}
-              menuItems={[
-                {
-                  label: t("providers.contextMenu.use"),
-                  onClick: () => handleSwitch(provider.id),
-                  show: !provider.active && provider.enabled,
-                },
-                {
-                  label: t("providers.contextMenu.edit"),
-                  onClick: () => openEditModal(provider),
-                },
-                {
-                  label: t("providers.contextMenu.duplicate"),
-                  onClick: () => openDuplicateModal(provider),
-                },
-                {
-                  label: t("providers.contextMenu.delete"),
-                  onClick: () => requestDelete(provider),
-                  destructive: true,
-                  show: provider.id !== "official",
-                },
-              ]}
-            >
-              <Card
-                className={`p-0 h-full border group ${provider.active ? "border-primary shadow-[inset_0_0_0_1px_var(--color-primary),0_0_0_2px_var(--color-primary)] dark:shadow-[inset_0_0_0_1px_var(--color-primary),0_0_0_2px_var(--color-primary)]" : selectedIds.has(provider.id) ? "border-primary ring-1 ring-primary" : "border-border"} ${!provider.enabled ? "opacity-50" : ""}`}
-              >
-                <CardHeader className="p-3 pb-1">
-                  <div className="flex items-center justify-between">
-                    {provider.id !== "official" ? (
-                      <button
-                        type="button"
-                        className={`h-3.5 w-3.5 rounded-[3px] border flex-shrink-0 flex items-center justify-center transition-opacity cursor-pointer ${selectedIds.has(provider.id) ? "opacity-100 bg-primary border-primary text-primary-foreground" : isSelectMode ? "opacity-100 bg-background border-border text-muted-foreground" : "opacity-0 group-hover:opacity-100 bg-background border-border text-muted-foreground hover:border-primary"}`}
-                        onClick={e => {
-                          e.stopPropagation();
-                          toggleSelect(provider.id);
-                        }}
+            <ContextMenu key={provider.id}>
+              <ContextMenuTrigger asChild>
+                <Card
+                  className={`p-0 h-full min-w-0 overflow-hidden border group ${provider.active ? "border-primary shadow-[inset_0_0_0_1px_var(--color-primary),0_0_0_2px_var(--color-primary)] dark:shadow-[inset_0_0_0_1px_var(--color-primary),0_0_0_2px_var(--color-primary)]" : selectedIds.has(provider.id) ? "border-primary ring-1 ring-primary" : "border-border"} ${!provider.enabled ? "opacity-50" : ""}`}
+                >
+                  <CardHeader className="p-3 pb-1 overflow-hidden">
+                    <div className="flex min-w-0 items-center gap-1">
+                      {provider.id !== "official" ? (
+                        <button
+                          type="button"
+                          className={`h-3.5 w-3.5 shrink-0 rounded-[3px] border flex items-center justify-center transition-opacity cursor-pointer ${selectedIds.has(provider.id) ? "opacity-100 bg-primary border-primary text-primary-foreground" : isSelectMode ? "opacity-100 bg-background border-border text-muted-foreground" : "opacity-0 group-hover:opacity-100 bg-background border-border text-muted-foreground hover:border-primary"}`}
+                          onClick={e => {
+                            e.stopPropagation();
+                            toggleSelect(provider.id);
+                          }}
+                        >
+                          {selectedIds.has(provider.id) && <Check className="h-2.5 w-2.5" />}
+                        </button>
+                      ) : (
+                        <span className="w-3.5 shrink-0" />
+                      )}
+                      <CardTitle
+                        className="min-w-0 flex-1 truncate text-xs font-medium leading-tight"
+                        title={provider.name}
                       >
-                        {selectedIds.has(provider.id) && <Check className="h-2.5 w-2.5" />}
-                      </button>
-                    ) : (
-                      <span className="w-3.5 flex-shrink-0" />
-                    )}
-                    <CardTitle className="text-sm truncate mx-1.5 flex-1 min-w-0">
-                      {provider.name}
-                    </CardTitle>
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      {(() => {
-                        const proto = PROVIDER_PROTOCOL_LABEL[provider.providerType];
-                        return proto ? (
+                        {provider.name}
+                      </CardTitle>
+                      <div className="flex shrink-0 items-center gap-0.5">
+                        {(() => {
+                          const proto = PROVIDER_PROTOCOL_LABEL[provider.providerType];
+                          return proto ? (
+                            <span
+                              className={`inline-flex shrink-0 items-center whitespace-nowrap px-1.5 py-0.5 text-[9px] font-semibold leading-none ${proto.className}`}
+                              title={t(proto.label)}
+                            >
+                              {t(proto.label)}
+                            </span>
+                          ) : null;
+                        })()}
+                        {provider.active && (
                           <span
-                            className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${proto.className}`}
+                            className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold leading-none text-primary"
+                            title={t("providers.badge.active")}
                           >
-                            {t(proto.label)}
+                            <Check className="h-2.5 w-2.5 shrink-0" aria-hidden />
+                            {t("providers.badgeShort.active")}
                           </span>
-                        ) : null;
-                      })()}
-                      {provider.modelMap?.length && provider.modelMappingEnabled === false ? (
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] px-1.5 py-0.5 text-amber-700 dark:text-amber-400 border-amber-600/40"
-                        >
-                          {t("providers.badge.mappingOff")}
-                        </Badge>
-                      ) : null}
-                      {!provider.enabled && (
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] px-1.5 py-0.5 text-muted-foreground"
-                        >
-                          {t("providers.badge.disabled")}
-                        </Badge>
-                      )}
-                      {provider.active && (
-                        <span className="inline-flex items-center gap-0.5 rounded-md bg-primary/10 text-primary px-1.5 py-0.5 text-[10px] font-semibold">
-                          <Check className="h-3 w-3" />
-                          {t("providers.badge.active")}
-                        </span>
-                      )}
+                        )}
+                        {provider.modelMap?.length && provider.modelMappingEnabled === false ? (
+                          <Badge
+                            variant="outline"
+                            className="h-auto shrink-0 whitespace-nowrap rounded-none px-1.5 py-0.5 text-[9px] leading-none text-amber-700 dark:text-amber-400 border-amber-600/40"
+                            title={t("providers.badge.mappingOff")}
+                          >
+                            {t("providers.badgeShort.mappingOff")}
+                          </Badge>
+                        ) : null}
+                        {!provider.enabled && (
+                          <Badge
+                            variant="outline"
+                            className="h-auto shrink-0 whitespace-nowrap rounded-none px-1.5 py-0.5 text-[9px] leading-none text-muted-foreground"
+                            title={t("providers.badge.disabled")}
+                          >
+                            {t("providers.badgeShort.disabled")}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-3 pt-0 space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">{t("providers.card.id")}:</span>
-                    <span className="font-mono text-[10px]">{provider.id}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">{t("providers.card.mode")}:</span>
-                    <Badge variant="outline" className="text-[10px] px-1 py-0">
-                      {provider.mode}
-                    </Badge>
-                  </div>
-                  {provider.baseUrl && (
+                  </CardHeader>
+                  <CardContent className="p-3 pt-0 space-y-1">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">{t("providers.card.baseUrl")}:</span>
-                      <span className="font-mono text-[10px] truncate max-w-[140px]">
-                        {provider.baseUrl}
-                      </span>
+                      <span className="text-muted-foreground">{t("providers.card.id")}:</span>
+                      <span className="font-mono text-[10px]">{provider.id}</span>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            </ContextMenuWrapper>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">{t("providers.card.mode")}:</span>
+                      <Badge variant="outline" className="text-[10px] px-1 py-0">
+                        {provider.mode}
+                      </Badge>
+                    </div>
+                    {provider.baseUrl && (
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">
+                          {t("providers.card.baseUrl")}:
+                        </span>
+                        <span className="font-mono text-[10px] truncate max-w-[140px]">
+                          {provider.baseUrl}
+                        </span>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                {!provider.active && provider.enabled ? (
+                  <ContextMenuItem onClick={() => handleSwitch(provider.id)}>
+                    {t("providers.contextMenu.use")}
+                  </ContextMenuItem>
+                ) : null}
+                <ContextMenuItem onClick={() => openEditModal(provider)}>
+                  {t("providers.contextMenu.edit")}
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => openDuplicateModal(provider)}>
+                  {t("providers.contextMenu.duplicate")}
+                </ContextMenuItem>
+                {provider.id !== "official" ? (
+                  <ContextMenuItem variant="destructive" onClick={() => requestDelete(provider)}>
+                    {t("providers.contextMenu.delete")}
+                  </ContextMenuItem>
+                ) : null}
+              </ContextMenuContent>
+            </ContextMenu>
           ))
         )}
       </div>
@@ -711,12 +727,12 @@ export default function Providers() {
               {/* ID and Enabled row */}
               <div className="grid grid-cols-[1fr_auto] gap-3">
                 <div className="space-y-1">
-                  <label className="text-xs font-medium">
+                  <Label className="text-xs font-medium">
                     {t("providers.modal.providerId")} <span className="text-destructive">*</span>
-                  </label>
-                  <input
+                  </Label>
+                  <Input
                     type="text"
-                    className="w-full h-8 px-2 text-xs border rounded-md bg-background disabled:opacity-50"
+                    className="h-8 text-xs disabled:opacity-50"
                     placeholder={t("providers.placeholder.id")}
                     value={editingProvider != null ? editingProvider.id : formData.id}
                     onChange={e => updateForm("id", e.target.value.replace(/[^A-Za-z0-9_-]/g, ""))}
@@ -728,21 +744,19 @@ export default function Providers() {
                 </div>
                 <div className="pt-[26px]">
                   <div className="flex items-center gap-2 h-8">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       id="enabled"
-                      className="h-4 w-4"
                       disabled={editingProvider?.id === "official" || formData.id === "official"}
                       checked={
                         editingProvider?.id === "official" || formData.id === "official"
                           ? true
                           : (formData.enabled ?? true)
                       }
-                      onChange={e => updateForm("enabled", e.target.checked)}
+                      onCheckedChange={checked => updateForm("enabled", checked === true)}
                     />
-                    <label htmlFor="enabled" className="text-xs whitespace-nowrap">
+                    <Label htmlFor="enabled" className="text-xs font-normal whitespace-nowrap">
                       {t("providers.modal.enabled")}
-                    </label>
+                    </Label>
                     {(editingProvider?.id === "official" || formData.id === "official") && (
                       <span
                         className="text-[10px] text-muted-foreground"
@@ -757,12 +771,12 @@ export default function Providers() {
 
               {/* Name */}
               <div className="space-y-1">
-                <label className="text-xs font-medium">
+                <Label className="text-xs font-medium">
                   {t("providers.modal.name")} <span className="text-destructive">*</span>
-                </label>
-                <input
+                </Label>
+                <Input
                   type="text"
-                  className="w-full h-8 px-2 text-xs border rounded-md bg-background"
+                  className="h-8 text-xs"
                   placeholder={t("providers.placeholder.name")}
                   value={formData.name}
                   onChange={e => updateForm("name", e.target.value)}
@@ -771,12 +785,12 @@ export default function Providers() {
 
               {/* Base URL */}
               <div className="space-y-1">
-                <label className="text-xs font-medium">
+                <Label className="text-xs font-medium">
                   {t("providers.modal.baseUrl")} <span className="text-destructive">*</span>
-                </label>
-                <input
+                </Label>
+                <Input
                   type="text"
-                  className="w-full h-8 px-2 text-xs border rounded-md bg-background"
+                  className="h-8 text-xs"
                   placeholder={t("providers.placeholder.baseUrl")}
                   value={formData.baseUrl}
                   onChange={e => updateForm("baseUrl", e.target.value)}
@@ -787,7 +801,7 @@ export default function Providers() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-medium">{t("providers.modal.type")}</label>
-                  <Select
+                  <SelectField
                     value={formData.providerType}
                     options={[
                       { value: "anthropic", label: t("providers.protocol.anthropic") },
@@ -806,7 +820,7 @@ export default function Providers() {
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-medium">{t("providers.card.mode")}</label>
-                  <Select
+                  <SelectField
                     value={formData.mode}
                     options={[
                       { value: "passthrough", label: t("providers.modal.modePassthrough") },
@@ -820,12 +834,12 @@ export default function Providers() {
 
               {/* API Key */}
               <div className="space-y-1">
-                <label className="text-xs font-medium">{t("providers.modal.apiKey")}</label>
+                <Label className="text-xs font-medium">{t("providers.modal.apiKey")}</Label>
                 {editingProvider ? (
                   <>
-                    <input
+                    <Input
                       type="text"
-                      className="w-full h-8 px-2 text-xs border rounded-md bg-muted cursor-not-allowed"
+                      className="h-8 cursor-not-allowed bg-muted text-xs"
                       value={
                         formData.apiKey
                           ? `${formData.apiKey.slice(0, 4)}************${formData.apiKey.slice(-4)}`
@@ -839,9 +853,9 @@ export default function Providers() {
                   </>
                 ) : (
                   <>
-                    <input
+                    <Input
                       type="password"
-                      className="w-full h-8 px-2 text-xs border rounded-md bg-background"
+                      className="h-8 text-xs"
                       placeholder={t("providers.placeholder.apiKey")}
                       value={formData.apiKey || ""}
                       onChange={e => updateForm("apiKey", e.target.value)}
@@ -855,15 +869,19 @@ export default function Providers() {
 
               {/* Custom models list */}
               <div className="space-y-2 rounded-md border border-border/60 p-3">
-                <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="rounded border-input"
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="use-custom-models-list"
                     checked={formData.useCustomModelsList === true}
-                    onChange={e => updateForm("useCustomModelsList", e.target.checked)}
+                    onCheckedChange={checked => updateForm("useCustomModelsList", checked === true)}
                   />
-                  {t("providers.modal.useCustomModelsList")}
-                </label>
+                  <Label
+                    htmlFor="use-custom-models-list"
+                    className="cursor-pointer text-xs font-medium"
+                  >
+                    {t("providers.modal.useCustomModelsList")}
+                  </Label>
+                </div>
                 <p className="text-[10px] text-muted-foreground">
                   {t("providers.modal.customModelsListHelp")}
                 </p>
@@ -899,15 +917,19 @@ export default function Providers() {
 
               {/* Model Map */}
               <div className="space-y-2 rounded-md border border-border/60 p-3">
-                <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="rounded border-input"
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="enable-model-mapping"
                     checked={formData.modelMappingEnabled !== false}
-                    onChange={e => updateForm("modelMappingEnabled", e.target.checked)}
+                    onCheckedChange={checked => updateForm("modelMappingEnabled", checked === true)}
                   />
-                  {t("providers.modal.enableModelMapping")}
-                </label>
+                  <Label
+                    htmlFor="enable-model-mapping"
+                    className="cursor-pointer text-xs font-medium"
+                  >
+                    {t("providers.modal.enableModelMapping")}
+                  </Label>
+                </div>
                 <p className="text-[10px] text-muted-foreground">
                   {t("providers.modal.modelMappingHelp")}
                 </p>
@@ -1050,12 +1072,12 @@ export default function Providers() {
             </CardHeader>
             <CardContent className="p-4 space-y-3">
               <div className="space-y-1">
-                <label className="text-xs font-medium">
+                <Label className="text-xs font-medium">
                   {t("providers.duplicateModal.name")} <span className="text-destructive">*</span>
-                </label>
-                <input
+                </Label>
+                <Input
                   type="text"
-                  className="w-full h-8 px-2 text-xs border rounded-md bg-background"
+                  className="h-8 text-xs"
                   value={dupName}
                   onChange={e => setDupName(e.target.value)}
                   placeholder={t("providers.duplicateModal.namePlaceholder")}
@@ -1063,10 +1085,10 @@ export default function Providers() {
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-medium">{t("providers.duplicateModal.newId")}</label>
-                <input
+                <Label className="text-xs font-medium">{t("providers.duplicateModal.newId")}</Label>
+                <Input
                   type="text"
-                  className="w-full h-8 px-2 text-xs border rounded-md bg-background font-mono"
+                  className="h-8 font-mono text-xs"
                   value={dupNewId}
                   onChange={e => setDupNewId(e.target.value)}
                   placeholder={t("providers.duplicateModal.idPlaceholder")}

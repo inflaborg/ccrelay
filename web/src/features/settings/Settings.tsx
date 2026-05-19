@@ -1,11 +1,14 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useId, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ListFilter, Loader2, Plus, Trash2, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Select } from "@/components/ui/select";
+import { SelectField } from "@/components/select-field";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,17 +50,19 @@ function Toggle({
   label: string;
   disabled?: boolean;
 }) {
+  const id = useId();
   return (
-    <label className="flex items-center gap-2 h-8 cursor-pointer select-none">
-      <input
-        type="checkbox"
-        className="h-4 w-4"
+    <div className="flex items-center gap-2 h-8">
+      <Checkbox
+        id={id}
         checked={checked}
         disabled={disabled}
-        onChange={e => onChange(e.target.checked)}
+        onCheckedChange={v => onChange(v === true)}
       />
-      <span className="text-xs">{label}</span>
-    </label>
+      <Label htmlFor={id} className="cursor-pointer text-xs font-normal">
+        {label}
+      </Label>
+    </div>
   );
 }
 
@@ -75,9 +80,9 @@ function NumberInput({
   className?: string;
 }) {
   return (
-    <input
+    <Input
       type="number"
-      className={`w-full h-8 px-2 text-xs border rounded-md bg-background font-mono ${className ?? ""}`}
+      className={`h-8 text-xs font-mono ${className ?? ""}`}
       value={value}
       min={min}
       max={max}
@@ -98,9 +103,9 @@ function TextInput({
   className?: string;
 }) {
   return (
-    <input
+    <Input
       type="text"
-      className={`w-full h-8 px-2 text-xs border rounded-md bg-background font-mono ${className ?? ""}`}
+      className={`h-8 text-xs font-mono ${className ?? ""}`}
       value={value}
       placeholder={placeholder}
       onChange={e => onChange(e.target.value)}
@@ -111,7 +116,7 @@ function TextInput({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
-      <label className="text-xs font-medium">{label}</label>
+      <Label className="text-xs font-medium">{label}</Label>
       {children}
     </div>
   );
@@ -280,7 +285,7 @@ function ServerSection({ data }: { data: ServerSettings }) {
         label={t("settings.server.autoStart")}
       />
       <Field label={t("settings.server.language")}>
-        <Select
+        <SelectField
           value={form.locale || ""}
           options={[
             { value: "", label: t("common.na") },
@@ -454,9 +459,9 @@ function ForwardRuleEditor({
           <div className="space-y-1.5 pt-0.5">
             {group.rows.map(({ flatIndex, rule }) => (
               <div key={`fwd-${flatIndex}`} className="grid grid-cols-[1fr_1fr_28px] gap-1.5">
-                <input
+                <Input
                   type="text"
-                  className="h-7 px-2 text-xs border rounded-md bg-background font-mono min-w-0"
+                  className="h-7 text-xs font-mono min-w-0"
                   value={rule.path}
                   placeholder="/my/custom/route"
                   onChange={e => {
@@ -465,7 +470,7 @@ function ForwardRuleEditor({
                     onChange(n);
                   }}
                 />
-                <Select
+                <SelectField
                   value={rule.provider}
                   options={providerOptions}
                   onChange={v => {
@@ -620,7 +625,7 @@ function BlockConditionProviderLists({
             );
           })}
           <div className="w-full min-w-[120px] max-w-[260px]">
-            <Select
+            <SelectField
               options={allowAvail}
               placeholder={
                 providerIdOptions.length === 0
@@ -684,7 +689,7 @@ function BlockConditionProviderLists({
             );
           })}
           <div className="w-full min-w-[120px] max-w-[260px]">
-            <Select
+            <SelectField
               options={skipAvail}
               placeholder={
                 providerIdOptions.length === 0
@@ -782,9 +787,9 @@ function BlockRuleEditor({
             key={i}
             className="grid grid-cols-[1fr_1fr_72px_minmax(9rem,11rem)_28px] gap-1.5 items-center"
           >
-            <input
+            <Input
               type="text"
-              className="h-7 px-2 text-xs border rounded-md bg-background font-mono min-w-0"
+              className="h-7 text-xs font-mono min-w-0"
               value={item.path}
               placeholder="/api/event_logging/*"
               onChange={e => {
@@ -793,9 +798,9 @@ function BlockRuleEditor({
                 onChange(n);
               }}
             />
-            <input
+            <Input
               type="text"
-              className="h-7 px-2 text-xs border rounded-md bg-background font-mono min-w-0"
+              className="h-7 text-xs font-mono min-w-0"
               value={item.response}
               placeholder='{"ok":true}'
               onChange={e => {
@@ -804,9 +809,9 @@ function BlockRuleEditor({
                 onChange(n);
               }}
             />
-            <input
+            <Input
               type="number"
-              className="h-7 px-2 text-xs border rounded-md bg-background font-mono w-full min-w-[4rem]"
+              className="h-7 text-xs font-mono w-full min-w-[4rem]"
               value={item.code}
               onChange={e => {
                 const n = [...items];
@@ -1118,7 +1123,7 @@ function LoggingSection({ data }: { data: LoggingSettings }) {
         label="Enable request log storage"
       />
       <Field label="Database type">
-        <Select
+        <SelectField
           value={db.type}
           options={[
             { value: "sqlite", label: "SQLite" },

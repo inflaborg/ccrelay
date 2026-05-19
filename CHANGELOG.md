@@ -11,7 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **UI**
 
+- Admin UI form controls and overlays use [shadcn/ui](https://ui.shadcn.com) (Radix) primitives; layout and form conventions are documented in `web/DESIGN.md`.
+- Capabilities **Web search**: **Select all** and **Invert selection** for provider assignment.
+- Capabilities **Web search**: separate **Enable** toggle so you can turn the feature off without clearing the provider preset list.
 - Dashboard **Client configuration** section now detects and manages **Claude Desktop** (macOS and Windows) alongside Claude Code and Codex. Apply writes CCRelay proxy settings to the platform-specific `Claude-3p` config directory; Restore removes them and reverts the deployment mode.
+
+**Config**
+
+- `webSearch.enabled` master switch in `config.yaml`. The `providers` list is kept when disabled; legacy configs without `enabled` still treat a non-empty `providers` list as on.
 
 **Diagnostics**
 
@@ -26,12 +33,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **CCRelay: Open Logs Folder** command opens the same runtime log folder.
 
+### Changed
+
+**UI**
+
+- Replaced hand-rolled UI primitives with shadcn/ui across Settings, Providers, Capabilities, Logs, and Dashboard.
+- Provider cards: protocol and status labels stay on one row (full protocol names such as **OpenAI Chat**); name truncates when space is tight. Tag padding increased; square corners on header tags.
+
 ### Fixed
 
 **UI**
 
-- Settings and Capabilities save rows: success and status hints no longer appear to the right of the Save button, so the button no longer shifts horizontally when feedback shows.
-- Request logs: manual refresh on the Logs page now always fetches the latest entries from the server instead of reusing a short-lived cached list.
+- Admin UI theme and density after shadcn adoption: restored dark semantic colors (HSL tokens), compact typography, and clearer default borders on inputs and selects.
+- Settings and Capabilities save rows: status hints sit left of **Save** so the button no longer shifts when feedback appears.
+- Provider cards: header labels no longer overflow the card boundary.
+- Request logs: manual refresh on the Logs page always fetches the latest entries instead of reusing a short-lived cached list.
 
 **Desktop**
 

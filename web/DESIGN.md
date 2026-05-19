@@ -1,6 +1,37 @@
 # Web UI design guidelines
 
-Layout and visual conventions for the admin UI in `web/src` (Settings, Capabilities, Providers, etc.). These are **layout rules**, not shared components—copy the markup structure in each feature; do not extract a cross-feature Save/ActionBar component unless a separate design-system effort explicitly adds one.
+Layout and component conventions for the admin UI in `web/src` (Settings, Capabilities, Providers, etc.).
+
+## Component stack (shadcn/ui)
+
+- Primitives live in [`src/components/ui/`](src/components/ui/) and are installed/maintained with the [shadcn/ui](https://ui.shadcn.com) CLI (`web/components.json`).
+- Add or update primitives: `cd web && npx shadcn@latest add <name> -y -o` (overwrite existing files intentionally). If the CLI writes under `web/@/components/ui/`, copy into `web/src/components/ui/` and remove the stray `@` folder.
+- **Do not** hand-roll Radix replacements in `components/ui/`. Business-only widgets (e.g. [`infinite-table.tsx`](src/components/ui/infinite-table.tsx), [`markdown-viewer.tsx`](src/components/ui/markdown-viewer.tsx)) stay in `components/ui/` when they are not shadcn registry components.
+- [`src/components/select-field.tsx`](src/components/select-field.tsx) is an app-level helper around shadcn `Select` (options array + empty-value sentinel). Prefer it over duplicating `SelectTrigger` / `SelectItem` markup; use raw shadcn `Select` when you need custom layout.
+
+### Form controls
+
+| Use case      | Component                                                       |
+| ------------- | --------------------------------------------------------------- |
+| Single choice | shadcn `Select` or `SelectField`                                |
+| Text / number | `Input` + `Label`                                               |
+| Boolean       | `Checkbox` + `Label`                                            |
+| Multi-line    | native `textarea` with the same border/radius tokens as `Input` |
+| File picker   | native `<input type="file">` (hidden) is OK                     |
+
+**Anti-patterns:** native `<select>`; unstyled `<input type="checkbox">` for UI toggles.
+
+Theme: semantic tokens in [`src/styles/globals.css`](src/styles/globals.css) use **HSL components** (e.g. `--background: 0 0% 12%`) so they work with `hsl(var(--token))` in [`tailwind.config.js`](tailwind.config.js). `html` may use `class="dark"` for shadcn `dark:` variants; `:root` and `.dark` share the same palette.
+
+### Typography (compact admin UI)
+
+- Main content uses `text-xs` on `<main>`; feature code often sets `text-xs` on fields and `text-sm` on section titles.
+- shadcn primitives under `components/ui/` are tuned for this density (no root `text-sm` on `Card`, `Label`/`Select`/`Input` defaults match the pre-shadcn scale). After `shadcn add`, re-check font sizes if Nova defaults creep back in.
+- Form fields: `Input` / `Select` use `border-border` + `bg-background` so they read clearly on `bg-card` sections; native `textarea` should use the same pair.
+
+## Right-aligned action rows
+
+These are **layout rules**, not shared components—copy the markup structure in each feature; do not extract a cross-feature Save/ActionBar component unless a separate design-system effort explicitly adds one.
 
 ## Right-aligned action rows
 

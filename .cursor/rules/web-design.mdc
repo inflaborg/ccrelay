@@ -1,7 +1,7 @@
 ---
-description: Web admin UI layout conventions
+description: Web admin UI layout and shadcn/ui conventions
 globs: web/**/*.{tsx,ts}
 alwaysApply: false
 ---
 
-For right-aligned save/action rows in `web/`, follow [web/DESIGN.md](../../web/DESIGN.md): short hints left of the button, primary button `shrink-0` anchored on the right.
+Follow [web/DESIGN.md](../../web/DESIGN.md) for save-row layout and shadcn/ui primitives (`cd web && npx shadcn@latest add`); no hand-rolled `components/ui` replacements.

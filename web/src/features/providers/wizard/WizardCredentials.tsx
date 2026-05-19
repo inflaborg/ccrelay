@@ -1,6 +1,9 @@
 import { useTranslation } from "react-i18next";
 import { Loader2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { PartnerPreset } from "./types";
 import type { UpstreamModelsResult } from "./useUpstreamModels";
 
@@ -97,12 +100,12 @@ export function WizardCredentials({
   return (
     <div className="space-y-4">
       <div className="space-y-1">
-        <label className="text-xs font-medium">
+        <Label className="text-xs font-medium">
           {t("wizard.field.name")} <span className="text-destructive">*</span>
-        </label>
-        <input
+        </Label>
+        <Input
           type="text"
-          className="w-full h-8 px-2 text-xs border rounded-md bg-background"
+          className="h-8 text-xs"
           value={nameBase}
           onChange={e => onNameBaseChange(e.target.value)}
           placeholder={preset.namePrefix}
@@ -110,12 +113,12 @@ export function WizardCredentials({
       </div>
 
       <div className="space-y-1">
-        <label className="text-xs font-medium">
+        <Label className="text-xs font-medium">
           {t("wizard.field.apiKey")} <span className="text-destructive">*</span>
-        </label>
-        <input
+        </Label>
+        <Input
           type="password"
-          className="w-full h-8 px-2 text-xs border rounded-md bg-background font-mono"
+          className="h-8 font-mono text-xs"
           value={apiKey}
           onChange={e => onApiKeyChange(e.target.value)}
           autoComplete="off"
@@ -124,12 +127,12 @@ export function WizardCredentials({
 
       {preset.requireUserBaseUrl ? (
         <div className="space-y-1">
-          <label className="text-xs font-medium">
+          <Label className="text-xs font-medium">
             {t("wizard.field.baseUrl")} <span className="text-destructive">*</span>
-          </label>
-          <input
+          </Label>
+          <Input
             type="text"
-            className="w-full h-8 px-2 text-xs border rounded-md bg-background font-mono"
+            className="h-8 font-mono text-xs"
             value={userBaseUrl}
             onChange={e => onUserBaseUrlChange(e.target.value)}
             placeholder={
@@ -277,20 +280,23 @@ export function WizardCredentials({
         </div>
       )}
 
-      <label className="flex items-start gap-2 cursor-pointer">
-        <input
-          type="checkbox"
-          className="h-4 w-4 mt-0.5 rounded border"
+      <div className="flex items-start gap-2">
+        <Checkbox
+          id="wizard-claude-support"
+          className="mt-0.5"
           checked={claudeSupport}
-          onChange={e => onClaudeSupportChange(e.target.checked)}
+          onCheckedChange={checked => onClaudeSupportChange(checked === true)}
         />
-        <span className="text-xs leading-snug">
+        <Label
+          htmlFor="wizard-claude-support"
+          className="cursor-pointer text-xs font-normal leading-snug"
+        >
           <span className="font-medium">{t("wizard.field.claudeSupport")}</span>
-          <span className="block text-muted-foreground mt-0.5">
+          <span className="mt-0.5 block text-muted-foreground">
             {t("wizard.help.claudeSupport")}
           </span>
-        </span>
-      </label>
+        </Label>
+      </div>
     </div>
   );
 }

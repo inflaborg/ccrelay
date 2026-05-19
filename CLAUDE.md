@@ -36,7 +36,7 @@ When editing README.md, README_CN.md, or CHANGELOG.md, follow these rules:
 
 ## Web UI
 
-- For right-aligned save/action rows in `web/`, follow [web/DESIGN.md](web/DESIGN.md): short hints left of the button, primary button `shrink-0` anchored on the right.
+- Follow [web/DESIGN.md](web/DESIGN.md) for layout and shadcn/ui form primitives (`npx shadcn@latest add` in `web/`); do not add hand-rolled components under `components/ui/`.
 
 ## Language and style
 

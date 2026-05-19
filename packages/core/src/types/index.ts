@@ -246,6 +246,8 @@ export const WebSearchConfigSchema = z.object({
     .optional(),
   providers: z.array(z.string()).optional(),
   defaultSearchBackend: z.string().optional(),
+  /** When false, web search is off but `providers` may still list preset assignments. */
+  enabled: z.boolean().optional(),
 });
 
 export type WebSearchConfigInput = z.infer<typeof WebSearchConfigSchema>;
@@ -343,10 +345,15 @@ export interface WebSearchGlobalConfig {
     coding?: boolean;
     model?: string;
   };
-  /** Provider IDs that have web search enabled. */
+  /** Provider IDs assigned to web search (preset list; may be inactive when `enabled` is false). */
   providers?: string[];
   /** Which search backend to use ("tavily" | "glm"). Defaults to "tavily". */
   defaultSearchBackend?: string;
+  /**
+   * Master switch for web search interception.
+   * Omitted in legacy YAML: treated as enabled when `providers` is non-empty.
+   */
+  enabled?: boolean;
 }
 
 export interface RouterConfig {

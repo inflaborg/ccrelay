@@ -1,10 +1,13 @@
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  /* Dark theme - clean gray color palette */
-  :root {
+  /* Dark theme – HSL components for tailwind.config `hsl(var(--token))` */
+  :root,
+  .dark {
     --background: 0 0% 12%;
     --foreground: 0 0% 92%;
     --card: 0 0% 16%;
@@ -23,8 +26,8 @@
     --destructive-foreground: 0 0% 95%;
     --success: 150 50% 45%;
     --success-foreground: 0 0% 95%;
-    --border: 0 0% 22%;
-    --input: 0 0% 18%;
+    --border: 0 0% 28%;
+    --input: 0 0% 10%;
     --ring: 0 0% 60%;
     --radius: 0.375rem;
   }
@@ -59,7 +62,6 @@
     overflow: hidden;
   }
 
-  /* Unified focus style for inputs */
   input:focus,
   textarea:focus,
   select:focus {
@@ -71,13 +73,11 @@
 
 /* Scrollbar styling for dark theme */
 
-/* Firefox thin scrollbar */
 html {
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--border)) transparent;
 }
 
-/* WebKit/Blink (Chrome, Edge, Electron, Safari) */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

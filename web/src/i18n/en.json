@@ -177,6 +177,11 @@
       "disabled": "Disabled",
       "active": "Active"
     },
+    "badgeShort": {
+      "mappingOff": "Map",
+      "disabled": "Off",
+      "active": "On"
+    },
     "card": {
       "id": "ID",
       "mode": "Mode",
@@ -558,6 +563,7 @@
     "webSearch": {
       "title": "Web Search",
       "enable": "Enable web search",
+      "disabledHint": "Web search is off. Provider assignments and search settings are kept and apply when you turn it on again.",
       "searchBackend": "Search Backend",
       "provider": "Search Provider",
       "apiKey": "API Key",
@@ -577,6 +583,8 @@
       "glmModelPlaceholder": "glm-4.7",
       "providerAssignment": "Provider Assignment",
       "providerAssignmentHint": "Select which LLM providers should have web search enabled",
+      "selectAll": "Select all",
+      "invertSelection": "Invert selection",
       "noProviders": "No providers configured",
       "savedAndReloaded": "Config saved and reloaded"
     }
