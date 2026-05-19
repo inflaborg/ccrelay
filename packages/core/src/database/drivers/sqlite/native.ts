@@ -8,7 +8,9 @@
 import * as path from "path";
 import * as fsSync from "fs";
 import type Database from "better-sqlite3";
-import { Logger } from "../../utils/logger";
+import { Logger } from "../../../utils/logger";
+import { TABLE } from "../../schema";
+import { runSqliteStartupMigration, SQLITE_INSERT_V2 } from "../../migration";
 import type {
   DatabaseDriver,
   SqliteDriverConfig,
@@ -19,15 +21,16 @@ import type {
   ProviderStatRow,
   RequestStatus,
   StatsQuery,
-} from "../types";
+  DatabaseInitializeOptions,
+} from "../../types";
 import {
   MAX_LOG_ROWS,
   MAX_LOG_AGE_DAYS,
-  encodeForStorage,
-  buildInsertSql,
+  utf8StringToBlob,
   dbRowToLogWithoutBody,
   dbRowToLog,
-} from "./sqlite-utils";
+} from "../../shared-utils";
+import { buildInsertSql } from "./utils";
 
 export class SqliteNativeDriver implements DatabaseDriver {
   private readonly config: SqliteDriverConfig;
@@ -44,7 +47,7 @@ export class SqliteNativeDriver implements DatabaseDriver {
     return this.db!;
   }
 
-  async initialize(): Promise<void> {
+  async initialize(options?: DatabaseInitializeOptions): Promise<void> {
     const dbPath = this.config.path;
     const dir = path.dirname(dbPath);
 
@@ -66,7 +69,23 @@ export class SqliteNativeDriver implements DatabaseDriver {
 
     this.log.info(`[SqliteNative] Database path: ${dbPath}`);
 
-    this.createSchema();
+    const choice = options?.migrationChoice ?? "migrate";
+    runSqliteStartupMigration(
+      dbPath,
+      sql => {
+        const row = this.d.prepare(sql).get() as { c?: number } | undefined;
+        return row?.c;
+      },
+      sql => this.d.prepare(sql).all() as Array<Record<string, unknown>>,
+      sql => {
+        this.d.exec(sql);
+      },
+      params => {
+        this.d.prepare(SQLITE_INSERT_V2).run(...params);
+      },
+      choice
+    );
+
     this.isEnabled = true;
 
     setTimeout(() => {
@@ -74,88 +93,6 @@ export class SqliteNativeDriver implements DatabaseDriver {
         this.log.error("[SqliteNative] Background cleanup failed:", err);
       });
     }, 0);
-  }
-
-  private createSchema(): void {
-    this.d.exec(`
-      CREATE TABLE IF NOT EXISTS request_logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        timestamp INTEGER NOT NULL,
-        provider_id TEXT NOT NULL,
-        provider_name TEXT NOT NULL,
-        method TEXT NOT NULL,
-        path TEXT NOT NULL,
-        target_url TEXT,
-        request_body TEXT,
-        response_body TEXT,
-        original_request_body TEXT,
-        original_response_body TEXT,
-        status_code INTEGER,
-        duration INTEGER NOT NULL,
-        success INTEGER NOT NULL,
-        error_message TEXT,
-        client_id TEXT,
-        status TEXT DEFAULT 'completed',
-        route_type TEXT,
-        input_tokens INTEGER,
-        output_tokens INTEGER,
-        cache_tokens INTEGER,
-        ttfb INTEGER
-      )
-    `);
-
-    const indexes = [
-      "CREATE INDEX IF NOT EXISTS idx_timestamp ON request_logs(timestamp)",
-      "CREATE INDEX IF NOT EXISTS idx_provider_id ON request_logs(provider_id)",
-      "CREATE INDEX IF NOT EXISTS idx_path ON request_logs(path)",
-      "CREATE INDEX IF NOT EXISTS idx_success ON request_logs(success)",
-      "CREATE INDEX IF NOT EXISTS idx_client_id ON request_logs(client_id)",
-      "CREATE INDEX IF NOT EXISTS idx_status ON request_logs(status)",
-    ];
-
-    for (const sql of indexes) {
-      this.d.exec(sql);
-    }
-
-    try {
-      const columns: Array<{ name: string }> = this.d.pragma("table_info(request_logs)") as Array<{
-        name: string;
-      }>;
-      const columnNames = columns.map(c => c.name);
-
-      const migrations: Array<{ column: string; sql: string }> = [
-        { column: "target_url", sql: "ALTER TABLE request_logs ADD COLUMN target_url TEXT" },
-        {
-          column: "original_request_body",
-          sql: "ALTER TABLE request_logs ADD COLUMN original_request_body TEXT",
-        },
-        {
-          column: "original_response_body",
-          sql: "ALTER TABLE request_logs ADD COLUMN original_response_body TEXT",
-        },
-        { column: "client_id", sql: "ALTER TABLE request_logs ADD COLUMN client_id TEXT" },
-        {
-          column: "status",
-          sql: "ALTER TABLE request_logs ADD COLUMN status TEXT DEFAULT 'completed'",
-        },
-        { column: "route_type", sql: "ALTER TABLE request_logs ADD COLUMN route_type TEXT" },
-        { column: "input_tokens", sql: "ALTER TABLE request_logs ADD COLUMN input_tokens INTEGER" },
-        {
-          column: "output_tokens",
-          sql: "ALTER TABLE request_logs ADD COLUMN output_tokens INTEGER",
-        },
-        { column: "cache_tokens", sql: "ALTER TABLE request_logs ADD COLUMN cache_tokens INTEGER" },
-        { column: "ttfb", sql: "ALTER TABLE request_logs ADD COLUMN ttfb INTEGER" },
-      ];
-
-      for (const migration of migrations) {
-        if (!columnNames.includes(migration.column)) {
-          this.d.exec(migration.sql);
-        }
-      }
-    } catch {
-      // Table might not exist yet
-    }
   }
 
   // ---- Write operations ----------------------------------------------------
@@ -202,7 +139,7 @@ export class SqliteNativeDriver implements DatabaseDriver {
     }
     try {
       const stmt = this.d.prepare(`
-        UPDATE request_logs
+        UPDATE ${TABLE}
         SET status_code = ?,
             response_body = ?,
             original_response_body = ?,
@@ -218,11 +155,11 @@ export class SqliteNativeDriver implements DatabaseDriver {
       `);
       stmt.run(
         statusCode,
-        encodeForStorage(responseBody),
-        encodeForStorage(originalResponseBody),
+        utf8StringToBlob(responseBody),
+        utf8StringToBlob(originalResponseBody),
         duration,
         success ? 1 : 0,
-        encodeForStorage(errorMessage),
+        errorMessage ?? null,
         inputTokens ?? null,
         outputTokens ?? null,
         cacheTokens ?? null,
@@ -246,7 +183,7 @@ export class SqliteNativeDriver implements DatabaseDriver {
     }
     try {
       const stmt = this.d.prepare(`
-        UPDATE request_logs
+        UPDATE ${TABLE}
         SET status_code = ?,
             duration = ?,
             success = ?,
@@ -254,7 +191,7 @@ export class SqliteNativeDriver implements DatabaseDriver {
             status = ?
         WHERE client_id = ?
       `);
-      stmt.run(statusCode, duration, 0, encodeForStorage(errorMessage), status, clientId);
+      stmt.run(statusCode, duration, 0, errorMessage ?? null, status, clientId);
     } catch (err) {
       this.log.error("[SqliteNative] Failed to update log status:", err);
     }
@@ -280,14 +217,14 @@ export class SqliteNativeDriver implements DatabaseDriver {
       return;
     }
     const placeholders = ids.map(() => "?").join(",");
-    this.d.prepare(`DELETE FROM request_logs WHERE id IN (${placeholders})`).run(...ids);
+    this.d.prepare(`DELETE FROM ${TABLE} WHERE id IN (${placeholders})`).run(...ids);
   }
 
   async clearAllLogs(): Promise<void> {
     if (!this.isEnabled) {
       return;
     }
-    this.d.exec("DELETE FROM request_logs");
+    this.d.exec(`DELETE FROM ${TABLE}`);
     this.d.exec("VACUUM");
   }
 
@@ -296,10 +233,10 @@ export class SqliteNativeDriver implements DatabaseDriver {
       return;
     }
     const cutoff = Date.now() - MAX_LOG_AGE_DAYS * 24 * 60 * 60 * 1000;
-    this.d.prepare("DELETE FROM request_logs WHERE timestamp < ?").run(cutoff);
+    this.d.prepare(`DELETE FROM ${TABLE} WHERE timestamp < ?`).run(cutoff);
     this.d
       .prepare(
-        `DELETE FROM request_logs WHERE id NOT IN (SELECT id FROM request_logs ORDER BY timestamp DESC LIMIT ?)`
+        `DELETE FROM ${TABLE} WHERE id NOT IN (SELECT id FROM ${TABLE} ORDER BY timestamp DESC LIMIT ?)`
       )
       .run(MAX_LOG_ROWS);
   }
@@ -350,7 +287,7 @@ export class SqliteNativeDriver implements DatabaseDriver {
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
     const countRow = this.d
-      .prepare(`SELECT COUNT(*) as count FROM request_logs ${whereClause}`)
+      .prepare(`SELECT COUNT(*) as count FROM ${TABLE} ${whereClause}`)
       .get(...params) as Record<string, unknown> | undefined;
     const total = (countRow?.count as number) ?? 0;
 
@@ -365,7 +302,7 @@ export class SqliteNativeDriver implements DatabaseDriver {
                 input_tokens, output_tokens, cache_tokens, ttfb,
                 SUBSTR(request_body, 1, 500) as request_body,
                 SUBSTR(original_request_body, 1, 500) as original_request_body
-         FROM request_logs ${whereClause} ORDER BY timestamp DESC LIMIT ? OFFSET ?`
+         FROM ${TABLE} ${whereClause} ORDER BY timestamp DESC LIMIT ? OFFSET ?`
       )
       .all(...params, limit, offset) as Record<string, unknown>[];
 
@@ -376,7 +313,7 @@ export class SqliteNativeDriver implements DatabaseDriver {
     if (!this.isEnabled) {
       return null;
     }
-    const row = this.d.prepare("SELECT * FROM request_logs WHERE id = ?").get(id) as
+    const row = this.d.prepare(`SELECT * FROM ${TABLE} WHERE id = ?`).get(id) as
       | Record<string, unknown>
       | undefined;
     return row ? dbRowToLog(row) : null;
@@ -410,7 +347,6 @@ export class SqliteNativeDriver implements DatabaseDriver {
     const timeFilter = since ? "(? IS NULL OR timestamp >= ?)" : "1=1";
     const timeParams = since ? [sinceParam, sinceParam] : [];
 
-    // 1. Base stats + token aggregation
     const base = this.d
       .prepare(
         `SELECT COUNT(*) as totalLogs,
@@ -421,7 +357,7 @@ export class SqliteNativeDriver implements DatabaseDriver {
                 COALESCE(SUM(output_tokens), 0) as totalOutputTokens,
                 COALESCE(SUM(cache_tokens), 0) as totalCacheTokens,
                 AVG(ttfb) as avgTtfb
-         FROM request_logs
+         FROM ${TABLE}
          WHERE ${timeFilter}`
       )
       .get(...timeParams) as Record<string, unknown>;
@@ -431,13 +367,12 @@ export class SqliteNativeDriver implements DatabaseDriver {
     const totalCache = (base.totalCacheTokens as number) ?? 0;
     const denominator = totalInput + totalCache;
 
-    // 2. Filtered TPS (only genuinely streamed: genTime > 500ms)
     const tps = this.d
       .prepare(
         `SELECT COALESCE(SUM(output_tokens), 0) as filteredTokens,
                 COALESCE(SUM(duration - ttfb), 0) as filteredGenTime,
                 COUNT(*) as filteredCount
-         FROM request_logs
+         FROM ${TABLE}
          WHERE ${timeFilter}
            AND ttfb IS NOT NULL
            AND output_tokens IS NOT NULL
@@ -451,7 +386,6 @@ export class SqliteNativeDriver implements DatabaseDriver {
     const filteredCount = (tps.filteredCount as number) ?? 0;
     const outputTps = filteredGenTime > 0 ? (filteredTokens / filteredGenTime) * 1000 : 0;
 
-    // 3. Percentiles via LIMIT/OFFSET
     let p50Duration = 0;
     let p90Duration = 0;
     const totalLogs = (base.totalLogs as number) ?? 0;
@@ -460,26 +394,25 @@ export class SqliteNativeDriver implements DatabaseDriver {
       const p90Offset = Math.floor(0.9 * (totalLogs - 1));
       const p50Row = this.d
         .prepare(
-          `SELECT duration FROM request_logs WHERE ${timeFilter} ORDER BY duration ASC LIMIT 1 OFFSET ?`
+          `SELECT duration FROM ${TABLE} WHERE ${timeFilter} ORDER BY duration ASC LIMIT 1 OFFSET ?`
         )
         .get(...timeParams, p50Offset) as Record<string, unknown> | undefined;
       const p90Row = this.d
         .prepare(
-          `SELECT duration FROM request_logs WHERE ${timeFilter} ORDER BY duration ASC LIMIT 1 OFFSET ?`
+          `SELECT duration FROM ${TABLE} WHERE ${timeFilter} ORDER BY duration ASC LIMIT 1 OFFSET ?`
         )
         .get(...timeParams, p90Offset) as Record<string, unknown> | undefined;
       p50Duration = Math.round((p50Row?.duration as number) ?? 0);
       p90Duration = Math.round((p90Row?.duration as number) ?? 0);
     }
 
-    // 4. Provider breakdown
     const providerRows = this.d
       .prepare(
         `SELECT provider_id, provider_name, COUNT(*) as count,
                 COALESCE(SUM(input_tokens), 0) as totalInputTokens,
                 COALESCE(SUM(output_tokens), 0) as totalOutputTokens,
                 COALESCE(SUM(cache_tokens), 0) as totalCacheTokens
-         FROM request_logs
+         FROM ${TABLE}
          WHERE ${timeFilter}
          GROUP BY provider_id, provider_name`
       )
@@ -517,8 +450,6 @@ export class SqliteNativeDriver implements DatabaseDriver {
       providerBreakdown,
     };
   }
-
-  // ---- Properties ----------------------------------------------------------
 
   get enabled(): boolean {
     return this.isEnabled;

@@ -8,7 +8,9 @@
 import { spawn, execSync, ChildProcess } from "child_process";
 import * as path from "path";
 import * as fsSync from "fs";
-import { Logger } from "../../utils/logger";
+import { Logger } from "../../../utils/logger";
+import { TABLE, LEGACY_TABLE, SQLITE_CREATE_TABLE_V2, SQLITE_INDEXES_V2 } from "../../schema";
+import { SQLITE_INSERT_V2 } from "../../migration";
 import type {
   DatabaseDriver,
   SqliteDriverConfig,
@@ -19,15 +21,24 @@ import type {
   ProviderStatRow,
   RequestStatus,
   StatsQuery,
-} from "../types";
+  DatabaseInitializeOptions,
+  LogDbMigrationChoice,
+} from "../../types";
 import {
   MAX_LOG_ROWS,
   MAX_LOG_AGE_DAYS,
-  encodeForStorage,
-  buildInsertSql,
+  utf8StringToBlob,
+  decodeFromStorage,
   dbRowToLogWithoutBody,
   dbRowToLog,
-} from "./sqlite-utils";
+} from "../../shared-utils";
+import {
+  buildInsertSql,
+  CLI_BODY_PREVIEW_HEX,
+  normalizeCliRow,
+  type SqlInsertParam,
+} from "./utils";
+import { sqlLiteralForBlob } from "./cli-wire";
 
 /** Thrown when the `sqlite3` executable is absent; callers may degrade to disabled log storage. */
 export const SQLITE_CLI_NOT_FOUND_MESSAGE = "sqlite3 CLI not found. Please install SQLite3.";
@@ -68,9 +79,14 @@ export function resolveSqlite3ExecutableFromEnv(): string | null {
 /**
  * Escape a value for safe insertion into a SQL string.
  */
-function escapeValue(value: string | number | boolean | null | undefined): string {
+type CliSqlParam = SqlInsertParam | undefined;
+
+function escapeValue(value: CliSqlParam): string {
   if (value === null || value === undefined) {
     return "NULL";
+  }
+  if (Buffer.isBuffer(value)) {
+    return sqlLiteralForBlob(value);
   }
   if (typeof value === "boolean") {
     return value ? "1" : "0";
@@ -88,10 +104,7 @@ function escapeValue(value: string | number | boolean | null | undefined): strin
 /**
  * Interpolate parameters into a SQL template.
  */
-function interpolateSql(
-  sql: string,
-  params?: (string | number | boolean | null | undefined)[]
-): string {
+function interpolateSql(sql: string, params?: CliSqlParam[]): string {
   if (!params || params.length === 0) {
     return sql;
   }
@@ -270,26 +283,18 @@ class CliConnection {
 
   // ---- SQL helpers --------------------------------------------------------
 
-  async exec(
-    sql: string,
-    params?: (string | number | boolean | null | undefined)[]
-  ): Promise<void> {
+  async exec(sql: string, params?: CliSqlParam[]): Promise<void> {
     const interpolated = interpolateSql(sql, params);
     await this.sendCommand(interpolated, true);
   }
 
-  async query(
-    sql: string,
-    params?: (string | number | boolean | null | undefined)[]
-  ): Promise<Record<string, unknown>[]> {
+  async query(sql: string, params?: CliSqlParam[]): Promise<Record<string, unknown>[]> {
     const interpolated = interpolateSql(sql, params);
-    return this.sendCommand(interpolated, false);
+    const rows = await this.sendCommand(interpolated, false);
+    return rows.map(normalizeCliRow);
   }
 
-  async queryScalar<T = number>(
-    sql: string,
-    params?: (string | number | boolean | null | undefined)[]
-  ): Promise<T | null> {
+  async queryScalar<T = number>(sql: string, params?: CliSqlParam[]): Promise<T | null> {
     const rows = await this.query(sql, params);
     if (rows.length === 0) {
       return null;
@@ -504,7 +509,7 @@ class CliConnection {
     }
 
     try {
-      const rows = this.parseJsonOutput(resultText);
+      const rows = this.parseJsonOutput(resultText).map(normalizeCliRow);
       this.currentQuery.resolve(rows);
     } catch (err) {
       void this.handleError(
@@ -912,7 +917,7 @@ export class SqliteCliDriver implements DatabaseDriver {
   /**
    * Initialize the database with dual read/write connections
    */
-  async initialize(): Promise<void> {
+  async initialize(options?: DatabaseInitializeOptions): Promise<void> {
     const dbPath = this.config.path;
     const dir = path.dirname(dbPath);
 
@@ -929,7 +934,7 @@ export class SqliteCliDriver implements DatabaseDriver {
 
     this.writeConn = new CliConnection(this.config, this.sqlite3Path, this.log, "write");
     await this.writeConn.start();
-    await this.createSchema();
+    await this.createSchema(options?.migrationChoice ?? "migrate");
 
     this.readConn = new CliConnection(this.config, this.sqlite3Path, this.log, "read");
     try {
@@ -980,88 +985,73 @@ export class SqliteCliDriver implements DatabaseDriver {
     }
   }
 
-  private async createSchema(): Promise<void> {
+  private async createSchema(migrationChoice: LogDbMigrationChoice): Promise<void> {
     if (!this.writeConn) {
       return;
     }
 
-    await this.writeConn.exec(`
-      CREATE TABLE IF NOT EXISTS request_logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        timestamp INTEGER NOT NULL,
-        provider_id TEXT NOT NULL,
-        provider_name TEXT NOT NULL,
-        method TEXT NOT NULL,
-        path TEXT NOT NULL,
-        target_url TEXT,
-        request_body TEXT,
-        response_body TEXT,
-        original_request_body TEXT,
-        original_response_body TEXT,
-        status_code INTEGER,
-        duration INTEGER NOT NULL,
-        success INTEGER NOT NULL,
-        error_message TEXT,
-        client_id TEXT,
-        status TEXT DEFAULT 'completed',
-        route_type TEXT,
-        input_tokens INTEGER,
-        output_tokens INTEGER,
-        cache_tokens INTEGER,
-        ttfb INTEGER
-      )
-    `);
-
-    const indexes = [
-      "CREATE INDEX IF NOT EXISTS idx_timestamp ON request_logs(timestamp)",
-      "CREATE INDEX IF NOT EXISTS idx_provider_id ON request_logs(provider_id)",
-      "CREATE INDEX IF NOT EXISTS idx_path ON request_logs(path)",
-      "CREATE INDEX IF NOT EXISTS idx_success ON request_logs(success)",
-      "CREATE INDEX IF NOT EXISTS idx_client_id ON request_logs(client_id)",
-      "CREATE INDEX IF NOT EXISTS idx_status ON request_logs(status)",
-    ];
-
-    for (const sql of indexes) {
+    await this.writeConn.exec(SQLITE_CREATE_TABLE_V2);
+    for (const sql of SQLITE_INDEXES_V2) {
       await this.writeConn.exec(sql);
     }
 
-    try {
-      const columns = await this.writeConn.query("PRAGMA table_info(request_logs)");
-      const columnNames = columns.map(c => c.name as string);
-
-      const migrations: Array<{ column: string; sql: string }> = [
-        { column: "target_url", sql: "ALTER TABLE request_logs ADD COLUMN target_url TEXT" },
-        {
-          column: "original_request_body",
-          sql: "ALTER TABLE request_logs ADD COLUMN original_request_body TEXT",
-        },
-        {
-          column: "original_response_body",
-          sql: "ALTER TABLE request_logs ADD COLUMN original_response_body TEXT",
-        },
-        { column: "client_id", sql: "ALTER TABLE request_logs ADD COLUMN client_id TEXT" },
-        {
-          column: "status",
-          sql: "ALTER TABLE request_logs ADD COLUMN status TEXT DEFAULT 'completed'",
-        },
-        { column: "route_type", sql: "ALTER TABLE request_logs ADD COLUMN route_type TEXT" },
-        { column: "input_tokens", sql: "ALTER TABLE request_logs ADD COLUMN input_tokens INTEGER" },
-        {
-          column: "output_tokens",
-          sql: "ALTER TABLE request_logs ADD COLUMN output_tokens INTEGER",
-        },
-        { column: "cache_tokens", sql: "ALTER TABLE request_logs ADD COLUMN cache_tokens INTEGER" },
-        { column: "ttfb", sql: "ALTER TABLE request_logs ADD COLUMN ttfb INTEGER" },
-      ];
-
-      for (const migration of migrations) {
-        if (!columnNames.includes(migration.column)) {
-          await this.writeConn.exec(migration.sql);
-        }
-      }
-    } catch {
-      // Table might not exist yet
+    const legacyExists =
+      (await this.writeConn.queryScalar<number>(
+        `SELECT COUNT(*) as c FROM sqlite_master WHERE type='table' AND name='${LEGACY_TABLE}'`
+      )) ?? 0;
+    if (legacyExists === 0) {
+      return;
     }
+
+    const oldRowCount =
+      (await this.writeConn.queryScalar<number>(`SELECT COUNT(*) as c FROM ${LEGACY_TABLE}`)) ?? 0;
+    if (oldRowCount === 0) {
+      await this.writeConn.exec(`DROP TABLE IF EXISTS ${LEGACY_TABLE}`);
+      return;
+    }
+
+    if (migrationChoice === "migrate") {
+      const legacyRows = await this.writeConn.query(`SELECT * FROM ${LEGACY_TABLE}`);
+      for (const row of legacyRows) {
+        const toBlob = (v: unknown): Buffer | null => {
+          if (v === null || v === undefined) {
+            return null;
+          }
+          if (Buffer.isBuffer(v)) {
+            return v;
+          }
+          if (typeof v === "string") {
+            return utf8StringToBlob(decodeFromStorage(v));
+          }
+          return null;
+        };
+        await this.writeConn.exec(SQLITE_INSERT_V2, [
+          row.timestamp as number,
+          row.provider_id as string,
+          row.provider_name as string,
+          row.method as string,
+          row.path as string,
+          (row.target_url as string | null) ?? null,
+          toBlob(row.request_body),
+          toBlob(row.response_body),
+          toBlob(row.original_request_body),
+          toBlob(row.original_response_body),
+          (row.status_code as number | null) ?? null,
+          row.duration as number,
+          row.success as number,
+          (row.error_message as string | null) ?? null,
+          (row.client_id as string | null) ?? null,
+          (row.status as string) ?? "completed",
+          (row.route_type as string | null) ?? null,
+          (row.input_tokens as number | null) ?? null,
+          (row.output_tokens as number | null) ?? null,
+          (row.cache_tokens as number | null) ?? null,
+          (row.ttfb as number | null) ?? null,
+        ]);
+      }
+    }
+
+    await this.writeConn.exec(`DROP TABLE IF EXISTS ${LEGACY_TABLE}`);
   }
 
   // ---- Write operations (writeConn) --------------------------------------
@@ -1103,7 +1093,7 @@ export class SqliteCliDriver implements DatabaseDriver {
 
     this.writeConn
       .exec(
-        `UPDATE request_logs
+        `UPDATE ${TABLE}
        SET status_code = ?,
            response_body = ?,
            original_response_body = ?,
@@ -1118,11 +1108,11 @@ export class SqliteCliDriver implements DatabaseDriver {
        WHERE client_id = ?`,
         [
           statusCode,
-          encodeForStorage(responseBody),
-          encodeForStorage(originalResponseBody),
+          utf8StringToBlob(responseBody),
+          utf8StringToBlob(originalResponseBody),
           duration,
           success ? 1 : 0,
-          encodeForStorage(errorMessage),
+          errorMessage ?? null,
           inputTokens ?? null,
           outputTokens ?? null,
           cacheTokens ?? null,
@@ -1148,14 +1138,14 @@ export class SqliteCliDriver implements DatabaseDriver {
 
     this.writeConn
       .exec(
-        `UPDATE request_logs
+        `UPDATE ${TABLE}
        SET status_code = ?,
            duration = ?,
            success = ?,
            error_message = ?,
            status = ?
        WHERE client_id = ?`,
-        [statusCode, duration, 0, encodeForStorage(errorMessage), status, clientId]
+        [statusCode, duration, 0, errorMessage ?? null, status, clientId]
       )
       .catch(err => {
         this.log.error("[SqliteCli] Failed to update log status:", err);
@@ -1182,14 +1172,14 @@ export class SqliteCliDriver implements DatabaseDriver {
     }
 
     const placeholders = ids.map(() => "?").join(",");
-    await this.writeConn.exec(`DELETE FROM request_logs WHERE id IN (${placeholders})`, ids);
+    await this.writeConn.exec(`DELETE FROM ${TABLE} WHERE id IN (${placeholders})`, ids);
   }
 
   async clearAllLogs(): Promise<void> {
     if (!this.writeConn?.started) {
       return;
     }
-    await this.writeConn.exec("DELETE FROM request_logs");
+    await this.writeConn.exec(`DELETE FROM ${TABLE}`);
     await this.writeConn.exec("VACUUM");
   }
 
@@ -1199,12 +1189,12 @@ export class SqliteCliDriver implements DatabaseDriver {
     }
 
     const cutoff = Date.now() - MAX_LOG_AGE_DAYS * 24 * 60 * 60 * 1000;
-    await this.writeConn.exec("DELETE FROM request_logs WHERE timestamp < ?", [cutoff]);
+    await this.writeConn.exec(`DELETE FROM ${TABLE} WHERE timestamp < ?`, [cutoff]);
 
     await this.writeConn.exec(`
-      DELETE FROM request_logs
+      DELETE FROM ${TABLE}
       WHERE id NOT IN (
-        SELECT id FROM request_logs ORDER BY timestamp DESC LIMIT ${MAX_LOG_ROWS}
+        SELECT id FROM ${TABLE} ORDER BY timestamp DESC LIMIT ${MAX_LOG_ROWS}
       )
     `);
   }
@@ -1263,7 +1253,7 @@ export class SqliteCliDriver implements DatabaseDriver {
 
     const total =
       (await this.readConn.queryScalar<number>(
-        `SELECT COUNT(*) as count FROM request_logs ${whereClause}`,
+        `SELECT COUNT(*) as count FROM ${TABLE} ${whereClause}`,
         params
       )) ?? 0;
 
@@ -1275,9 +1265,8 @@ export class SqliteCliDriver implements DatabaseDriver {
               status_code, duration, success, error_message, client_id,
               status, route_type,
               input_tokens, output_tokens, cache_tokens, ttfb,
-              SUBSTR(request_body, 1, 500) as request_body,
-              SUBSTR(original_request_body, 1, 500) as original_request_body
-       FROM request_logs ${whereClause} ORDER BY timestamp DESC LIMIT ? OFFSET ?`,
+              ${CLI_BODY_PREVIEW_HEX}
+       FROM ${TABLE} ${whereClause} ORDER BY timestamp DESC LIMIT ? OFFSET ?`,
       [...params, limit, offset]
     );
 
@@ -1291,7 +1280,17 @@ export class SqliteCliDriver implements DatabaseDriver {
       return null;
     }
 
-    const rows = await this.readConn.query("SELECT * FROM request_logs WHERE id = ?", [id]);
+    const rows = await this.readConn.query(
+      `SELECT id, timestamp, provider_id, provider_name, method, path, target_url,
+              hex(request_body) as request_body,
+              hex(response_body) as response_body,
+              hex(original_request_body) as original_request_body,
+              hex(original_response_body) as original_response_body,
+              status_code, duration, success, error_message, client_id, status, route_type,
+              input_tokens, output_tokens, cache_tokens, ttfb
+       FROM ${TABLE} WHERE id = ?`,
+      [id]
+    );
 
     if (rows.length === 0) {
       return null;
@@ -1338,7 +1337,7 @@ export class SqliteCliDriver implements DatabaseDriver {
               COALESCE(SUM(output_tokens), 0) as totalOutputTokens,
               COALESCE(SUM(cache_tokens), 0) as totalCacheTokens,
               AVG(ttfb) as avgTtfb
-       FROM request_logs
+       FROM ${TABLE}
        WHERE ${timeFilter}`,
       timeParams
     );
@@ -1353,7 +1352,7 @@ export class SqliteCliDriver implements DatabaseDriver {
       `SELECT COALESCE(SUM(output_tokens), 0) as filteredTokens,
               COALESCE(SUM(duration - ttfb), 0) as filteredGenTime,
               COUNT(*) as filteredCount
-       FROM request_logs
+       FROM ${TABLE}
        WHERE ${timeFilter}
          AND ttfb IS NOT NULL
          AND output_tokens IS NOT NULL
@@ -1376,11 +1375,11 @@ export class SqliteCliDriver implements DatabaseDriver {
       const p90Offset = Math.floor(0.9 * (totalLogs - 1));
       const [p50Rows, p90Rows] = await Promise.all([
         this.readConn.query(
-          `SELECT duration FROM request_logs WHERE ${timeFilter} ORDER BY duration ASC LIMIT 1 OFFSET ?`,
+          `SELECT duration FROM ${TABLE} WHERE ${timeFilter} ORDER BY duration ASC LIMIT 1 OFFSET ?`,
           [...timeParams, p50Offset]
         ),
         this.readConn.query(
-          `SELECT duration FROM request_logs WHERE ${timeFilter} ORDER BY duration ASC LIMIT 1 OFFSET ?`,
+          `SELECT duration FROM ${TABLE} WHERE ${timeFilter} ORDER BY duration ASC LIMIT 1 OFFSET ?`,
           [...timeParams, p90Offset]
         ),
       ]);
@@ -1394,7 +1393,7 @@ export class SqliteCliDriver implements DatabaseDriver {
               COALESCE(SUM(input_tokens), 0) as totalInputTokens,
               COALESCE(SUM(output_tokens), 0) as totalOutputTokens,
               COALESCE(SUM(cache_tokens), 0) as totalCacheTokens
-       FROM request_logs
+       FROM ${TABLE}
        WHERE ${timeFilter}
        GROUP BY provider_id, provider_name`,
       timeParams

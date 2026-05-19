@@ -7,7 +7,7 @@
 
 import { Worker } from "worker_threads";
 import * as path from "path";
-import { Logger } from "../utils/logger";
+import { Logger } from "../../utils/logger";
 import type {
   DatabaseDriver,
   RequestLog,
@@ -17,7 +17,10 @@ import type {
   RequestStatus,
   DatabaseDriverConfig,
   StatsQuery,
-} from "./types";
+  DatabaseInitializeOptions,
+  LogDbMigrationChoice,
+  SqliteDriverConfig,
+} from "../types";
 
 // Message types (must match worker)
 type WorkerMessageType =
@@ -164,7 +167,10 @@ export class DatabaseWorkerClient implements DatabaseDriver {
 
     try {
       this.startWorker();
-      await this.send("init", this.config);
+      await this.send("init", {
+        config: this.config,
+        migrationChoice: "migrate" as LogDbMigrationChoice,
+      });
       this._enabled = true;
       this.workerRestartCount = 0;
       this.log.info("[DatabaseWorker] Worker restarted successfully");
@@ -209,10 +215,13 @@ export class DatabaseWorkerClient implements DatabaseDriver {
   /**
    * Initialize the database
    */
-  async initialize(): Promise<void> {
+  async initialize(options?: DatabaseInitializeOptions): Promise<void> {
     this.isClosing = false;
     this.startWorker();
-    await this.send("init", this.config);
+    await this.send("init", {
+      config: this.config as SqliteDriverConfig,
+      migrationChoice: options?.migrationChoice ?? "migrate",
+    });
     this._enabled = true;
     this.log.info("[DatabaseWorker] Initialized");
   }

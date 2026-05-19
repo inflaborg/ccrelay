@@ -8,7 +8,7 @@ import * as os from "os";
 import { Logger } from "../utils/logger";
 import type { DatabaseDriver, DatabaseDriverConfig } from "./types";
 import { createDriver } from "./factory";
-import { isSqliteCliUnavailableError } from "./drivers/sqlite-cli";
+import { isSqliteCliUnavailableError } from "./drivers/sqlite";
 
 export type {
   RequestLog,
@@ -20,6 +20,7 @@ export type {
   DatabaseDriverConfig,
   SqliteDriverConfig,
   PostgresDriverConfig,
+  LogDbMigrationChoice,
 } from "./types";
 
 /**
@@ -80,7 +81,8 @@ export class LogDatabase {
     try {
       this.log.info(`[LogDatabase] Creating ${this.driverConfig.type} driver...`);
       this.driver = createDriver(this.driverConfig);
-      await this.driver.initialize();
+
+      await this.driver.initialize({ migrationChoice: "migrate" });
 
       this.log.info("[LogDatabase] Initialization complete");
     } catch (err) {

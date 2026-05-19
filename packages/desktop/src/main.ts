@@ -81,6 +81,7 @@ void app.whenReady().then(async () => {
     }
     return base;
   });
+
   const leaderElection = new LeaderElection(configManager.port, configManager.host, () =>
     configManager.getApiBearerToken()
   );

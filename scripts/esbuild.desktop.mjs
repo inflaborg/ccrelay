@@ -16,7 +16,7 @@ if (!fs.existsSync(outDir)) {
 const commonOptions = {
   bundle: true,
   platform: "node",
-  target: "node18",
+  target: "node22",
   format: "cjs",
   external: [
     "electron",
@@ -41,7 +41,7 @@ await esbuild.build({
 
 await esbuild.build({
   ...commonOptions,
-  entryPoints: [path.join(coreDir, "src/database/database-worker.ts")],
+  entryPoints: [path.join(coreDir, "src/database/worker/worker.ts")],
   outfile: path.join(outDir, "database-worker.cjs"),
 });
 

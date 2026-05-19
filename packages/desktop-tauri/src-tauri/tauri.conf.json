@@ -26,7 +26,12 @@
       "icons/icon.ico"
     ],
     "externalBin": ["binaries/ccrelay-server"],
-    "resources": ["../web/**/*", "../out/database-worker.cjs"],
+    "resources": [
+      "../web/**/*",
+      "../out/ccrelay-server.js",
+      "../out/database-worker.cjs",
+      "../out/native/node_modules/better-sqlite3/**/*"
+    ],
     "windows": {
       "webviewInstallMode": {
         "silent": true,

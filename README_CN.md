@@ -135,7 +135,8 @@ npm run compile        # 或 npm run watch
 可选的 Electron 桌面应用（`packages/desktop`），与 VS Code 扩展共享同一核心：
 
 - 共用 `~/.ccrelay/` 配置、状态和 Leader 选举
-- 托盘菜单 → **打开控制台** 在应用窗口内加载 Web UI
+- 请求日志使用进程内 SQLite（默认桌面构建无需系统 `sqlite3` 命令）
+- 托盘菜单 → **打开控制台** 在应用窗口内加载 Web UI；**打开日志目录** 可打开 `~/.ccrelay/logs/` 下的运行诊断日志
 - 从 [GitHub Releases](https://github.com/inflaborg/ccrelay/releases) 下载：
   - **macOS**: `CCRelay-<版本>-darwin-arm64.dmg` 或 `-darwin-x64.dmg`
   - **Windows**: `CCRelay-<版本>-win32-x64.exe` 或 `-win32-arm64.exe`
@@ -147,19 +148,22 @@ npm run compile        # 或 npm run watch
 轻量级 Tauri 桌面应用（`packages/desktop-tauri`），与 VS Code 扩展和 Electron 应用共享同一核心：
 
 - 共用 `~/.ccrelay/` 配置、状态和 Leader 选举
-- 使用 Sidecar 架构：Rust 壳层管理 Node.js 服务进程
-- 托盘菜单支持启动/停止服务器和打开控制台
+- **Sidecar 架构**：Rust 壳层启动安装包内自带的 **Node.js 运行时**（服务端脚本与原生 SQLite 模块随应用资源一并分发）。终端用户无需单独安装 Node。
+- 请求日志与 Electron 桌面版相同，使用进程内 SQLite
+- 托盘菜单支持启动/停止服务器、**打开控制台** 与 **打开日志目录**
 - 从 [GitHub Releases](https://github.com/inflaborg/ccrelay/releases) 下载：
-  - 安装包命名与 Electron 桌面版一致（`CCRelay-<版本>-<platform>-<arch>.<扩展名>`），在版本号后增加 **`tauri`**（例如 `CCRelay-0.2.1-tauri-darwin-arm64.dmg`、`CCRelay-0.2.1-tauri-win32-x64.exe`）。Windows 仅提供 **NSIS 安装包（`.exe`）**，不提供 MSI。
+  - 安装包命名与 Electron 桌面版一致（`CCRelay-<版本>-<platform>-<arch>.<扩展名>`），在版本号后增加 **`tauri`**（例如 `CCRelay-0.2.4-tauri-darwin-arm64.dmg`、`CCRelay-0.2.4-tauri-win32-x64.exe`）。Windows 仅提供 **NSIS 安装包（`.exe`）**，不提供 MSI。
 
 ### 开发
 
 ```bash
 npm install
-npm run tauri:dev         # 开发模式，支持热重载
-npm run tauri:pack:mac    # 构建 macOS 应用
-npm run tauri:pack:win    # 构建 Windows 应用
+npm run tauri:dev         # 构建 Web UI 与 Node sidecar 后进入 Tauri 开发模式
+npm run tauri:pack:mac    # 构建 macOS 安装包
+npm run tauri:pack:win    # 构建 Windows 安装包
 ```
+
+`npm run tauri:build`（在 pack/dev 前自动执行）会打包 sidecar 脚本、复制原生 SQLite 模块，并将 Node 二进制放入 Tauri 外部 sidecar 目录。从源码构建时请使用 **Node.js 22**（与 CI 一致）。
 
 ---
 

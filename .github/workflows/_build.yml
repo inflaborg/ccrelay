@@ -58,7 +58,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: |
             package-lock.json
@@ -214,7 +214,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: |
             package-lock.json
@@ -395,7 +395,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: |
             package-lock.json
@@ -404,10 +404,8 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build Tauri (frontend, SEA sidecar, Rust host prep)
+      - name: Build Tauri (frontend, sidecar, Rust host prep)
         run: npm run tauri:build
-        env:
-          CCRELAY_SEA: '1'
 
       - name: Import signing certificate
         id: tauri_mac_signing

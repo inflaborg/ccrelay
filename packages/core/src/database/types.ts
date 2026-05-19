@@ -137,6 +137,13 @@ export interface PostgresDriverConfig {
  */
 export type DatabaseDriverConfig = SqliteDriverConfig | PostgresDriverConfig;
 
+/** User choice when legacy request_logs has rows at startup. */
+export type LogDbMigrationChoice = "migrate" | "discard";
+
+export interface DatabaseInitializeOptions {
+  migrationChoice?: LogDbMigrationChoice;
+}
+
 /**
  * Database driver interface - exposes business-level methods
  * Each driver implementation handles its own SQL dialect internally
@@ -145,7 +152,7 @@ export interface DatabaseDriver {
   /**
    * Initialize the database (create tables, indexes, run migrations)
    */
-  initialize(): Promise<void>;
+  initialize(options?: DatabaseInitializeOptions): Promise<void>;
 
   /**
    * Close the database connection gracefully
