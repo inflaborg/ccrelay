@@ -42,29 +42,48 @@ await esbuild.build({
   outfile: path.join(outDir, "database-worker.cjs"),
 });
 
-// Copy better-sqlite3 native addon for sidecar (resolved via NODE_PATH at runtime)
-function resolveBetterSqlite3Dir() {
-  const candidates = [
-    path.join(tauriDir, "node_modules/better-sqlite3"),
-    path.join(rootDir, "node_modules/better-sqlite3"),
-    path.join(coreDir, "node_modules/better-sqlite3"),
-  ];
-  for (const dir of candidates) {
-    if (fs.existsSync(path.join(dir, "package.json"))) {
-      return dir;
+// Copy better-sqlite3 and runtime deps for sidecar (resolved via NODE_PATH at runtime)
+function resolvePackageDir(packageName, anchorDirs) {
+  const seen = new Set();
+  for (const anchor of anchorDirs) {
+    const candidates = [
+      path.join(anchor, "node_modules", packageName),
+      path.join(path.dirname(anchor), "node_modules", packageName),
+      path.join(rootDir, "node_modules", packageName),
+    ];
+    for (const dir of candidates) {
+      if (seen.has(dir)) {
+        continue;
+      }
+      seen.add(dir);
+      if (fs.existsSync(path.join(dir, "package.json"))) {
+        return dir;
+      }
     }
   }
   throw new Error(
-    "better-sqlite3 not found. Run npm install from the repo root (desktop-tauri depends on it)."
+    `${packageName} not found. Run npm install from the repo root (desktop-tauri depends on it).`
   );
 }
 
+function copyIntoNativeNodeModules(packageName, anchorDirs) {
+  const src = resolvePackageDir(packageName, anchorDirs);
+  const dest = path.join(outDir, "native/node_modules", packageName);
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.cpSync(src, dest, { recursive: true });
+}
+
+const nativeAnchors = [
+  path.join(tauriDir, "node_modules/better-sqlite3"),
+  path.join(rootDir, "node_modules/better-sqlite3"),
+  path.join(coreDir, "node_modules/better-sqlite3"),
+];
+
 execSync("npm rebuild better-sqlite3", { cwd: rootDir, stdio: "inherit" });
 
-const betterSqlite3Src = resolveBetterSqlite3Dir();
-const betterSqlite3Dest = path.join(outDir, "native/node_modules/better-sqlite3");
-fs.mkdirSync(path.dirname(betterSqlite3Dest), { recursive: true });
-fs.cpSync(betterSqlite3Src, betterSqlite3Dest, { recursive: true });
+copyIntoNativeNodeModules("better-sqlite3", nativeAnchors);
+copyIntoNativeNodeModules("bindings", nativeAnchors);
+copyIntoNativeNodeModules("file-uri-to-path", nativeAnchors);
 
 // Sidecar binary: copy Node executable (Tauri externalBin)
 const targetTriple = execSync("rustc --print host-tuple").toString().trim();
