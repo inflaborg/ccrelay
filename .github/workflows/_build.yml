@@ -279,7 +279,7 @@ jobs:
         run: npm install
 
       - name: Rebuild native modules for Electron
-        run: npx electron-rebuild -f -w better-sqlite3 --arch ${{ matrix.arch }}
+        run: npx electron-builder install-app-deps --arch ${{ matrix.arch }}
         working-directory: packages/desktop
 
       - name: Build desktop
