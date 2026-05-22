@@ -9,6 +9,8 @@ const VENDOR_DISPLAY: Record<string, string> = {
   gemini: "Gemini",
   deepseek: "DeepSeek",
   claude: "Claude",
+  llama: "Llama",
+  qwen: "Qwen",
 };
 
 /**
@@ -126,6 +128,27 @@ export const GENERIC_ENDPOINT_PRESETS: readonly PartnerPreset[] = [
 ];
 
 export const PARTNER_PRESETS: readonly PartnerPreset[] = [
+  {
+    id: "tuning-engines",
+    nameKey: "wizard.brand.tuningEngines",
+    mode: "inject",
+    idPrefix: "tuning-engines",
+    namePrefix: "Tuning-Engines",
+    defaultModelIds: ["llama-3.3-70b-fp8", "qwen-2.5-coder-32b"],
+    defaultCustomModels: true,
+    authHeader: "authorization",
+    fixedBaseUrl: "https://api.tuningengines.com/v1",
+    options: [],
+    segmentRules: [],
+    variants: [
+      {
+        providerType: "openai_chat",
+        urlTemplate: "{fixedBaseUrl}",
+        idSuffix: "openai",
+        nameSuffix: "",
+      },
+    ],
+  },
   {
     id: "glm",
     nameKey: "wizard.brand.glm",

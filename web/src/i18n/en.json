@@ -270,6 +270,7 @@
     "brand": {
       "genericOpenaiChat": "OpenAI Chat",
       "genericAnthropic": "Anthropic",
+      "tuningEngines": "Tuning Engines",
       "glm": "Zhipu GLM",
       "xiaomi": "Xiaomi MiMo",
       "azure": "Azure OpenAI",
