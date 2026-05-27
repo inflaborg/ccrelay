@@ -152,6 +152,11 @@ export {
 export {
   formatOpenAIResponsesSse,
   formatOpenAIChatCompletionsSse,
+  formatAnthropicSseError,
+  formatOpenAIChatSseError,
+  formatOpenAIResponsesSseError,
+  extractUpstreamSseError,
+  type UpstreamSseErrorInfo,
 } from "./streaming/sse-formatters";
 
 export {

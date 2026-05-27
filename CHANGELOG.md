@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Cross-protocol streaming now forwards upstream errors as native SSE events for Anthropic, OpenAI Chat, and OpenAI Responses clients instead of returning a misleading 502.
+- Streaming requests that finish normally (e.g. Codex on Azure Responses API ending with `response.completed`) are no longer mislogged as 499 "Client disconnected" when the client tears down the connection after reading the final event, even when the upstream FIN is delayed.
+
 ## [0.2.5] - 2026-05-26 (pre-release)
 
 Pre-release line for 0.2.5.
