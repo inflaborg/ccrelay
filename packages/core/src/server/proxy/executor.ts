@@ -161,6 +161,29 @@ export class ProxyExecutor {
 
   constructor(private responseLogger: ResponseLogger) {}
 
+  /** Write converted SSE to the client and mirror into `ctx.responseChunks` when DB logging is on. */
+  private writeClientStreamForLog(
+    clientRes: http.ServerResponse,
+    chunk: string | Buffer,
+    ctx: ExecutionContext
+  ): void {
+    const buf = typeof chunk === "string" ? Buffer.from(chunk, "utf-8") : chunk;
+    clientRes.write(buf);
+    if (this.responseLogger.enabled) {
+      ctx.responseChunks.push(buf);
+    }
+  }
+
+  private recordUpstreamChunkForLog(chunk: Buffer, upstreamLog: Buffer[]): void {
+    if (this.responseLogger.enabled) {
+      upstreamLog.push(chunk);
+    }
+  }
+
+  private upstreamLogBody(upstreamLog: Buffer[]): string | undefined {
+    return upstreamLog.length > 0 ? Buffer.concat(upstreamLog).toString("utf-8") : undefined;
+  }
+
   /**
    * Set the execute function (for retry support, called after full initialization)
    */
@@ -743,15 +766,14 @@ export class ProxyExecutor {
     log.info(`[A->Chat SSE] ${clientId}: anthropic → OpenAI chunks (${provider.id})`);
     clientRes.writeHead(status, sseHeaders);
 
-    const startTime = Date.now();
-
     const chatState = createAnthropicToOpenAISseState(originalModel ?? task.originalModel ?? "");
+    const upstreamLog: Buffer[] = [];
 
     const sseBuffer = createAnthropicSseEnvelopeBuffer(envelope => {
       const fragments = processAnthropicStreamEnvelope(chatState, envelope);
       for (const line of fragments) {
         if (!ctx.clientDisconnected) {
-          clientRes.write(line);
+          this.writeClientStreamForLog(clientRes, line, ctx);
         }
       }
     });
@@ -760,6 +782,7 @@ export class ProxyExecutor {
       if (!ctx.upstreamTerminalSeen && chunkContainsTerminalMarker(chunk)) {
         ctx.upstreamTerminalSeen = true;
       }
+      this.recordUpstreamChunkForLog(chunk, upstreamLog);
       sseBuffer.push(chunk);
     });
 
@@ -769,7 +792,7 @@ export class ProxyExecutor {
       if (!ctx.clientDisconnected) {
         if (!chatState.streamingFinished) {
           for (const line of flushAnthropicToOpenAISseFinal(chatState)) {
-            clientRes.write(line);
+            this.writeClientStreamForLog(clientRes, line, ctx);
           }
         }
         clientRes.end();
@@ -779,10 +802,20 @@ export class ProxyExecutor {
       const aborted = ctx.clientDisconnected && !ctx.upstreamEndedNaturally;
       task.streamCompleted = !aborted;
       ctx.streamCompleted = task.streamCompleted;
+      const duration = Date.now() - ctx.startTime;
+      this.responseLogger.logResponse(
+        clientId,
+        duration,
+        aborted ? 499 : status,
+        ctx.responseChunks,
+        aborted ? "Client disconnected" : undefined,
+        this.upstreamLogBody(upstreamLog),
+        ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+      );
       resolve({
         statusCode: aborted ? 499 : status,
         headers: sseHeaders,
-        duration: Date.now() - startTime,
+        duration,
         streamed: true,
         streamCompleted: task.streamCompleted,
         errorMessage: aborted ? "Client disconnected" : undefined,
@@ -828,9 +861,9 @@ export class ProxyExecutor {
     log.info(`[A->Responses SSE] anthropic sse → Responses (${provider.id})`);
     clientRes.writeHead(status, sseHeaders);
 
-    const startTime = Date.now();
     const chatState = createAnthropicToOpenAISseState(originalModel ?? task.originalModel ?? "");
     const respState = createStreamingState({ echo: task.originalResponsesEcho });
+    const upstreamLog: Buffer[] = [];
 
     const feedSyntheticChatCompletionChunk = (line: string): void => {
       const trimmed = line.trimEnd();
@@ -841,7 +874,7 @@ export class ProxyExecutor {
       const synth = processStreamingChunk(respState, payload);
       for (const ev of synth) {
         if (!ctx.clientDisconnected) {
-          clientRes.write(ev);
+          this.writeClientStreamForLog(clientRes, ev, ctx);
         }
       }
     };
@@ -857,6 +890,7 @@ export class ProxyExecutor {
       if (!ctx.upstreamTerminalSeen && chunkContainsTerminalMarker(chunk)) {
         ctx.upstreamTerminalSeen = true;
       }
+      this.recordUpstreamChunkForLog(chunk, upstreamLog);
       sseBuffer.push(chunk);
     });
 
@@ -870,7 +904,7 @@ export class ProxyExecutor {
       }
       if (!ctx.clientDisconnected && respState.phase !== "done") {
         for (const ev of processStreamingChunk(respState, "[DONE]")) {
-          clientRes.write(ev);
+          this.writeClientStreamForLog(clientRes, ev, ctx);
         }
       }
 
@@ -883,10 +917,22 @@ export class ProxyExecutor {
       task.streamCompleted = !aborted;
       ctx.streamCompleted = task.streamCompleted;
 
+      const duration = Date.now() - ctx.startTime;
+      const { clientId } = task;
+      this.responseLogger.logResponse(
+        clientId,
+        duration,
+        aborted ? 499 : status,
+        ctx.responseChunks,
+        aborted ? "Client disconnected" : undefined,
+        this.upstreamLogBody(upstreamLog),
+        ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+      );
+
       resolve({
         statusCode: aborted ? 499 : status,
         headers: sseHeaders,
-        duration: Date.now() - startTime,
+        duration,
         streamed: true,
         streamCompleted: task.streamCompleted,
         errorMessage: aborted ? "Client disconnected" : undefined,
@@ -1469,7 +1515,7 @@ export class ProxyExecutor {
     _originalModel: string | undefined,
     resolve: (value: ProxyResult) => void
   ): void {
-    const { provider, res: clientRes } = task;
+    const { provider, res: clientRes, clientId } = task;
 
     const sseHeaders = headersForResponsesSse(responseHeaders);
     log.debug(
@@ -1483,13 +1529,16 @@ export class ProxyExecutor {
     let totalBytes = 0;
 
     const state = createStreamingState({ echo: task.originalResponsesEcho });
+    const upstreamLog: Buffer[] = [];
 
     const processLine = (line: string): void => {
       // Strip "data:" prefix — upstream SSE lines come as "data: {...}" or "data: [DONE]"
       const payload = line.startsWith("data:") ? line.slice(5).trim() : line;
       const events = processStreamingChunk(state, payload);
       for (const event of events) {
-        clientRes!.write(event);
+        if (!ctx.clientDisconnected) {
+          this.writeClientStreamForLog(clientRes!, event, ctx);
+        }
       }
     };
 
@@ -1501,6 +1550,7 @@ export class ProxyExecutor {
       if (!ctx.upstreamTerminalSeen && chunkContainsTerminalMarker(chunk)) {
         ctx.upstreamTerminalSeen = true;
       }
+      this.recordUpstreamChunkForLog(chunk, upstreamLog);
       if (chunkCount === 1) {
         firstChunkTime = Date.now() - startTime;
         log.debug(`[Chat->Responses SSE] First chunk: ${chunk.length} bytes`);
@@ -1509,6 +1559,7 @@ export class ProxyExecutor {
     });
 
     proxyRes.on("end", () => {
+      ctx.upstreamEndedNaturally = true;
       clientRes!.off("close", onClientDisconnect);
 
       // Flush any remaining partial line
@@ -1518,29 +1569,46 @@ export class ProxyExecutor {
       if (state.phase !== "done") {
         const remaining = processStreamingChunk(state, "[DONE]");
         for (const event of remaining) {
-          clientRes!.write(event);
+          if (!ctx.clientDisconnected) {
+            this.writeClientStreamForLog(clientRes!, event, ctx);
+          }
         }
       }
 
-      clientRes!.end();
+      if (!ctx.clientDisconnected) {
+        clientRes!.end();
+      }
 
-      task.streamCompleted = true;
-      ctx.streamCompleted = true;
+      const aborted = ctx.clientDisconnected && !ctx.upstreamEndedNaturally;
+      task.streamCompleted = !aborted;
+      ctx.streamCompleted = task.streamCompleted;
 
-      const duration = Date.now() - startTime;
+      const streamMs = Date.now() - startTime;
+      const duration = Date.now() - ctx.startTime;
       log.info(
         `[Chat->Responses SSE] ${provider.id}: ${chunkCount} upstream chunks, ` +
           `${totalBytes} bytes, ${state.seq} events emitted, ` +
-          `first_chunk=${firstChunkTime}ms, total=${duration}ms`
+          `first_chunk=${firstChunkTime}ms, stream=${streamMs}ms, total=${duration}ms`
+      );
+
+      this.responseLogger.logResponse(
+        clientId,
+        duration,
+        aborted ? 499 : status,
+        ctx.responseChunks,
+        aborted ? "Client disconnected" : undefined,
+        this.upstreamLogBody(upstreamLog),
+        ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
       );
 
       resolve({
-        statusCode: status,
+        statusCode: aborted ? 499 : status,
         headers: sseHeaders,
         duration,
         streamed: true,
-        streamCompleted: true,
+        streamCompleted: task.streamCompleted,
         responseBodyChunks: ctx.responseChunks,
+        errorMessage: aborted ? "Client disconnected" : undefined,
       });
     });
 

@@ -108,6 +108,7 @@ export {
 export { geminiThoughtTagsResponseTransform } from "./gemini/response-thoughts";
 export { minimaxChatSanitize } from "./minimax/request-sanitize";
 export { minimaxReasoningDetailsResponseTransform } from "./minimax/response-reasoning";
+export { customToFunctionShim, openaiChatStrictToolsSanitize } from "./openai-chat-strict-tools";
 
 /** @deprecated Prefer `TOOL_TRANSFORM_REGISTRY`. */
 export const TRANSFORM_REGISTRY = TOOL_TRANSFORM_REGISTRY;
