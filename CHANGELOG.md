@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-05-26 (pre-release)
+
+Pre-release line for 0.2.5.
+
 ## [0.2.4] - 2026-05-19
 
 Admin UI on shadcn/ui, Claude Desktop and Web search controls, and **DeepSeek** / **Astraflow (UCloud)** add-provider presets. Request logs move to a compact v2 table with automatic migration; desktop apps use in-process SQLite and Tauri bundles a Node sidecar. Reasoning-effort mapping updates and macOS Tahoe fixes for desktop, VS Code, and proxy streaming.
