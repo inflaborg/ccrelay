@@ -13,10 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Smart Routing** tab between Dashboard and Providers: aggregates all provider model lists, exposes unified `/v1/models` with `<providerId>:<modelId>` ids, and routes requests by model without switching the active provider.
 - **Providers** page: Smart Routing card and provider cards are mutually exclusive routing modes — enable Smart Routing from the Providers tab; selecting a fallback provider disables Smart Routing. Aggregated catalog shows provider fetch errors when upstream model lists fail.
+- **Client configuration** page shows installed Claude Desktop claude-code bundles (scanned from the Claude-3p directory) and the Claude Code CLI version (via `claude --version`). CLI version detection can be disabled on the page.
 
 **Config**
 
 - `smartRouting` section in `config.yaml` (`enabled`, include/exclude filters, alias prefix, upstream models cache TTL). Optional alias-drift migration when enabling smart routing updates legacy custom model aliases that collide across providers.
+- `clientVersionDetection` section in `config.yaml` (`enabled`, default true) controls whether the dashboard runs `claude --version` for Client configuration.
 
 ### Changed
 

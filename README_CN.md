@@ -425,7 +425,7 @@ gemini:
 - **Capabilities** — 可选联网搜索后端（**Tavily** 与/或 **GLM（智谱 Z.ai）**）：API Key、GLM 接入地址与协议、默认后端，以及启用本地代答的提供商列表
 - **Logs** — 请求/响应日志查看器，支持 Token 列、TTFB、输出 TPS 和模型映射显示（未启用日志时自动隐藏）
 - **Settings** — 在 UI 中管理 YAML 配置；路由和并发保存后即时生效，服务器和日志需重启
-- **Client configuration** — 从 UI 写入 Claude Code 环境变量和 Codex 配置
+- **Client configuration** — 从 UI 写入 Claude Code 环境变量和 Codex 配置；同时显示 Claude Desktop 已安装的 claude-code bundle 版本与 Claude Code CLI 版本（后台执行 `claude --version`，可在页面上关闭）
 
 > **注意**：直接在浏览器中打开 `http://127.0.0.1:7575/ccrelay/` 无法访问面板。面板仅允许来自 VS Code 扩展或桌面应用内部的请求（通过内部请求头验证）。请通过扩展命令或桌面托盘菜单打开面板。
 

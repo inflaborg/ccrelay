@@ -203,7 +203,12 @@ export function handleApiRequest(req: http.IncomingMessage, res: http.ServerResp
   }
 
   if (reqPath === "/ccrelay/api/client-config" && method === "GET") {
-    handleGetClientConfig(req, res);
+    handleGetClientConfig(req, res).catch(err => {
+      log.error("Error handling GET /client-config", err);
+      if (!res.headersSent) {
+        sendJson(res, 500, { error: "Internal server error" });
+      }
+    });
     return true;
   }
 

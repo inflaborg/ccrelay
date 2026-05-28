@@ -293,6 +293,16 @@ export interface SmartRoutingConfig {
   bareModelFallback: SmartRoutingBareModelFallbackConfig;
 }
 
+export const ClientVersionDetectionConfigSchema = z.object({
+  enabled: z.boolean().optional(),
+});
+
+export type ClientVersionDetectionConfigInput = z.infer<typeof ClientVersionDetectionConfigSchema>;
+
+export interface ClientVersionDetectionConfig {
+  enabled: boolean;
+}
+
 export interface SmartRoutingCatalogEntry {
   publicId: string;
   aliasHash: string;
@@ -334,6 +344,7 @@ export const FileConfigSchema = z.object({
   webSearch: WebSearchConfigSchema.optional(),
   web_search: WebSearchConfigSchema.optional(),
   smartRouting: SmartRoutingConfigSchema.optional(),
+  clientVersionDetection: ClientVersionDetectionConfigSchema.optional(),
 });
 
 export type FileConfigInput = z.infer<typeof FileConfigSchema>;
@@ -451,6 +462,8 @@ export interface RouterConfig {
   webSearch?: WebSearchGlobalConfig;
   /** Aggregated model routing across providers. */
   smartRouting?: SmartRoutingConfig;
+  /** Claude CLI version detection for Client Config dashboard. */
+  clientVersionDetection?: ClientVersionDetectionConfig;
 }
 
 export interface RouterStatus {

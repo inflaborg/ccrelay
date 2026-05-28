@@ -1,10 +1,20 @@
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileCode2, Loader2, Monitor, RotateCcw, SlidersHorizontal, X } from "lucide-react";
+import {
+  FileCode2,
+  Loader2,
+  Monitor,
+  RefreshCw,
+  RotateCcw,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,11 +26,142 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { api } from "@/api/client";
 import { CLAUDE_CODE_DEFAULT_MODELS, CODEX_DEFAULT_MODEL } from "@/constants/claudeCodeDefaults";
-import type { ClientConfigItem, ClientConfigItemStatus } from "@/types/api";
+import type {
+  ClientConfigItem,
+  ClientConfigItemStatus,
+  ClaudeCliVersionInfo,
+  ClaudeDesktopBundleVersions,
+} from "@/types/api";
 import ConfigFieldList from "@/features/client-config/ConfigFieldList";
+
+function formatBundleList(versions: string[], notInstalledLabel: string): string {
+  return versions.length > 0 ? versions.join(", ") : notInstalledLabel;
+}
+
+function formatCliVersionText(
+  info: ClaudeCliVersionInfo | undefined,
+  t: (key: string) => string
+): string {
+  if (!info) {
+    return "—";
+  }
+  switch (info.status) {
+    case "ok":
+      return info.version ?? "—";
+    case "disabled":
+      return t("clientConfig.version.cliDisabled");
+    default:
+      return t("clientConfig.version.cliNotDetected");
+  }
+}
+
+function ClaudeDesktopBundleInfo({
+  bundles,
+  t,
+}: {
+  bundles: ClaudeDesktopBundleVersions | undefined;
+  t: (key: string) => string;
+}) {
+  const notInstalled = t("clientConfig.version.notInstalled");
+  return (
+    <p className="mb-2 pb-2 border-b border-border/50 text-[10px] text-muted-foreground truncate w-full">
+      <span className="font-medium text-foreground/90">
+        {t("clientConfig.version.desktopBundles")}
+      </span>
+      {" · "}
+      {t("clientConfig.version.native")}:{" "}
+      <span className="font-mono text-foreground/80">
+        {formatBundleList(bundles?.native ?? [], notInstalled)}
+      </span>
+      {" · "}
+      {t("clientConfig.version.vm")}:{" "}
+      <span className="font-mono text-foreground/80">
+        {formatBundleList(bundles?.vm ?? [], notInstalled)}
+      </span>
+    </p>
+  );
+}
+
+function ClaudeCliVersionInfoRow({
+  info,
+  t,
+  onRefresh,
+  refreshing,
+}: {
+  info: ClaudeCliVersionInfo | undefined;
+  t: (key: string) => string;
+  onRefresh: () => void;
+  refreshing: boolean;
+}) {
+  return (
+    <div className="mb-2 pb-2 border-b border-border/50 flex items-center justify-between gap-2 w-full">
+      <p className="min-w-0 truncate text-[10px] text-muted-foreground">
+        <span className="font-medium text-foreground/90">
+          {t("clientConfig.version.cliVersion")}
+        </span>
+        {" · "}
+        <span className="font-mono text-foreground/80">{formatCliVersionText(info, t)}</span>
+      </p>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        className="h-6 w-6 p-0 shrink-0"
+        disabled={refreshing}
+        onClick={onRefresh}
+        title={t("clientConfig.version.refresh")}
+      >
+        {refreshing ? (
+          <Loader2 className="h-3 w-3 animate-spin" />
+        ) : (
+          <RefreshCw className="h-3 w-3" />
+        )}
+      </Button>
+    </div>
+  );
+}
+
+function OptionalModelConfigRow({
+  title,
+  description,
+  children,
+  buttonLabel,
+  buttonDisabled,
+  onConfigure,
+}: {
+  title: string;
+  description: string;
+  children: ReactNode;
+  buttonLabel: string;
+  buttonDisabled?: boolean;
+  onConfigure: () => void;
+}) {
+  return (
+    <div className="mt-2 pt-2 border-t border-border/50 w-full">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="text-[10px] text-muted-foreground">
+            <span className="font-medium text-foreground/90">{title}</span> {description}
+          </p>
+          {children}
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          className="h-7 shrink-0 text-xs gap-1"
+          disabled={buttonDisabled}
+          onClick={onConfigure}
+        >
+          <SlidersHorizontal className="h-3 w-3" />
+          {buttonLabel}
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 function statusBadge(status: ClientConfigItemStatus, t: (key: string) => string) {
   switch (status) {
@@ -131,10 +272,26 @@ export default function ClientConfigStatus() {
   >(null);
   const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ["clientConfig"],
     queryFn: () => api.getClientConfig(),
     refetchInterval: 60_000,
+  });
+
+  const { data: settingsConfig } = useQuery({
+    queryKey: ["config"],
+    queryFn: () => api.getConfig(),
+  });
+
+  const detectionEnabled = settingsConfig?.clientVersionDetection?.enabled !== false;
+
+  const detectionToggleMutation = useMutation({
+    mutationFn: (enabled: boolean) =>
+      api.patchConfig({ section: "clientVersionDetection", data: { enabled } }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["config"] });
+      void queryClient.invalidateQueries({ queryKey: ["clientConfig"] });
+    },
   });
 
   const applyMutation = useMutation({
@@ -244,7 +401,7 @@ export default function ClientConfigStatus() {
   return (
     <>
       <Card className="p-0">
-        <CardHeader className="p-3 pb-2">
+        <CardHeader className="p-3 pb-2 space-y-2">
           <p className="text-[10px] text-muted-foreground font-normal">
             {t("clientConfig.description", {
               port: data?.port ?? "—",
@@ -252,6 +409,27 @@ export default function ClientConfigStatus() {
               codexPath: "~/.codex/config.toml",
             })}
           </p>
+          <div className="flex items-start gap-2">
+            <Checkbox
+              id="client-version-detection"
+              checked={detectionEnabled}
+              disabled={detectionToggleMutation.isPending}
+              onCheckedChange={checked => {
+                detectionToggleMutation.mutate(checked === true);
+              }}
+            />
+            <div className="grid gap-0.5 leading-none">
+              <Label
+                htmlFor="client-version-detection"
+                className="text-[10px] font-normal cursor-pointer"
+              >
+                {t("clientConfig.version.detectionToggle")}
+              </Label>
+              <p className="text-[10px] text-muted-foreground">
+                {t("clientConfig.version.detectionToggleHint")}
+              </p>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="p-3 pt-0 space-y-2">
           {isLoading ? (
@@ -310,6 +488,7 @@ export default function ClientConfigStatus() {
                     </>
                   }
                 >
+                  <ClaudeDesktopBundleInfo bundles={data.claudeDesktopBundles} t={t} />
                   <ConfigFieldList fields={data.claudeDesktop.fields ?? []} />
                 </ClientConfigSection>
               )}
@@ -368,13 +547,27 @@ export default function ClientConfigStatus() {
                     </>
                   }
                 >
-                  <div className="mt-2 pt-2 border-t border-border/50 space-y-1.5 w-full">
-                    <p className="text-[10px] text-muted-foreground">
-                      <span className="font-medium text-foreground/90">
-                        {t("clientConfig.claudeCode.optionalModels.title")}
-                      </span>{" "}
-                      {t("clientConfig.claudeCode.optionalModels.description")}
-                    </p>
+                  <ClaudeCliVersionInfoRow
+                    info={data.claudeCli}
+                    t={t}
+                    refreshing={isFetching}
+                    onRefresh={() => {
+                      void refetch();
+                    }}
+                  />
+                  <OptionalModelConfigRow
+                    title={t("clientConfig.claudeCode.optionalModels.title")}
+                    description={t("clientConfig.claudeCode.optionalModels.description")}
+                    buttonLabel={t("clientConfig.claudeCode.configureModels")}
+                    buttonDisabled={applyMutation.isPending || modelsMutation.isPending}
+                    onConfigure={() => {
+                      const m = data.claudeDefaultModels;
+                      setOpus(m?.opus ?? CLAUDE_CODE_DEFAULT_MODELS.opus);
+                      setSonnet(m?.sonnet ?? CLAUDE_CODE_DEFAULT_MODELS.sonnet);
+                      setHaiku(m?.haiku ?? CLAUDE_CODE_DEFAULT_MODELS.haiku);
+                      setModelModalOpen(true);
+                    }}
+                  >
                     {data.claudeDefaultModels &&
                     (data.claudeDefaultModels.opus ||
                       data.claudeDefaultModels.sonnet ||
@@ -396,26 +589,7 @@ export default function ClientConfigStatus() {
                         </span>
                       </p>
                     )}
-                    <div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        className="h-7 text-xs gap-1"
-                        disabled={applyMutation.isPending || modelsMutation.isPending}
-                        onClick={() => {
-                          const m = data.claudeDefaultModels;
-                          setOpus(m?.opus ?? CLAUDE_CODE_DEFAULT_MODELS.opus);
-                          setSonnet(m?.sonnet ?? CLAUDE_CODE_DEFAULT_MODELS.sonnet);
-                          setHaiku(m?.haiku ?? CLAUDE_CODE_DEFAULT_MODELS.haiku);
-                          setModelModalOpen(true);
-                        }}
-                      >
-                        <SlidersHorizontal className="h-3 w-3" />
-                        {t("clientConfig.claudeCode.configureModels")}
-                      </Button>
-                    </div>
-                  </div>
+                  </OptionalModelConfigRow>
                   <ConfigFieldList fields={data.claudeCode.fields ?? []} />
                 </ClientConfigSection>
               )}
@@ -473,13 +647,17 @@ export default function ClientConfigStatus() {
                     </>
                   }
                 >
-                  <div className="mt-2 pt-2 border-t border-border/50 space-y-1.5 w-full">
-                    <p className="text-[10px] text-muted-foreground">
-                      <span className="font-medium text-foreground/90">
-                        {t("clientConfig.codex.model.label")}
-                      </span>{" "}
-                      {t("clientConfig.codex.model.description")}
-                    </p>
+                  <OptionalModelConfigRow
+                    title={t("clientConfig.codex.model.label")}
+                    description={t("clientConfig.codex.model.description")}
+                    buttonLabel={t("clientConfig.codex.configureModel")}
+                    buttonDisabled={applyMutation.isPending || codexModelPatchMutation.isPending}
+                    onConfigure={() => {
+                      setCodexModalMode("configure");
+                      setCodexModel(data.codex?.model ?? "");
+                      setCodexModelModalOpen(true);
+                    }}
+                  >
                     {data.codex.model ? (
                       <p className="text-[10px] font-mono text-foreground/80">{data.codex.model}</p>
                     ) : (
@@ -489,24 +667,7 @@ export default function ClientConfigStatus() {
                         <span className="font-mono text-foreground/80">{CODEX_DEFAULT_MODEL}</span>
                       </p>
                     )}
-                    <div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        className="h-7 text-xs gap-1"
-                        disabled={applyMutation.isPending || codexModelPatchMutation.isPending}
-                        onClick={() => {
-                          setCodexModalMode("configure");
-                          setCodexModel(data.codex?.model ?? "");
-                          setCodexModelModalOpen(true);
-                        }}
-                      >
-                        <SlidersHorizontal className="h-3 w-3" />
-                        {t("clientConfig.codex.configureModel")}
-                      </Button>
-                    </div>
-                  </div>
+                  </OptionalModelConfigRow>
                   <ConfigFieldList fields={data.codex.fields ?? []} />
                 </ClientConfigSection>
               )}

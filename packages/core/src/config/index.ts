@@ -34,6 +34,7 @@ import { buildConcurrencyConfig, buildRouteQueues } from "./builders/concurrency
 import { buildDatabaseConfig } from "./builders/database";
 import { buildWebSearchConfig } from "./builders/web-search";
 import { buildSmartRoutingConfig } from "./builders/smart-routing";
+import { buildClientVersionDetectionConfig } from "./builders/client-version-detection";
 
 export { getDefaultRoutingSettings } from "./defaults";
 export { expandEnvVarsInObject } from "./env";
@@ -374,6 +375,7 @@ export class ConfigManager {
     const rawWebSearch = merged.webSearch ?? merged.web_search;
     const webSearchConfig = buildWebSearchConfig(rawWebSearch);
     const smartRouting = buildSmartRoutingConfig(merged.smartRouting);
+    const clientVersionDetection = buildClientVersionDetectionConfig(merged.clientVersionDetection);
 
     return {
       port: merged.server?.port || 7575,
@@ -392,6 +394,7 @@ export class ConfigManager {
       locale: merged.server?.locale,
       webSearch: webSearchConfig,
       smartRouting,
+      clientVersionDetection,
     };
   }
 
@@ -689,6 +692,10 @@ export class ConfigManager {
     return this.config.smartRouting;
   }
 
+  get clientVersionDetectionConfig() {
+    return this.config.clientVersionDetection;
+  }
+
   getConfigRaw(): Record<string, unknown> {
     const content = fs.readFileSync(this.configPath, "utf-8");
     const raw = yaml.load(content) as Record<string, unknown>;
@@ -699,6 +706,7 @@ export class ConfigManager {
       routing: raw.routing ?? {},
       webSearch: raw.webSearch ?? raw.web_search ?? {},
       smartRouting: raw.smartRouting ?? {},
+      clientVersionDetection: raw.clientVersionDetection ?? {},
     };
   }
 
@@ -760,7 +768,14 @@ export class ConfigManager {
   }
 
   updateConfigSection(
-    section: "logging" | "concurrency" | "server" | "routing" | "webSearch" | "smartRouting",
+    section:
+      | "logging"
+      | "concurrency"
+      | "server"
+      | "routing"
+      | "webSearch"
+      | "smartRouting"
+      | "clientVersionDetection",
     data: Record<string, unknown>,
     options?: { merge?: boolean }
   ): { ok: boolean; error?: string } {

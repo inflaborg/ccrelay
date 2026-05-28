@@ -22,6 +22,7 @@ const ALLOWED_SECTIONS = new Set([
   "routing",
   "webSearch",
   "smartRouting",
+  "clientVersionDetection",
 ]);
 
 /**
@@ -103,7 +104,14 @@ export async function handlePatchConfig(
     }
 
     const result = configManager.updateConfigSection(
-      section as "logging" | "concurrency" | "server" | "routing" | "webSearch" | "smartRouting",
+      section as
+        | "logging"
+        | "concurrency"
+        | "server"
+        | "routing"
+        | "webSearch"
+        | "smartRouting"
+        | "clientVersionDetection",
       body.data
     );
 

@@ -177,6 +177,18 @@
       "upToDate": "已是最新",
       "apply": "应用 CCRelay 模板"
     },
+    "version": {
+      "desktopBundles": "已安装 bundle",
+      "native": "Native",
+      "vm": "VM",
+      "notInstalled": "未安装",
+      "cliVersion": "CLI 版本",
+      "cliNotDetected": "未检测到",
+      "cliDisabled": "已在设置中关闭检测",
+      "detectionToggle": "检测 Claude CLI 版本",
+      "detectionToggleHint": "后台执行 `claude --version`",
+      "refresh": "重新检测版本"
+    },
     "dialog": {
       "overwrite": {
         "title": "覆盖 Claude Code 设置？",

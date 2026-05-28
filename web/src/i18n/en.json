@@ -177,6 +177,18 @@
       "upToDate": "Up to date",
       "apply": "Apply CCRelay template"
     },
+    "version": {
+      "desktopBundles": "Installed bundles",
+      "native": "Native",
+      "vm": "VM",
+      "notInstalled": "Not installed",
+      "cliVersion": "CLI version",
+      "cliNotDetected": "Not detected",
+      "cliDisabled": "Detection disabled in settings",
+      "detectionToggle": "Detect Claude CLI version",
+      "detectionToggleHint": "Runs `claude --version` in background",
+      "refresh": "Refresh version"
+    },
     "dialog": {
       "overwrite": {
         "title": "Overwrite Claude Code settings?",

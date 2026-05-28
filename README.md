@@ -424,7 +424,7 @@ Built-in web dashboard accessible via Command Palette → `CCRelay: Open Dashboa
 - **Capabilities** — optional web search backends (**Tavily** and/or **GLM (Z.ai)**): API keys, GLM endpoint and protocol, default backend, and which providers answer web search locally
 - **Logs** — request/response log viewer with token columns, TTFB, output TPS, and model mapping display (hidden when logging is disabled)
 - **Settings** — manage YAML config in the UI; routing and concurrency hot-reload on save, server and logging changes require a restart
-- **Client configuration** — write Claude Code env vars and Codex config from the UI
+- **Client configuration** — write Claude Code env vars and Codex config from the UI; shows installed Claude Desktop claude-code bundle versions and Claude Code CLI version (`claude --version`, can be disabled on the page)
 
 > **Note**: The dashboard is not accessible by directly opening `http://127.0.0.1:7575/ccrelay/` in a browser. Access is restricted to requests originating from within the VS Code extension or the desktop app, which include an internal header. Open the dashboard via the extension command or the desktop tray menu instead.
 
