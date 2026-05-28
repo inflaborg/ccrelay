@@ -1,4 +1,5 @@
 import { computeCanonicalAliasHash, type AliasHashProtocol } from "@ccrelay/shared/aliasHash";
+import { buildCoworkModelMapEntries } from "@ccrelay/shared/coworkModelMap";
 import type { AddProviderRequest, ModelMapEntry } from "../../../types/api";
 import type { PartnerPreset, WizardInput } from "./types";
 
@@ -186,14 +187,6 @@ export function buildModelConfig(input: BuildModelConfigInput):
 
   if (useCustomModels) {
     if (claudeSupport) {
-      parsed.forEach(m => {
-        const alias = aliasForModel(providerId, providerType, m.upstreamId, aliasPrefix);
-        modelMap.push({ pattern: alias, model: m.upstreamId });
-      });
-      if (parsed.length > 0) {
-        const first = parsed[0].upstreamId;
-        modelMap.push({ pattern: "claude-*", model: first }, { pattern: "gpt-*", model: first });
-      }
       const customModelsList = parsed.map(m => {
         const alias = aliasForModel(providerId, providerType, m.upstreamId, aliasPrefix);
         const real = m.upstreamId;
@@ -203,6 +196,7 @@ export function buildModelConfig(input: BuildModelConfigInput):
         }
         return `${real};${dn};${alias}`;
       });
+      const modelMap = buildCoworkModelMapEntries(customModelsList);
       return {
         useCustomModelsList: true,
         customModelsList,

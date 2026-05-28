@@ -109,9 +109,11 @@ describe("buildModelConfig", () => {
       ]);
     }
     expect(c.modelMap[0]).toEqual({ pattern: alias("glm-5.1"), model: "glm-5.1" });
-    expect(c.modelMap[1]).toEqual({ pattern: alias("glm-4.7"), model: "glm-4.7" });
-    expect(c.modelMap[2]).toEqual({ pattern: "claude-*", model: "glm-5.1" });
-    expect(c.modelMap[3]).toEqual({ pattern: "gpt-*", model: "glm-5.1" });
+    expect(c.modelMap[1]).toEqual({ pattern: "glm-5.1", model: "glm-5.1" });
+    expect(c.modelMap[2]).toEqual({ pattern: alias("glm-4.7"), model: "glm-4.7" });
+    expect(c.modelMap[3]).toEqual({ pattern: "glm-4.7", model: "glm-4.7" });
+    expect(c.modelMap[4]).toEqual({ pattern: "claude-*", model: "glm-5.1" });
+    expect(c.modelMap[5]).toEqual({ pattern: "gpt-*", model: "glm-5.1" });
   });
 
   it("includes display name in custom list line when different from upstream id", () => {
@@ -126,6 +128,7 @@ describe("buildModelConfig", () => {
       expect(c.customModelsList).toEqual([`glm-5.1;GLM 5.1;${alias("glm-5.1")}`]);
     }
     expect(c.modelMap[0]).toEqual({ pattern: alias("glm-5.1"), model: "glm-5.1" });
+    expect(c.modelMap[1]).toEqual({ pattern: "glm-5.1", model: "glm-5.1" });
   });
 
   it("differs alias for same upstream id across provider id or protocol", () => {

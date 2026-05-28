@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Smart Routing alias-drift migration rebuilds `modelMap` alongside `customModelsList`, keeping Cowork alias routing in sync after migration.
 - Multi-variant wizard presets (e.g. GLM Anthropic + OpenAI) no longer share one alias set across provider variants.
+- Cowork auto-generated `modelMap` now includes identity rules (`realId` → `realId`) before wildcard catch-alls, so clients sending real model ids are not misrouted by `claude-*` / `gpt-*`.
+- **Rebuild model map** fully rebuilds from `customModelsList` and does not preserve manually added wildcard rules.
 
 **Protocol/Conversion**
 
