@@ -472,6 +472,7 @@ export interface RouterStatus {
   providerName?: string;
   providerMode?: ProviderMode;
   port?: number;
+  host?: string;
 }
 
 export interface ProvidersResponse {

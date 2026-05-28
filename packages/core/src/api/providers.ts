@@ -9,6 +9,10 @@
 import * as http from "http";
 import type { ProxyServer } from "../server/handler";
 import type { Provider, ProvidersResponse, ProviderConfigInput, ModelMapEntry } from "../types";
+import {
+  isSmartRoutingEnabled,
+  SMART_ROUTING_PROVIDER_ID,
+} from "../server/smartRouting/virtualProvider";
 import { sendJson, parseJsonBody } from "./index";
 
 let serverInstance: ProxyServer | null = null;
@@ -48,7 +52,8 @@ export function handleListProviders(
 
   const router = serverInstance.getRouter();
   const config = serverInstance.getConfig();
-  const currentId = router.getCurrentProviderId();
+  const srEnabled = isSmartRoutingEnabled(config);
+  const currentId = srEnabled ? SMART_ROUTING_PROVIDER_ID : router.getCurrentProviderId();
 
   // Return all providers (including disabled ones)
   const webSearchProviders = config.webSearchConfig?.providers ?? [];
@@ -60,7 +65,7 @@ export function handleListProviders(
     mode: p.mode,
     providerType: p.providerType,
     baseUrl: p.baseUrl,
-    active: p.id === currentId,
+    active: !srEnabled && p.id === router.getCurrentProviderId(),
     enabled: p.enabled !== false,
     apiKey: maskApiKey(p.apiKey),
     modelMap: p.modelMap,

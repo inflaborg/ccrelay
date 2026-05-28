@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Loader2, RotateCw, Server, Zap } from "lucide-react";
+import { Loader2, RotateCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api } from "@/api/client";
-import type { StatsRange } from "@/types/api";
+import type { StatsRange, ServerStatus } from "@/types/api";
+import { cn } from "@/lib/utils";
 import QueueStatus from "./QueueStatus";
 
 function formatTokenCount(n: number): string {
@@ -19,6 +19,38 @@ function formatDuration(ms: number): string {
   if (ms >= 60_000) return `${(ms / 60_000).toFixed(1)}m`;
   if (ms >= 1_000) return `${(ms / 1_000).toFixed(1)}s`;
   return `${ms}ms`;
+}
+
+function formatListenAddress(host: string | undefined, port: number | undefined): string {
+  if (!port) return "";
+  const normalizedHost = host?.trim() || "127.0.0.1";
+  return `${normalizedHost}:${port}`;
+}
+
+function getProviderDisplay(
+  status: ServerStatus | undefined,
+  t: (key: string) => string
+): { label: string; hint: string | null } {
+  if (!status) {
+    return { label: t("common.na"), hint: null };
+  }
+  if (status.currentProvider === "smart-routing") {
+    return { label: t("nav.smartRouting"), hint: null };
+  }
+
+  const label =
+    status.providerName || status.currentProvider || t("dashboard.currentProvider.none");
+  const hints: string[] = [];
+  if (status.providerMode) hints.push(status.providerMode);
+  if (
+    status.currentProvider &&
+    status.providerName &&
+    status.currentProvider !== status.providerName
+  ) {
+    hints.push(status.currentProvider);
+  }
+
+  return { label, hint: hints.length > 0 ? hints.join(" · ") : null };
 }
 
 const RANGES: StatsRange[] = ["1d", "7d", "30d", "all"];
@@ -53,6 +85,12 @@ export default function Dashboard() {
       setRefreshing(false);
     }
   };
+
+  const provider = getProviderDisplay(status, t);
+  const totalLogs = stats?.totalLogs ?? 0;
+  const successCount = stats?.successCount ?? 0;
+  const errorCount = stats?.errorCount ?? 0;
+  const successRate = totalLogs > 0 ? Math.round((successCount / totalLogs) * 100) : 0;
 
   return (
     <div className="space-y-3">
@@ -97,210 +135,203 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Status Cards */}
-      <div className="grid gap-2 grid-cols-1 sm:grid-cols-3">
+      {/* Overview + Performance / Token */}
+      <div className="grid gap-2 grid-cols-1 lg:grid-cols-2">
         <Card className="p-0">
-          <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
-            <CardTitle className="text-xs font-medium">
-              {t("dashboard.serverStatus.title")}
-            </CardTitle>
-            <Server className="h-3.5 w-3.5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="p-3 pt-0">
-            {statusLoading ? (
-              <div className="h-6 animate-pulse bg-muted rounded" />
+          <CardContent className="p-3 space-y-3">
+            {statusLoading || statsLoading ? (
+              <div className="h-[4.5rem] animate-pulse bg-muted rounded" />
             ) : (
               <>
-                <div className="text-lg font-bold">
-                  {status?.status === "running"
-                    ? t("dashboard.serverStatus.running")
-                    : t("dashboard.serverStatus.stopped")}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className={cn(
+                        "h-2 w-2 shrink-0 rounded-full",
+                        status?.status === "running" ? "bg-green-500" : "bg-muted-foreground"
+                      )}
+                      aria-hidden
+                    />
+                    <span className="text-sm font-semibold">
+                      {status?.status === "running"
+                        ? t("dashboard.serverStatus.running")
+                        : t("dashboard.serverStatus.stopped")}
+                    </span>
+                  </div>
+                  {status?.status === "running" && status.port ? (
+                    <code className="text-[10px] text-muted-foreground font-mono shrink-0">
+                      {formatListenAddress(status.host, status.port)}
+                    </code>
+                  ) : null}
                 </div>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <Badge
-                    variant={status?.status === "running" ? "success" : "destructive"}
-                    className="text-[10px] px-1.5 py-0"
-                  >
-                    {status?.port || t("common.na")}
-                  </Badge>
-                  <span className="text-[10px] text-muted-foreground">
-                    {status?.host || t("common.na")}
-                  </span>
+
+                <div className="border-t border-border pt-3 grid grid-cols-2 gap-4">
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-muted-foreground mb-1">
+                      {t("dashboard.currentProvider.title")}
+                    </p>
+                    <p className="text-base font-semibold truncate">{provider.label}</p>
+                    {provider.hint ? (
+                      <p className="text-[10px] text-muted-foreground truncate mt-0.5">
+                        {provider.hint}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div>
+                    <p className="text-[10px] text-muted-foreground mb-1">
+                      {t("dashboard.totalRequests.title")}
+                    </p>
+                    <p className="text-base font-semibold">{totalLogs}</p>
+                    {totalLogs > 0 ? (
+                      <>
+                        <p className="text-[10px] mt-0.5">
+                          <span className="text-green-600 dark:text-green-500">
+                            {successCount} {t("dashboard.totalRequests.success")}
+                          </span>
+                          {errorCount > 0 ? (
+                            <>
+                              <span className="text-muted-foreground mx-1">·</span>
+                              <span className="text-destructive">
+                                {errorCount} {t("dashboard.totalRequests.errors")}
+                              </span>
+                            </>
+                          ) : null}
+                        </p>
+                        <div
+                          className="mt-1.5 h-1 rounded-full bg-muted overflow-hidden"
+                          role="presentation"
+                        >
+                          <div
+                            className="h-full bg-green-500 transition-[width]"
+                            style={{ width: `${successRate}%` }}
+                          />
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
                 </div>
               </>
             )}
           </CardContent>
         </Card>
 
-        <Card className="p-0">
-          <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
-            <CardTitle className="text-xs font-medium">
-              {t("dashboard.currentProvider.title")}
-            </CardTitle>
-            <Activity className="h-3.5 w-3.5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="p-3 pt-0">
-            {statusLoading ? (
-              <div className="h-6 animate-pulse bg-muted rounded" />
-            ) : (
-              <>
-                <div className="text-lg font-bold truncate">
-                  {status?.providerName || t("dashboard.currentProvider.none")}
+        <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
+          <Card className="p-0">
+            <CardHeader className="p-3 pb-2">
+              <CardTitle className="text-xs font-medium">
+                {t("dashboard.performance.title")}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-3 pt-0">
+              {statsLoading ? (
+                <div className="h-20 animate-pulse bg-muted rounded" />
+              ) : (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
+                      {t("dashboard.performance.avgResponseTime")}
+                    </span>
+                    <span className="text-xs font-medium">
+                      {formatDuration(stats?.avgDuration || 0)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
+                      {t("dashboard.performance.p50Latency")}
+                    </span>
+                    <span className="text-xs font-medium">
+                      {formatDuration(stats?.p50Duration || 0)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
+                      {t("dashboard.performance.p90Latency")}
+                    </span>
+                    <span className="text-xs font-medium">
+                      {formatDuration(stats?.p90Duration || 0)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
+                      {t("dashboard.performance.avgTtfb")}
+                    </span>
+                    <span className="text-xs font-medium">
+                      {formatDuration(stats?.avgTtfb || 0)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
+                      {t("dashboard.performance.successRate")}
+                    </span>
+                    <span className="text-xs font-medium">
+                      {stats?.totalLogs
+                        ? `${Math.round((stats.successCount / stats.totalLogs) * 100)}%`
+                        : t("common.na")}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span
+                      className="text-xs text-muted-foreground"
+                      title={t("dashboard.performance.outputTpsTooltip")}
+                    >
+                      {t("dashboard.performance.outputTps")}
+                    </span>
+                    <span className="text-xs font-medium">
+                      {stats?.outputTps ? `${stats.outputTps.toFixed(1)} t/s` : "-"}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                    {status?.providerMode || t("common.na")}
-                  </Badge>
-                  <span className="text-[10px] text-muted-foreground truncate">
-                    {status?.currentProvider || t("common.na")}
-                  </span>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+              )}
+            </CardContent>
+          </Card>
 
-        <Card className="p-0">
-          <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
-            <CardTitle className="text-xs font-medium">
-              {t("dashboard.totalRequests.title")}
-            </CardTitle>
-            <Zap className="h-3.5 w-3.5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="p-3 pt-0">
-            {statsLoading ? (
-              <div className="h-6 animate-pulse bg-muted rounded" />
-            ) : (
-              <>
-                <div className="text-lg font-bold">{stats?.totalLogs || 0}</div>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <span className="text-[10px] text-green-500">
-                    {`${stats?.successCount || 0} ${t("dashboard.totalRequests.success")}`}
-                  </span>
-                  <span className="text-[10px] text-red-500">
-                    {`${stats?.errorCount || 0} ${t("dashboard.totalRequests.errors")}`}
-                  </span>
+          <Card className="p-0">
+            <CardHeader className="p-3 pb-2">
+              <CardTitle className="text-xs font-medium">{t("dashboard.tokens.title")}</CardTitle>
+            </CardHeader>
+            <CardContent className="p-3 pt-0">
+              {statsLoading ? (
+                <div className="h-20 animate-pulse bg-muted rounded" />
+              ) : (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
+                      {t("dashboard.tokens.input")}
+                    </span>
+                    <span className="text-xs font-medium">
+                      {formatTokenCount(stats?.totalInputTokens || 0)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
+                      {t("dashboard.tokens.output")}
+                    </span>
+                    <span className="text-xs font-medium">
+                      {formatTokenCount(stats?.totalOutputTokens || 0)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
+                      {t("dashboard.tokens.cache")}
+                    </span>
+                    <span className="text-xs font-medium">
+                      {formatTokenCount(stats?.totalCacheTokens || 0)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
+                      {t("dashboard.tokens.cacheHitRate")}
+                    </span>
+                    <span className="text-xs font-medium">
+                      {stats?.cacheHitRate != null ? `${stats.cacheHitRate}%` : "-"}
+                    </span>
+                  </div>
                 </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Performance + Token Usage */}
-      <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
-        <Card className="p-0">
-          <CardHeader className="p-3 pb-2">
-            <CardTitle className="text-xs font-medium">
-              {t("dashboard.performance.title")}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-3 pt-0">
-            {statsLoading ? (
-              <div className="h-20 animate-pulse bg-muted rounded" />
-            ) : (
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">
-                    {t("dashboard.performance.avgResponseTime")}
-                  </span>
-                  <span className="text-xs font-medium">
-                    {formatDuration(stats?.avgDuration || 0)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">
-                    {t("dashboard.performance.p50Latency")}
-                  </span>
-                  <span className="text-xs font-medium">
-                    {formatDuration(stats?.p50Duration || 0)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">
-                    {t("dashboard.performance.p90Latency")}
-                  </span>
-                  <span className="text-xs font-medium">
-                    {formatDuration(stats?.p90Duration || 0)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">
-                    {t("dashboard.performance.avgTtfb")}
-                  </span>
-                  <span className="text-xs font-medium">{formatDuration(stats?.avgTtfb || 0)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">
-                    {t("dashboard.performance.successRate")}
-                  </span>
-                  <span className="text-xs font-medium">
-                    {stats?.totalLogs
-                      ? `${Math.round((stats.successCount / stats.totalLogs) * 100)}%`
-                      : t("common.na")}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span
-                    className="text-xs text-muted-foreground"
-                    title={t("dashboard.performance.outputTpsTooltip")}
-                  >
-                    {t("dashboard.performance.outputTps")}
-                  </span>
-                  <span className="text-xs font-medium">
-                    {stats?.outputTps ? `${stats.outputTps.toFixed(1)} t/s` : "-"}
-                  </span>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="p-0">
-          <CardHeader className="p-3 pb-2">
-            <CardTitle className="text-xs font-medium">{t("dashboard.tokens.title")}</CardTitle>
-          </CardHeader>
-          <CardContent className="p-3 pt-0">
-            {statsLoading ? (
-              <div className="h-20 animate-pulse bg-muted rounded" />
-            ) : (
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">
-                    {t("dashboard.tokens.input")}
-                  </span>
-                  <span className="text-xs font-medium">
-                    {formatTokenCount(stats?.totalInputTokens || 0)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">
-                    {t("dashboard.tokens.output")}
-                  </span>
-                  <span className="text-xs font-medium">
-                    {formatTokenCount(stats?.totalOutputTokens || 0)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">
-                    {t("dashboard.tokens.cache")}
-                  </span>
-                  <span className="text-xs font-medium">
-                    {formatTokenCount(stats?.totalCacheTokens || 0)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">
-                    {t("dashboard.tokens.cacheHitRate")}
-                  </span>
-                  <span className="text-xs font-medium">
-                    {stats?.cacheHitRate != null ? `${stats.cacheHitRate}%` : "-"}
-                  </span>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Provider Breakdown */}
