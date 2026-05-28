@@ -23,6 +23,7 @@ import {
   applyPlatformRequestOverride,
   applyPlatformRequestSanitize,
   matchAnthropicSseRule,
+  openaiChatStrictToolsSanitize,
 } from "../../converter/platform-transforms";
 import { anthropicBodyHasHostedTool } from "../../converter/hosted-tools";
 import { ScopedLogger } from "../../utils/logger";
@@ -72,6 +73,7 @@ function applyPlatformTransformsToOpenAiChatBody(body: Buffer, baseUrl: string):
       return body;
     }
     applyHostedToolsToOpenAiChatRecord(data, baseUrl);
+    openaiChatStrictToolsSanitize(data, baseUrl);
     applyPlatformMessagesToOpenAiChatRecord(data, baseUrl);
     applyPlatformRequestSanitize(data, baseUrl);
     return Buffer.from(JSON.stringify(data), "utf-8");

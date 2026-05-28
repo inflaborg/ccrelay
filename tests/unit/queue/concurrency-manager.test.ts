@@ -1187,4 +1187,43 @@ describe("ConcurrencyManager", () => {
       global.clearTimeout = originalClearTimeout;
     });
   });
+
+  describe("CM019: Detail stats and queued tasks", () => {
+    it("CM019: should expose processing and queued task snapshots", async () => {
+      config.maxWorkers = 1;
+
+      let releaseTask1: () => void;
+      const blockingExecutor = vi.fn().mockImplementation(
+        () =>
+          new Promise<ProxyResult>(resolve => {
+            releaseTask1 = () => resolve({ statusCode: 200 } as ProxyResult);
+          })
+      );
+
+      manager = new ConcurrencyManager(config, blockingExecutor);
+
+      const p1 = manager.submit(createMockTask("task-processing"));
+      p1.catch(() => {});
+
+      await new Promise(r => setTimeout(r, 10));
+
+      const p2 = manager.submit(createMockTask("task-queued"));
+      p2.catch(() => {});
+
+      await new Promise(r => setTimeout(r, 10));
+
+      const detail = manager.getDetailStats();
+      expect(detail.activeWorkers).toBe(1);
+      expect(detail.queueLength).toBe(1);
+      expect(detail.processingTasks).toHaveLength(1);
+      expect(detail.processingTasks[0]?.id).toBe("task-processing");
+      expect(detail.queuedTasks).toHaveLength(1);
+      expect(detail.queuedTasks[0]?.id).toBe("task-queued");
+      expect(detail.queuedTasks[0]?.elapsed).toBeGreaterThanOrEqual(0);
+
+      manager.shutdown();
+      releaseTask1!();
+      await Promise.allSettled([p1, p2]);
+    });
+  });
 });

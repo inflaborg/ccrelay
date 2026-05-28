@@ -29,6 +29,11 @@ export interface PlatformTransformRule {
   requestOverride?: string;
   /** Strip client query string from outbound upstream URL when matched (e.g. Gemini rejects unknown params). */
   stripQuery?: boolean;
+  /**
+   * After hosted-tool transforms: keep only `function` tools plus types listed in `tools`,
+   * shim Responses `custom` to string-arg `function`, drop other hosted/built-in tools.
+   */
+  strictTools?: boolean;
   /** Outbound Chat Completions JSON sanitize registry key (runs after tools/messages transforms). */
   requestSanitize?: string;
 }
@@ -61,18 +66,26 @@ export const PLATFORM_TRANSFORM_RULES: readonly PlatformTransformRule[] = [
     responses: "glm-web-search-response",
     anthropicSse: "glm-web-search-prime-normalize",
     requestSanitize: "glm-chat-sanitize",
+    strictTools: true,
   },
   {
     provider: "xiaomimimo",
     domains: ["api.xiaomimimo.com"],
     tools: { web_search: "mimo-web-search" },
     responses: "mimo-annotations-web-search",
+    strictTools: true,
+  },
+  {
+    provider: "xiaomimimo-token-plan",
+    domainParents: ["xiaomimimo.com"],
+    strictTools: true,
   },
   {
     provider: "minimax",
     domains: ["api.minimax.io", "api.minimaxi.com"],
     requestSanitize: "minimax-chat-sanitize",
     responses: "minimax-reasoning-details",
+    strictTools: true,
   },
   {
     provider: "azure-openai",
@@ -87,10 +100,12 @@ export const PLATFORM_TRANSFORM_RULES: readonly PlatformTransformRule[] = [
     stripQuery: true,
     requestSanitize: "gemini-chat-sanitize",
     responses: "gemini-thought-tags",
+    strictTools: true,
   },
   {
     provider: "deepseek",
     domains: ["api.deepseek.com"],
     requestSanitize: "deepseek-chat-sanitize",
+    strictTools: true,
   },
 ];

@@ -5,7 +5,7 @@
 import { ScopedLogger } from "../utils/logger";
 import { ConcurrencyManager } from "../queue";
 import type { ConfigManager } from "../config";
-import type { RequestTask, QueueStats, ProxyResult } from "../types";
+import type { RequestTask, QueueStats, QueueOverview, ProxyResult } from "../types";
 
 const log = new ScopedLogger("QueueManager");
 
@@ -131,6 +131,30 @@ export class QueueManager {
    */
   getStats(): QueueStats | null {
     return this.defaultQueue?.getStats() ?? null;
+  }
+
+  /**
+   * Get full queue overview (default + route queues, with live task snapshots)
+   */
+  getOverview(): QueueOverview {
+    if (!this.enabled) {
+      return {
+        enabled: false,
+        message: "Concurrency control is not enabled",
+        routes: {},
+      };
+    }
+
+    const routes: QueueOverview["routes"] = {};
+    for (const [name, queue] of this.routeQueues) {
+      routes[name] = queue.getDetailStats();
+    }
+
+    return {
+      enabled: true,
+      default: this.defaultQueue?.getDetailStats() ?? null,
+      routes,
+    };
   }
 
   /**

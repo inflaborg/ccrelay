@@ -62,6 +62,8 @@ export {
   normalizeGeminiEffort,
   passthroughTransform,
   isPlainObject,
+  customToFunctionShim,
+  openaiChatStrictToolsSanitize,
   TOOL_TRANSFORM_REGISTRY,
   MESSAGE_TRANSFORM_REGISTRY,
   REQUEST_OVERRIDE_REGISTRY,

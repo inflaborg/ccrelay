@@ -119,14 +119,19 @@ describe("matchHostedToolRuleForBaseUrl", () => {
     expect(r?.responses).toBe("minimax-reasoning-details");
   });
 
-  it("does not match MiMo for token-plan-sgp host (no web_search)", () => {
-    expect(
-      matchHostedToolRuleForBaseUrl("https://token-plan-sgp.xiaomimimo.com/v1/chat/completions")
-    ).toBeUndefined();
+  it("hits xiaomimimo-token-plan for token-plan-sgp host (strictTools, no web_search)", () => {
+    const r = matchHostedToolRuleForBaseUrl(
+      "https://token-plan-sgp.xiaomimimo.com/v1/chat/completions"
+    );
+    expect(r?.provider).toBe("xiaomimimo-token-plan");
+    expect(r?.strictTools).toBe(true);
+    expect(r?.tools).toBeUndefined();
   });
 
-  it("does not match MiMo for other xiaomimimo.com hosts", () => {
-    expect(matchHostedToolRuleForBaseUrl("https://staging.xiaomimimo.com/v1")).toBeUndefined();
+  it("hits xiaomimimo-token-plan for other xiaomimimo.com subdomains", () => {
+    const r = matchHostedToolRuleForBaseUrl("https://staging.xiaomimimo.com/v1");
+    expect(r?.provider).toBe("xiaomimimo-token-plan");
+    expect(r?.strictTools).toBe(true);
   });
 
   it("hits DeepSeek rule for api.deepseek.com", () => {

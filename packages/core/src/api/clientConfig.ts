@@ -9,6 +9,7 @@ import * as http from "http";
 import * as os from "os";
 import * as path from "path";
 import type { ProxyServer } from "../server/handler";
+import { CCRELAY_MODEL_ALIAS_HEADER } from "../converter/models-fallback";
 
 function sendJson(res: http.ServerResponse, status: number, data: unknown): void {
   // eslint-disable-next-line @typescript-eslint/naming-convention -- HTTP response header
@@ -55,16 +56,94 @@ function claudeDesktopDir(): string | null {
 
 export type ClientConfigItemStatus = "ok" | "missing" | "wrong_target" | "invalid";
 
+export interface ClientConfigField {
+  key: string;
+  expected: string;
+  current?: string;
+  ok: boolean;
+}
+
 export interface ClientConfigItem {
   status: ClientConfigItemStatus;
   filePath: string;
+  fields: ClientConfigField[];
   /** e.g. ANTHROPIC_BASE_URL or Codex base_url */
   currentValue?: string;
+  /** Claude Desktop inferenceCustomHeaders when readable */
+  customHeaders?: Record<string, string>;
+  /** Expected Claude Desktop inferenceCustomHeaders for Cowork alias mode */
+  expectedCustomHeaders?: Record<string, string>;
   /** For Codex, which model_provider is selected */
   modelProvider?: string;
   /** For Codex, the current model value from config.toml */
   model?: string;
   message?: string;
+}
+
+function formatScalarFieldValue(value: unknown): string | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (typeof value === "object") {
+    return JSON.stringify(value);
+  }
+  return undefined;
+}
+
+function resolveStatusFromFields(
+  fields: ClientConfigField[],
+  options: { baseUrlKey?: string; hasInvalidBaseType?: boolean }
+): ClientConfigItemStatus {
+  if (options.hasInvalidBaseType) {
+    return "wrong_target";
+  }
+  const baseKey = options.baseUrlKey;
+  if (baseKey) {
+    const baseField = fields.find(f => f.key === baseKey);
+    if (baseField && !baseField.ok && baseField.current !== undefined && baseField.current !== "") {
+      return "wrong_target";
+    }
+  }
+  if (fields.every(f => f.ok)) {
+    return "ok";
+  }
+  return "missing";
+}
+
+function itemFromFields(
+  filePath: string,
+  fields: ClientConfigField[],
+  options?: {
+    baseUrlKey?: string;
+    hasInvalidBaseType?: boolean;
+    message?: string;
+    currentValue?: string;
+    customHeaders?: Record<string, string>;
+    expectedCustomHeaders?: Record<string, string>;
+    modelProvider?: string;
+    model?: string;
+  }
+): ClientConfigItem {
+  const status = resolveStatusFromFields(fields, {
+    baseUrlKey: options?.baseUrlKey,
+    hasInvalidBaseType: options?.hasInvalidBaseType,
+  });
+  return {
+    status,
+    filePath,
+    fields,
+    ...(options?.currentValue !== undefined ? { currentValue: options.currentValue } : {}),
+    ...(options?.customHeaders !== undefined ? { customHeaders: options.customHeaders } : {}),
+    ...(options?.expectedCustomHeaders !== undefined
+      ? { expectedCustomHeaders: options.expectedCustomHeaders }
+      : {}),
+    ...(options?.modelProvider !== undefined ? { modelProvider: options.modelProvider } : {}),
+    ...(options?.model !== undefined ? { model: options.model } : {}),
+    ...(options?.message !== undefined ? { message: options.message } : {}),
+  };
 }
 
 /** Optional Claude Code env overrides (CCRelay modelMap usually enough). */
@@ -139,6 +218,99 @@ function buildClaudeDefaultEnv(port: number): Record<string, string | number> {
     API_TIMEOUT_MS: "3000000",
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: 1,
   };
+}
+
+function isNonEmptyScalar(v: unknown): boolean {
+  if (v === undefined || v === null) {
+    return false;
+  }
+  if (typeof v === "string") {
+    return v.trim() !== "";
+  }
+  if (typeof v === "number" || typeof v === "boolean") {
+    return true;
+  }
+  return false;
+}
+
+function isTruthyEnvFlag(v: unknown): boolean {
+  if (v === true || v === 1) {
+    return true;
+  }
+  if (typeof v === "string") {
+    const t = v.trim().toLowerCase();
+    return t === "1" || t === "true";
+  }
+  return false;
+}
+
+function isPositiveNumericString(v: unknown): boolean {
+  if (v === undefined || v === null) {
+    return false;
+  }
+  const n = typeof v === "number" ? v : typeof v === "string" ? Number(v.trim()) : NaN;
+  return Number.isFinite(n) && n > 0;
+}
+
+function findHeaderValueCaseInsensitive(
+  headers: Record<string, string>,
+  canonicalKey: string
+): string | undefined {
+  const target = canonicalKey.toLowerCase();
+  for (const [k, v] of Object.entries(headers)) {
+    if (k.toLowerCase() === target) {
+      return String(v);
+    }
+  }
+  return undefined;
+}
+
+export function buildClaudeCodeFields(
+  env: Record<string, unknown> | undefined,
+  port: number
+): ClientConfigField[] {
+  const baseUrlRaw = env?.ANTHROPIC_BASE_URL;
+  const baseUrlStr = formatScalarFieldValue(baseUrlRaw)?.trim();
+  const baseOk = baseUrlStr ? isLocalProxyAnthropicBase(baseUrlStr, port) : false;
+  const authToken = env?.ANTHROPIC_AUTH_TOKEN;
+  const timeout = env?.API_TIMEOUT_MS;
+  const disableTraffic = env?.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC;
+
+  return [
+    {
+      key: "ANTHROPIC_BASE_URL",
+      expected: `http://127.0.0.1:${port}/anthropic`,
+      current: baseUrlStr,
+      ok: baseOk,
+    },
+    {
+      key: "ANTHROPIC_AUTH_TOKEN",
+      expected: "(non-empty)",
+      current: formatScalarFieldValue(authToken),
+      ok: isNonEmptyScalar(authToken),
+    },
+    {
+      key: "API_TIMEOUT_MS",
+      expected: "(positive number)",
+      current: formatScalarFieldValue(timeout),
+      ok: isPositiveNumericString(timeout),
+    },
+    {
+      key: "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+      expected: "(truthy)",
+      current: formatScalarFieldValue(disableTraffic),
+      ok: isTruthyEnvFlag(disableTraffic),
+    },
+  ];
+}
+
+export function getClaudeCodeEnvGaps(
+  env: Record<string, unknown> | undefined,
+  port: number
+): string[] {
+  return buildClaudeCodeFields(env, port)
+    .filter(f => !f.ok)
+    .map(f => f.key);
 }
 /* eslint-enable @typescript-eslint/naming-convention */
 
@@ -227,64 +399,109 @@ export function parseTomlLite(content: string): ParsedTomlLite {
 function detectClaude(claudePath: string, port: number): ClientConfigItem {
   const filePath = claudePath;
   if (!fs.existsSync(claudePath)) {
-    return { status: "missing", filePath };
+    return itemFromFields(filePath, buildClaudeCodeFields(undefined, port), {
+      baseUrlKey: "ANTHROPIC_BASE_URL",
+    });
   }
   const raw = fs.readFileSync(claudePath, "utf-8");
   let parsed: { env?: Record<string, unknown> };
   try {
     parsed = JSON.parse(raw) as { env?: Record<string, unknown> };
   } catch {
-    return { status: "invalid", filePath, message: "Invalid JSON" };
+    return { status: "invalid", filePath, fields: [], message: "Invalid JSON" };
   }
-  const base = parsed.env?.ANTHROPIC_BASE_URL;
-  if (base === undefined || base === null) {
-    return { status: "missing", filePath, message: "ANTHROPIC_BASE_URL not set in env" };
+
+  const env = parsed.env;
+  const base = env?.ANTHROPIC_BASE_URL;
+  const baseStr =
+    base === undefined || base === null
+      ? undefined
+      : typeof base === "string" || typeof base === "number"
+        ? String(base).trim()
+        : undefined;
+
+  const fields = buildClaudeCodeFields(env, port);
+
+  if (baseStr === undefined) {
+    if (base !== undefined && base !== null) {
+      return itemFromFields(filePath, fields, {
+        baseUrlKey: "ANTHROPIC_BASE_URL",
+        hasInvalidBaseType: true,
+        currentValue: JSON.stringify(base),
+        message: "ANTHROPIC_BASE_URL must be a string",
+      });
+    }
+    return itemFromFields(filePath, fields, {
+      baseUrlKey: "ANTHROPIC_BASE_URL",
+      message: "ANTHROPIC_BASE_URL not set in env",
+    });
   }
-  if (typeof base !== "string" && typeof base !== "number") {
-    return {
-      status: "wrong_target",
-      filePath,
-      currentValue: JSON.stringify(base),
-      message: "ANTHROPIC_BASE_URL must be a string",
-    };
+
+  if (baseStr === "") {
+    return itemFromFields(filePath, fields, {
+      baseUrlKey: "ANTHROPIC_BASE_URL",
+      message: "ANTHROPIC_BASE_URL not set in env",
+    });
   }
-  const s = String(base).trim();
-  if (s === "") {
-    return { status: "missing", filePath, message: "ANTHROPIC_BASE_URL not set in env" };
-  }
-  if (isLocalProxyAnthropicBase(s, port)) {
-    return { status: "ok", filePath, currentValue: s };
-  }
-  return { status: "wrong_target", filePath, currentValue: s };
+
+  return itemFromFields(filePath, fields, {
+    baseUrlKey: "ANTHROPIC_BASE_URL",
+    currentValue: baseStr,
+  });
+}
+
+export function buildCodexFields(toml: ParsedTomlLite, port: number): ClientConfigField[] {
+  const expectedBase = `http://127.0.0.1:${port}/openai`;
+  const modelProvider = toml.top.model_provider;
+  const model = toml.top.model;
+  const baseUrl = modelProvider
+    ? toml.sections[`model_providers.${modelProvider}`]?.base_url
+    : undefined;
+
+  return [
+    {
+      key: "model_provider",
+      expected: "ccrelay",
+      current: modelProvider,
+      ok: modelProvider === "ccrelay",
+    },
+    {
+      key: "model_providers.ccrelay.base_url",
+      expected: expectedBase,
+      current: baseUrl,
+      ok: baseUrl ? isLocalProxyCodexBase(baseUrl, port) : false,
+    },
+    {
+      key: "model",
+      expected: "(any non-empty)",
+      current: model?.trim() || undefined,
+      ok: Boolean(model?.trim()),
+    },
+  ];
 }
 
 function detectCodex(codexPath: string, port: number): ClientConfigItem {
   const filePath = codexPath;
   if (!fs.existsSync(codexPath)) {
-    return { status: "missing", filePath };
+    return itemFromFields(filePath, buildCodexFields({ top: {}, sections: {} }, port), {
+      baseUrlKey: "model_providers.ccrelay.base_url",
+    });
   }
   const raw = fs.readFileSync(codexPath, "utf-8");
   const toml = parseTomlLite(raw);
   const modelProvider = toml.top.model_provider;
   const model = toml.top.model;
-  if (!modelProvider) {
-    return { status: "missing", filePath, model, message: "model_provider not set" };
-  }
-  const sec = toml.sections[`model_providers.${modelProvider}`];
-  const baseUrl = sec?.base_url;
-  if (!baseUrl) {
-    return {
-      status: "missing",
-      filePath,
-      modelProvider,
-      model,
-      message: "base_url not set for provider",
-    };
-  }
-  if (isLocalProxyCodexBase(baseUrl, port)) {
-    return { status: "ok", filePath, currentValue: baseUrl, modelProvider, model };
-  }
-  return { status: "wrong_target", filePath, currentValue: baseUrl, modelProvider, model };
+  const fields = buildCodexFields(toml, port);
+  const baseUrl = modelProvider
+    ? toml.sections[`model_providers.${modelProvider}`]?.base_url
+    : undefined;
+
+  return itemFromFields(filePath, fields, {
+    baseUrlKey: "model_providers.ccrelay.base_url",
+    currentValue: baseUrl,
+    modelProvider,
+    model,
+  });
 }
 
 interface ClaudeDesktopMeta {
@@ -309,39 +526,198 @@ function readClaudeDesktopMeta(dir: string): ClaudeDesktopMeta | null {
   }
 }
 
+function readClaudeDesktopCustomHeaders(
+  parsed: Record<string, unknown>
+): Record<string, string> | undefined {
+  const custom = parsed.inferenceCustomHeaders;
+  if (!custom || typeof custom !== "object" || Array.isArray(custom)) {
+    return undefined;
+  }
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(custom as Record<string, unknown>)) {
+    if (typeof value === "string" || typeof value === "number") {
+      out[key] = String(value);
+    }
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+export function expectedClaudeDesktopCustomHeaders(): Record<string, string> {
+  return { [CCRELAY_MODEL_ALIAS_HEADER]: "1" };
+}
+
+export function hasExpectedClaudeDesktopCustomHeaders(
+  headers: Record<string, string> | undefined
+): boolean {
+  if (!headers) {
+    return false;
+  }
+  const alias = findHeaderValueCaseInsensitive(headers, CCRELAY_MODEL_ALIAS_HEADER);
+  return alias !== undefined && alias.trim() !== "";
+}
+
+export function isCoworkEgressAllowed(hosts: unknown): boolean {
+  return Array.isArray(hosts) && hosts.length > 0 && hosts.some(entry => String(entry) === "*");
+}
+
+export function buildClaudeDesktopFields(
+  parsed: Record<string, unknown>,
+  port: number,
+  deploymentMode?: string
+): ClientConfigField[] {
+  const customHeaders = readClaudeDesktopCustomHeaders(parsed);
+
+  const baseUrl = parsed.inferenceGatewayBaseUrl;
+  let trimmedBase: string | undefined;
+  let baseOk = false;
+  if (typeof baseUrl === "string" && baseUrl.trim()) {
+    trimmedBase = baseUrl.trim();
+    baseOk = isLocalProxyAnthropicBase(trimmedBase, port);
+  }
+
+  const fields: ClientConfigField[] = [
+    {
+      key: "inferenceGatewayBaseUrl",
+      expected: `http://127.0.0.1:${port}/anthropic`,
+      current: trimmedBase,
+      ok: baseOk,
+    },
+    {
+      key: "inferenceProvider",
+      expected: "gateway",
+      current: formatScalarFieldValue(parsed.inferenceProvider),
+      ok: parsed.inferenceProvider === "gateway",
+    },
+    {
+      key: "inferenceGatewayApiKey",
+      expected: "(non-empty)",
+      current: formatScalarFieldValue(parsed.inferenceGatewayApiKey),
+      ok:
+        typeof parsed.inferenceGatewayApiKey === "string" &&
+        String(parsed.inferenceGatewayApiKey).trim() !== "",
+    },
+    {
+      key: "coworkEgressAllowedHosts",
+      expected: '(non-empty array including "*")',
+      current: formatScalarFieldValue(parsed.coworkEgressAllowedHosts),
+      ok: isCoworkEgressAllowed(parsed.coworkEgressAllowedHosts),
+    },
+    {
+      key: "inferenceCustomHeaders",
+      expected: "x-ccrelay-model-alias: (non-empty, key case-insensitive)",
+      current: customHeaders ? JSON.stringify(customHeaders) : undefined,
+      ok: hasExpectedClaudeDesktopCustomHeaders(customHeaders),
+    },
+    {
+      key: "inferenceGatewayHeaders",
+      expected: "(absent)",
+      current:
+        parsed.inferenceGatewayHeaders === undefined
+          ? undefined
+          : formatScalarFieldValue(parsed.inferenceGatewayHeaders),
+      ok: parsed.inferenceGatewayHeaders === undefined,
+    },
+    {
+      key: "disableEssentialTelemetry",
+      expected: "true",
+      current: formatScalarFieldValue(parsed.disableEssentialTelemetry),
+      ok: parsed.disableEssentialTelemetry === true,
+    },
+    {
+      key: "disableNonessentialTelemetry",
+      expected: "true",
+      current: formatScalarFieldValue(parsed.disableNonessentialTelemetry),
+      ok: parsed.disableNonessentialTelemetry === true,
+    },
+    {
+      key: "deploymentMode",
+      expected: "3p",
+      current: deploymentMode,
+      ok: deploymentMode === "3p",
+    },
+  ];
+
+  return fields;
+}
+
+export function getClaudeDesktopConfigGaps(
+  parsed: Record<string, unknown>,
+  port: number,
+  deploymentMode?: string
+): { baseOk: boolean; trimmedBase?: string; gaps: string[] } {
+  const fields = buildClaudeDesktopFields(parsed, port, deploymentMode);
+  const baseField = fields.find(f => f.key === "inferenceGatewayBaseUrl");
+  return {
+    baseOk: baseField?.ok ?? false,
+    trimmedBase: baseField?.current,
+    gaps: fields.filter(f => !f.ok).map(f => f.key),
+  };
+}
+
+function readClaudeDesktopDeploymentMode(dir: string): string | undefined {
+  const desktopConfigPath = path.join(dir, "claude_desktop_config.json");
+  if (!fs.existsSync(desktopConfigPath)) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(fs.readFileSync(desktopConfigPath, "utf-8")) as Record<
+      string,
+      unknown
+    >;
+    return typeof parsed.deploymentMode === "string" ? parsed.deploymentMode : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function evaluateClaudeDesktopConfig(
+  configPath: string,
+  parsed: Record<string, unknown>,
+  port: number,
+  deploymentMode?: string
+): ClientConfigItem {
+  const expectedCustomHeaders = expectedClaudeDesktopCustomHeaders();
+  const customHeaders = readClaudeDesktopCustomHeaders(parsed);
+  const fields = buildClaudeDesktopFields(parsed, port, deploymentMode);
+  const baseField = fields.find(f => f.key === "inferenceGatewayBaseUrl");
+
+  return itemFromFields(configPath, fields, {
+    baseUrlKey: "inferenceGatewayBaseUrl",
+    currentValue: baseField?.current,
+    customHeaders,
+    expectedCustomHeaders,
+  });
+}
+
 function detectClaudeDesktop(dir: string | null, port: number): ClientConfigItem | null {
   if (!dir) {
     return null;
   }
   const filePath = path.join(dir, "configLibrary");
   if (!fs.existsSync(dir)) {
-    return { status: "missing", filePath };
+    return itemFromFields(filePath, buildClaudeDesktopFields({}, port), {
+      baseUrlKey: "inferenceGatewayBaseUrl",
+    });
   }
   const meta = readClaudeDesktopMeta(dir);
   if (!meta) {
-    return { status: "missing", filePath: path.join(filePath, "_meta.json") };
+    return itemFromFields(path.join(filePath, "_meta.json"), buildClaudeDesktopFields({}, port), {
+      baseUrlKey: "inferenceGatewayBaseUrl",
+    });
   }
   const configPath = path.join(filePath, `${meta.appliedId}.json`);
   if (!fs.existsSync(configPath)) {
-    return { status: "missing", filePath: configPath };
+    return itemFromFields(configPath, buildClaudeDesktopFields({}, port), {
+      baseUrlKey: "inferenceGatewayBaseUrl",
+    });
   }
   try {
     const raw = fs.readFileSync(configPath, "utf-8");
     const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const baseUrl = parsed.inferenceGatewayBaseUrl;
-    if (typeof baseUrl !== "string" || !baseUrl.trim()) {
-      return {
-        status: "missing",
-        filePath: configPath,
-        message: "inferenceGatewayBaseUrl not set",
-      };
-    }
-    if (isLocalProxyAnthropicBase(baseUrl.trim(), port)) {
-      return { status: "ok", filePath: configPath, currentValue: baseUrl.trim() };
-    }
-    return { status: "wrong_target", filePath: configPath, currentValue: baseUrl.trim() };
+    const deploymentMode = readClaudeDesktopDeploymentMode(dir);
+    return evaluateClaudeDesktopConfig(configPath, parsed, port, deploymentMode);
   } catch {
-    return { status: "invalid", filePath: configPath, message: "Invalid JSON" };
+    return { status: "invalid", filePath: configPath, fields: [], message: "Invalid JSON" };
   }
 }
 
@@ -692,7 +1068,6 @@ export async function handleApplyClientConfig(
       }
 
       // 1. developer_settings.json — merge
-      /* eslint-disable @typescript-eslint/naming-convention -- Claude Desktop settings keys */
       const devSettingsPath = path.join(dir, "developer_settings.json");
       let devSettings: Record<string, unknown> = {};
       if (fs.existsSync(devSettingsPath)) {
@@ -754,12 +1129,14 @@ export async function handleApplyClientConfig(
       ccConfig.inferenceProvider = "gateway";
       ccConfig.inferenceGatewayBaseUrl = `http://127.0.0.1:${port}/anthropic`;
       ccConfig.inferenceGatewayApiKey = "1";
-      ccConfig.inferenceGatewayHeaders = {
-        "x-ccrelay-model-alias": "1",
+      const existingHeaders = readClaudeDesktopCustomHeaders(ccConfig) ?? {};
+      ccConfig.inferenceCustomHeaders = {
+        ...existingHeaders,
+        ...expectedClaudeDesktopCustomHeaders(),
       };
+      delete ccConfig.inferenceGatewayHeaders;
       ccConfig.disableEssentialTelemetry = true;
       ccConfig.disableNonessentialTelemetry = true;
-      /* eslint-enable @typescript-eslint/naming-convention */
       fs.writeFileSync(configPath, `${JSON.stringify(ccConfig, null, 2)}\n`, "utf-8");
 
       sendJson(res, 200, { status: "ok", message: `Updated Claude Desktop config in ${dir}` });

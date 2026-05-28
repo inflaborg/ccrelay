@@ -5,7 +5,13 @@
 
 import { Semaphore } from "./semaphore";
 import { PriorityQueue } from "./priority-queue";
-import type { RequestTask, ProxyResult, QueueStats, ConcurrencyConfig } from "../types";
+import type {
+  RequestTask,
+  ProxyResult,
+  QueueStats,
+  QueueDetailStats,
+  ConcurrencyConfig,
+} from "../types";
 import { ScopedLogger } from "../utils/logger";
 
 type TaskExecutor = (task: RequestTask) => Promise<ProxyResult>;
@@ -394,6 +400,35 @@ export class ConcurrencyManager {
       id: t.task.id,
       elapsed: now - t.startedAt,
     }));
+  }
+
+  /**
+   * Get tasks waiting in the queue (not yet assigned a worker)
+   */
+  getQueuedTasks(): Array<{ id: string; elapsed: number }> {
+    const now = Date.now();
+    return this.queue
+      .toArray()
+      .map(qt => ({
+        id: qt.task.id,
+        elapsed: now - qt.queuedAt,
+      }))
+      .sort((a, b) => b.elapsed - a.elapsed);
+  }
+
+  /**
+   * Queue stats with live task snapshots (for dashboard / API)
+   */
+  getDetailStats(): QueueDetailStats {
+    const maxQueueLimit =
+      this.config.maxQueueSize && this.config.maxQueueSize > 0 ? this.config.maxQueueSize : 10000;
+
+    return {
+      ...this.getStats(),
+      maxQueueSize: maxQueueLimit,
+      processingTasks: this.getProcessingTasks().sort((a, b) => b.elapsed - a.elapsed),
+      queuedTasks: this.getQueuedTasks(),
+    };
   }
 
   /**

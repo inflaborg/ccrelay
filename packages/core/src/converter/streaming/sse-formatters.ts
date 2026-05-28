@@ -332,3 +332,157 @@ export function formatOpenAIChatCompletionsSse(response: OpenAIChatCompletionRes
   lines.push("data: [DONE]\n\n");
   return lines.join("");
 }
+
+/** Parsed upstream error fields for cross-protocol SSE error projection. */
+export interface UpstreamSseErrorInfo {
+  message: string;
+  code: string;
+  type?: string;
+}
+
+const UPSTREAM_ERROR_BODY_MAX = 2000;
+
+function errorInfoFromParsed(
+  parsed: Record<string, unknown>,
+  status: number
+): UpstreamSseErrorInfo | null {
+  const err = parsed.error;
+  if (err && typeof err === "object") {
+    const e = err as Record<string, unknown>;
+    const message =
+      (typeof e.message === "string" ? e.message : null) ??
+      (typeof parsed.message === "string" ? parsed.message : null);
+    if (message) {
+      return {
+        message,
+        code: typeof e.code === "string" ? e.code : String(status),
+        type: typeof e.type === "string" ? e.type : undefined,
+      };
+    }
+  }
+  if (typeof parsed.message === "string") {
+    return {
+      message: parsed.message,
+      code: String(status),
+      type: typeof parsed.type === "string" ? parsed.type : undefined,
+    };
+  }
+  return null;
+}
+
+/**
+ * Extract error message/code from upstream SSE-wrapped or JSON error bodies.
+ */
+export function extractUpstreamSseError(body: string, status: number): UpstreamSseErrorInfo {
+  for (const line of body.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("data:")) {
+      continue;
+    }
+    const payload = trimmed.slice(5).trim();
+    if (!payload || payload === "[DONE]") {
+      continue;
+    }
+    try {
+      const parsed = JSON.parse(payload) as Record<string, unknown>;
+      const info = errorInfoFromParsed(parsed, status);
+      if (info) {
+        return info;
+      }
+    } catch {
+      /* try next line */
+    }
+  }
+
+  const trimmedBody = body.trim();
+  if (trimmedBody.length > 0) {
+    try {
+      const parsed = JSON.parse(trimmedBody) as Record<string, unknown>;
+      const info = errorInfoFromParsed(parsed, status);
+      if (info) {
+        return info;
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+
+  const truncated =
+    body.length > UPSTREAM_ERROR_BODY_MAX ? `${body.slice(0, UPSTREAM_ERROR_BODY_MAX)}...` : body;
+  return {
+    message: truncated.length > 0 ? truncated : `HTTP ${status}`,
+    code: String(status),
+    type: "api_error",
+  };
+}
+
+/** Anthropic Messages API SSE error stream (error + message_stop). */
+export function formatAnthropicSseError(_status: number, message: string, type?: string): string {
+  const errorType = type ?? "api_error";
+  const lines: string[] = [];
+  lines.push(
+    `event: error\ndata: ${JSON.stringify({ type: "error", error: { type: errorType, message } })}\n\n`
+  );
+  lines.push(`event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`);
+  return lines.join("");
+}
+
+/** OpenAI Chat Completions SSE error stream (data error + [DONE]). */
+export function formatOpenAIChatSseError(status: number, message: string, code?: string): string {
+  const errorCode = code ?? String(status);
+  const lines: string[] = [];
+  lines.push(
+    `data: ${JSON.stringify({ error: { message, type: "server_error", code: errorCode } })}\n\n`
+  );
+  lines.push("data: [DONE]\n\n");
+  return lines.join("");
+}
+
+/**
+ * OpenAI Responses API SSE error stream: lifecycle shells + top-level error event +
+ * response.failed + [DONE].
+ */
+export function formatOpenAIResponsesSseError(
+  status: number,
+  message: string,
+  code?: string,
+  model?: string
+): string {
+  let sequence_number = 0;
+  const lines: string[] = [];
+  const nextSeq = () => sequence_number++;
+  const push = (obj: Record<string, unknown>) => appendResponsesSseEvent(lines, nextSeq, obj);
+
+  const errorCode = code ?? String(status);
+  const responseId = `resp_${randomUUID().replace(/-/g, "")}`;
+  const modelName = model ?? "unknown";
+  const createdResponse = {
+    id: responseId,
+    object: "response",
+    created_at: Math.floor(Date.now() / 1000),
+    status: "in_progress" as const,
+    model: modelName,
+    output: [] as unknown[],
+    error: null,
+  };
+
+  push({ type: "response.created", response: createdResponse });
+  push({ type: "response.in_progress", response: { ...createdResponse } });
+
+  const errSeq = nextSeq();
+  lines.push(
+    `event: error\ndata: ${JSON.stringify({ type: "error", code: errorCode, message, sequence_number: errSeq })}\n\n`
+  );
+
+  push({
+    type: "response.failed",
+    response: {
+      ...createdResponse,
+      status: "failed",
+      error: { code: errorCode, message },
+    },
+  });
+
+  lines.push("data: [DONE]\n\n");
+  return lines.join("");
+}

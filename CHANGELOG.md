@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Cross-protocol streaming now forwards upstream errors as native SSE events for Anthropic, OpenAI Chat, and OpenAI Responses clients instead of returning a misleading 502.
+- Streaming requests that finish normally (e.g. Codex on Azure Responses API ending with `response.completed`) are no longer mislogged as 499 "Client disconnected" when the client tears down the connection after reading the final event, even when the upstream FIN is delayed.
+- Cross-protocol Responses to OpenAI Chat now strips unsupported hosted tools on GLM, MiMo, DeepSeek, Gemini, and MiniMax; Codex `apply_patch` freeform tools are downgraded to string-arg functions so Chat-only upstreams no longer reject requests with `Param Incorrect`.
+- Request logs for cross-protocol streaming (Chat SSE to Responses SSE) now update from `pending` to `completed` when the stream finishes, matching passthrough streaming behavior.
+- Cross-protocol streaming request logs now store the converted Responses SSE sent to the client and the upstream wire body, not only status and duration.
+
+## [0.2.5] - 2026-05-26 (pre-release)
+
+Pre-release line for 0.2.5.
+
 ## [0.2.4] - 2026-05-19
 
 Admin UI on shadcn/ui, Claude Desktop and Web search controls, and **DeepSeek** / **Astraflow (UCloud)** add-provider presets. Request logs move to a compact v2 table with automatic migration; desktop apps use in-process SQLite and Tauri bundles a Node sidecar. Reasoning-effort mapping updates and macOS Tahoe fixes for desktop, VS Code, and proxy streaming.
