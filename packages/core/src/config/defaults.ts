@@ -50,6 +50,18 @@ providers:
 # Default provider ID
 defaultProvider: "official"
 
+# ==================== Smart Routing ====================
+# Aggregates all provider model lists; routes by <providerId>:<modelId>.
+smartRouting:
+  enabled: false
+  aliasPrefix: "claude-"
+  modelsCache:
+    ttlSeconds: 600
+    refreshOnStart: true
+    onUpstreamFail: stale
+  bareModelFallback:
+    mode: first-match
+
 # ==================== Routing Configuration ====================
 routing:
   # Forward rules: path → provider mapping. First match wins.

@@ -21,6 +21,7 @@ describe("BodyProcessor Azure Responses web_search (Anthropic inbound)", () => {
       method: "POST",
       path: "/anthropic/v1/messages",
       provider: azureOpenAi,
+      clientHeaders: {},
       headers: {},
       targetUrl: "https://example.cognitiveservices.azure.com/openai/v1/v1/messages",
       targetPath: "/v1/messages",

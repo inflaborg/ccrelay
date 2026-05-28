@@ -252,6 +252,76 @@ export const WebSearchConfigSchema = z.object({
 
 export type WebSearchConfigInput = z.infer<typeof WebSearchConfigSchema>;
 
+// Smart routing configuration schema
+export const SmartRoutingModelsCacheSchema = z.object({
+  ttlSeconds: z.number().int().positive().default(600),
+  refreshOnStart: z.boolean().default(true),
+  onUpstreamFail: z.enum(["stale", "empty"]).default("stale"),
+});
+
+export const SmartRoutingBareModelFallbackSchema = z.object({
+  mode: z.enum(["first-match", "reject"]).default("first-match"),
+});
+
+export const SmartRoutingConfigSchema = z.object({
+  enabled: z.boolean().optional(),
+  modelsCache: SmartRoutingModelsCacheSchema.optional(),
+  aliasPrefix: z.string().optional(),
+  exclude: z.array(z.string()).optional(),
+  include: z.array(z.string()).optional(),
+  bareModelFallback: SmartRoutingBareModelFallbackSchema.optional(),
+});
+
+export type SmartRoutingConfigInput = z.infer<typeof SmartRoutingConfigSchema>;
+
+export interface SmartRoutingModelsCacheConfig {
+  ttlSeconds: number;
+  refreshOnStart: boolean;
+  onUpstreamFail: "stale" | "empty";
+}
+
+export interface SmartRoutingBareModelFallbackConfig {
+  mode: "first-match" | "reject";
+}
+
+export interface SmartRoutingConfig {
+  enabled: boolean;
+  modelsCache: SmartRoutingModelsCacheConfig;
+  aliasPrefix: string;
+  exclude?: string[];
+  include?: string[];
+  bareModelFallback: SmartRoutingBareModelFallbackConfig;
+}
+
+export interface SmartRoutingCatalogEntry {
+  publicId: string;
+  aliasHash: string;
+  providerId: string;
+  providerDisplayName?: string;
+  protocol: ProviderType;
+  upstreamModelId: string;
+  displayName?: string;
+  legacyAlias?: string;
+  source: "custom" | "upstream";
+  fetchedAt: number;
+}
+
+export interface AliasDriftPeer {
+  providerId: string;
+  upstreamModelId: string;
+}
+
+export interface AliasDrift {
+  providerId: string;
+  upstreamModelId: string;
+  displayName: string;
+  oldAlias: string;
+  newAlias: string;
+  lineIndex: number;
+  collision: boolean;
+  collisionPeers?: AliasDriftPeer[];
+}
+
 // Full file configuration schema
 export const FileConfigSchema = z.object({
   configVersion: z.string().optional(),
@@ -263,6 +333,7 @@ export const FileConfigSchema = z.object({
   logging: LoggingConfigSchema.optional(),
   webSearch: WebSearchConfigSchema.optional(),
   web_search: WebSearchConfigSchema.optional(),
+  smartRouting: SmartRoutingConfigSchema.optional(),
 });
 
 export type FileConfigInput = z.infer<typeof FileConfigSchema>;
@@ -378,6 +449,8 @@ export interface RouterConfig {
   locale?: "en" | "zh";
   /** Global web search config (Tavily API key, etc.) shared across providers. */
   webSearch?: WebSearchGlobalConfig;
+  /** Aggregated model routing across providers. */
+  smartRouting?: SmartRoutingConfig;
 }
 
 export interface RouterStatus {

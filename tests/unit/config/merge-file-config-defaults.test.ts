@@ -126,4 +126,17 @@ describe("mergeFileConfigWithDefaults", () => {
     expect(merged.providers?.official?.modelMap?.[0]).toEqual({ pattern: "x", model: "y" });
     expect(merged.providers?.extra?.name).toBe("Extra");
   });
+
+  it("deep-merges smartRouting from user config", () => {
+    const defaults = mkDefaults();
+    const merged = mergeFileConfigWithDefaults(defaults, {
+      smartRouting: {
+        enabled: true,
+        exclude: ["official:*"],
+      },
+    });
+
+    expect(merged.smartRouting?.enabled).toBe(true);
+    expect(merged.smartRouting?.exclude).toEqual(["official:*"]);
+  });
 });

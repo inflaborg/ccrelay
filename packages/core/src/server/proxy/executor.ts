@@ -57,6 +57,13 @@ import {
 import type { ApiSurface } from "../../types";
 import type { RequestTask, ProxyResult } from "../../types";
 import type { ResponseLogger } from "../responseLogger";
+import type { ModelCatalog } from "../smartRouting/modelCatalog";
+import {
+  synthesizeSmartRoutingModelsListBody,
+  synthesizeSmartRoutingModelDetailBody,
+  extractSmartRoutingDetailSuffix,
+  decodeSmartRoutingModelDetailId,
+} from "../smartRouting/synthesizeModels";
 
 const log = new ScopedLogger("ProxyExecutor");
 
@@ -158,8 +165,13 @@ function chunkContainsTerminalMarker(chunk: Buffer): boolean {
  */
 export class ProxyExecutor {
   private executeFn: ((task: RequestTask) => Promise<ProxyResult>) | null = null;
+  private modelCatalog: ModelCatalog | null = null;
 
   constructor(private responseLogger: ResponseLogger) {}
+
+  setModelCatalog(catalog: ModelCatalog): void {
+    this.modelCatalog = catalog;
+  }
 
   /** Write converted SSE to the client and mirror into `ctx.responseChunks` when DB logging is on. */
   private writeClientStreamForLog(
@@ -228,6 +240,102 @@ export class ProxyExecutor {
         errorMessage: "Client disconnected",
         duration: 0,
       };
+    }
+
+    if (
+      this.modelCatalog?.isEnabled() &&
+      method === "GET" &&
+      isModelsListUpstreamPath(task.requestPath)
+    ) {
+      await this.modelCatalog.ensureReady();
+      const synthStart = Date.now();
+      const useAlias = readUseModelAliasFromHeaders(taskHeaders);
+      const entries = this.modelCatalog.getAll();
+      const bodyText = synthesizeSmartRoutingModelsListBody({
+        clientSurface: task.clientSurface,
+        entries,
+        useAlias,
+      });
+      const chunks = [Buffer.from(bodyText, "utf-8")];
+      const duration = Date.now() - synthStart;
+      log.info(`[${clientId}] GET /models: smartRouting catalog, models=${entries.length}`);
+      this.responseLogger.logResponse(
+        clientId,
+        duration,
+        200,
+        chunks,
+        undefined,
+        undefined,
+        undefined
+      );
+      return Promise.resolve({
+        statusCode: 200,
+        headers: { "content-type": "application/json; charset=utf-8" },
+        body: bodyText,
+        duration,
+        responseBodyChunks: chunks,
+      });
+    }
+
+    if (
+      this.modelCatalog?.isEnabled() &&
+      method === "GET" &&
+      isModelDetailUpstreamPath(task.requestPath)
+    ) {
+      await this.modelCatalog.ensureReady();
+      const synthStart = Date.now();
+      const suffix = extractSmartRoutingDetailSuffix(task.requestPath);
+      const modelId = suffix ? decodeSmartRoutingModelDetailId(suffix) : null;
+      const entries = this.modelCatalog.getAll();
+      const detailBody =
+        modelId !== null
+          ? synthesizeSmartRoutingModelDetailBody({
+              clientSurface: task.clientSurface,
+              modelId,
+              entries,
+            })
+          : null;
+      const duration = Date.now() - synthStart;
+      if (detailBody === null) {
+        const notFoundId = modelId ?? "unknown";
+        const errBody = synthesizeModelNotFoundBody(task.clientSurface, notFoundId);
+        const chunks = [Buffer.from(errBody, "utf-8")];
+        log.info(`[${clientId}] GET /models/{id}: smartRouting not_found=${notFoundId}`);
+        this.responseLogger.logResponse(
+          clientId,
+          duration,
+          404,
+          chunks,
+          undefined,
+          undefined,
+          undefined
+        );
+        return Promise.resolve({
+          statusCode: 404,
+          headers: { "content-type": "application/json; charset=utf-8" },
+          body: errBody,
+          duration,
+          responseBodyChunks: chunks,
+        });
+      }
+      const chunks = [Buffer.from(detailBody, "utf-8")];
+      log.info(`[${clientId}] GET /models/{id}: smartRouting model=${modelId}`);
+      this.responseLogger.logResponse(
+        clientId,
+        duration,
+        200,
+        chunks,
+        undefined,
+        undefined,
+        undefined
+      );
+      return Promise.resolve({
+        statusCode: 200,
+        headers: { "content-type": "application/json; charset=utf-8" },
+        body: detailBody,
+        duration,
+        responseBodyChunks: chunks,
+      });
     }
 
     if (

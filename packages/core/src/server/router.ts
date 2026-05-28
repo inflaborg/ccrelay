@@ -12,7 +12,7 @@ type ProviderChangeCallback = (providerId: string) => void;
 /** Unified routing result */
 export type RouteResult =
   | { type: "block"; response: string; code: number }
-  | { type: "forward"; provider: Provider; isRouted: boolean }
+  | { type: "forward"; provider: Provider; isRouted: boolean; forwardRuleProvider: string }
   | { type: "not_found" };
 
 export class Router {
@@ -124,7 +124,12 @@ export class Router {
       }
       const provider = this.resolveProvider(rule.provider);
       if (provider) {
-        return { type: "forward", provider, isRouted: rule.provider !== "official" };
+        return {
+          type: "forward",
+          provider,
+          isRouted: rule.provider !== "official",
+          forwardRuleProvider: rule.provider,
+        };
       }
     }
 

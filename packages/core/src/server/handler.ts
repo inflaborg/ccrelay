@@ -32,6 +32,7 @@ import { ProxyExecutor } from "./proxy/executor";
 import { QueueManager } from "./queueManager";
 import { ResponseLogger } from "./responseLogger";
 import { RequestHandler } from "./request";
+import { ModelCatalog } from "./smartRouting/modelCatalog";
 import { InterceptorRegistry } from "./interceptor";
 import { WebSearchInterceptor } from "../services/web-search";
 import { WsBroadcaster, WsFollowerClient } from "./websocket";
@@ -80,9 +81,12 @@ export class ProxyServer {
 
   private readonly interceptorRegistry: InterceptorRegistry;
 
+  private readonly modelCatalog: ModelCatalog;
+
   constructor(config: ConfigManager, leaderElection: LeaderElection | null = null) {
     this.config = config;
     this.router = new Router(config);
+    this.modelCatalog = new ModelCatalog(config);
     if (!hasLogDatabaseDriverConfigResolver()) {
       setLogDatabaseDriverConfigResolver(() =>
         loggingDatabaseConfigToDriver(this.config.configValue.logging.database)
@@ -97,6 +101,7 @@ export class ProxyServer {
 
     // Initialize proxy executor (executeFn set after construction for retry support)
     this.proxyExecutor = new ProxyExecutor(this.responseLogger);
+    this.proxyExecutor.setModelCatalog(this.modelCatalog);
 
     // Initialize queue manager (executor set after construction to avoid circular dependency)
     this.queueManager = new QueueManager(config);
@@ -523,6 +528,9 @@ export class ProxyServer {
       this.server.listen(port, host, () => {
         this.isRunning = true;
         this.log.info(`Server started on http://${host}:${port}`);
+        if (this.modelCatalog.isEnabled()) {
+          void this.modelCatalog.ensureReady();
+        }
         resolve(undefined);
       });
 
@@ -610,6 +618,10 @@ export class ProxyServer {
 
   getConfig(): ConfigManager {
     return this.config;
+  }
+
+  getModelCatalog(): ModelCatalog {
+    return this.modelCatalog;
   }
 
   /**
@@ -726,6 +738,8 @@ export class ProxyServer {
     if (!this._requestHandler) {
       this._requestHandler = new RequestHandler(
         this.router,
+        this.config,
+        this.modelCatalog,
         this.queueManager,
         this.proxyExecutor,
         this.database,

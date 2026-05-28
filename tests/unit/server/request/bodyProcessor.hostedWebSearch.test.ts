@@ -19,6 +19,7 @@ describe("BodyProcessor hasHostedWebSearch (/v1/messages canonical path)", () =>
       method: "POST",
       path: "/anthropic/v1/messages",
       provider: glmAnthropic,
+      clientHeaders: {},
       headers: {},
       targetUrl: "https://api.z.ai/api/anthropic/v1/messages",
       targetPath: "/v1/messages",

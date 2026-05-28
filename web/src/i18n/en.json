@@ -11,6 +11,7 @@
   "nav": {
     "clientConfig": "Client Config",
     "dashboard": "Dashboard",
+    "smartRouting": "Smart Routing",
     "providers": "Providers",
     "capabilities": "Capabilities",
     "logs": "Logs",
@@ -213,9 +214,66 @@
       "removeAll": "Remove all from file"
     }
   },
+  "smartRouting": {
+    "title": "Smart Routing",
+    "subtitle": "Aggregate provider model lists and route requests by model id",
+    "refreshAll": "Refresh cache",
+    "disabledHint": "Smart routing is not enabled. Enable it on the Providers page to aggregate models and route by model id.",
+    "goToProviders": "Go to Providers",
+    "settings": {
+      "title": "Settings",
+      "aliasPrefix": "Alias prefix",
+      "bareFallback": "Bare model id fallback",
+      "firstMatch": "First match (provider order)",
+      "reject": "Reject"
+    },
+    "catalog": {
+      "title": "Aggregated models",
+      "models": "models",
+      "statsBadge": "{{providers}} providers · {{models}} models",
+      "previewHint": "Preview only. Smart routing is not active yet — enable it on the Providers tab.",
+      "empty": "No models in catalog yet. Refresh cache or configure providers.",
+      "emptyWithErrors": "No models aggregated. Fix provider fetch errors above and refresh cache.",
+      "publicId": "Public ID",
+      "aliasHash": "Alias hash",
+      "protocol": "Protocol",
+      "source": "Source",
+      "excluded": "Excluded",
+      "reload": "Reload view"
+    },
+    "providerErrors": {
+      "title": "Some providers failed to fetch models",
+      "editProvider": "Edit in Providers",
+      "auth": "{{providerId}}: authentication failed",
+      "missing_key": "{{providerId}}: missing API key",
+      "network": "{{providerId}}: network error",
+      "format": "{{providerId}}: invalid response or base URL"
+    },
+    "aliasDrift": {
+      "title": "Alias hash drift",
+      "description": "Some custom model aliases differ from the canonical hash. Update to avoid cross-provider collisions.",
+      "keep": "Keep",
+      "update": "Update",
+      "updateAll": "Update all",
+      "keepAllNonCollision": "Keep non-collisions",
+      "collisionWarning": "Duplicate alias with: {{peers}}. Keeping may fall back to first-match routing for this alias."
+    }
+  },
   "providers": {
     "title": "Providers",
-    "subtitle": "Manage and switch between AI API providers",
+    "subtitle": "Choose Smart Routing or a single provider as the routing source",
+    "section": {
+      "smartRouting": "Smart Routing",
+      "upstream": "Providers"
+    },
+    "smartRoutingCard": {
+      "summary": "{{providers}} providers · {{models}} models",
+      "summaryDisabled": "Aggregates {{providers}} providers · {{models}} models. Click to enable.",
+      "enable": "Enable",
+      "disable": "Disable",
+      "active": "Active",
+      "lastRefreshed": "Last refreshed: {{time}}"
+    },
     "reloadConfig": "Reload config",
     "add": "Add",
     "protocol": {
@@ -237,7 +295,7 @@
     "badgeShort": {
       "mappingOff": "Map",
       "disabled": "Off",
-      "active": "On"
+      "active": "Active"
     },
     "card": {
       "id": "ID",

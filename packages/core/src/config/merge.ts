@@ -246,6 +246,13 @@ export function mergeFileConfigWithDefaults(
           ) as unknown as FileConfigInput["logging"])
         : undefined,
     webSearch: file.webSearch ?? file.web_search ?? defaults.webSearch,
+    smartRouting:
+      (defaults.smartRouting ?? file.smartRouting)
+        ? deepMerge(
+            (defaults.smartRouting ?? {}) as Record<string, unknown>,
+            (file.smartRouting ?? {}) as Record<string, unknown>
+          )
+        : undefined,
   };
 
   return merged;

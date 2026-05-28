@@ -28,6 +28,7 @@ describe("BodyProcessor cross-protocol upstream path", () => {
       method: "GET",
       path: "/anthropic/v1/models",
       provider: openaiUpstream,
+      clientHeaders: {},
       headers: {},
       targetUrl: "https://example.com/v1/v1/models",
       targetPath: "/v1/models",

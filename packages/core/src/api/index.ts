@@ -30,6 +30,13 @@ import {
   setServer as setClientConfigServer,
 } from "./clientConfig";
 import { handleGetConfig, handlePatchConfig, setServer as setSettingsServer } from "./settings";
+import {
+  handleSmartRoutingCatalog,
+  handleSmartRoutingRefresh,
+  handleSmartRoutingAliasDrift,
+  handleSmartRoutingAliasDriftApply,
+  setServer as setSmartRoutingServer,
+} from "./smartRouting";
 import { handleWizardProbeModels, handleWizardEndpointTest } from "./wizardUpstream";
 import { sendJson } from "./httpJson";
 import { setProxyServerForApi } from "./serverRef";
@@ -49,6 +56,7 @@ export function setServer(server: ProxyServer): void {
   setQueueServer(server);
   setClientConfigServer(server);
   setSettingsServer(server);
+  setSmartRoutingServer(server);
 }
 
 /** Return this leader's UI access token (for followers to proxy dashboard auth). */
@@ -237,6 +245,36 @@ export function handleApiRequest(req: http.IncomingMessage, res: http.ServerResp
   if (reqPath === "/ccrelay/api/wizard/endpoint-test" && method === "POST") {
     handleWizardEndpointTest(req, res).catch(err => {
       log.error("Error handling POST /wizard/endpoint-test", err);
+      if (!res.headersSent) {
+        sendJson(res, 500, { error: "Internal server error" });
+      }
+    });
+    return true;
+  }
+
+  if (reqPath === "/ccrelay/api/smart-routing/catalog" && method === "GET") {
+    handleSmartRoutingCatalog(req, res);
+    return true;
+  }
+
+  if (reqPath === "/ccrelay/api/smart-routing/refresh" && method === "POST") {
+    handleSmartRoutingRefresh(req, res).catch(err => {
+      log.error("Error handling POST /smart-routing/refresh", err);
+      if (!res.headersSent) {
+        sendJson(res, 500, { error: "Internal server error" });
+      }
+    });
+    return true;
+  }
+
+  if (reqPath === "/ccrelay/api/smart-routing/alias-drift" && method === "GET") {
+    handleSmartRoutingAliasDrift(req, res);
+    return true;
+  }
+
+  if (reqPath === "/ccrelay/api/smart-routing/alias-drift/apply" && method === "POST") {
+    handleSmartRoutingAliasDriftApply(req, res).catch(err => {
+      log.error("Error handling POST /smart-routing/alias-drift/apply", err);
       if (!res.headersSent) {
         sendJson(res, 500, { error: "Internal server error" });
       }
