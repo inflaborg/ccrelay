@@ -7,6 +7,7 @@ import {
   Loader2,
   Plus,
   RotateCw,
+  Route,
   X,
   Upload,
   Download,
@@ -37,6 +38,8 @@ import { SelectField } from "@/components/select-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { rebuildCoworkModelMap } from "@ccrelay/shared/coworkModelMap";
+import type { AliasHashProtocol } from "@ccrelay/shared/aliasHash";
 import { api } from "@/api/client";
 import type { AddProviderRequest, Provider, ModelMapEntry } from "@/types/api";
 import { WizardDialog } from "./wizard/WizardDialog";
@@ -138,11 +141,60 @@ export default function Providers() {
     queryFn: () => api.getProviders(),
   });
 
+  const { data: config } = useQuery({
+    queryKey: ["config"],
+    queryFn: () => api.getConfig(),
+  });
+
+  const srEnabled = config?.smartRouting?.enabled === true;
+  const aliasPrefix = config?.smartRouting?.aliasPrefix ?? "claude-";
+  const coworkHelperReady = formData.id.trim().length > 0 && Boolean(formData.providerType);
+
+  const { data: catalog, isLoading: catalogLoading } = useQuery({
+    queryKey: ["smartRoutingCatalog"],
+    queryFn: () => api.getSmartRoutingCatalog(),
+    refetchInterval: 30_000,
+  });
+
+  const catalogStats = catalog?.stats;
+  const srActiveClass =
+    "border-primary shadow-[inset_0_0_0_1px_var(--color-primary),0_0_0_2px_var(--color-primary)] dark:shadow-[inset_0_0_0_1px_var(--color-primary),0_0_0_2px_var(--color-primary)]";
+
+  const enableSmartRoutingMutation = useMutation({
+    mutationFn: async () => {
+      await api.patchConfig({ section: "smartRouting", data: { enabled: true } });
+      await api.refreshSmartRoutingCatalog();
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["config"] });
+      void queryClient.invalidateQueries({ queryKey: ["providers"] });
+      void queryClient.invalidateQueries({ queryKey: ["smartRoutingCatalog"] });
+      void queryClient.invalidateQueries({ queryKey: ["status"] });
+    },
+  });
+
+  const disableSmartRoutingMutation = useMutation({
+    mutationFn: async () => {
+      await api.patchConfig({ section: "smartRouting", data: { enabled: false } });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["config"] });
+      void queryClient.invalidateQueries({ queryKey: ["smartRoutingCatalog"] });
+    },
+  });
+
   const switchMutation = useMutation({
-    mutationFn: (providerId: string) => api.switchProvider(providerId),
+    mutationFn: async (providerId: string) => {
+      if (config?.smartRouting?.enabled) {
+        await api.patchConfig({ section: "smartRouting", data: { enabled: false } });
+      }
+      await api.switchProvider(providerId);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["status"] });
       queryClient.invalidateQueries({ queryKey: ["providers"] });
+      queryClient.invalidateQueries({ queryKey: ["config"] });
+      queryClient.invalidateQueries({ queryKey: ["smartRoutingCatalog"] });
     },
   });
 
@@ -404,6 +456,32 @@ export default function Providers() {
     []
   );
 
+  const handleRebuildModelMap = useCallback(() => {
+    const lines = customModelsText
+      .split("\n")
+      .map(l => l.trim())
+      .filter(l => l.length > 0);
+    if (lines.length === 0 || !formData.id.trim()) {
+      return;
+    }
+    const rebuilt = rebuildCoworkModelMap({
+      customModelsList: lines,
+      existingModelMap: formData.modelMap,
+      aliasPrefix,
+    });
+    if (modelMapTimerRef.current) {
+      clearTimeout(modelMapTimerRef.current);
+      modelMapTimerRef.current = null;
+    }
+    setModelMapText(yaml.dump(rebuilt, { indent: 2, lineWidth: -1 }));
+    setModelMapError(null);
+    setFormData(prev => ({
+      ...prev,
+      modelMappingEnabled: true,
+      modelMap: rebuilt,
+    }));
+  }, [aliasPrefix, customModelsText, formData.id, formData.modelMap]);
+
   const providers = (providersData?.providers || []).sort((a, b) => {
     const sortGroup = (p: Provider) => {
       if (p.id === "official") {
@@ -527,138 +605,245 @@ export default function Providers() {
         </div>
       </div>
 
-      {/* Providers List - Compact grid */}
-      <div className="grid min-w-0 gap-2 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-        {isLoading ? (
-          <>
-            <Card className="p-0">
-              <CardContent className="p-3">
-                <div className="h-16 animate-pulse bg-muted rounded" />
-              </CardContent>
-            </Card>
-            <Card className="p-0">
-              <CardContent className="p-3">
-                <div className="h-16 animate-pulse bg-muted rounded" />
-              </CardContent>
-            </Card>
-          </>
-        ) : (
-          providers.map(provider => (
-            <ContextMenu key={provider.id}>
-              <ContextMenuTrigger asChild>
-                <Card
-                  className={`p-0 h-full min-w-0 overflow-hidden border group ${provider.active ? "border-primary shadow-[inset_0_0_0_1px_var(--color-primary),0_0_0_2px_var(--color-primary)] dark:shadow-[inset_0_0_0_1px_var(--color-primary),0_0_0_2px_var(--color-primary)]" : selectedIds.has(provider.id) ? "border-primary ring-1 ring-primary" : "border-border"} ${!provider.enabled ? "opacity-50" : ""}`}
+      <section className="space-y-2">
+        <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          {t("providers.section.smartRouting")}
+        </h3>
+        <Card
+          className={`p-0 cursor-pointer transition-colors ${srEnabled ? srActiveClass : "border-border hover:border-primary/50"}`}
+          onClick={() => {
+            if (!srEnabled && !enableSmartRoutingMutation.isPending) {
+              enableSmartRoutingMutation.mutate();
+            }
+          }}
+        >
+          <CardHeader className="p-3 pb-1">
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-xs font-medium flex items-center gap-1.5">
+                <Route className="h-3.5 w-3.5" />
+                {t("nav.smartRouting")}
+              </CardTitle>
+              {srEnabled && (
+                <Badge variant="secondary" className="text-[10px]">
+                  {t("providers.smartRoutingCard.active")}
+                </Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="p-3 pt-1 space-y-2">
+            {enableSmartRoutingMutation.isPending || catalogLoading ? (
+              <div className="h-8 animate-pulse bg-muted rounded" />
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {srEnabled
+                  ? t("providers.smartRoutingCard.summary", {
+                      providers: catalogStats?.providerCount ?? 0,
+                      models: catalogStats?.modelCount ?? 0,
+                    })
+                  : t("providers.smartRoutingCard.summaryDisabled", {
+                      providers: catalogStats?.providerCount ?? 0,
+                      models: catalogStats?.modelCount ?? 0,
+                    })}
+              </p>
+            )}
+            {srEnabled && catalogStats?.lastRefreshedAt ? (
+              <p className="text-[10px] text-muted-foreground">
+                {t("providers.smartRoutingCard.lastRefreshed", {
+                  time: new Date(catalogStats.lastRefreshedAt).toLocaleString(),
+                })}
+              </p>
+            ) : null}
+            <div className="flex items-center gap-1.5">
+              {!srEnabled ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-7 text-xs"
+                  disabled={enableSmartRoutingMutation.isPending}
+                  onClick={e => {
+                    e.stopPropagation();
+                    enableSmartRoutingMutation.mutate();
+                  }}
                 >
-                  <CardHeader className="p-3 pb-1 overflow-hidden">
-                    <div className="flex min-w-0 items-center gap-1">
-                      {provider.id !== "official" ? (
-                        <button
-                          type="button"
-                          className={`h-3.5 w-3.5 shrink-0 rounded-[3px] border flex items-center justify-center transition-opacity cursor-pointer ${selectedIds.has(provider.id) ? "opacity-100 bg-primary border-primary text-primary-foreground" : isSelectMode ? "opacity-100 bg-background border-border text-muted-foreground" : "opacity-0 group-hover:opacity-100 bg-background border-border text-muted-foreground hover:border-primary"}`}
-                          onClick={e => {
-                            e.stopPropagation();
-                            toggleSelect(provider.id);
-                          }}
-                        >
-                          {selectedIds.has(provider.id) && <Check className="h-2.5 w-2.5" />}
-                        </button>
-                      ) : (
-                        <span className="w-3.5 shrink-0" />
-                      )}
-                      <CardTitle
-                        className="min-w-0 flex-1 truncate text-xs font-medium leading-tight"
-                        title={provider.name}
-                      >
-                        {provider.name}
-                      </CardTitle>
-                      <div className="flex shrink-0 items-center gap-0.5">
-                        {(() => {
-                          const proto = PROVIDER_PROTOCOL_LABEL[provider.providerType];
-                          return proto ? (
-                            <span
-                              className={`inline-flex shrink-0 items-center whitespace-nowrap px-1.5 py-0.5 text-[9px] font-semibold leading-none ${proto.className}`}
-                              title={t(proto.label)}
+                  {enableSmartRoutingMutation.isPending ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    t("providers.smartRoutingCard.enable")
+                  )}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  disabled={disableSmartRoutingMutation.isPending}
+                  onClick={e => {
+                    e.stopPropagation();
+                    disableSmartRoutingMutation.mutate();
+                  }}
+                >
+                  {disableSmartRoutingMutation.isPending ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    t("providers.smartRoutingCard.disable")
+                  )}
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+        {enableSmartRoutingMutation.error ? (
+          <p className="text-xs text-destructive">
+            {(enableSmartRoutingMutation.error as Error).message}
+          </p>
+        ) : null}
+      </section>
+
+      <section className="space-y-2">
+        <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          {t("providers.section.upstream")}
+        </h3>
+
+        {/* Providers List - Compact grid */}
+        <div className="grid min-w-0 gap-2 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+          {isLoading ? (
+            <>
+              <Card className="p-0">
+                <CardContent className="p-3">
+                  <div className="h-16 animate-pulse bg-muted rounded" />
+                </CardContent>
+              </Card>
+              <Card className="p-0">
+                <CardContent className="p-3">
+                  <div className="h-16 animate-pulse bg-muted rounded" />
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            providers.map(provider => {
+              const isActive = !srEnabled && provider.active;
+              return (
+                <ContextMenu key={provider.id}>
+                  <ContextMenuTrigger asChild>
+                    <Card
+                      className={`p-0 h-full min-w-0 overflow-hidden border group ${isActive ? srActiveClass : selectedIds.has(provider.id) ? "border-primary ring-1 ring-primary" : "border-border"} ${!provider.enabled ? "opacity-50" : ""}`}
+                    >
+                      <CardHeader className="p-3 pb-1 overflow-hidden">
+                        <div className="flex min-w-0 items-center gap-1">
+                          {provider.id !== "official" ? (
+                            <button
+                              type="button"
+                              className={`h-3.5 w-3.5 shrink-0 rounded-[3px] border flex items-center justify-center transition-opacity cursor-pointer ${selectedIds.has(provider.id) ? "opacity-100 bg-primary border-primary text-primary-foreground" : isSelectMode ? "opacity-100 bg-background border-border text-muted-foreground" : "opacity-0 group-hover:opacity-100 bg-background border-border text-muted-foreground hover:border-primary"}`}
+                              onClick={e => {
+                                e.stopPropagation();
+                                toggleSelect(provider.id);
+                              }}
                             >
-                              {t(proto.label)}
+                              {selectedIds.has(provider.id) && <Check className="h-2.5 w-2.5" />}
+                            </button>
+                          ) : (
+                            <span className="w-3.5 shrink-0" />
+                          )}
+                          <CardTitle
+                            className="min-w-0 flex-1 truncate text-xs font-medium leading-tight"
+                            title={provider.name}
+                          >
+                            {provider.name}
+                          </CardTitle>
+                          <div className="flex shrink-0 items-center gap-0.5">
+                            {(() => {
+                              const proto = PROVIDER_PROTOCOL_LABEL[provider.providerType];
+                              return proto ? (
+                                <span
+                                  className={`inline-flex shrink-0 items-center whitespace-nowrap px-1.5 py-0.5 text-[9px] font-semibold leading-none ${proto.className}`}
+                                  title={t(proto.label)}
+                                >
+                                  {t(proto.label)}
+                                </span>
+                              ) : null;
+                            })()}
+                            {isActive && (
+                              <span
+                                className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold leading-none text-primary"
+                                title={t("providers.badge.active")}
+                              >
+                                <Check className="h-2.5 w-2.5 shrink-0" aria-hidden />
+                                {t("providers.badgeShort.active")}
+                              </span>
+                            )}
+                            {provider.modelMap?.length && provider.modelMappingEnabled === false ? (
+                              <Badge
+                                variant="outline"
+                                className="h-auto shrink-0 whitespace-nowrap rounded-none px-1.5 py-0.5 text-[9px] leading-none text-amber-700 dark:text-amber-400 border-amber-600/40"
+                                title={t("providers.badge.mappingOff")}
+                              >
+                                {t("providers.badgeShort.mappingOff")}
+                              </Badge>
+                            ) : null}
+                            {!provider.enabled && (
+                              <Badge
+                                variant="outline"
+                                className="h-auto shrink-0 whitespace-nowrap rounded-none px-1.5 py-0.5 text-[9px] leading-none text-muted-foreground"
+                                title={t("providers.badge.disabled")}
+                              >
+                                {t("providers.badgeShort.disabled")}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="p-3 pt-0 space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">{t("providers.card.id")}:</span>
+                          <span className="font-mono text-[10px]">{provider.id}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">{t("providers.card.mode")}:</span>
+                          <Badge variant="outline" className="text-[10px] px-1 py-0">
+                            {provider.mode}
+                          </Badge>
+                        </div>
+                        {provider.baseUrl && (
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground">
+                              {t("providers.card.baseUrl")}:
                             </span>
-                          ) : null;
-                        })()}
-                        {provider.active && (
-                          <span
-                            className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold leading-none text-primary"
-                            title={t("providers.badge.active")}
-                          >
-                            <Check className="h-2.5 w-2.5 shrink-0" aria-hidden />
-                            {t("providers.badgeShort.active")}
-                          </span>
+                            <span className="font-mono text-[10px] truncate max-w-[140px]">
+                              {provider.baseUrl}
+                            </span>
+                          </div>
                         )}
-                        {provider.modelMap?.length && provider.modelMappingEnabled === false ? (
-                          <Badge
-                            variant="outline"
-                            className="h-auto shrink-0 whitespace-nowrap rounded-none px-1.5 py-0.5 text-[9px] leading-none text-amber-700 dark:text-amber-400 border-amber-600/40"
-                            title={t("providers.badge.mappingOff")}
-                          >
-                            {t("providers.badgeShort.mappingOff")}
-                          </Badge>
-                        ) : null}
-                        {!provider.enabled && (
-                          <Badge
-                            variant="outline"
-                            className="h-auto shrink-0 whitespace-nowrap rounded-none px-1.5 py-0.5 text-[9px] leading-none text-muted-foreground"
-                            title={t("providers.badge.disabled")}
-                          >
-                            {t("providers.badgeShort.disabled")}
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="p-3 pt-0 space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">{t("providers.card.id")}:</span>
-                      <span className="font-mono text-[10px]">{provider.id}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">{t("providers.card.mode")}:</span>
-                      <Badge variant="outline" className="text-[10px] px-1 py-0">
-                        {provider.mode}
-                      </Badge>
-                    </div>
-                    {provider.baseUrl && (
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">
-                          {t("providers.card.baseUrl")}:
-                        </span>
-                        <span className="font-mono text-[10px] truncate max-w-[140px]">
-                          {provider.baseUrl}
-                        </span>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </ContextMenuTrigger>
-              <ContextMenuContent>
-                {!provider.active && provider.enabled ? (
-                  <ContextMenuItem onClick={() => handleSwitch(provider.id)}>
-                    {t("providers.contextMenu.use")}
-                  </ContextMenuItem>
-                ) : null}
-                <ContextMenuItem onClick={() => openEditModal(provider)}>
-                  {t("providers.contextMenu.edit")}
-                </ContextMenuItem>
-                <ContextMenuItem onClick={() => openDuplicateModal(provider)}>
-                  {t("providers.contextMenu.duplicate")}
-                </ContextMenuItem>
-                {provider.id !== "official" ? (
-                  <ContextMenuItem variant="destructive" onClick={() => requestDelete(provider)}>
-                    {t("providers.contextMenu.delete")}
-                  </ContextMenuItem>
-                ) : null}
-              </ContextMenuContent>
-            </ContextMenu>
-          ))
-        )}
-      </div>
+                      </CardContent>
+                    </Card>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent>
+                    {!isActive && provider.enabled ? (
+                      <ContextMenuItem onClick={() => handleSwitch(provider.id)}>
+                        {t("providers.contextMenu.use")}
+                      </ContextMenuItem>
+                    ) : null}
+                    <ContextMenuItem onClick={() => openEditModal(provider)}>
+                      {t("providers.contextMenu.edit")}
+                    </ContextMenuItem>
+                    <ContextMenuItem onClick={() => openDuplicateModal(provider)}>
+                      {t("providers.contextMenu.duplicate")}
+                    </ContextMenuItem>
+                    {provider.id !== "official" ? (
+                      <ContextMenuItem
+                        variant="destructive"
+                        onClick={() => requestDelete(provider)}
+                      >
+                        {t("providers.contextMenu.delete")}
+                      </ContextMenuItem>
+                    ) : null}
+                  </ContextMenuContent>
+                </ContextMenu>
+              );
+            })
+          )}
+        </div>
+      </section>
 
       {/* Error messages */}
       {switchMutation.error && (
@@ -693,6 +878,7 @@ export default function Providers() {
       <WizardDialog
         open={showWizard}
         onOpenChange={setShowWizard}
+        aliasPrefix={aliasPrefix}
         onCustom={() => {
           setShowWizard(false);
           openLegacyAddModal();
@@ -896,6 +1082,12 @@ export default function Providers() {
                         variant="ghost"
                         size="sm"
                         className="h-5 shrink-0 px-1.5 text-[10px] mt-0.5"
+                        disabled={!coworkHelperReady}
+                        title={
+                          coworkHelperReady
+                            ? undefined
+                            : t("providers.modal.coworkHelperRequiresId")
+                        }
                         onClick={() => {
                           setCoworkHelperKey(k => k + 1);
                           setCoworkHelperOpen(true);
@@ -934,9 +1126,28 @@ export default function Providers() {
                   {t("providers.modal.modelMappingHelp")}
                 </p>
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground">
-                    {t("providers.modal.modelMap")}
-                  </label>
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      {t("providers.modal.modelMap")}
+                    </label>
+                    {formData.useCustomModelsList ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 shrink-0 px-1.5 text-[10px]"
+                        disabled={!coworkHelperReady || customModelsText.trim().length === 0}
+                        title={
+                          coworkHelperReady
+                            ? t("providers.modal.rebuildModelMapHelp")
+                            : t("providers.modal.coworkHelperRequiresId")
+                        }
+                        onClick={handleRebuildModelMap}
+                      >
+                        {t("providers.modal.rebuildModelMap")}
+                      </Button>
+                    ) : null}
+                  </div>
                   <textarea
                     className={`w-full px-2 py-1 text-xs border rounded-md bg-background font-mono ${modelMapError ? "border-destructive" : ""} ${formData.modelMappingEnabled === false ? "opacity-60 bg-muted/20" : ""}`}
                     placeholder={`- pattern: "claude-*"\n  model: "custom-model"`}
@@ -999,6 +1210,9 @@ export default function Providers() {
         key={coworkHelperKey}
         open={coworkHelperOpen}
         initialCustomModelsText={customModelsText}
+        providerId={formData.id}
+        providerType={formData.providerType as AliasHashProtocol}
+        aliasPrefix={aliasPrefix}
         onOpenChange={setCoworkHelperOpen}
         onApply={handleCoworkHelperApply}
       />

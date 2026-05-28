@@ -24,6 +24,8 @@ import type {
   WizardProbeModelsResponse,
   WizardEndpointTestRequest,
   WizardEndpointTestResponse,
+  SmartRoutingCatalogResponse,
+  AliasDriftResponse,
 } from "../types/api";
 
 // Re-export types for convenience
@@ -235,4 +237,24 @@ export const api = {
     signal?: AbortSignal
   ): Promise<WizardEndpointTestResponse> =>
     fetchWizardPostJson<WizardEndpointTestResponse>("/wizard/endpoint-test", body, signal),
+
+  getSmartRoutingCatalog: (): Promise<SmartRoutingCatalogResponse> =>
+    fetchAPI("/smart-routing/catalog"),
+
+  refreshSmartRoutingCatalog: (providerId?: string): Promise<SmartRoutingCatalogResponse> =>
+    fetchAPI(
+      `/smart-routing/refresh${providerId ? `?providerId=${encodeURIComponent(providerId)}` : ""}`,
+      { method: "POST", headers: buildDefaultHeaders(false) }
+    ),
+
+  getSmartRoutingAliasDrift: (): Promise<AliasDriftResponse> =>
+    fetchAPI("/smart-routing/alias-drift"),
+
+  applySmartRoutingAliasDrift: (body: {
+    updates: Array<{ providerId: string; lineIndex: number }>;
+  }): Promise<{ status: string }> =>
+    fetchAPI("/smart-routing/alias-drift/apply", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 };

@@ -296,6 +296,75 @@ export interface SettingsConfig {
   /** Bundled default forward/block (read-only preview + "restore defaults" in editor until Save). */
   routingDefaults?: RoutingSettings;
   webSearch?: WebSearchSettings;
+  smartRouting?: SmartRoutingSettings;
+}
+
+export interface SmartRoutingSettings {
+  enabled?: boolean;
+  aliasPrefix?: string;
+  modelsCache?: {
+    ttlSeconds?: number;
+    refreshOnStart?: boolean;
+    onUpstreamFail?: "stale" | "empty";
+  };
+  exclude?: string[];
+  include?: string[];
+  bareModelFallback?: {
+    mode?: "first-match" | "reject";
+  };
+}
+
+export interface SmartRoutingCatalogEntry {
+  publicId: string;
+  aliasHash: string;
+  providerId: string;
+  providerDisplayName?: string;
+  protocol: "anthropic" | "openai" | "openai_chat";
+  upstreamModelId: string;
+  displayName?: string;
+  legacyAlias?: string;
+  source: "custom" | "upstream";
+  fetchedAt: number;
+}
+
+export type SmartRoutingProviderErrorCode = "auth" | "network" | "format" | "missing_key";
+
+export interface SmartRoutingProviderError {
+  providerId: string;
+  errorCode: SmartRoutingProviderErrorCode;
+}
+
+export interface SmartRoutingCatalogStats {
+  providerCount: number;
+  modelCount: number;
+  lastRefreshedAt?: number;
+}
+
+export interface SmartRoutingCatalogResponse {
+  enabled: boolean;
+  entries: SmartRoutingCatalogEntry[];
+  stats: SmartRoutingCatalogStats;
+  providerErrors: SmartRoutingProviderError[];
+}
+
+export interface AliasDriftPeer {
+  providerId: string;
+  upstreamModelId: string;
+}
+
+export interface AliasDrift {
+  providerId: string;
+  upstreamModelId: string;
+  displayName: string;
+  oldAlias: string;
+  newAlias: string;
+  lineIndex: number;
+  collision: boolean;
+  collisionPeers?: AliasDriftPeer[];
+}
+
+export interface AliasDriftResponse {
+  drifts: AliasDrift[];
 }
 
 export interface WebSearchSettings {

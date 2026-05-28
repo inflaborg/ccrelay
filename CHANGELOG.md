@@ -7,7 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**UI**
+
+- **Smart Routing** tab between Dashboard and Providers: aggregates all provider model lists, exposes unified `/v1/models` with `<providerId>:<modelId>` ids, and routes requests by model without switching the active provider.
+- **Providers** page: Smart Routing card and provider cards are mutually exclusive routing modes — enable Smart Routing from the Providers tab; selecting a fallback provider disables Smart Routing. Aggregated catalog shows provider fetch errors when upstream model lists fail.
+
+**Config**
+
+- `smartRouting` section in `config.yaml` (`enabled`, include/exclude filters, alias prefix, upstream models cache TTL). Optional alias-drift migration when enabling smart routing updates legacy custom model aliases that collide across providers.
+
+### Changed
+
+**UI**
+
+- Provider wizard and Cowork quick-fill generate canonical alias hashes (`claude-{8 hex}` from `providerId:protocol:upstreamModelId`); the same upstream model on different providers or protocols gets a different alias.
+
 ### Fixed
+
+**Config**
+
+- Smart Routing alias-drift migration rebuilds `modelMap` alongside `customModelsList`, keeping Cowork alias routing in sync after migration.
+- Multi-variant wizard presets (e.g. GLM Anthropic + OpenAI) no longer share one alias set across provider variants.
+
+**Protocol/Conversion**
 
 - Cross-protocol streaming now forwards upstream errors as native SSE events for Anthropic, OpenAI Chat, and OpenAI Responses clients instead of returning a misleading 502.
 - Streaming requests that finish normally (e.g. Codex on Azure Responses API ending with `response.completed`) are no longer mislogged as 499 "Client disconnected" when the client tears down the connection after reading the final event, even when the upstream FIN is delayed.

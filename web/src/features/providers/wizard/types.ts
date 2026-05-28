@@ -71,4 +71,6 @@ export interface WizardInput extends WizardModelInput {
   nameBase?: string;
   /** When false, provider uses upstream models list (no local customModelsList) */
   useCustomModels: boolean;
+  /** Smart routing alias prefix; defaults to `claude-` when omitted */
+  aliasPrefix?: string;
 }

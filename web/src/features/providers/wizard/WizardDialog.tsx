@@ -32,6 +32,7 @@ export interface WizardDialogProps {
   onOpenChange: (open: boolean) => void;
   onCustom: () => void;
   onComplete: () => void;
+  aliasPrefix?: string;
   addMutation: {
     mutateAsync: (data: AddProviderRequest) => Promise<unknown>;
   };
@@ -56,6 +57,7 @@ export function WizardDialog({
   onOpenChange,
   onCustom,
   onComplete,
+  aliasPrefix = "claude-",
   addMutation,
 }: WizardDialogProps) {
   const { t } = useTranslation();
@@ -174,6 +176,7 @@ export function WizardDialog({
         : [],
       claudeSupport,
       useCustomModels,
+      aliasPrefix,
     };
     try {
       return { ok: true, preview: generateProviders(preset, wi) };
@@ -189,6 +192,7 @@ export function WizardDialog({
     modelIdsText,
     claudeSupport,
     useCustomModels,
+    aliasPrefix,
   ]);
 
   const credentialFields: WizardCredentialsFields = useMemo(

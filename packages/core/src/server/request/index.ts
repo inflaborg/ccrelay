@@ -5,13 +5,16 @@
 import type * as http from "http";
 import type * as url from "url";
 import type { Router } from "../router";
+import type { ConfigManager } from "../../config";
 import type { QueueManager } from "../queueManager";
 import type { ProxyExecutor } from "../proxy/executor";
 import type { LogDatabase } from "../../database";
 import type { RoutingContext, BodyProcessResult } from "./context";
 import { RouterStage } from "./routerStage";
 import { BodyProcessor } from "./bodyProcessor";
+import { SmartRoutingStage } from "./smartRoutingStage";
 import { TaskExecutor } from "./taskExecutor";
+import type { ModelCatalog } from "../smartRouting/modelCatalog";
 import { ResponseWriter } from "../response";
 import type { ResponseLogger } from "../responseLogger";
 import type { InterceptorRegistry, InterceptResult } from "../interceptor";
@@ -39,6 +42,7 @@ function buildRawBodyLogSnapshot(
  */
 export class RequestHandler {
   private routerStage: RouterStage;
+  private smartRoutingStage: SmartRoutingStage;
   private bodyProcessor: BodyProcessor;
   private taskExecutor: TaskExecutor;
   private database: LogDatabase;
@@ -47,6 +51,8 @@ export class RequestHandler {
 
   constructor(
     router: Router,
+    config: ConfigManager,
+    modelCatalog: ModelCatalog,
     queueManager: QueueManager,
     proxyExecutor: ProxyExecutor,
     database: LogDatabase,
@@ -54,6 +60,7 @@ export class RequestHandler {
     interceptorRegistry: InterceptorRegistry
   ) {
     this.routerStage = new RouterStage(router);
+    this.smartRoutingStage = new SmartRoutingStage(config, router, modelCatalog);
     this.bodyProcessor = new BodyProcessor();
     this.taskExecutor = new TaskExecutor(queueManager, proxyExecutor, database);
     this.database = database;
@@ -227,12 +234,25 @@ export class RequestHandler {
     bodyReceiveTime: number,
     res: http.ServerResponse
   ): void {
-    // Stage 3: Body processing - apply model mapping and OpenAI conversion
+    // Stage 3: Body processing - smart routing, model mapping, protocol conversion
+    const clientBody = rawBody;
+    const smartRouted = this.smartRoutingStage.process(routing, rawBody);
     const bodyResult = this.bodyProcessor.process(
-      rawBody,
-      routing,
+      smartRouted.body,
+      smartRouted.routing,
       true // databaseEnabled
     );
+
+    if (smartRouted.routing.smartRoutingClientModel !== undefined) {
+      bodyResult.originalModel = smartRouted.routing.smartRoutingClientModel;
+      if (this.database.enabled && clientBody.length > 0) {
+        try {
+          bodyResult.originalRequestBody = clientBody.toString("utf-8");
+        } catch {
+          // keep bodyProcessor snapshot
+        }
+      }
+    }
 
     // Generate client ID
     const clientId = `req-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
@@ -240,7 +260,7 @@ export class RequestHandler {
     // Stage 4: Execute task (queue or direct)
     const responseWriter = new ResponseWriter(res);
     this.taskExecutor.execute(
-      routing,
+      smartRouted.routing,
       bodyResult,
       clientId,
       requestReceiveStart,

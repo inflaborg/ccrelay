@@ -22,15 +22,21 @@ export interface RoutingContext {
   method: string;
   path: string;
   provider: Provider;
+  /** Raw client headers before provider auth injection (for re-preparing after smart routing). */
+  clientHeaders: Record<string, string>;
   headers: Record<string, string>;
   targetUrl: string;
   targetPath: string;
   /** Query string from client request, e.g. `?a=1` (empty if none) */
   targetQuery: string;
   isRouted: boolean;
+  /** Forward rule provider id before resolution (`auto` or explicit provider id). */
+  forwardRuleProvider?: string;
   isOpenAIProvider: boolean;
   /** Wire format the client is using; default anthropic for legacy paths */
   clientSurface: ApiSurface;
+  /** Client wire model id before smart routing rewrites the request body. */
+  smartRoutingClientModel?: string;
 }
 
 /**

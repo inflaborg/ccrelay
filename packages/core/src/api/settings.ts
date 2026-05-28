@@ -15,7 +15,14 @@ export function setServer(server: ProxyServer): void {
   serverInstance = server;
 }
 
-const ALLOWED_SECTIONS = new Set(["logging", "concurrency", "server", "routing", "webSearch"]);
+const ALLOWED_SECTIONS = new Set([
+  "logging",
+  "concurrency",
+  "server",
+  "routing",
+  "webSearch",
+  "smartRouting",
+]);
 
 /**
  * GET /ccrelay/api/config
@@ -96,7 +103,7 @@ export async function handlePatchConfig(
     }
 
     const result = configManager.updateConfigSection(
-      section as "logging" | "concurrency" | "server" | "routing" | "webSearch",
+      section as "logging" | "concurrency" | "server" | "routing" | "webSearch" | "smartRouting",
       body.data
     );
 

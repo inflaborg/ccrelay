@@ -33,6 +33,7 @@ import { buildRoutingFromMerged } from "./builders/routing";
 import { buildConcurrencyConfig, buildRouteQueues } from "./builders/concurrency";
 import { buildDatabaseConfig } from "./builders/database";
 import { buildWebSearchConfig } from "./builders/web-search";
+import { buildSmartRoutingConfig } from "./builders/smart-routing";
 
 export { getDefaultRoutingSettings } from "./defaults";
 export { expandEnvVarsInObject } from "./env";
@@ -372,6 +373,7 @@ export class ConfigManager {
 
     const rawWebSearch = merged.webSearch ?? merged.web_search;
     const webSearchConfig = buildWebSearchConfig(rawWebSearch);
+    const smartRouting = buildSmartRoutingConfig(merged.smartRouting);
 
     return {
       port: merged.server?.port || 7575,
@@ -389,6 +391,7 @@ export class ConfigManager {
       },
       locale: merged.server?.locale,
       webSearch: webSearchConfig,
+      smartRouting,
     };
   }
 
@@ -682,6 +685,10 @@ export class ConfigManager {
     };
   }
 
+  get smartRoutingConfig() {
+    return this.config.smartRouting;
+  }
+
   getConfigRaw(): Record<string, unknown> {
     const content = fs.readFileSync(this.configPath, "utf-8");
     const raw = yaml.load(content) as Record<string, unknown>;
@@ -691,11 +698,69 @@ export class ConfigManager {
       server: raw.server ?? {},
       routing: raw.routing ?? {},
       webSearch: raw.webSearch ?? raw.web_search ?? {},
+      smartRouting: raw.smartRouting ?? {},
     };
   }
 
+  updateProviderCustomModelsList(providerId: string, list: string[]): boolean {
+    return this.updateProviderCowork(providerId, { customModelsList: list });
+  }
+
+  updateProviderCowork(
+    providerId: string,
+    patch: { customModelsList: string[]; modelMap?: Array<{ pattern: string; model: string }> }
+  ): boolean {
+    try {
+      const content = fs.readFileSync(this.configPath, "utf-8");
+      const rawConfig = yaml.load(content) as Record<string, unknown>;
+      const providers = rawConfig.providers as Record<string, unknown> | undefined;
+      if (!providers) {
+        return false;
+      }
+      const keys = Object.keys(providers);
+      const resolved = resolveProviderKeyInMap(keys, providerId);
+      if (!resolved) {
+        return false;
+      }
+      const providerRaw = providers[resolved];
+      if (!providerRaw || typeof providerRaw !== "object" || Array.isArray(providerRaw)) {
+        return false;
+      }
+      const providerObj = { ...(providerRaw as Record<string, unknown>) };
+      providerObj.customModelsList = patch.customModelsList;
+      providerObj.custom_models_list = patch.customModelsList;
+      providerObj.useCustomModelsList = true;
+      providerObj.use_custom_models_list = true;
+      if (patch.modelMap !== undefined) {
+        providerObj.modelMap = patch.modelMap;
+        providerObj.model_map = patch.modelMap;
+        providerObj.modelMappingEnabled = true;
+        providerObj.model_mapping_enabled = true;
+      }
+      providers[resolved] = providerObj;
+      rawConfig.providers = sortProviderMapKeys(providers as Record<string, ProviderConfigInput>);
+
+      const yamlContent = yaml.dump(rawConfig, {
+        indent: 2,
+        lineWidth: -1,
+        noRefs: true,
+        quotingType: '"',
+        forceQuotes: false,
+      });
+      this.saving = true;
+      fs.writeFileSync(this.configPath, yamlContent, "utf-8");
+      this.saving = false;
+      this.reload();
+      return true;
+    } catch (err) {
+      this.saving = false;
+      console.error("[ConfigManager] Failed to update provider Cowork config:", err);
+      return false;
+    }
+  }
+
   updateConfigSection(
-    section: "logging" | "concurrency" | "server" | "routing" | "webSearch",
+    section: "logging" | "concurrency" | "server" | "routing" | "webSearch" | "smartRouting",
     data: Record<string, unknown>,
     options?: { merge?: boolean }
   ): { ok: boolean; error?: string } {

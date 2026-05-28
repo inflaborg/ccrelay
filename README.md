@@ -323,7 +323,9 @@ vlModelMap:
 
 Starting from Claude Desktop 1.7196.0, the client rejects model IDs that contain third-party keywords such as `qwen`, `glm`, `kimi`, `deepseek`, etc. If you use third-party upstream models, map them to `claude-` prefixed aliases for Cowork only.
 
-The alias must be `claude-` followed by a single token **without additional hyphens** (e.g. `claude-a1`, not `claude-my-model`), because multi-hyphen names are parsed as Anthropic model versions.
+The alias must be `claude-` followed by a single token **without additional hyphens** (e.g. `claude-a1b2c3d4`, not `claude-my-model`), because multi-hyphen names are parsed as Anthropic model versions.
+
+Canonical alias ids (Wizard, Cowork helper, Smart Routing) use `claude-{8 hex}`: `SHA1(providerId:protocol:upstreamModelId)` truncated to 8 hex digits, prefixed with `smartRouting.aliasPrefix` (default `claude-`). The same upstream model on different providers or protocols gets a different alias.
 
 **Custom model list** (`customModelsList`): each line is `realModelId;displayName;alias` (or `realModelId;;alias` when display equals the real id). The real id is what upstream expects; `alias` is the Cowork-safe id.
 
@@ -342,11 +344,11 @@ glm:
   apiKey: "${GLM_API_KEY}"
   useCustomModelsList: true
   customModelsList:
-    - "glm-5.1;GLM 5.1;claude-a1"
-    - "glm-4.7;GLM 4.7;claude-a2"
+    - "glm-5.1;GLM 5.1;claude-363a702b"
+    - "glm-4.7;GLM 4.7;claude-02a1bc84"
   modelMap:
-    - { pattern: "claude-a1", model: "glm-5.1" }
-    - { pattern: "claude-a2", model: "glm-4.7" }
+    - { pattern: "claude-363a702b", model: "glm-5.1" }
+    - { pattern: "claude-02a1bc84", model: "glm-4.7" }
     - { pattern: "claude-*", model: "glm-5.1" }
     - { pattern: "gpt-*", model: "glm-5.1" }
 ```
@@ -354,10 +356,10 @@ glm:
 With this configuration:
 
 - **Without** `x-ccrelay-model-alias`: `GET /models` returns `glm-5.1` and `glm-4.7` (with display names when they differ from the id).
-- **With** `x-ccrelay-model-alias`: `GET /models` returns `claude-a1` / `claude-a2` as ids; Cowork selects those; CCRelay maps them to real upstream ids via `modelMap`.
+- **With** `x-ccrelay-model-alias`: `GET /models` returns canonical alias ids as wire `id`; Cowork selects those; CCRelay maps them to real upstream ids via `modelMap`.
 - The `claude-*` and `gpt-*` wildcards catch any other model names the client may send and route them to the first model.
 
-The built-in wizard writes `realId;displayName;claude-{hash}` lines and matching `modelMap` entries. Add `x-ccrelay-model-alias` in Claude Desktop for Cowork; omit it elsewhere.
+The built-in wizard and Cowork quick-fill helper generate `realId;displayName;claude-{hash}` lines and matching `modelMap` entries using the canonical hash above. Add `x-ccrelay-model-alias` in Claude Desktop for Cowork; omit it elsewhere. Use **Rebuild model map** in the provider editor to resync `modelMap` after editing `customModelsList` manually.
 
 #### Custom model list configuration UI
 
@@ -415,7 +417,8 @@ gemini:
 Built-in web dashboard accessible via Command Palette → `CCRelay: Open Dashboard` (VS Code) or tray menu → **Open Dashboard** (desktop app).
 
 - **Dashboard** — server status, current provider, token usage, performance metrics (TTFB, P50/P90 latency, output TPS) with time range selector
-- **Providers** — view, switch, duplicate, import/export providers
+- **Smart Routing** — aggregate all provider model lists; unified `/v1/models` with `<providerId>:<modelId>` ids; route each request to the matching provider by model (no provider switch / client restart when changing models)
+- **Providers** — configure upstream connections; duplicate, import/export providers
 - **Capabilities** — optional web search backends (**Tavily** and/or **GLM (Z.ai)**): API keys, GLM endpoint and protocol, default backend, and which providers answer web search locally
 - **Logs** — request/response log viewer with token columns, TTFB, output TPS, and model mapping display (hidden when logging is disabled)
 - **Settings** — manage YAML config in the UI; routing and concurrency hot-reload on save, server and logging changes require a restart
@@ -479,6 +482,21 @@ Each provider supports:
 | `vlModelMap`   | —                 | Vision model mappings (for multimodal requests)                                          |
 | `headers`      | —                 | Custom request headers                                                                   |
 | `enabled`      | `true`            | Enable/disable                                                                           |
+
+### Smart Routing
+
+Enable **Smart Routing** on the **Providers** tab (top card). It aggregates all enabled providers' model lists and routes each request to the matching provider by model id. Smart Routing and the single fallback provider are **mutually exclusive**: when Smart Routing is active, provider cards are deselected; choosing a fallback provider disables Smart Routing.
+
+Use the **Smart Routing** tab for settings only (alias prefix, bare model id fallback, exclude list, aggregated model table).
+
+| Setting                          | Default         | Description                                                                                    |
+| -------------------------------- | --------------- | ---------------------------------------------------------------------------------------------- |
+| `smartRouting.enabled`           | `false`         | Enable on the Providers tab. Aggregate provider models and route by `<providerId>:<modelId>`   |
+| `smartRouting.aliasPrefix`       | `"claude-"`     | Prefix for canonical alias ids (`claude-{8 hex}`) when client sends `x-ccrelay-model-alias`       |
+| `smartRouting.exclude`           | —               | Wildcard list of public model ids to hide from `/v1/models`                                    |
+| `smartRouting.include`           | —               | When set, only matching public ids are exposed (mutually exclusive with exclude)               |
+| `smartRouting.modelsCache.ttlSeconds` | `600`      | Upstream models list cache TTL for non-custom providers                                        |
+| `smartRouting.bareModelFallback.mode` | `first-match` | When client sends a bare model id (no prefix), match first provider in YAML order or reject |
 
 ### Routing
 

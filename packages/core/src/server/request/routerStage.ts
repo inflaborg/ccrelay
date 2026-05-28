@@ -105,6 +105,7 @@ export class RouterStage {
         method,
         path,
         provider: null as never,
+        clientHeaders: {},
         headers: {},
         targetUrl: "",
         targetPath: "",
@@ -120,7 +121,7 @@ export class RouterStage {
     }
 
     // type === "forward"
-    const { provider, isRouted } = result;
+    const { provider, isRouted, forwardRuleProvider } = result;
     const isOpenAIProvider = isOpenAIType(provider.providerType);
 
     // 2. Prepare headers
@@ -145,11 +146,13 @@ export class RouterStage {
       method,
       path,
       provider,
+      clientHeaders: originalHeaders,
       headers,
       targetUrl,
       targetPath,
       targetQuery,
       isRouted,
+      forwardRuleProvider,
       isOpenAIProvider,
       clientSurface: resolveInboundClientSurface(method, path, provider),
     };

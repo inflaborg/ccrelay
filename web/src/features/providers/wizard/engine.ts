@@ -1,3 +1,4 @@
+import { computeCanonicalAliasHash, type AliasHashProtocol } from "@ccrelay/shared/aliasHash";
 import type { AddProviderRequest, ModelMapEntry } from "../../../types/api";
 import type { PartnerPreset, WizardInput } from "./types";
 
@@ -82,24 +83,6 @@ export function buildTemplateValues(
   return values;
 }
 
-/** 32-bit FNV-1a hash (unsigned) for stable short ids. */
-function fnv1a32(str: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
-
-/**
- * Stable 6-char lowercase hex suffix for wizard `claude-{hash}` aliases.
- * Derived only from upstream model id (no index) so clients see a single hyphenated segment.
- */
-export function stableModelHash(upstreamId: string): string {
-  return fnv1a32(upstreamId).toString(16).padStart(8, "0").slice(-6);
-}
-
 /**
  * Parse one `customModelsList` line into real id + display name for editor UI (alias segment ignored).
  * Supports `id`, `id;display`, `id;display;alias`, and `id;;alias`. Aligns with server `parseCustomModelLine`.
@@ -162,11 +145,25 @@ function parseWizardModelLine(line: string): { upstreamId: string; displayName: 
   return { upstreamId, displayName: dn.length > 0 ? dn : upstreamId };
 }
 
-export function buildModelConfig(
-  modelIds: string[],
-  claudeSupport: boolean,
-  useCustomModels: boolean
-):
+function aliasForModel(
+  providerId: string,
+  providerType: AliasHashProtocol,
+  upstreamId: string,
+  aliasPrefix: string
+): string {
+  return computeCanonicalAliasHash(providerId, providerType, upstreamId, aliasPrefix);
+}
+
+export interface BuildModelConfigInput {
+  providerId: string;
+  providerType: AliasHashProtocol;
+  aliasPrefix: string;
+  modelIds: string[];
+  claudeSupport: boolean;
+  useCustomModels: boolean;
+}
+
+export function buildModelConfig(input: BuildModelConfigInput):
   | {
       useCustomModelsList: true;
       customModelsList: string[];
@@ -178,6 +175,8 @@ export function buildModelConfig(
       modelMap: ModelMapEntry[];
       modelMappingEnabled: true;
     } {
+  const { providerId, providerType, aliasPrefix, modelIds, claudeSupport, useCustomModels } = input;
+
   const parsed = modelIds
     .map(s => s.trim())
     .filter(s => s.length > 0)
@@ -188,7 +187,7 @@ export function buildModelConfig(
   if (useCustomModels) {
     if (claudeSupport) {
       parsed.forEach(m => {
-        const alias = `claude-${stableModelHash(m.upstreamId)}`;
+        const alias = aliasForModel(providerId, providerType, m.upstreamId, aliasPrefix);
         modelMap.push({ pattern: alias, model: m.upstreamId });
       });
       if (parsed.length > 0) {
@@ -196,7 +195,7 @@ export function buildModelConfig(
         modelMap.push({ pattern: "claude-*", model: first }, { pattern: "gpt-*", model: first });
       }
       const customModelsList = parsed.map(m => {
-        const alias = `claude-${stableModelHash(m.upstreamId)}`;
+        const alias = aliasForModel(providerId, providerType, m.upstreamId, aliasPrefix);
         const real = m.upstreamId;
         const dn = m.displayName;
         if (dn === real) {
@@ -263,7 +262,7 @@ export function generateProviders(preset: PartnerPreset, input: WizardInput): Ad
   }
 
   const templateValues = buildTemplateValues(preset, input.selections, input.userBaseUrl);
-  const modelPart = buildModelConfig(input.modelIds, input.claudeSupport, input.useCustomModels);
+  const aliasPrefix = input.aliasPrefix ?? "claude-";
   const authHeader = resolveAuthHeader(preset, input.selections);
   const nameRoot = input.nameBase?.trim() || preset.namePrefix;
 
@@ -275,6 +274,15 @@ export function generateProviders(preset: PartnerPreset, input: WizardInput): Ad
     const id = [preset.idPrefix, idSuffix].filter(s => s.length > 0).join("-");
     const nameParts = [nameRoot, nameSuffix].filter(s => s.length > 0);
     const name = nameParts.join("-");
+
+    const modelPart = buildModelConfig({
+      providerId: id,
+      providerType: variant.providerType,
+      aliasPrefix,
+      modelIds: input.modelIds,
+      claudeSupport: input.claudeSupport,
+      useCustomModels: input.useCustomModels,
+    });
 
     const req: AddProviderRequest = {
       id,

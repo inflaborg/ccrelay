@@ -11,6 +11,7 @@
   "nav": {
     "clientConfig": "客户端配置",
     "dashboard": "仪表盘",
+    "smartRouting": "智能路由",
     "providers": "提供商",
     "capabilities": "能力",
     "logs": "日志",
@@ -213,9 +214,66 @@
       "removeAll": "从文件中移除全部"
     }
   },
+  "smartRouting": {
+    "title": "智能路由",
+    "subtitle": "聚合各供应商模型列表，按 model id 自动路由请求",
+    "refreshAll": "刷新缓存",
+    "disabledHint": "智能路由未启用。请在供应商页面启用以聚合模型并按 model id 路由。",
+    "goToProviders": "前往供应商",
+    "settings": {
+      "title": "设置",
+      "aliasPrefix": "别名前缀",
+      "bareFallback": "裸 model id 兜底",
+      "firstMatch": "首个匹配（按 provider 排序）",
+      "reject": "拒绝"
+    },
+    "catalog": {
+      "title": "聚合模型",
+      "models": "个模型",
+      "statsBadge": "{{providers}} 个供应商 · {{models}} 个模型",
+      "previewHint": "当前仅为预览。智能路由尚未启用，请在「供应商」页面启用。",
+      "empty": "目录为空。请刷新缓存或配置供应商。",
+      "emptyWithErrors": "未聚合到任何模型。请先修复上方供应商拉取错误并刷新缓存。",
+      "publicId": "公开 ID",
+      "aliasHash": "别名 Hash",
+      "protocol": "协议",
+      "source": "来源",
+      "excluded": "排除",
+      "reload": "重新加载"
+    },
+    "providerErrors": {
+      "title": "部分供应商拉取模型失败",
+      "editProvider": "在供应商中编辑",
+      "auth": "{{providerId}}：认证失败",
+      "missing_key": "{{providerId}}：缺少 API Key",
+      "network": "{{providerId}}：网络错误",
+      "format": "{{providerId}}：响应或 Base URL 无效"
+    },
+    "aliasDrift": {
+      "title": "Alias Hash 差异",
+      "description": "部分自定义模型 alias 与 canonical hash 不一致。建议更新以避免跨 provider 碰撞。",
+      "keep": "保留",
+      "update": "更新",
+      "updateAll": "全部更新",
+      "keepAllNonCollision": "保留非碰撞项",
+      "collisionWarning": "与以下条目 alias 重复：{{peers}}。保留后该 alias 可能走兜底路由。"
+    }
+  },
   "providers": {
-    "title": "提供商",
-    "subtitle": "管理并在 AI API 提供商之间切换",
+    "title": "供应商",
+    "subtitle": "选择智能路由或具体供应商作为路由源",
+    "section": {
+      "smartRouting": "智能路由",
+      "upstream": "供应商"
+    },
+    "smartRoutingCard": {
+      "summary": "聚合 {{providers}} 个供应商 · {{models}} 个模型",
+      "summaryDisabled": "可聚合 {{providers}} 个供应商 · {{models}} 个模型，点击启用。",
+      "enable": "启用",
+      "disable": "停用",
+      "active": "使用中",
+      "lastRefreshed": "上次刷新：{{time}}"
+    },
     "reloadConfig": "重新加载配置",
     "add": "添加",
     "protocol": {
@@ -232,12 +290,12 @@
     "badge": {
       "mappingOff": "映射已关",
       "disabled": "已禁用",
-      "active": "当前使用"
+      "active": "使用中"
     },
     "badgeShort": {
       "mappingOff": "映射关",
       "disabled": "禁用",
-      "active": "在用"
+      "active": "使用中"
     },
     "card": {
       "id": "ID",
@@ -279,7 +337,10 @@
       "coworkHelperAdd": "添加一行",
       "coworkHelperPreview": "预览",
       "coworkHelperApply": "应用",
-      "coworkHelperRemoveRow": "删除此行"
+      "coworkHelperRemoveRow": "删除此行",
+      "coworkHelperRequiresId": "请先填写 Provider ID 与协议类型，再生成 alias。",
+      "rebuildModelMap": "重建 modelMap",
+      "rebuildModelMapHelp": "根据自定义模型列表重建 alias 精确映射，并保留 wildcard 规则。"
     },
     "validation": {
       "mustBeYamlArray": "必须是 YAML 数组",
