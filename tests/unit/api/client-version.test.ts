@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   setExecFileAsyncForTests,
   detectClaudeCliVersion,
@@ -48,6 +48,7 @@ describe("detectClaudeCliVersion", () => {
 
   afterEach(() => {
     setExecFileAsyncForTests(null);
+    vi.restoreAllMocks();
   });
 
   it("returns disabled when detection is turned off", async () => {
@@ -56,13 +57,19 @@ describe("detectClaudeCliVersion", () => {
     });
   });
 
-  it("returns ok with trimmed version output", async () => {
-    setExecFileAsyncForTests(() =>
-      Promise.resolve({
-        stdout: "  2.1.153 (Claude Code)\n",
-        stderr: "",
-      })
-    );
+  it("returns ok with trimmed version output after which resolves claude on unix", async () => {
+    vi.spyOn(process, "platform", "get").mockReturnValue("darwin");
+    setExecFileAsyncForTests((file, args) => {
+      if (file.endsWith("/which") && args[0] === "claude") {
+        return Promise.resolve({ stdout: "/usr/local/bin/claude\n", stderr: "" });
+      }
+      if (args[0] === "--version") {
+        return Promise.resolve({ stdout: "  2.1.153 (Claude Code)\n", stderr: "" });
+      }
+      return Promise.reject(
+        Object.assign(new Error(`unexpected exec ${file} ${args.join(" ")}`), { code: "ENOENT" })
+      );
+    });
 
     await expect(detectClaudeCliVersion()).resolves.toEqual({
       status: "ok",
@@ -70,46 +77,107 @@ describe("detectClaudeCliVersion", () => {
     });
   });
 
+  it("invokes claude directly on windows without which", async () => {
+    vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+    const calls: string[] = [];
+    setExecFileAsyncForTests((file, args) => {
+      calls.push(`${file} ${args.join(" ")}`);
+      if (file === "claude" && args[0] === "--version") {
+        return Promise.resolve({ stdout: "2.1.0\n", stderr: "" });
+      }
+      return Promise.reject(Object.assign(new Error("missing"), { code: "ENOENT" }));
+    });
+
+    await expect(detectClaudeCliVersion()).resolves.toEqual({
+      status: "ok",
+      version: "2.1.0",
+    });
+    expect(calls).toEqual(["claude --version"]);
+  });
+
+  it("accepts version output on stderr", async () => {
+    vi.spyOn(process, "platform", "get").mockReturnValue("linux");
+    setExecFileAsyncForTests((file, args) => {
+      if (file.endsWith("/which") && args[0] === "claude") {
+        return Promise.resolve({ stdout: "/usr/local/bin/claude\n", stderr: "" });
+      }
+      if (args[0] === "--version") {
+        return Promise.resolve({ stdout: "", stderr: "2.1.99\n" });
+      }
+      return Promise.reject(Object.assign(new Error("missing"), { code: "ENOENT" }));
+    });
+
+    await expect(detectClaudeCliVersion()).resolves.toEqual({
+      status: "ok",
+      version: "2.1.99",
+    });
+  });
+
   it("truncates overly long stdout", async () => {
-    setExecFileAsyncForTests(() =>
-      Promise.resolve({
-        stdout: "x".repeat(250),
-        stderr: "",
-      })
-    );
+    vi.spyOn(process, "platform", "get").mockReturnValue("darwin");
+    setExecFileAsyncForTests((file, args) => {
+      if (file.endsWith("/which") && args[0] === "claude") {
+        return Promise.resolve({ stdout: "/usr/local/bin/claude\n", stderr: "" });
+      }
+      if (args[0] === "--version") {
+        return Promise.resolve({ stdout: "x".repeat(250), stderr: "" });
+      }
+      return Promise.reject(Object.assign(new Error("missing"), { code: "ENOENT" }));
+    });
     const result = await detectClaudeCliVersion();
     expect(result.status).toBe("ok");
     expect(result.version).toHaveLength(200);
   });
 
-  it("maps exec errors to status codes", async () => {
+  it("returns not_found when claude cannot be resolved on unix", async () => {
+    vi.spyOn(process, "platform", "get").mockReturnValue("darwin");
     setExecFileAsyncForTests(() =>
       Promise.reject(Object.assign(new Error("missing"), { code: "ENOENT" }))
     );
     await expect(detectClaudeCliVersion()).resolves.toMatchObject({
       status: "not_found",
-      errorCode: "ENOENT",
     });
+  });
 
-    setExecFileAsyncForTests(() =>
-      Promise.reject(Object.assign(new Error("timeout"), { code: "ETIMEDOUT" }))
-    );
+  it("maps exec errors to status codes", async () => {
+    vi.spyOn(process, "platform", "get").mockReturnValue("darwin");
+    setExecFileAsyncForTests((file, args) => {
+      if (file.endsWith("/which") && args[0] === "claude") {
+        return Promise.resolve({ stdout: "/usr/local/bin/claude\n", stderr: "" });
+      }
+      if (args[0] === "--version") {
+        return Promise.reject(Object.assign(new Error("timeout"), { code: "ETIMEDOUT" }));
+      }
+      return Promise.reject(Object.assign(new Error("missing"), { code: "ENOENT" }));
+    });
     await expect(detectClaudeCliVersion()).resolves.toMatchObject({
       status: "timeout",
       errorCode: "ETIMEDOUT",
     });
 
-    setExecFileAsyncForTests(() =>
-      Promise.reject(Object.assign(new Error("denied"), { code: "EPERM" }))
-    );
+    setExecFileAsyncForTests((file, args) => {
+      if (file.endsWith("/which") && args[0] === "claude") {
+        return Promise.resolve({ stdout: "/usr/local/bin/claude\n", stderr: "" });
+      }
+      if (args[0] === "--version") {
+        return Promise.reject(Object.assign(new Error("denied"), { code: "EPERM" }));
+      }
+      return Promise.reject(Object.assign(new Error("missing"), { code: "ENOENT" }));
+    });
     await expect(detectClaudeCliVersion()).resolves.toMatchObject({
       status: "blocked",
       errorCode: "EPERM",
     });
 
-    setExecFileAsyncForTests(() =>
-      Promise.reject(Object.assign(new Error("boom"), { code: "ERR_FAILED" }))
-    );
+    setExecFileAsyncForTests((file, args) => {
+      if (file.endsWith("/which") && args[0] === "claude") {
+        return Promise.resolve({ stdout: "/usr/local/bin/claude\n", stderr: "" });
+      }
+      if (args[0] === "--version") {
+        return Promise.reject(Object.assign(new Error("boom"), { code: "ERR_FAILED" }));
+      }
+      return Promise.reject(Object.assign(new Error("missing"), { code: "ENOENT" }));
+    });
     await expect(detectClaudeCliVersion()).resolves.toMatchObject({
       status: "error",
       errorCode: "ERR_FAILED",

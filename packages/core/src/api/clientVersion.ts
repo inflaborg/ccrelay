@@ -29,6 +29,13 @@ function getExecFileAsync(): CliVersionExecFn {
 
 const VERSION_DIR_RE = /^\d+\.\d+\.\d+(-[\w.]+)?$/;
 const MAX_CLI_VERSION_LENGTH = 200;
+const WHICH_BINARIES = ["/usr/bin/which", "/bin/which"];
+
+const EXEC_BASE_OPTS = {
+  env: process.env,
+  maxBuffer: 4096,
+  windowsHide: true,
+};
 
 export interface ClaudeDesktopBundleVersions {
   native: string[];
@@ -150,21 +157,84 @@ function mapExecError(err: unknown): ClaudeCliVersionInfo {
   return { status: "error", errorCode: code, message };
 }
 
-export async function detectClaudeCliVersion(opts?: {
-  enabled?: boolean;
-}): Promise<ClaudeCliVersionInfo> {
-  if (opts?.enabled === false) {
-    return { status: "disabled" };
-  }
+function firstNonEmptyLine(text: string): string {
+  return (
+    text
+      .trim()
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .find(line => line.length > 0) ?? ""
+  );
+}
 
+async function runExec(
+  file: string,
+  args: readonly string[],
+  timeoutMs: number,
+  options?: { cwd?: string }
+): Promise<{ stdout: string; stderr: string }> {
+  return getExecFileAsync()(file, args, {
+    ...EXEC_BASE_OPTS,
+    timeout: timeoutMs,
+    ...(options?.cwd ? { cwd: options.cwd } : {}),
+  });
+}
+
+/** Avoid project-local asdf/mise `.tool-versions` breaking global CLI shims. */
+function claudeExecCwd(): string {
+  return os.homedir();
+}
+
+async function resolveClaudeViaWhich(): Promise<string | null> {
+  for (const whichBin of WHICH_BINARIES) {
+    try {
+      if (!fs.existsSync(whichBin)) {
+        continue;
+      }
+      const { stdout } = await runExec(whichBin, ["claude"], 3000, { cwd: claudeExecCwd() });
+      const line = firstNonEmptyLine(stdout);
+      if (line) {
+        return line;
+      }
+    } catch {
+      // try next which binary
+    }
+  }
+  return null;
+}
+
+function claudeCandidatePaths(): string[] {
+  const home = os.homedir();
+  return [
+    "/opt/homebrew/bin/claude",
+    "/usr/local/bin/claude",
+    path.join(home, ".local", "bin", "claude"),
+  ];
+}
+
+function resolveClaudeFromKnownLocations(): string | null {
+  for (const candidate of claudeCandidatePaths()) {
+    try {
+      if (fs.existsSync(candidate)) {
+        return candidate;
+      }
+    } catch {
+      // continue
+    }
+  }
+  return null;
+}
+
+async function resolveClaudeExecutableOnUnix(): Promise<string | null> {
+  return (await resolveClaudeViaWhich()) ?? resolveClaudeFromKnownLocations();
+}
+
+async function readClaudeVersionFromExecutable(claudePath: string): Promise<ClaudeCliVersionInfo> {
   try {
-    const { stdout } = await getExecFileAsync()("claude", ["--version"], {
-      env: process.env,
-      timeout: 3000,
-      maxBuffer: 4096,
-      windowsHide: true,
+    const { stdout, stderr } = await runExec(claudePath, ["--version"], 8000, {
+      cwd: claudeExecCwd(),
     });
-    const version = trimCliVersionOutput(String(stdout));
+    const version = trimCliVersionOutput(String(stdout || stderr));
     if (!version) {
       return { status: "error", message: "Empty version output" };
     }
@@ -172,4 +242,23 @@ export async function detectClaudeCliVersion(opts?: {
   } catch (err) {
     return mapExecError(err);
   }
+}
+
+export async function detectClaudeCliVersion(opts?: {
+  enabled?: boolean;
+}): Promise<ClaudeCliVersionInfo> {
+  if (opts?.enabled === false) {
+    return { status: "disabled" };
+  }
+
+  if (process.platform === "win32") {
+    return readClaudeVersionFromExecutable("claude");
+  }
+
+  const claudePath = await resolveClaudeExecutableOnUnix();
+  if (!claudePath) {
+    return { status: "not_found", message: "claude CLI not found on PATH" };
+  }
+
+  return readClaudeVersionFromExecutable(claudePath);
 }

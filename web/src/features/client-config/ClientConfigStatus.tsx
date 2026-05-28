@@ -486,15 +486,16 @@ export default function ClientConfigStatus() {
                 detectionToggleMutation.mutate(checked === true);
               }}
             />
-            <div className="grid gap-1 leading-snug">
-              <Label
-                htmlFor="client-version-detection"
-                className="text-xs font-normal cursor-pointer"
-              >
-                {t("clientConfig.version.detectionToggle")}
-              </Label>
-              <p className={metaText}>{t("clientConfig.version.detectionToggleHint")}</p>
-            </div>
+            <Label
+              htmlFor="client-version-detection"
+              className="text-xs font-normal cursor-pointer leading-relaxed"
+            >
+              {t("clientConfig.version.detectionToggle")}
+              <span className="text-muted-foreground font-normal">
+                {" "}
+                {t("clientConfig.version.detectionToggleHint")}
+              </span>
+            </Label>
           </div>
         </CardHeader>
         <CardContent className="p-4 pt-0 space-y-3">

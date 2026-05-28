@@ -187,7 +187,7 @@
       "cliNotDetected": "Not detected",
       "cliDisabled": "Detection disabled in settings",
       "detectionToggle": "Detect Claude CLI version",
-      "detectionToggleHint": "Runs `claude --version` in background",
+      "detectionToggleHint": "(runs `claude --version` in background)",
       "refresh": "Refresh version"
     },
     "dialog": {
