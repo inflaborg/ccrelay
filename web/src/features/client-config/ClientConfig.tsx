@@ -30,15 +30,15 @@ export default function ClientConfig() {
           type="button"
           size="sm"
           variant="outline"
-          className="h-7 text-xs gap-1 shrink-0"
+          className="h-8 text-xs gap-1 shrink-0"
           onClick={handleRefresh}
           disabled={refreshing}
           title={t("common.refresh")}
         >
           {refreshing ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
-            <RotateCw className="h-3 w-3" />
+            <RotateCw className="h-3.5 w-3.5" />
           )}
           <span className="hidden sm:inline">{t("common.refresh")}</span>
         </Button>

@@ -99,6 +99,7 @@
     "title": "Client configuration",
     "pageSubtitle": "Point Claude Desktop, Claude Code, and Codex at this CCRelay instance",
     "description": "Check Claude Desktop, Claude Code ({{claudePath}}), and Codex ({{codexPath}}) configs point to this CCRelay instance (port {{port}}).",
+    "copyPath": "Copy path",
     "status": {
       "ok": "OK",
       "notSet": "Not set",

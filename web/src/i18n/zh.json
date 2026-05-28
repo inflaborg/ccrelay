@@ -99,6 +99,7 @@
     "title": "客户端配置",
     "pageSubtitle": "将 Claude Desktop、Claude Code 和 Codex 指向此 CCRelay 实例",
     "description": "检查 Claude Desktop、Claude Code（{{claudePath}}）和 Codex（{{codexPath}}）配置是否指向此 CCRelay 实例（端口 {{port}}）。",
+    "copyPath": "复制路径",
     "status": {
       "ok": "正常",
       "notSet": "未设置",
