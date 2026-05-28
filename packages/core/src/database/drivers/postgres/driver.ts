@@ -558,13 +558,17 @@ export class PostgresDriver implements DatabaseDriver {
       const pid = String(row.provider_id);
       const count = num(row.count);
       byProvider[pid] = count;
+      const inputTokens = num(row.totalInputTokens);
+      const cacheTokens = num(row.totalCacheTokens);
+      const denom = inputTokens + cacheTokens;
       providerBreakdown.push({
         providerId: pid,
         providerName: String(row.provider_name ?? pid),
         count,
-        totalInputTokens: num(row.totalInputTokens),
+        totalInputTokens: inputTokens,
         totalOutputTokens: num(row.totalOutputTokens),
-        totalCacheTokens: num(row.totalCacheTokens),
+        totalCacheTokens: cacheTokens,
+        cacheHitRate: denom > 0 ? Math.round((cacheTokens / denom) * 100) : 0,
       });
     }
 

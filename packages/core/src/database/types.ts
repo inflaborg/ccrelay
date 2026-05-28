@@ -85,6 +85,7 @@ export interface ProviderStatRow {
   totalInputTokens: number;
   totalOutputTokens: number;
   totalCacheTokens: number;
+  cacheHitRate: number;
 }
 
 /**

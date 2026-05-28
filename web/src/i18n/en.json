@@ -80,7 +80,8 @@
       "title": "Provider Breakdown",
       "provider": "Provider",
       "requests": "Requests",
-      "tokens": "Tokens"
+      "tokens": "Tokens",
+      "cacheHitRate": "Cache Hit Rate"
     },
     "queue": {
       "title": "Concurrency Queue",

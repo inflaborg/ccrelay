@@ -362,6 +362,9 @@ export default function Dashboard() {
                     <th className="text-right py-1.5 pl-2 text-muted-foreground font-medium">
                       {t("dashboard.tokens.cache")}
                     </th>
+                    <th className="text-right py-1.5 pl-2 text-muted-foreground font-medium">
+                      {t("dashboard.providerBreakdown.cacheHitRate")}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -380,6 +383,9 @@ export default function Dashboard() {
                       </td>
                       <td className="text-right py-1.5 pl-2 font-mono text-muted-foreground">
                         {formatTokenCount(p.totalCacheTokens)}
+                      </td>
+                      <td className="text-right py-1.5 pl-2 font-mono">
+                        {p.cacheHitRate != null ? `${p.cacheHitRate}%` : "-"}
                       </td>
                     </tr>
                   ))}

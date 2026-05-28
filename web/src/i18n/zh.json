@@ -80,7 +80,8 @@
       "title": "提供商分布",
       "provider": "提供商",
       "requests": "请求数",
-      "tokens": "Token"
+      "tokens": "Token",
+      "cacheHitRate": "缓存命中率"
     },
     "queue": {
       "title": "并发队列",
