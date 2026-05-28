@@ -11,3 +11,32 @@ export const SMART_ROUTING_VIRTUAL_PROVIDER: Provider = {
   providerType: "anthropic",
   enabled: true,
 };
+
+export function isSmartRoutingEnabled(config: {
+  smartRoutingConfig?: { enabled?: boolean };
+}): boolean {
+  return config.smartRoutingConfig?.enabled === true;
+}
+
+export function resolveEffectiveRoutingStatus(
+  config: { smartRoutingConfig?: { enabled?: boolean } },
+  router: { getCurrentProviderId(): string; getCurrentProvider(): Provider | undefined }
+): {
+  currentProvider: string;
+  providerName?: string;
+  providerMode?: Provider["mode"];
+} {
+  if (isSmartRoutingEnabled(config)) {
+    return {
+      currentProvider: SMART_ROUTING_PROVIDER_ID,
+      providerName: SMART_ROUTING_VIRTUAL_PROVIDER.name,
+      providerMode: SMART_ROUTING_VIRTUAL_PROVIDER.mode,
+    };
+  }
+  const provider = router.getCurrentProvider();
+  return {
+    currentProvider: router.getCurrentProviderId(),
+    providerName: provider?.name,
+    providerMode: provider?.mode,
+  };
+}

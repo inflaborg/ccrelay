@@ -287,13 +287,23 @@ export async function deactivate(): Promise<void> {
       const role = server.getRole();
       logger?.info(`[Extension] Deactivating with role: ${role}`);
 
-      const stopPromise = server.stop();
-      const timeoutPromise = timeout(5000).then(() => {
-        logger?.warn("[Extension] Server stop timed out after 5s, forcing cleanup");
+      let stopTimedOut = false;
+      const stopPromise = server.stop().catch(err => {
+        logger?.error("[Extension] Error during server.stop()", err);
       });
 
-      await Promise.race([stopPromise, timeoutPromise]);
-      await Promise.race([stopPromise, timeout(1000)]);
+      await Promise.race([
+        stopPromise,
+        timeout(5000).then(async () => {
+          stopTimedOut = true;
+          logger?.warn("[Extension] Server stop timed out after 5s, forcing coordination cleanup");
+          await server!.forceStopCoordination();
+        }),
+      ]);
+
+      if (!stopTimedOut) {
+        await stopPromise;
+      }
 
       logger?.info("[Extension] Server stopped successfully");
     }

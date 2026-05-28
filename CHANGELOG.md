@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **UI**
 
+- When the proxy is stopped or unreachable, the dashboard shows a **Server not running** screen and polls until the server is back.
 - **Smart Routing** tab between Dashboard and Providers: aggregates all provider model lists, exposes unified `/v1/models` with `<providerId>:<modelId>` ids, and routes requests by model without switching the active provider.
 - **Providers** page: Smart Routing card and provider cards are mutually exclusive routing modes — enable Smart Routing from the Providers tab; selecting a fallback provider disables Smart Routing. Aggregated catalog shows provider fetch errors when upstream model lists fail.
 - **Client configuration** page shows installed Claude Desktop claude-code bundles (scanned from the Claude-3p directory) and the Claude Code CLI version (via `claude --version`). CLI version detection can be disabled on the page.
@@ -20,13 +21,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `smartRouting` section in `config.yaml` (`enabled`, include/exclude filters, alias prefix, upstream models cache TTL). Optional alias-drift migration when enabling smart routing updates legacy custom model aliases that collide across providers.
 - `clientVersionDetection` section in `config.yaml` (`enabled`, default true) controls whether the dashboard runs `claude --version` for Client configuration.
 
+**Desktop**
+
+- Electron desktop app serves the dashboard from bundled UI assets, so the window can open even when the HTTP proxy is not running.
+
 ### Changed
 
 **UI**
 
+- Dashboard **Overview** combines server status, current provider, and total requests in one card, aligned with Performance and Token Usage.
 - Provider wizard and Cowork quick-fill generate canonical alias hashes (`claude-{8 hex}` from `providerId:protocol:upstreamModelId`); the same upstream model on different providers or protocols gets a different alias.
 
 ### Fixed
+
+**UI**
+
+- Dashboard and VS Code status bar show **Smart Routing** as the current provider when smart routing is enabled; the status bar **Switch Provider** menu can enable or disable Smart Routing.
+- Electron desktop dashboard no longer fails to load scripts and styles when opened while the proxy is stopped.
+
+**Multi-instance**
+
+- Leader election across VS Code extension and desktop instances now follows the active HTTP proxy port: only the serving instance holds the leader role, stale instances release coordination after reload or shutdown, and followers recover within a short polling window when the leader stops.
 
 **Config**
 

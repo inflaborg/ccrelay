@@ -165,6 +165,7 @@ export interface ProviderBreakdownRow {
   totalInputTokens: number;
   totalOutputTokens: number;
   totalCacheTokens: number;
+  cacheHitRate: number;
 }
 
 export interface LogStats {

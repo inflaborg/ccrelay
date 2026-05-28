@@ -131,6 +131,71 @@ export class ProxyServer {
   }
 
   /**
+   * Handle HTTP server start failure after winning leadership election.
+   */
+  private async handleLeaderServerStartFailure(err: unknown): Promise<void> {
+    this.serverStartInProgress = false;
+    this.log.error(
+      `[Server:${this.instanceId}] Failed to start server as leader, releasing leadership`,
+      err
+    );
+
+    await this.database.close();
+
+    if (!this.leaderElection) {
+      return;
+    }
+
+    const isPortInUse =
+      err instanceof Error && "code" in err && (err as NodeJS.ErrnoException).code === "EADDRINUSE";
+
+    if (isPortInUse) {
+      const portConflict = await this.leaderElection.handlePortConflict();
+      if (portConflict.becameFollower && portConflict.leaderUrl) {
+        this.role = "follower";
+        this.leaderUrl = portConflict.leaderUrl;
+        await this.ensureFollowerNoLogStorage();
+        this.connectToLeader(portConflict.leaderUrl);
+        this.log.info(
+          `[Server:${this.instanceId}] Demoted to follower of port holder at ${portConflict.leaderUrl}`
+        );
+        return;
+      }
+    }
+
+    this.leaderElection.recordLeadershipFailure();
+    await this.leaderElection.releaseLeadership();
+    this.role = "follower";
+    this.leaderUrl = null;
+
+    if (!this.leaderElection.hasExternalPortConflict()) {
+      this.leaderElection.startMonitoringAsFollower();
+    }
+
+    await this.ensureFollowerNoLogStorage();
+  }
+
+  /**
+   * Force-stop coordination (lock/IPC/heartbeat) without waiting for HTTP shutdown.
+   */
+  async forceStopCoordination(): Promise<void> {
+    if (this.leaderElection) {
+      await this.leaderElection.forceStop();
+    }
+
+    this.stopWsServer();
+    this.disconnectFromLeader();
+
+    void this.stopServerOnly().catch(stopErr => {
+      this.log.error("[Server] Error force-stopping HTTP server", stopErr);
+    });
+
+    void this.database.close().catch(closeErr => {
+      this.log.error("[Server] Error force-closing database", closeErr);
+    });
+  }
+
+  /**
    * Open persisted logs only on the leader (before HTTP accepts proxy traffic).
    */
   private async ensureLeaderLogStorage(): Promise<void> {
@@ -194,38 +259,31 @@ export class ProxyServer {
             this.leaderElection.notifyServerStarted();
           }
         } catch (err) {
-          this.serverStartInProgress = false;
-          this.log.error("[Server] Failed to start server after becoming leader", err);
-          await this.database.close();
-          if (this.leaderElection) {
-            this.leaderElection.recordLeadershipFailure();
-            await this.leaderElection.releaseLeadership();
-            this.role = "follower";
-            this.leaderUrl = null;
-
-            if (!this.leaderElection.hasExternalPortConflict()) {
-              this.leaderElection.startMonitoringAsFollower();
-            }
-            this.log.info("[Server] Released leadership after server start failure");
-          }
+          await this.handleLeaderServerStartFailure(err);
         }
       })();
     }
 
-    // If we became a follower and server is running, stop it
-    if (info.role === "follower" && this.isRunning) {
-      this.log.info("[Server] Became follower, stopping HTTP server and log storage");
-      this.stopServerOnly()
-        .then(async () => {
-          await this.database.close();
-          this.stopWsServer();
-          if (this.leaderElection) {
-            this.leaderElection.notifyServerStopped();
+    // If we became a follower, release coordination and stop HTTP if still running
+    if (info.role === "follower" && (this.isRunning || oldRole === "leader")) {
+      this.log.info("[Server] Became follower, stopping HTTP server and releasing coordination");
+      void (async () => {
+        try {
+          if (this.isRunning) {
+            await this.stopServerOnly();
+            await this.database.close();
+            this.stopWsServer();
+            if (this.leaderElection) {
+              this.leaderElection.notifyServerStopped();
+            }
           }
-        })
-        .catch(err => {
-          this.log.error("[Server] Failed to stop server after becoming follower", err);
-        });
+          if (this.leaderElection) {
+            await this.leaderElection.releaseCoordinationOnDemotion();
+          }
+        } catch (stopErr) {
+          this.log.error("[Server] Failed to stop server after becoming follower", stopErr);
+        }
+      })();
     }
 
     // Notify status bar to update
@@ -463,28 +521,7 @@ export class ProxyServer {
           // Notify election that server started successfully
           this.leaderElection.notifyServerStarted();
         } catch (err) {
-          this.serverStartInProgress = false;
-          // Server failed to start (port in use by external process)
-          this.log.error(
-            `[Server:${this.instanceId}] Failed to start server as leader, releasing leadership`,
-            err
-          );
-
-          await this.database.close();
-
-          // Record failure and release leadership
-          this.leaderElection.recordLeadershipFailure();
-          await this.leaderElection.releaseLeadership();
-          this.role = "follower";
-          this.leaderUrl = null;
-
-          // Continue monitoring unless we've hit max failures
-          if (!this.leaderElection.hasExternalPortConflict()) {
-            this.leaderElection.startMonitoringAsFollower();
-          }
-
-          await this.ensureFollowerNoLogStorage();
-
+          await this.handleLeaderServerStartFailure(err);
           return { role: this.role, leaderUrl: this.leaderUrl ?? undefined };
         }
       } else {

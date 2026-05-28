@@ -7,6 +7,11 @@ import * as http from "http";
 import { getDatabase } from "../database";
 import { sendJson } from "./index";
 import { rejectLogStorageApiIfNotLeader } from "./serverRef";
+import { SMART_ROUTING_PROVIDER_ID } from "../server/smartRouting/virtualProvider";
+
+function omitVirtualProviderFromBreakdown<T extends { providerId: string }>(rows: T[]): T[] {
+  return rows.filter(row => row.providerId !== SMART_ROUTING_PROVIDER_ID);
+}
 
 export async function handleStats(
   req: http.IncomingMessage,
@@ -54,5 +59,8 @@ export async function handleStats(
   }
 
   const stats = await db.getStats(since ? { since } : undefined);
-  sendJson(res, 200, stats);
+  sendJson(res, 200, {
+    ...stats,
+    providerBreakdown: omitVirtualProviderFromBreakdown(stats.providerBreakdown),
+  });
 }

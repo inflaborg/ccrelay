@@ -8,6 +8,13 @@
     "apply": "应用",
     "delete": "删除"
   },
+  "serverOffline": {
+    "title": "服务器未运行",
+    "description": "当前没有可用的 CCRelay 实例。请从桌面托盘或扩展菜单启动服务器。",
+    "checking": "正在检测服务器…",
+    "waiting": "等待服务器恢复…",
+    "hint": "服务器恢复后将自动返回管理界面。"
+  },
   "nav": {
     "clientConfig": "客户端配置",
     "dashboard": "仪表盘",
@@ -73,7 +80,8 @@
       "title": "提供商分布",
       "provider": "提供商",
       "requests": "请求数",
-      "tokens": "Token"
+      "tokens": "Token",
+      "cacheHitRate": "缓存命中率"
     },
     "queue": {
       "title": "并发队列",

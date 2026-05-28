@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "./i18n";
 import App from "./App";
 import "./styles/globals.css";
+import ServerAvailabilityGate from "./components/ServerAvailabilityGate";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -18,7 +19,9 @@ const queryClient = new QueryClient({
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <App />
+      <ServerAvailabilityGate>
+        <App />
+      </ServerAvailabilityGate>
     </QueryClientProvider>
   </StrictMode>
 );

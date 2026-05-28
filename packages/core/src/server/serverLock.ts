@@ -15,6 +15,7 @@ import * as os from "os";
 import * as path from "path";
 import * as fs from "fs";
 import { Logger } from "../utils/logger";
+import { probeCcrelayHttp } from "./httpLeaderProbe";
 import type { ServerLockInfo } from "../types";
 
 // Heartbeat timeout in milliseconds - leader must heartbeat within this window
@@ -32,6 +33,9 @@ const IPC_CONNECT_TIMEOUT_MS = 500;
 
 /** Min interval between IPC takeover attempts (heartbeat / probes) */
 const IPC_TAKEOVER_COOLDOWN_MS = 5_000;
+
+/** Grace period after lock acquire before HTTP-down preempt is allowed */
+const LEADER_HTTP_PREEMPT_GRACE_MS = 5_000;
 
 // Message types for IPC communication
 type MessageType = "query" | "acquire" | "heartbeat" | "release" | "response" | "error";
@@ -280,6 +284,55 @@ export class ServerLock {
   }
 
   /**
+   * When this process becomes IPC server, drop a cached leader whose HTTP is not serving.
+   * Skips selfInstanceId so a leader mid-startup is not cleared before HTTP binds.
+   */
+  async invalidateInheritedLeaderIfHttpDown(selfInstanceId: string): Promise<void> {
+    if (!this.isIpcServer || !this.currentLeader) {
+      return;
+    }
+    if (this.currentLeader.instanceId === selfInstanceId) {
+      return;
+    }
+
+    const httpUp = await probeCcrelayHttp(this.currentLeader.host, this.currentLeader.port);
+    if (!httpUp) {
+      this.log.info(
+        `[ServerLock:${this.instanceId}] Clearing inherited leader ${this.currentLeader.instanceId} (HTTP not serving)`
+      );
+      this.currentLeader = null;
+    }
+  }
+
+  /**
+   * True when a fresh-heartbeat leader should be preempted (HTTP not serving, not self).
+   */
+  private async shouldPreemptFreshLeader(
+    leader: ServerLockInfo,
+    requesterId: string
+  ): Promise<boolean> {
+    if (leader.instanceId === requesterId) {
+      return false;
+    }
+
+    const httpUp = await probeCcrelayHttp(leader.host, leader.port);
+    if (httpUp) {
+      return false;
+    }
+
+    const now = Date.now();
+    const heartbeatFresh = now - leader.lastHeartbeat <= HEARTBEAT_TIMEOUT_MS;
+    const inStartupGrace = now - leader.startTime <= LEADER_HTTP_PREEMPT_GRACE_MS;
+
+    // Allow brief startup window for HTTP bind before treating HTTP-down as preemptible.
+    if (inStartupGrace && heartbeatFresh) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
    * Probe the existing socket to check if a real IPC server is listening.
    * Returns true if a server responds, false if connection is refused (stale socket).
    */
@@ -374,59 +427,73 @@ export class ServerLock {
    */
   private handleAcquireMessage(socket: net.Socket, message: IpcMessage): void {
     if (!this.currentLeader) {
-      // No leader yet, grant lock
-      if (message.instanceId && message.port && message.host) {
-        this.currentLeader = {
-          instanceId: message.instanceId,
-          pid: message.pid ?? process.pid,
-          port: message.port,
-          host: message.host,
-          startTime: message.startTime ?? Date.now(),
-          lastHeartbeat: message.lastHeartbeat ?? Date.now(),
-        };
-        this.log.info(
-          `[ServerLock] Lock acquired by ${this.currentLeader.instanceId} at ${this.currentLeader.host}:${this.currentLeader.port}`
-        );
-        this.sendToClient(socket, {
-          type: "response",
-          leader: this.currentLeader,
-        });
-      }
-    } else {
-      // Check if current leader is still valid
-      const now = Date.now();
-      if (now - this.currentLeader.lastHeartbeat > HEARTBEAT_TIMEOUT_MS) {
-        // Current leader is dead (heartbeat timeout), release and grant to new requester
-        this.log.info(
-          `[ServerLock] Previous leader ${this.currentLeader.instanceId} heartbeat timed out, releasing lock`
-        );
-        this.currentLeader = null;
-
-        if (message.instanceId && message.port && message.host) {
-          this.currentLeader = {
-            instanceId: message.instanceId,
-            pid: message.pid ?? process.pid,
-            port: message.port,
-            host: message.host,
-            startTime: message.startTime ?? Date.now(),
-            lastHeartbeat: message.lastHeartbeat ?? Date.now(),
-          };
-          this.log.info(
-            `[ServerLock] Lock acquired by ${this.currentLeader.instanceId} at ${this.currentLeader.host}:${this.currentLeader.port}`
-          );
-        }
-        this.sendToClient(socket, {
-          type: "response",
-          leader: this.currentLeader,
-        });
-      } else {
-        // Current leader is valid, deny request
-        this.sendToClient(socket, {
-          type: "response",
-          leader: this.currentLeader,
-        });
-      }
+      this.grantAcquireToRequester(socket, message);
+      return;
     }
+
+    const now = Date.now();
+    if (now - this.currentLeader.lastHeartbeat > HEARTBEAT_TIMEOUT_MS) {
+      this.log.info(
+        `[ServerLock] Previous leader ${this.currentLeader.instanceId} heartbeat timed out, releasing lock`
+      );
+      this.currentLeader = null;
+      this.grantAcquireToRequester(socket, message);
+      return;
+    }
+
+    void this.maybePreemptLeaderWithoutHttp(socket, message);
+  }
+
+  private grantAcquireToRequester(socket: net.Socket, message: IpcMessage): void {
+    if (!message.instanceId || !message.port || !message.host) {
+      this.sendToClient(socket, {
+        type: "error",
+        error: "Missing acquire fields",
+      });
+      return;
+    }
+
+    this.currentLeader = {
+      instanceId: message.instanceId,
+      pid: message.pid ?? process.pid,
+      port: message.port,
+      host: message.host,
+      startTime: message.startTime ?? Date.now(),
+      lastHeartbeat: message.lastHeartbeat ?? Date.now(),
+    };
+    this.log.info(
+      `[ServerLock] Lock acquired by ${this.currentLeader.instanceId} at ${this.currentLeader.host}:${this.currentLeader.port}`
+    );
+    this.sendToClient(socket, {
+      type: "response",
+      leader: this.currentLeader,
+    });
+  }
+
+  private async maybePreemptLeaderWithoutHttp(
+    socket: net.Socket,
+    message: IpcMessage
+  ): Promise<void> {
+    const leader = this.currentLeader;
+    if (!leader) {
+      this.grantAcquireToRequester(socket, message);
+      return;
+    }
+
+    const requesterId = message.instanceId ?? "";
+    if (!(await this.shouldPreemptFreshLeader(leader, requesterId))) {
+      this.sendToClient(socket, {
+        type: "response",
+        leader,
+      });
+      return;
+    }
+
+    this.log.info(
+      `[ServerLock] Preempting leader ${leader.instanceId}: heartbeat fresh but HTTP is not serving`
+    );
+    this.currentLeader = null;
+    this.grantAcquireToRequester(socket, message);
   }
 
   /**
@@ -574,6 +641,20 @@ export class ServerLock {
           // Check if current leader is dead
           if (now - this.currentLeader.lastHeartbeat > HEARTBEAT_TIMEOUT_MS) {
             this.log.info(`[ServerLock:${this.instanceId}] Current leader is dead, taking over`);
+            this.currentLeader = {
+              instanceId,
+              pid: process.pid,
+              port,
+              host,
+              startTime: now,
+              lastHeartbeat: now,
+            };
+            return true;
+          }
+          if (await this.shouldPreemptFreshLeader(this.currentLeader, instanceId)) {
+            this.log.info(
+              `[ServerLock:${this.instanceId}] Preempting leader ${this.currentLeader.instanceId}: heartbeat fresh but HTTP is not serving`
+            );
             this.currentLeader = {
               instanceId,
               pid: process.pid,

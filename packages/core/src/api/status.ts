@@ -6,6 +6,7 @@
 import * as http from "http";
 import type { ProxyServer } from "../server/handler";
 import type { RouterStatus } from "../types";
+import { resolveEffectiveRoutingStatus } from "../server/smartRouting/virtualProvider";
 import { sendJson } from "./index";
 
 let serverInstance: ProxyServer | null = null;
@@ -31,15 +32,16 @@ export function handleStatus(
   }
 
   const router = serverInstance.getRouter();
-  const provider = router.getCurrentProvider();
   const config = serverInstance.getConfig();
+  const routing = resolveEffectiveRoutingStatus(config, router);
 
   const status: RouterStatus = {
     status: serverInstance.running ? "running" : "stopped",
-    currentProvider: router.getCurrentProviderId(),
-    providerName: provider?.name,
-    providerMode: provider?.mode,
+    currentProvider: routing.currentProvider,
+    providerName: routing.providerName,
+    providerMode: routing.providerMode,
     port: config.port,
+    host: config.host,
   };
 
   sendJson(res, 200, status);

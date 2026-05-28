@@ -422,13 +422,17 @@ export class SqliteNativeDriver implements DatabaseDriver {
     const providerBreakdown: ProviderStatRow[] = [];
     for (const r of providerRows) {
       byProvider[r.provider_id as string] = r.count as number;
+      const inputTokens = (r.totalInputTokens as number) ?? 0;
+      const cacheTokens = (r.totalCacheTokens as number) ?? 0;
+      const denom = inputTokens + cacheTokens;
       providerBreakdown.push({
         providerId: r.provider_id as string,
         providerName: (r.provider_name as string) || (r.provider_id as string),
         count: r.count as number,
-        totalInputTokens: (r.totalInputTokens as number) ?? 0,
+        totalInputTokens: inputTokens,
         totalOutputTokens: (r.totalOutputTokens as number) ?? 0,
-        totalCacheTokens: (r.totalCacheTokens as number) ?? 0,
+        totalCacheTokens: cacheTokens,
+        cacheHitRate: denom > 0 ? Math.round((cacheTokens / denom) * 100) : 0,
       });
     }
 

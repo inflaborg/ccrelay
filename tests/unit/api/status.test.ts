@@ -115,6 +115,7 @@ class MockRouter {
 class MockConfigManager {
   port: number = 7575;
   host: string = "127.0.0.1";
+  smartRoutingConfig?: { enabled?: boolean };
 
   getPort(): number {
     return this.port;
@@ -238,12 +239,37 @@ describe("api/status: handleStatus", () => {
         providerName: string;
         providerMode: string;
         port: number;
+        host: string;
       };
       expect(body.status).toBe("running");
       expect(body.currentProvider).toBe("test-provider");
       expect(body.providerName).toBe("Test Provider");
       expect(body.providerMode).toBe("passthrough");
       expect(body.port).toBe(7575);
+      expect(body.host).toBe("127.0.0.1");
+    });
+
+    it("should report Smart Routing as current provider when smart routing is enabled", () => {
+      const req = new MockIncomingMessage(
+        "/ccrelay/api/status",
+        "GET"
+      ) as unknown as MockIncomingMessage & IncomingMessage;
+      const res = new MockServerResponse() as unknown as MockServerResponse & ServerResponse;
+
+      mockConfig.smartRoutingConfig = { enabled: true };
+      (mockServer as unknown as MockProxyServer).setRunning(true);
+      setServer(mockServer);
+
+      handleStatus(req, res, {});
+
+      const body = JSON.parse(res.body) as {
+        currentProvider: string;
+        providerName: string;
+        providerMode: string;
+      };
+      expect(body.currentProvider).toBe("smart-routing");
+      expect(body.providerName).toBe("Smart Routing");
+      expect(body.providerMode).toBe("passthrough");
     });
 
     it("should include all provider details when server is running", () => {
