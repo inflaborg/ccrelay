@@ -4,7 +4,12 @@
 
 import * as vscode from "vscode";
 import type { ConfigManager, ProxyServer } from "@ccrelay/core";
-import type { Provider, InstanceRole, RoleChangeInfo, ElectionState } from "@ccrelay/core";
+import {
+  resolveEffectiveRoutingStatus,
+  isSmartRoutingEnabled,
+  SMART_ROUTING_PROVIDER_ID,
+} from "@ccrelay/core";
+import type { InstanceRole, RoleChangeInfo, ElectionState } from "@ccrelay/core";
 
 export class StatusBarManager implements vscode.Disposable {
   private statusBarItem: vscode.StatusBarItem;
@@ -51,6 +56,14 @@ export class StatusBarManager implements vscode.Disposable {
   private handleConfigChange = (): void => {
     this.update();
   };
+
+  private getRoutingDisplay() {
+    return resolveEffectiveRoutingStatus(this.config, this.server.getRouter());
+  }
+
+  private getDisplayProviderName(): string | undefined {
+    return this.getRoutingDisplay().providerName;
+  }
 
   private createStatusBarItem(): vscode.StatusBarItem {
     const priority = 100;
@@ -109,12 +122,27 @@ export class StatusBarManager implements vscode.Disposable {
     }
 
     const router = this.server.getRouter();
-    const currentProviderId = router.getCurrentProviderId();
-    const provider = this.config.getProvider(currentProviderId);
+    const routing = this.getRoutingDisplay();
+    const displayName = routing.providerName;
+    const provider = router.getCurrentProvider();
+    const isSmartRouting = routing.currentProvider === SMART_ROUTING_PROVIDER_ID;
 
-    if (provider) {
-      this.statusBarItem.text = `${statusIcon} ${provider.name}${statusSuffix}`;
-      this.statusBarItem.tooltip = this.buildTooltip(provider, role, electionState, leaderUrl);
+    if (displayName) {
+      this.statusBarItem.text = `${statusIcon} ${displayName}${statusSuffix}`;
+      this.statusBarItem.tooltip = this.buildTooltip(
+        isSmartRouting
+          ? { id: SMART_ROUTING_PROVIDER_ID, name: displayName }
+          : {
+              id: provider?.id ?? routing.currentProvider,
+              name: displayName,
+              mode: provider?.mode,
+              baseUrl: provider?.baseUrl,
+            },
+        role,
+        electionState,
+        leaderUrl,
+        isSmartRouting
+      );
       this.statusBarItem.backgroundColor = backgroundColor;
     } else {
       this.statusBarItem.text = `$(warning) CCRelay${statusSuffix}`;
@@ -124,23 +152,29 @@ export class StatusBarManager implements vscode.Disposable {
   }
 
   private buildTooltip(
-    provider: Provider,
+    display: { name: string; id: string; mode?: string; baseUrl?: string },
     role: InstanceRole,
     electionState: ElectionState,
-    leaderUrl: string | null
+    leaderUrl: string | null,
+    isSmartRouting: boolean
   ): string {
-    const lines = [
-      "CCRelay",
-      "",
-      `Current: ${provider.name}`,
-      `ID: ${provider.id}`,
-      `Mode: ${provider.mode}`,
-      `Base URL: ${provider.baseUrl}`,
+    const lines = ["CCRelay", "", `Current: ${display.name}`, `ID: ${display.id}`];
+
+    if (!isSmartRouting) {
+      if (display.mode) {
+        lines.push(`Mode: ${display.mode}`);
+      }
+      if (display.baseUrl) {
+        lines.push(`Base URL: ${display.baseUrl}`);
+      }
+    }
+
+    lines.push(
       `Port: ${this.config.port}`,
       "",
       `Role: ${this.getRoleDisplayName(role)}`,
-      `State: ${this.getStateDisplayName(electionState)}`,
-    ];
+      `State: ${this.getStateDisplayName(electionState)}`
+    );
 
     // Add leader URL for follower
     if (role === "follower" && leaderUrl) {
@@ -193,9 +227,7 @@ export class StatusBarManager implements vscode.Disposable {
    */
   async showMenu(): Promise<void> {
     const isRunning = this.server.running;
-    const router = this.server.getRouter();
-    const currentProviderId = router.getCurrentProviderId();
-    const currentProvider = this.config.getProvider(currentProviderId);
+    const displayName = this.getDisplayProviderName();
     const role = this.server.getRole();
 
     const menuItems: vscode.QuickPickItem[] = [
@@ -237,7 +269,7 @@ export class StatusBarManager implements vscode.Disposable {
     const roleLabel =
       role === "leader" ? "Leader" : role === "follower" ? "Follower" : "Standalone";
     const selected = await vscode.window.showQuickPick(menuItems, {
-      placeHolder: `CCRelay [${roleLabel}]${isRunning ? ` (${currentProvider?.name || "Unknown"})` : "(Stopped)"}`,
+      placeHolder: `CCRelay [${roleLabel}]${isRunning ? ` (${displayName || "Unknown"})` : "(Stopped)"}`,
       title: "CCRelay",
     });
 
@@ -293,36 +325,79 @@ export class StatusBarManager implements vscode.Disposable {
     const providers = this.config.enabledProviders;
     const router = this.server.getRouter();
     const currentId = router.getCurrentProviderId();
+    const srEnabled = isSmartRoutingEnabled(this.config);
+    const displayName = this.getDisplayProviderName();
 
-    if (providers.length === 0) {
+    if (providers.length === 0 && !srEnabled) {
       vscode.window.showWarningMessage("No enabled providers found.");
       return;
     }
 
-    const items: vscode.QuickPickItem[] = providers.map(provider => ({
-      label: provider.name,
-      description: provider.id,
-      detail: `Mode: ${provider.mode} | URL: ${provider.baseUrl}`,
-      picked: provider.id === currentId,
-    }));
+    const items: vscode.QuickPickItem[] = [
+      {
+        label: "Smart Routing",
+        description: SMART_ROUTING_PROVIDER_ID,
+        detail: "Route requests by model alias across providers",
+        picked: srEnabled,
+      },
+      { label: "", kind: vscode.QuickPickItemKind.Separator },
+      ...providers.map(provider => ({
+        label: provider.name,
+        description: provider.id,
+        detail: `Mode: ${provider.mode} | URL: ${provider.baseUrl}`,
+        picked: !srEnabled && provider.id === currentId,
+      })),
+    ];
 
     const selected = await vscode.window.showQuickPick(items, {
-      placeHolder: `Select a provider (current: ${this.config.getProvider(currentId)?.name || "Unknown"})`,
+      placeHolder: `Select routing (current: ${displayName || "Unknown"})`,
       title: "CCRelay - Switch Provider",
     });
 
-    if (selected) {
-      const provider = providers.find(p => p.id === selected.description);
-      if (provider) {
-        const result = await this.server.switchProvider(provider.id);
-        if (result.success) {
-          vscode.window.showInformationMessage(`Switched to ${provider.name}`);
-        } else {
-          vscode.window.showErrorMessage(
-            `Failed to switch to ${provider.name}: ${result.error || "Unknown error"}`
-          );
-        }
+    if (!selected?.description) {
+      return;
+    }
+
+    if (selected.description === SMART_ROUTING_PROVIDER_ID) {
+      if (srEnabled) {
+        return;
       }
+      const result = this.config.updateConfigSection("smartRouting", { enabled: true });
+      if (!result.ok) {
+        vscode.window.showErrorMessage(
+          `Failed to enable Smart Routing: ${result.error || "Unknown error"}`
+        );
+        return;
+      }
+      void this.server.getModelCatalog().refreshAll();
+      this.update();
+      vscode.window.showInformationMessage("Smart Routing enabled");
+      return;
+    }
+
+    const provider = providers.find(p => p.id === selected.description);
+    if (!provider) {
+      return;
+    }
+
+    if (srEnabled) {
+      const disableResult = this.config.updateConfigSection("smartRouting", { enabled: false });
+      if (!disableResult.ok) {
+        vscode.window.showErrorMessage(
+          `Failed to disable Smart Routing: ${disableResult.error || "Unknown error"}`
+        );
+        return;
+      }
+    }
+
+    const switchResult = await this.server.switchProvider(provider.id);
+    if (switchResult.success) {
+      this.update();
+      vscode.window.showInformationMessage(`Switched to ${provider.name}`);
+    } else {
+      vscode.window.showErrorMessage(
+        `Failed to switch to ${provider.name}: ${switchResult.error || "Unknown error"}`
+      );
     }
   }
 

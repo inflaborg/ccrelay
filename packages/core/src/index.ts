@@ -17,6 +17,13 @@ export { setWebDistPath } from "./server/static";
 export { getUiAccessToken } from "./server/httpAccessGate";
 export { CCRELAY_UI_HEADER_NAME, CCRELAY_UI_HEADER_VALUE } from "./server/internalUiHeaders";
 
+export {
+  isSmartRoutingEnabled,
+  resolveEffectiveRoutingStatus,
+  SMART_ROUTING_PROVIDER_ID,
+  SMART_ROUTING_VIRTUAL_PROVIDER,
+} from "./server/smartRouting/virtualProvider";
+
 export { Logger, ScopedLogger, LogLevel, getLogDir } from "./utils/logger";
 
 export * as Api from "./api/index";

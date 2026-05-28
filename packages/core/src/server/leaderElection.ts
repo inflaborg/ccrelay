@@ -11,9 +11,8 @@
  * - waiting: Waiting for a new leader to appear
  */
 
-import * as http from "http";
-import { CCRELAY_UI_HEADER_NAME, CCRELAY_UI_HEADER_VALUE } from "./internalUiHeaders";
 import { ServerLock, getServerLock } from "./serverLock";
+import { probeCcrelayHttp, setLeaderHttpProbeBearer } from "./httpLeaderProbe";
 import { ScopedLogger } from "../utils/logger";
 import {
   ElectionResult,
@@ -88,6 +87,7 @@ export class LeaderElection {
     this.host = host;
     this.getApiBearerToken = getApiBearerToken;
     this.serverLock = getServerLock();
+    setLeaderHttpProbeBearer(getApiBearerToken);
   }
 
   /**
@@ -113,58 +113,46 @@ export class LeaderElection {
    */
   private async probeExistingServer(): Promise<boolean> {
     const probeStart = Date.now();
-    return new Promise(resolve => {
-      const bearer = this.getApiBearerToken();
-      const req = http.request(
-        {
-          hostname: this.host,
-          port: this.port,
-          path: "/ccrelay/api/status",
-          method: "GET",
-          timeout: PROBE_TIMEOUT_MS,
-          headers: {
-            // eslint-disable-next-line @typescript-eslint/naming-convention -- HTTP request header casing
-            Authorization: `Bearer ${bearer}`,
-            [CCRELAY_UI_HEADER_NAME]: CCRELAY_UI_HEADER_VALUE,
-          },
-        },
-        res => {
-          const duration = Date.now() - probeStart;
-          // Any response from /ccrelay/api/status means CCRelay is running
-          if (res.statusCode === 200) {
-            this.log.info(
-              `[LeaderElection] Found existing CCRelay server at ${this.host}:${this.port} in ${duration}ms`
-            );
-            resolve(true);
-          } else {
-            this.log.debug(
-              `[LeaderElection] Server responded with status ${res.statusCode} in ${duration}ms`
-            );
-            resolve(false);
-          }
-          // Consume the response to free up resources
-          res.resume();
-        }
+    const ok = await probeCcrelayHttp(this.host, this.port, PROBE_TIMEOUT_MS);
+    const duration = Date.now() - probeStart;
+    if (ok) {
+      this.log.info(
+        `[LeaderElection] Found existing CCRelay server at ${this.host}:${this.port} in ${duration}ms`
       );
+    } else if (duration > 100) {
+      this.log.debug(`[LeaderElection] Probe failed in ${duration}ms`);
+    }
+    return ok;
+  }
 
-      req.on("error", () => {
-        const duration = Date.now() - probeStart;
-        // Connection refused or other error means no server running
-        if (duration > 100) {
-          this.log.debug(`[LeaderElection] Probe failed in ${duration}ms`);
-        }
-        resolve(false);
-      });
+  private async isLeaderHttpServing(leader: ServerLockInfo): Promise<boolean> {
+    return probeCcrelayHttp(leader.host, leader.port, PROBE_TIMEOUT_MS);
+  }
 
-      req.on("timeout", () => {
-        const duration = Date.now() - probeStart;
-        this.log.debug(`[LeaderElection] Probe timed out after ${duration}ms`);
-        req.destroy();
-        resolve(false);
-      });
+  /**
+   * Become follower for a lock-recorded leader only when its HTTP server responds.
+   */
+  private async tryBecomeFollowerForLeader(leader: ServerLockInfo): Promise<ElectionResult | null> {
+    const leaderHttpUp = await this.isLeaderHttpServing(leader);
+    if (!leaderHttpUp) {
+      this.log.warn(
+        `[LeaderElection] Leader ${leader.instanceId} is registered in the lock but HTTP is not serving`
+      );
+      return null;
+    }
 
-      req.end();
-    });
+    this.log.info(
+      `[LeaderElection] Existing leader found: ${leader.instanceId} at ${leader.host}:${leader.port}`
+    );
+    this.role = "follower";
+    this.setState("follower");
+    this.leaderUrl = `http://${leader.host}:${leader.port}`;
+    this.resetProbeInterval();
+    return {
+      isLeader: false,
+      leaderUrl: this.leaderUrl,
+      existingLeader: leader,
+    };
   }
 
   /**
@@ -327,19 +315,11 @@ export class LeaderElection {
       const currentLeader = await this.serverLock.getCurrentLeader();
 
       if (currentLeader) {
-        // There's already a valid leader
-        this.log.info(
-          `[LeaderElection] Existing leader found: ${currentLeader.instanceId} at ${currentLeader.host}:${currentLeader.port}`
-        );
-        this.role = "follower";
-        this.setState("follower");
-        this.leaderUrl = `http://${currentLeader.host}:${currentLeader.port}`;
-        this.resetProbeInterval();
-        return {
-          isLeader: false,
-          leaderUrl: this.leaderUrl,
-          existingLeader: currentLeader,
-        };
+        const followerResult = await this.tryBecomeFollowerForLeader(currentLeader);
+        if (followerResult) {
+          return followerResult;
+        }
+        await this.serverLock.cleanupStaleLocks();
       }
 
       // No valid leader, try to become the leader
@@ -352,6 +332,8 @@ export class LeaderElection {
           this.log.warn(
             `[LeaderElection] Acquired leadership lock but failed to bind IPC coordination socket`
           );
+        } else {
+          await this.serverLock.invalidateInheritedLeaderIfHttpDown(this.instanceId);
         }
         this.log.info(`[LeaderElection] Instance ${this.instanceId} became leader`);
         this.role = "leader";
@@ -368,15 +350,10 @@ export class LeaderElection {
       const newLeader = await this.serverLock.getCurrentLeader();
 
       if (newLeader) {
-        this.role = "follower";
-        this.setState("follower");
-        this.leaderUrl = `http://${newLeader.host}:${newLeader.port}`;
-        this.resetProbeInterval();
-        return {
-          isLeader: false,
-          leaderUrl: this.leaderUrl,
-          existingLeader: newLeader,
-        };
+        const followerResult = await this.tryBecomeFollowerForLeader(newLeader);
+        if (followerResult) {
+          return followerResult;
+        }
       }
 
       // Shouldn't reach here, but handle gracefully - assume follower
@@ -407,9 +384,7 @@ export class LeaderElection {
     this.isRunning = true;
     this.log.info(`[LeaderElection] Started election for instance ${this.instanceId}`);
 
-    if (this.role === "leader") {
-      this.startHeartbeat();
-    } else if (this.role === "follower") {
+    if (this.role === "follower") {
       this.startMonitoring();
     }
   }
@@ -423,17 +398,14 @@ export class LeaderElection {
     this.isRunning = false;
 
     // Stop timers
-    if (this.heartbeatTimer) {
-      clearInterval(this.heartbeatTimer);
-      this.heartbeatTimer = null;
-    }
+    this.stopHeartbeat();
     if (this.electionTimer) {
       clearTimeout(this.electionTimer);
       this.electionTimer = null;
     }
 
     // Release lock if we're the leader
-    if (this.role === "leader") {
+    if (this.role === "leader" || this.state === "leader" || this.state === "leader_active") {
       await this.serverLock.release(this.instanceId);
       this.log.info(`[LeaderElection] Released leadership lock`);
     }
@@ -469,18 +441,125 @@ export class LeaderElection {
   }
 
   /**
-   * Start heartbeat as leader
+   * Start heartbeat as leader (only while HTTP is actively serving)
    */
   private startHeartbeat(): void {
-    this.log.info(`[LeaderElection] Starting heartbeat as leader`);
+    this.stopHeartbeat();
+    this.log.info(`[LeaderElection] Starting heartbeat as leader_active`);
     this.heartbeatTimer = setInterval(
       // eslint-disable-next-line @typescript-eslint/no-misused-promises -- setInterval doesn't await callbacks
       async () => {
+        if (this.state !== "leader_active") {
+          this.stopHeartbeat();
+          return;
+        }
+
+        const selfHttpUp = await probeCcrelayHttp(this.host, this.port, PROBE_TIMEOUT_MS);
+        if (!selfHttpUp) {
+          this.log.warn(
+            `[LeaderElection] Self HTTP not serving while leader_active, self-evicting instance ${this.instanceId}`
+          );
+          await this.selfEvict();
+          return;
+        }
+
         await this.serverLock.updateHeartbeat(this.instanceId, this.port, this.host);
-        // this.log.debug(`[LeaderElection] Heartbeat sent for instance ${this.instanceId}`);
       },
       LEADER_HEARTBEAT_INTERVAL_MS
     );
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+  }
+
+  /**
+   * Leader detected it no longer serves HTTP — release coordination and become follower.
+   */
+  private async selfEvict(): Promise<void> {
+    this.stopHeartbeat();
+    await this.serverLock.release(this.instanceId);
+    await this.serverLock.close();
+
+    this.role = "follower";
+    this.setState("waiting");
+    this.leaderUrl = null;
+
+    if (this.isRunning) {
+      this.startMonitoringAsFollower();
+    }
+    this.notifyRoleChange();
+  }
+
+  /**
+   * Port bind failed (EADDRINUSE). If another instance serves HTTP, demote to its follower.
+   */
+  async handlePortConflict(): Promise<{ becameFollower: boolean; leaderUrl?: string }> {
+    const serverUp = await this.probeExistingServer();
+    if (serverUp) {
+      this.log.info(
+        `[LeaderElection] Port ${this.port} held by active server, demoting to follower`
+      );
+      this.stopHeartbeat();
+      await this.serverLock.release(this.instanceId);
+      await this.serverLock.close();
+
+      this.role = "follower";
+      this.setState("follower");
+      this.leaderUrl = `http://${this.host}:${this.port}`;
+      this.failedLeadershipAttempts = 0;
+      this.resetProbeInterval();
+
+      if (this.isRunning) {
+        this.stopMonitoring();
+        this.startMonitoring();
+      }
+
+      this.notifyRoleChange();
+      return { becameFollower: true, leaderUrl: this.leaderUrl };
+    }
+
+    this.log.info(
+      `[LeaderElection] Port conflict but no server responding, cleaning stale coordination state`
+    );
+    await this.serverLock.cleanupStaleLocks();
+    await this.serverLock.invalidateInheritedLeaderIfHttpDown(this.instanceId);
+    return { becameFollower: false };
+  }
+
+  /**
+   * Release lock and IPC socket when demoting to follower (keep election monitoring).
+   */
+  async releaseCoordinationOnDemotion(): Promise<void> {
+    this.stopHeartbeat();
+    if (this.role === "leader" || this.state === "leader" || this.state === "leader_active") {
+      await this.serverLock.release(this.instanceId);
+    }
+    await this.serverLock.close();
+  }
+
+  /**
+   * Force-stop coordination without waiting for HTTP shutdown (deactivate timeout path).
+   */
+  async forceStop(): Promise<void> {
+    this.isRunning = false;
+    this.stopHeartbeat();
+    if (this.electionTimer) {
+      clearTimeout(this.electionTimer);
+      this.electionTimer = null;
+    }
+
+    if (this.role === "leader" || this.state === "leader" || this.state === "leader_active") {
+      await this.serverLock.release(this.instanceId);
+    }
+    await this.serverLock.close();
+
+    this.role = "follower";
+    this.setState("idle");
+    this.leaderUrl = null;
   }
 
   /**
@@ -540,7 +619,6 @@ export class LeaderElection {
           // We became the leader - notify server to start HTTP server
           this.log.info(`[LeaderElection] Re-elected as leader`);
           this.stopMonitoring();
-          this.startHeartbeat();
           this.notifyRoleChange(); // Notify server to start HTTP server
         } else if (result.leaderUrl) {
           // Another instance became leader, wait for it to be ready
@@ -579,8 +657,37 @@ export class LeaderElection {
       }
       this.notifyRoleChange();
     } else {
-      // Leader is still valid, reset probe interval on success
-      this.resetProbeInterval();
+      const leaderHttpUp = await this.isLeaderHttpServing(leader);
+      if (!leaderHttpUp) {
+        this.log.info(
+          `[LeaderElection] Leader ${leader.instanceId} lock is fresh but HTTP is down, starting re-election`
+        );
+        this.increaseProbeInterval();
+        try {
+          const result = await this.electLeaderWithTimeout();
+          if (result.isLeader) {
+            this.log.info(`[LeaderElection] Re-elected as leader after HTTP-down leader`);
+            this.stopMonitoring();
+            this.notifyRoleChange();
+          } else if (result.leaderUrl) {
+            this.leaderUrl = result.leaderUrl;
+            const leaderReady = await this.waitForLeaderReady(result.leaderUrl);
+            if (leaderReady) {
+              this.resetProbeInterval();
+            } else {
+              this.increaseProbeInterval();
+            }
+            this.notifyRoleChange();
+          }
+        } catch (err) {
+          this.log.error(`[LeaderElection] Re-election after HTTP-down leader failed`, err);
+          this.setState("waiting");
+          this.increaseProbeInterval();
+          this.notifyRoleChange(err instanceof Error ? err : new Error(String(err)));
+        }
+      } else {
+        this.resetProbeInterval();
+      }
     }
   }
 
@@ -668,10 +775,7 @@ export class LeaderElection {
     this.log.info(`[LeaderElection] Releasing leadership for instance ${this.instanceId}`);
 
     // Stop heartbeat timer
-    if (this.heartbeatTimer) {
-      clearInterval(this.heartbeatTimer);
-      this.heartbeatTimer = null;
-    }
+    this.stopHeartbeat();
 
     // Release the lock
     await this.serverLock.release(this.instanceId);
@@ -717,6 +821,7 @@ export class LeaderElection {
       this.setState("leader_active");
       this.resetProbeInterval();
       this.log.info(`[LeaderElection] Server started, state is now leader_active`);
+      this.startHeartbeat();
       // Notify listeners (StatusBarManager) to update UI
       this.notifyRoleChange();
     }
@@ -728,6 +833,7 @@ export class LeaderElection {
   notifyServerStopped(): void {
     if (this.state === "leader_active") {
       this.setState("leader");
+      this.stopHeartbeat();
       this.log.info(`[LeaderElection] Server stopped, state is now leader`);
       // Notify listeners (StatusBarManager) to update UI
       this.notifyRoleChange();
@@ -749,10 +855,7 @@ export class LeaderElection {
     this.setState("waiting"); // Use waiting state since we just failed leadership
 
     // Stop any existing timers
-    if (this.heartbeatTimer) {
-      clearInterval(this.heartbeatTimer);
-      this.heartbeatTimer = null;
-    }
+    this.stopHeartbeat();
 
     // Reset probe interval and start monitoring
     this.resetProbeInterval();
@@ -773,10 +876,7 @@ export class LeaderElection {
     this.log.info(`[LeaderElection] Force re-election triggered`);
 
     // Stop current timers
-    if (this.heartbeatTimer) {
-      clearInterval(this.heartbeatTimer);
-      this.heartbeatTimer = null;
-    }
+    this.stopHeartbeat();
     if (this.electionTimer) {
       clearTimeout(this.electionTimer);
       this.electionTimer = null;
@@ -793,7 +893,9 @@ export class LeaderElection {
     // Restart timers based on new role
     if (this.isRunning) {
       if (result.isLeader) {
-        this.startHeartbeat();
+        if (this.state === "leader_active") {
+          this.startHeartbeat();
+        }
       } else {
         this.startMonitoring();
       }
