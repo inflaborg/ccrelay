@@ -6,7 +6,6 @@
 import { protocol } from "electron";
 import * as fs from "fs";
 import * as path from "path";
-import { pathToFileURL } from "url";
 
 export const DASHBOARD_PROTOCOL = "ccrelay-dashboard";
 
@@ -16,11 +15,32 @@ export type DashboardInjectConfig = {
   locale?: string;
 };
 
-let webDistDir = "";
-let injectConfig: DashboardInjectConfig = {
-  apiOrigin: "http://127.0.0.1:7575",
-  apiBearer: "",
+/* eslint-disable @typescript-eslint/naming-convention -- file extension keys */
+const MIME_TYPES: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
 };
+/* eslint-enable @typescript-eslint/naming-convention */
+
+let webDistDir = "";
+let injectConfig: DashboardInjectConfig | null = null;
+
+function getMimeType(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  return MIME_TYPES[ext] ?? "application/octet-stream";
+}
 
 export function registerDashboardProtocolSchemes(): void {
   protocol.registerSchemesAsPrivileged([
@@ -61,6 +81,16 @@ function resolveAssetPath(urlPathname: string): string | null {
   return normalizedFile;
 }
 
+async function readFileResponse(filePath: string, cacheable: boolean): Promise<Response> {
+  const data = await fs.promises.readFile(filePath);
+  return new Response(data, {
+    headers: {
+      "Content-Type": getMimeType(filePath), // eslint-disable-line @typescript-eslint/naming-convention -- HTTP header
+      ...(cacheable ? { "Cache-Control": "public, max-age=3600" } : {}), // eslint-disable-line @typescript-eslint/naming-convention -- HTTP header
+    },
+  });
+}
+
 export function registerDashboardProtocolHandler(webDist: string): void {
   webDistDir = webDist;
 
@@ -75,7 +105,9 @@ export function registerDashboardProtocolHandler(webDist: string): void {
         return new Response("Web UI not built. Run npm run build:web.", { status: 503 });
       }
       let html = fs.readFileSync(filePath, "utf-8");
-      html = html.replace("<head>", `<head>${buildInjectScript(injectConfig)}`);
+      if (injectConfig) {
+        html = html.replace("<head>", `<head>${buildInjectScript(injectConfig)}`);
+      }
       return new Response(html, {
         headers: { "Content-Type": "text/html; charset=utf-8" }, // eslint-disable-line @typescript-eslint/naming-convention -- HTTP header
       });
@@ -85,7 +117,7 @@ export function registerDashboardProtocolHandler(webDist: string): void {
       return new Response("Not found", { status: 404 });
     }
 
-    return fetch(pathToFileURL(filePath).href);
+    return readFileResponse(filePath, true);
   });
 }
 
