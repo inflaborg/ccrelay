@@ -19,6 +19,7 @@ import type {
   SettingsConfig,
   PatchConfigResponse,
   StatsRange,
+  QueueOverviewResponse,
   WizardProbeModelsRequest,
   WizardProbeModelsResponse,
   WizardEndpointTestRequest,
@@ -173,6 +174,8 @@ export const api = {
     const params = range && range !== "all" ? `?range=${range}` : "";
     return fetchAPI<LogStats>(`/stats${params}`);
   },
+
+  getQueueStats: (): Promise<QueueOverviewResponse> => fetchAPI<QueueOverviewResponse>("/queue"),
 
   // Version
   getVersion: (): Promise<VersionResponse> => fetchAPI<VersionResponse>("/version"),

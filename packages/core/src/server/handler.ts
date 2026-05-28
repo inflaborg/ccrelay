@@ -627,6 +627,13 @@ export class ProxyServer {
   }
 
   /**
+   * Get full queue overview (default + route queues, with live task snapshots)
+   */
+  getQueueOverview() {
+    return this.queueManager.getOverview();
+  }
+
+  /**
    * Clear the waiting queue if concurrency manager is enabled
    */
   clearQueue(): number {

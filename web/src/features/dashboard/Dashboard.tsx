@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api } from "@/api/client";
 import type { StatsRange } from "@/types/api";
-import ClientConfigStatus from "./ClientConfigStatus";
+import QueueStatus from "./QueueStatus";
 
 function formatTokenCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -47,7 +47,7 @@ export default function Dashboard() {
       await Promise.all([
         queryClient.refetchQueries({ queryKey: ["status"] }),
         queryClient.refetchQueries({ queryKey: ["stats", range] }),
-        queryClient.refetchQueries({ queryKey: ["clientConfig"] }),
+        queryClient.refetchQueries({ queryKey: ["queue"] }),
       ]);
     } finally {
       setRefreshing(false);
@@ -359,7 +359,7 @@ export default function Dashboard() {
         </Card>
       )}
 
-      <ClientConfigStatus />
+      <QueueStatus />
     </div>
   );
 }

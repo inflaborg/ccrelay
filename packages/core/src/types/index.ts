@@ -736,6 +736,27 @@ export interface QueueStats {
   avgProcessTime: number;
 }
 
+/** Snapshot of a single task in the concurrency queue (processing or waiting). */
+export interface QueueTaskSnapshot {
+  id: string;
+  elapsed: number;
+}
+
+/** Queue stats plus live task snapshots for dashboard / API. */
+export interface QueueDetailStats extends QueueStats {
+  maxQueueSize: number;
+  processingTasks: QueueTaskSnapshot[];
+  queuedTasks: QueueTaskSnapshot[];
+}
+
+/** Full queue overview (default queue + route-specific queues). */
+export interface QueueOverview {
+  enabled: boolean;
+  message?: string;
+  default?: QueueDetailStats | null;
+  routes: Record<string, QueueDetailStats>;
+}
+
 /**
  * Semaphore lease for automatic release
  */

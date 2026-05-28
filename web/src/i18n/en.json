@@ -9,6 +9,7 @@
     "delete": "Delete"
   },
   "nav": {
+    "clientConfig": "Client Config",
     "dashboard": "Dashboard",
     "providers": "Providers",
     "capabilities": "Capabilities",
@@ -72,16 +73,73 @@
       "provider": "Provider",
       "requests": "Requests",
       "tokens": "Tokens"
+    },
+    "queue": {
+      "title": "Concurrency Queue",
+      "loading": "Loading queue status…",
+      "disabled": "Concurrency queue is disabled",
+      "noQueues": "No queues configured",
+      "defaultQueue": "Default",
+      "saturated": "Saturated",
+      "workers": "{{active}} / {{max}} workers",
+      "processing": "Processing",
+      "waiting": "Waiting",
+      "avgWait": "Avg wait",
+      "avgProcess": "Avg process",
+      "taskId": "Task",
+      "taskState": "State",
+      "elapsed": "Elapsed",
+      "stateProcessing": "Processing",
+      "stateQueued": "Queued",
+      "noActiveTasks": "No active or queued tasks"
     }
   },
   "clientConfig": {
     "title": "Client configuration",
+    "pageSubtitle": "Point Claude Desktop, Claude Code, and Codex at this CCRelay instance",
     "description": "Check Claude Desktop, Claude Code ({{claudePath}}), and Codex ({{codexPath}}) configs point to this CCRelay instance (port {{port}}).",
     "status": {
       "ok": "OK",
       "notSet": "Not set",
       "otherHost": "Other host",
       "invalidFile": "Invalid file"
+    },
+    "diff": {
+      "allConfigured": "All fields configured",
+      "expandAll": "Show all fields",
+      "expandOk": "Show OK fields",
+      "collapse": "Collapse",
+      "collapseOk": "Hide OK fields",
+      "expectedLabel": "Expected:",
+      "currentLabel": "Current:",
+      "notSetCurrent": "(not set)"
+    },
+    "rules": {
+      "nonEmpty": "Any non-empty value",
+      "positiveNumber": "Any positive number",
+      "truthy": "Truthy (1, \"1\", or true)",
+      "absent": "Must be absent",
+      "anyNonEmpty": "Any non-empty value",
+      "nonEmptyArrayIncludingStar": "Non-empty array including \"*\"",
+      "aliasHeaderNonEmpty": "x-ccrelay-model-alias header with non-empty value (key case-insensitive)"
+    },
+    "fields": {
+      "ANTHROPIC_BASE_URL": "Anthropic base URL",
+      "ANTHROPIC_AUTH_TOKEN": "Anthropic auth token",
+      "API_TIMEOUT_MS": "API timeout (ms)",
+      "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "Disable nonessential traffic",
+      "model_provider": "Model provider",
+      "model_providers.ccrelay.base_url": "CCRelay base URL",
+      "model": "Model",
+      "inferenceGatewayBaseUrl": "Gateway base URL",
+      "inferenceProvider": "Inference provider",
+      "inferenceGatewayApiKey": "Gateway API key",
+      "coworkEgressAllowedHosts": "Cowork egress allowed hosts",
+      "inferenceCustomHeaders": "Gateway custom headers",
+      "inferenceGatewayHeaders": "Gateway headers (legacy)",
+      "disableEssentialTelemetry": "Disable essential telemetry",
+      "disableNonessentialTelemetry": "Disable nonessential telemetry",
+      "deploymentMode": "Deployment mode"
     },
     "claudeCode": {
       "name": "Claude Code",
@@ -100,7 +158,6 @@
     },
     "claudeDesktop": {
       "name": "Claude Desktop",
-      "expected": "Expected:",
       "restore": "Restore",
       "upToDate": "Up to date",
       "apply": "Apply CCRelay settings"

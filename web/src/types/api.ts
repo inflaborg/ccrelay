@@ -187,6 +187,31 @@ export interface LogStats {
 
 export type StatsRange = "1d" | "7d" | "30d" | "all";
 
+export interface QueueTaskSnapshot {
+  id: string;
+  elapsed: number;
+}
+
+export interface QueueDetailStats {
+  queueLength: number;
+  activeWorkers: number;
+  maxWorkers: number;
+  maxQueueSize: number;
+  totalProcessed: number;
+  totalFailed: number;
+  avgWaitTime: number;
+  avgProcessTime: number;
+  processingTasks: QueueTaskSnapshot[];
+  queuedTasks: QueueTaskSnapshot[];
+}
+
+export interface QueueOverviewResponse {
+  enabled: boolean;
+  message?: string;
+  default?: QueueDetailStats | null;
+  routes: Record<string, QueueDetailStats>;
+}
+
 export interface BlockPattern {
   path: string;
   response: string;
@@ -227,10 +252,20 @@ export interface VersionResponse {
 
 export type ClientConfigItemStatus = "ok" | "missing" | "wrong_target" | "invalid";
 
+export interface ClientConfigField {
+  key: string;
+  expected: string;
+  current?: string;
+  ok: boolean;
+}
+
 export interface ClientConfigItem {
   status: ClientConfigItemStatus;
   filePath: string;
+  fields: ClientConfigField[];
   currentValue?: string;
+  customHeaders?: Record<string, string>;
+  expectedCustomHeaders?: Record<string, string>;
   modelProvider?: string;
   model?: string;
   message?: string;

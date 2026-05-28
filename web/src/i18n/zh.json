@@ -9,6 +9,7 @@
     "delete": "删除"
   },
   "nav": {
+    "clientConfig": "客户端配置",
     "dashboard": "仪表盘",
     "providers": "提供商",
     "capabilities": "能力",
@@ -72,16 +73,73 @@
       "provider": "提供商",
       "requests": "请求数",
       "tokens": "Token"
+    },
+    "queue": {
+      "title": "并发队列",
+      "loading": "加载队列状态…",
+      "disabled": "并发队列未启用",
+      "noQueues": "未配置队列",
+      "defaultQueue": "默认队列",
+      "saturated": "已满",
+      "workers": "{{active}} / {{max}} 并发",
+      "processing": "执行中",
+      "waiting": "排队中",
+      "avgWait": "平均等待",
+      "avgProcess": "平均执行",
+      "taskId": "任务",
+      "taskState": "状态",
+      "elapsed": "耗时",
+      "stateProcessing": "执行中",
+      "stateQueued": "排队中",
+      "noActiveTasks": "当前无执行中或排队任务"
     }
   },
   "clientConfig": {
     "title": "客户端配置",
+    "pageSubtitle": "将 Claude Desktop、Claude Code 和 Codex 指向此 CCRelay 实例",
     "description": "检查 Claude Desktop、Claude Code（{{claudePath}}）和 Codex（{{codexPath}}）配置是否指向此 CCRelay 实例（端口 {{port}}）。",
     "status": {
       "ok": "正常",
       "notSet": "未设置",
       "otherHost": "其他地址",
       "invalidFile": "文件无效"
+    },
+    "diff": {
+      "allConfigured": "全部已配置",
+      "expandAll": "展开查看全部字段",
+      "expandOk": "展开 OK 字段",
+      "collapse": "收起",
+      "collapseOk": "收起 OK 字段",
+      "expectedLabel": "期望:",
+      "currentLabel": "当前:",
+      "notSetCurrent": "（未设置）"
+    },
+    "rules": {
+      "nonEmpty": "任意非空值",
+      "positiveNumber": "任意正数",
+      "truthy": "Truthy（1、\"1\" 或 true）",
+      "absent": "必须不存在",
+      "anyNonEmpty": "任意非空值",
+      "nonEmptyArrayIncludingStar": "非空数组且包含 \"*\"",
+      "aliasHeaderNonEmpty": "x-ccrelay-model-alias 请求头非空（key 大小写不敏感）"
+    },
+    "fields": {
+      "ANTHROPIC_BASE_URL": "Anthropic 基础 URL",
+      "ANTHROPIC_AUTH_TOKEN": "Anthropic 认证令牌",
+      "API_TIMEOUT_MS": "API 超时（毫秒）",
+      "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "禁用非必要流量",
+      "model_provider": "模型提供商",
+      "model_providers.ccrelay.base_url": "CCRelay 基础 URL",
+      "model": "模型",
+      "inferenceGatewayBaseUrl": "网关基础 URL",
+      "inferenceProvider": "推理提供商",
+      "inferenceGatewayApiKey": "网关 API 密钥",
+      "coworkEgressAllowedHosts": "Cowork 出站允许主机",
+      "inferenceCustomHeaders": "网关自定义请求头",
+      "inferenceGatewayHeaders": "网关请求头（旧版）",
+      "disableEssentialTelemetry": "禁用必要遥测",
+      "disableNonessentialTelemetry": "禁用非必要遥测",
+      "deploymentMode": "部署模式"
     },
     "claudeCode": {
       "name": "Claude Code",
@@ -100,7 +158,6 @@
     },
     "claudeDesktop": {
       "name": "Claude Desktop",
-      "expected": "期望值:",
       "restore": "还原",
       "upToDate": "已是最新",
       "apply": "应用 CCRelay 设置"

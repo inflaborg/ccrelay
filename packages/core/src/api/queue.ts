@@ -5,7 +5,7 @@
 
 import * as http from "http";
 import type { ProxyServer } from "../server/handler";
-import type { QueueStats } from "../types";
+import type { QueueOverview } from "../types";
 import { sendJson } from "./index";
 
 let serverInstance: ProxyServer | null = null;
@@ -38,23 +38,13 @@ export function handleQueueStats(
     return;
   }
 
-  // Get queue stats from server
-  const queueStats: QueueStats | null = serverInstance.getQueueStats?.() ?? null;
+  const overview: QueueOverview = serverInstance.getQueueOverview?.() ?? {
+    enabled: false,
+    message: "Concurrency control is not enabled",
+    routes: {},
+  };
 
-  if (queueStats === null) {
-    // Concurrency is not enabled
-    sendJson(res, 200, {
-      enabled: false,
-      message: "Concurrency control is not enabled",
-    });
-    return;
-  }
-
-  // Concurrency is enabled, return stats
-  sendJson(res, 200, {
-    enabled: true,
-    ...queueStats,
-  });
+  sendJson(res, 200, overview);
 }
 
 /**
