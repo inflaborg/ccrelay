@@ -1,4 +1,3 @@
-import { looksLikeLegacyAliasPattern } from "./aliasHash";
 import { parseCustomModelLine } from "./customModelsLine";
 
 export interface CoworkModelMapEntry {
@@ -6,57 +5,64 @@ export interface CoworkModelMapEntry {
   model: string;
 }
 
+export interface BuildCoworkModelMapOptions {
+  /** Wildcard catch-all target model; defaults to first customModelsList id. */
+  wildcardTargetModel?: string;
+}
+
 export interface RebuildCoworkModelMapInput {
   customModelsList: string[];
+  /** @deprecated ignored — rebuild is clear-and-rebuild from customModelsList only */
   existingModelMap?: CoworkModelMapEntry[];
+  /** @deprecated ignored — aliases are read from customModelsList lines */
   aliasPrefix?: string;
+  wildcardTargetModel?: string;
 }
 
 /**
- * Rebuild Cowork modelMap from customModelsList: exact alias rules, preserved wildcards,
- * custom non-alias patterns, stale alias-shaped patterns removed.
+ * Build Cowork modelMap: alias exact rules, identity exact rules, then default wildcards.
+ */
+export function buildCoworkModelMapEntries(
+  customModelsList: string[],
+  options?: BuildCoworkModelMapOptions
+): CoworkModelMapEntry[] {
+  const entries: CoworkModelMapEntry[] = [];
+  const identityIds = new Set<string>();
+  let firstId: string | undefined;
+
+  for (const line of customModelsList) {
+    const parsed = parseCustomModelLine(line);
+    if (!parsed.id) {
+      continue;
+    }
+    if (firstId === undefined) {
+      firstId = parsed.id;
+    }
+    if (parsed.alias !== parsed.id) {
+      entries.push({ pattern: parsed.alias, model: parsed.id });
+    }
+    if (!identityIds.has(parsed.id)) {
+      identityIds.add(parsed.id);
+      entries.push({ pattern: parsed.id, model: parsed.id });
+    }
+  }
+
+  const wildcardTarget = options?.wildcardTargetModel ?? firstId;
+  if (wildcardTarget) {
+    entries.push(
+      { pattern: "claude-*", model: wildcardTarget },
+      { pattern: "gpt-*", model: wildcardTarget }
+    );
+  }
+
+  return entries;
+}
+
+/**
+ * Clear-and-rebuild Cowork modelMap from customModelsList (does not preserve custom rules).
  */
 export function rebuildCoworkModelMap(input: RebuildCoworkModelMapInput): CoworkModelMapEntry[] {
-  const aliasPrefix = input.aliasPrefix ?? "claude-";
-  const existing = input.existingModelMap ?? [];
-
-  const exactRules: CoworkModelMapEntry[] = [];
-  const currentAliases = new Set<string>();
-
-  for (const line of input.customModelsList) {
-    const parsed = parseCustomModelLine(line);
-    if (!parsed.id || parsed.alias === parsed.id) {
-      continue;
-    }
-    currentAliases.add(parsed.alias);
-    exactRules.push({ pattern: parsed.alias, model: parsed.id });
-  }
-
-  const wildcards: CoworkModelMapEntry[] = [];
-  for (const entry of existing) {
-    if (entry.pattern === "claude-*" || entry.pattern === "gpt-*") {
-      if (!wildcards.some(w => w.pattern === entry.pattern)) {
-        wildcards.push({ ...entry });
-      }
-    }
-  }
-
-  const preservedCustom: CoworkModelMapEntry[] = [];
-  for (const entry of existing) {
-    if (entry.pattern === "claude-*" || entry.pattern === "gpt-*") {
-      continue;
-    }
-    if (currentAliases.has(entry.pattern)) {
-      continue;
-    }
-    if (looksLikeLegacyAliasPattern(entry.pattern, aliasPrefix)) {
-      continue;
-    }
-    if (preservedCustom.some(p => p.pattern === entry.pattern && p.model === entry.model)) {
-      continue;
-    }
-    preservedCustom.push({ ...entry });
-  }
-
-  return [...exactRules, ...preservedCustom, ...wildcards];
+  return buildCoworkModelMapEntries(input.customModelsList, {
+    wildcardTargetModel: input.wildcardTargetModel,
+  });
 }

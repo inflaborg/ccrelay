@@ -42,15 +42,40 @@ export function createTray(server: ProxyServer, config: ConfigManager): Tray {
     const providerId = router.getCurrentProviderId();
     const provider = config.getProvider(providerId);
     const providers = config.enabledProviders;
+    const srEnabled = config.smartRoutingConfig?.enabled === true;
 
-    const providerMenuItems = providers.map(p => ({
-      label: p.name,
-      type: "radio" as const,
-      checked: p.id === providerId,
-      click: (): void => {
-        void router.switchProvider(p.id).then(() => updateMenu());
+    const providerMenuItems = [
+      {
+        label: "Smart Routing",
+        type: "radio" as const,
+        checked: srEnabled,
+        click: (): void => {
+          if (srEnabled) {
+            return;
+          }
+          config.updateConfigSection("smartRouting", { enabled: true });
+          void server
+            .getModelCatalog()
+            .refreshAll()
+            .finally(() => updateMenu());
+        },
       },
-    }));
+      { type: "separator" as const },
+      ...providers.map(p => ({
+        label: p.name,
+        type: "radio" as const,
+        checked: !srEnabled && p.id === providerId,
+        click: (): void => {
+          void (async () => {
+            if (config.smartRoutingConfig?.enabled) {
+              config.updateConfigSection("smartRouting", { enabled: false });
+            }
+            await router.switchProvider(p.id);
+            updateMenu();
+          })();
+        },
+      })),
+    ];
 
     const contextMenu = Menu.buildFromTemplate([
       {
@@ -58,7 +83,7 @@ export function createTray(server: ProxyServer, config: ConfigManager): Tray {
         enabled: false,
       },
       {
-        label: `Provider: ${provider?.name ?? "N/A"}`,
+        label: `Provider: ${srEnabled ? "Smart Routing" : (provider?.name ?? "N/A")}`,
         enabled: false,
       },
       { type: "separator" },

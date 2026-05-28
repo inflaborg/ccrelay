@@ -285,6 +285,28 @@ export interface ClientConfigGetResponse {
   claudeCode: ClientConfigItem;
   codex: ClientConfigItem;
   claudeDefaultModels: ClaudeDefaultModels;
+  claudeDesktopBundles: ClaudeDesktopBundleVersions;
+  claudeCli: ClaudeCliVersionInfo;
+}
+
+export interface ClaudeDesktopBundleVersions {
+  native: string[];
+  vm: string[];
+}
+
+export type ClaudeCliVersionStatus =
+  | "ok"
+  | "not_found"
+  | "timeout"
+  | "blocked"
+  | "disabled"
+  | "error";
+
+export interface ClaudeCliVersionInfo {
+  status: ClaudeCliVersionStatus;
+  version?: string;
+  errorCode?: string;
+  message?: string;
 }
 
 // Settings API types
@@ -297,6 +319,11 @@ export interface SettingsConfig {
   routingDefaults?: RoutingSettings;
   webSearch?: WebSearchSettings;
   smartRouting?: SmartRoutingSettings;
+  clientVersionDetection?: ClientVersionDetectionSettings;
+}
+
+export interface ClientVersionDetectionSettings {
+  enabled?: boolean;
 }
 
 export interface SmartRoutingSettings {

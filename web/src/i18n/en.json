@@ -99,6 +99,7 @@
     "title": "Client configuration",
     "pageSubtitle": "Point Claude Desktop, Claude Code, and Codex at this CCRelay instance",
     "description": "Check Claude Desktop, Claude Code ({{claudePath}}), and Codex ({{codexPath}}) configs point to this CCRelay instance (port {{port}}).",
+    "copyPath": "Copy path",
     "status": {
       "ok": "OK",
       "notSet": "Not set",
@@ -176,6 +177,18 @@
       "restore": "Restore",
       "upToDate": "Up to date",
       "apply": "Apply CCRelay template"
+    },
+    "version": {
+      "desktopBundles": "Installed bundles",
+      "native": "Native",
+      "vm": "VM",
+      "notInstalled": "Not installed",
+      "cliVersion": "CLI version",
+      "cliNotDetected": "Not detected",
+      "cliDisabled": "Detection disabled in settings",
+      "detectionToggle": "Detect Claude CLI version",
+      "detectionToggleHint": "(runs `claude --version` in background)",
+      "refresh": "Refresh version"
     },
     "dialog": {
       "overwrite": {

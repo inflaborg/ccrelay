@@ -10,6 +10,14 @@ import * as os from "os";
 import * as path from "path";
 import type { ProxyServer } from "../server/handler";
 import { CCRELAY_MODEL_ALIAS_HEADER } from "../converter/models-fallback";
+import { redactHomeInPath } from "../utils/path-display";
+import {
+  claudeDesktopDir,
+  detectClaudeCliVersion,
+  scanClaudeDesktopBundles,
+  type ClaudeCliVersionInfo,
+  type ClaudeDesktopBundleVersions,
+} from "./clientVersion";
 
 function sendJson(res: http.ServerResponse, status: number, data: unknown): void {
   // eslint-disable-next-line @typescript-eslint/naming-convention -- HTTP response header
@@ -43,16 +51,9 @@ export function setServer(server: ProxyServer | null): void {
 const CLAUDE_SETTINGS = () => path.join(os.homedir(), ".claude", "settings.json");
 const CODEX_CONFIG = () => path.join(os.homedir(), ".codex", "config.toml");
 
-function claudeDesktopDir(): string | null {
-  const p = os.platform();
-  if (p === "darwin") {
-    return path.join(os.homedir(), "Library", "Application Support", "Claude-3p");
-  }
-  if (p === "win32") {
-    return path.join(os.homedir(), "AppData", "Local", "Claude-3p");
-  }
-  return null;
-}
+// Re-export for tests and callers that imported from clientConfig historically.
+export { claudeDesktopDir } from "./clientVersion";
+export type { ClaudeCliVersionInfo, ClaudeDesktopBundleVersions } from "./clientVersion";
 
 export type ClientConfigItemStatus = "ok" | "missing" | "wrong_target" | "invalid";
 
@@ -133,7 +134,7 @@ function itemFromFields(
   });
   return {
     status,
-    filePath,
+    filePath: redactHomeInPath(filePath),
     fields,
     ...(options?.currentValue !== undefined ? { currentValue: options.currentValue } : {}),
     ...(options?.customHeaders !== undefined ? { customHeaders: options.customHeaders } : {}),
@@ -157,11 +158,13 @@ export interface ClientConfigGetResponse {
   expectedAnthropicBase: string;
   expectedCodexBaseUrl: string;
   port: number;
+  claudeDesktop: ClientConfigItem | null;
   claudeCode: ClientConfigItem;
   codex: ClientConfigItem;
-  claudeDesktop: ClientConfigItem | null;
   /** Parsed from settings.json env when file is readable */
   claudeDefaultModels: ClaudeDefaultModels;
+  claudeDesktopBundles: ClaudeDesktopBundleVersions;
+  claudeCli: ClaudeCliVersionInfo;
 }
 
 /** localhost / 127.0.0.1 / ::1, matching port, and `/anthropic` prefix (Anthropic Messages API base_url) */
@@ -408,7 +411,12 @@ function detectClaude(claudePath: string, port: number): ClientConfigItem {
   try {
     parsed = JSON.parse(raw) as { env?: Record<string, unknown> };
   } catch {
-    return { status: "invalid", filePath, fields: [], message: "Invalid JSON" };
+    return {
+      status: "invalid",
+      filePath: redactHomeInPath(filePath),
+      fields: [],
+      message: "Invalid JSON",
+    };
   }
 
   const env = parsed.env;
@@ -717,22 +725,33 @@ function detectClaudeDesktop(dir: string | null, port: number): ClientConfigItem
     const deploymentMode = readClaudeDesktopDeploymentMode(dir);
     return evaluateClaudeDesktopConfig(configPath, parsed, port, deploymentMode);
   } catch {
-    return { status: "invalid", filePath: configPath, fields: [], message: "Invalid JSON" };
+    return {
+      status: "invalid",
+      filePath: redactHomeInPath(configPath),
+      fields: [],
+      message: "Invalid JSON",
+    };
   }
 }
 
 /**
  * GET /ccrelay/api/client-config
  */
-export function handleGetClientConfig(_req: http.IncomingMessage, res: http.ServerResponse): void {
+export async function handleGetClientConfig(
+  _req: http.IncomingMessage,
+  res: http.ServerResponse
+): Promise<void> {
   if (!serverInstance) {
     sendJson(res, 503, { error: "Server not initialized" });
     return;
   }
-  const port = serverInstance.getConfig().port;
+  const routerConfig = serverInstance.getConfig().configValue;
+  const port = routerConfig.port;
   const expectedAnthropicBase = `http://127.0.0.1:${port}/anthropic`;
   const expectedCodexBaseUrl = `http://127.0.0.1:${port}/openai`;
   const claudePath = CLAUDE_SETTINGS();
+  const detectionEnabled = routerConfig.clientVersionDetection?.enabled !== false;
+  const claudeCli = await detectClaudeCliVersion({ enabled: detectionEnabled });
   const body: ClientConfigGetResponse = {
     expectedAnthropicBase,
     expectedCodexBaseUrl,
@@ -741,6 +760,8 @@ export function handleGetClientConfig(_req: http.IncomingMessage, res: http.Serv
     codex: detectCodex(CODEX_CONFIG(), port),
     claudeDesktop: detectClaudeDesktop(claudeDesktopDir(), port),
     claudeDefaultModels: readClaudeDefaultModelsFromFile(claudePath),
+    claudeDesktopBundles: scanClaudeDesktopBundles(claudeDesktopDir()),
+    claudeCli,
   };
   sendJson(res, 200, body);
 }

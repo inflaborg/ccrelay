@@ -62,6 +62,11 @@ smartRouting:
   bareModelFallback:
     mode: first-match
 
+# ==================== Client Version Detection ====================
+# Dashboard Client Config: scan Claude Desktop bundles and run claude --version.
+clientVersionDetection:
+  enabled: true
+
 # ==================== Routing Configuration ====================
 routing:
   # Forward rules: path → provider mapping. First match wins.

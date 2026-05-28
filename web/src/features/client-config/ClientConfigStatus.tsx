@@ -1,10 +1,22 @@
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileCode2, Loader2, Monitor, RotateCcw, SlidersHorizontal, X } from "lucide-react";
+import {
+  Check,
+  Copy,
+  FileCode2,
+  Loader2,
+  Monitor,
+  RefreshCw,
+  RotateCcw,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,35 +28,216 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { api } from "@/api/client";
 import { CLAUDE_CODE_DEFAULT_MODELS, CODEX_DEFAULT_MODEL } from "@/constants/claudeCodeDefaults";
-import type { ClientConfigItem, ClientConfigItemStatus } from "@/types/api";
+import type {
+  ClientConfigItem,
+  ClientConfigItemStatus,
+  ClaudeCliVersionInfo,
+  ClaudeDesktopBundleVersions,
+} from "@/types/api";
 import ConfigFieldList from "@/features/client-config/ConfigFieldList";
+
+const metaText = "text-xs text-muted-foreground";
+const sectionTitle = "text-sm font-medium";
+const monoValue = "text-xs font-mono text-foreground/80";
+const actionButton = "h-8 text-xs gap-1";
+const actionIcon = "h-3.5 w-3.5";
+
+function homePathVar(): string {
+  if (typeof navigator !== "undefined" && navigator.platform.toLowerCase().startsWith("win")) {
+    return "%HOME%";
+  }
+  return "$HOME";
+}
+
+function clientConfigPath(relativePath: string): string {
+  const sep = homePathVar() === "%HOME%" ? "\\" : "/";
+  return `${homePathVar()}${sep}${relativePath.replace(/\//g, sep)}`;
+}
+
+function CopyPathButton({ path }: { path: string }) {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(path);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // ignore clipboard errors
+    }
+  };
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="h-7 w-7 p-0 shrink-0"
+      onClick={() => void copy()}
+      title={t("clientConfig.copyPath")}
+    >
+      {copied ? (
+        <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-500" />
+      ) : (
+        <Copy className="h-3.5 w-3.5" />
+      )}
+    </Button>
+  );
+}
+
+function formatBundleList(versions: string[], notInstalledLabel: string): string {
+  return versions.length > 0 ? versions.join(", ") : notInstalledLabel;
+}
+
+function formatCliVersionText(
+  info: ClaudeCliVersionInfo | undefined,
+  t: (key: string) => string
+): string {
+  if (!info) {
+    return "—";
+  }
+  switch (info.status) {
+    case "ok":
+      return info.version ?? "—";
+    case "disabled":
+      return t("clientConfig.version.cliDisabled");
+    default:
+      return t("clientConfig.version.cliNotDetected");
+  }
+}
+
+function ClaudeDesktopBundleInfo({
+  bundles,
+  t,
+}: {
+  bundles: ClaudeDesktopBundleVersions | undefined;
+  t: (key: string) => string;
+}) {
+  const notInstalled = t("clientConfig.version.notInstalled");
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground min-w-0">
+      <span className="font-medium text-foreground/90 shrink-0">
+        {t("clientConfig.version.desktopBundles")}
+      </span>
+      <span className="text-border/80 hidden sm:inline" aria-hidden>
+        ·
+      </span>
+      <span className="shrink-0">
+        {t("clientConfig.version.native")}{" "}
+        <span className={monoValue}>{formatBundleList(bundles?.native ?? [], notInstalled)}</span>
+      </span>
+      <span className="text-border/80" aria-hidden>
+        ·
+      </span>
+      <span className="shrink-0">
+        {t("clientConfig.version.vm")}{" "}
+        <span className={monoValue}>{formatBundleList(bundles?.vm ?? [], notInstalled)}</span>
+      </span>
+    </div>
+  );
+}
+
+function ClaudeCliVersionInfoRow({
+  info,
+  t,
+  onRefresh,
+  refreshing,
+}: {
+  info: ClaudeCliVersionInfo | undefined;
+  t: (key: string) => string;
+  onRefresh: () => void;
+  refreshing: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-1.5 text-xs text-muted-foreground min-w-0">
+      <span className="shrink-0">{t("clientConfig.version.cliVersion")}</span>
+      <span className={`${monoValue} truncate min-w-0`} title={formatCliVersionText(info, t)}>
+        {formatCliVersionText(info, t)}
+      </span>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        className="h-6 w-6 p-0 shrink-0"
+        disabled={refreshing}
+        onClick={onRefresh}
+        title={t("clientConfig.version.refresh")}
+      >
+        {refreshing ? (
+          <Loader2 className="h-3 w-3 animate-spin" />
+        ) : (
+          <RefreshCw className="h-3 w-3" />
+        )}
+      </Button>
+    </div>
+  );
+}
+
+function OptionalModelConfigRow({
+  title,
+  description,
+  children,
+  buttonLabel,
+  buttonDisabled,
+  onConfigure,
+}: {
+  title: string;
+  description: string;
+  children: ReactNode;
+  buttonLabel: string;
+  buttonDisabled?: boolean;
+  onConfigure: () => void;
+}) {
+  return (
+    <div className="w-full">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <p className={sectionTitle}>{title}</p>
+          <p className={metaText}>{description}</p>
+          {children}
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          className={`${actionButton} shrink-0`}
+          disabled={buttonDisabled}
+          onClick={onConfigure}
+        >
+          <SlidersHorizontal className={actionIcon} />
+          {buttonLabel}
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 function statusBadge(status: ClientConfigItemStatus, t: (key: string) => string) {
   switch (status) {
     case "ok":
       return (
-        <Badge variant="success" className="text-[10px] px-1.5 py-0">
+        <Badge variant="success" className="text-xs px-2 py-0">
           {t("clientConfig.status.ok")}
         </Badge>
       );
     case "missing":
       return (
-        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+        <Badge variant="secondary" className="text-xs px-2 py-0">
           {t("clientConfig.status.notSet")}
         </Badge>
       );
     case "wrong_target":
       return (
-        <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+        <Badge variant="destructive" className="text-xs px-2 py-0">
           {t("clientConfig.status.otherHost")}
         </Badge>
       );
     case "invalid":
       return (
-        <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+        <Badge variant="destructive" className="text-xs px-2 py-0">
           {t("clientConfig.status.invalidFile")}
         </Badge>
       );
@@ -69,6 +262,7 @@ function ClientConfigSection({
   filePath,
   invalidMessage,
   actions,
+  metaBanner,
   children,
 }: {
   icon: ReactNode;
@@ -77,31 +271,46 @@ function ClientConfigSection({
   filePath: string;
   invalidMessage?: string;
   actions: ReactNode;
+  metaBanner?: ReactNode;
   children?: ReactNode;
 }) {
   const { t } = useTranslation();
+  const hasMeta = Boolean(metaBanner || children);
 
   return (
-    <div className="rounded-md border border-border/60 p-2.5">
-      <div className="flex gap-2">
-        <div className="shrink-0 mt-0.5 text-muted-foreground">{icon}</div>
-        <div className="flex-1 min-w-0 w-0">
-          <div className="flex items-start justify-between gap-2">
+    <div className="rounded-md border border-border/60 p-3.5">
+      <div className="flex gap-2.5">
+        <div className="shrink-0 mt-1 text-muted-foreground">{icon}</div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-2 flex-wrap min-w-0">
-              <span className="text-xs font-medium">{title}</span>
+              <span className={sectionTitle}>{title}</span>
               {status !== undefined && statusBadge(status, t)}
             </div>
-            <div className="flex shrink-0 gap-1">{actions}</div>
+            <div className="flex shrink-0 flex-wrap justify-end gap-1.5">{actions}</div>
           </div>
-          <div className="mt-1 min-w-0 space-y-0">
-            <p className="text-[10px] text-muted-foreground font-mono truncate">{filePath}</p>
-            {invalidMessage && (
-              <p className="text-[10px] text-amber-600 dark:text-amber-500 mt-0.5">
-                {invalidMessage}
-              </p>
-            )}
-            {children}
+          <div className="mt-1.5 flex items-center gap-1 min-w-0">
+            <p
+              className="text-xs text-muted-foreground font-mono truncate min-w-0 flex-1"
+              title={filePath}
+            >
+              {filePath}
+            </p>
+            <CopyPathButton path={filePath} />
           </div>
+          {invalidMessage && (
+            <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">{invalidMessage}</p>
+          )}
+          {hasMeta ? (
+            <div className="mt-3 pt-3 border-t border-border/50 space-y-3">
+              {metaBanner ? (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
+                  {metaBanner}
+                </div>
+              ) : null}
+              {children ? <div className="min-w-0 space-y-3">{children}</div> : null}
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
@@ -131,10 +340,26 @@ export default function ClientConfigStatus() {
   >(null);
   const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ["clientConfig"],
     queryFn: () => api.getClientConfig(),
     refetchInterval: 60_000,
+  });
+
+  const { data: settingsConfig } = useQuery({
+    queryKey: ["config"],
+    queryFn: () => api.getConfig(),
+  });
+
+  const detectionEnabled = settingsConfig?.clientVersionDetection?.enabled !== false;
+
+  const detectionToggleMutation = useMutation({
+    mutationFn: (enabled: boolean) =>
+      api.patchConfig({ section: "clientVersionDetection", data: { enabled } }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["config"] });
+      void queryClient.invalidateQueries({ queryKey: ["clientConfig"] });
+    },
   });
 
   const applyMutation = useMutation({
@@ -244,23 +469,43 @@ export default function ClientConfigStatus() {
   return (
     <>
       <Card className="p-0">
-        <CardHeader className="p-3 pb-2">
-          <p className="text-[10px] text-muted-foreground font-normal">
+        <CardHeader className="p-4 pb-3 space-y-3">
+          <p className={`${metaText} leading-relaxed`}>
             {t("clientConfig.description", {
               port: data?.port ?? "—",
-              claudePath: "~/.claude/settings.json",
-              codexPath: "~/.codex/config.toml",
+              claudePath: clientConfigPath(".claude/settings.json"),
+              codexPath: clientConfigPath(".codex/config.toml"),
             })}
           </p>
+          <div className="flex items-start gap-2.5">
+            <Checkbox
+              id="client-version-detection"
+              checked={detectionEnabled}
+              disabled={detectionToggleMutation.isPending}
+              onCheckedChange={checked => {
+                detectionToggleMutation.mutate(checked === true);
+              }}
+            />
+            <Label
+              htmlFor="client-version-detection"
+              className="text-xs font-normal cursor-pointer leading-relaxed"
+            >
+              {t("clientConfig.version.detectionToggle")}
+              <span className="text-muted-foreground font-normal">
+                {" "}
+                {t("clientConfig.version.detectionToggleHint")}
+              </span>
+            </Label>
+          </div>
         </CardHeader>
-        <CardContent className="p-3 pt-0 space-y-2">
+        <CardContent className="p-4 pt-0 space-y-3">
           {isLoading ? (
             <div className="h-16 animate-pulse bg-muted rounded" />
           ) : (
             <>
               {data?.claudeDesktop && (
                 <ClientConfigSection
-                  icon={<Monitor className="h-3.5 w-3.5" />}
+                  icon={<Monitor className="h-4 w-4" />}
                   title={t("clientConfig.claudeDesktop.name")}
                   status={data.claudeDesktop.status}
                   filePath={data.claudeDesktop.filePath}
@@ -273,7 +518,7 @@ export default function ClientConfigStatus() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-7 text-xs gap-1 text-muted-foreground hover:text-destructive"
+                          className={`${actionButton} text-muted-foreground hover:text-destructive`}
                           disabled={restoreMutation.isPending}
                           onClick={() => {
                             setRestoreTarget("claudeDesktop");
@@ -281,9 +526,9 @@ export default function ClientConfigStatus() {
                           }}
                         >
                           {restoreMutation.isPending && applyingTo === "claudeDesktop" ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
+                            <Loader2 className={`${actionIcon} animate-spin`} />
                           ) : (
-                            <RotateCcw className="h-3 w-3" />
+                            <RotateCcw className={actionIcon} />
                           )}
                           <span className="hidden sm:inline">
                             {t("clientConfig.claudeDesktop.restore")}
@@ -293,14 +538,14 @@ export default function ClientConfigStatus() {
                       <Button
                         size="sm"
                         variant={isClientConfigUpToDate(data.claudeDesktop) ? "outline" : "default"}
-                        className="h-7 text-xs min-w-[7rem]"
+                        className={`${actionButton} min-w-[7rem]`}
                         disabled={
                           isClientConfigUpToDate(data.claudeDesktop) || applyMutation.isPending
                         }
                         onClick={() => onConfigureClick("claudeDesktop")}
                       >
                         {applyMutation.isPending && applyingTo === "claudeDesktop" ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <Loader2 className={`${actionIcon} animate-spin`} />
                         ) : isClientConfigUpToDate(data.claudeDesktop) ? (
                           t("clientConfig.claudeDesktop.upToDate")
                         ) : (
@@ -309,6 +554,7 @@ export default function ClientConfigStatus() {
                       </Button>
                     </>
                   }
+                  metaBanner={<ClaudeDesktopBundleInfo bundles={data.claudeDesktopBundles} t={t} />}
                 >
                   <ConfigFieldList fields={data.claudeDesktop.fields ?? []} />
                 </ClientConfigSection>
@@ -316,7 +562,7 @@ export default function ClientConfigStatus() {
 
               {data?.claudeCode && (
                 <ClientConfigSection
-                  icon={<FileCode2 className="h-3.5 w-3.5" />}
+                  icon={<FileCode2 className="h-4 w-4" />}
                   title={t("clientConfig.claudeCode.name")}
                   status={data.claudeCode.status}
                   filePath={data.claudeCode.filePath}
@@ -329,7 +575,7 @@ export default function ClientConfigStatus() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-7 text-xs gap-1 text-muted-foreground hover:text-destructive"
+                          className={`${actionButton} text-muted-foreground hover:text-destructive`}
                           disabled={restoreMutation.isPending}
                           onClick={() => {
                             setRestoreTarget("claudeCode");
@@ -337,9 +583,9 @@ export default function ClientConfigStatus() {
                           }}
                         >
                           {restoreMutation.isPending && applyingTo === "claudeCode" ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
+                            <Loader2 className={`${actionIcon} animate-spin`} />
                           ) : (
-                            <RotateCcw className="h-3 w-3" />
+                            <RotateCcw className={actionIcon} />
                           )}
                           <span className="hidden sm:inline">
                             {t("clientConfig.claudeCode.restore")}
@@ -349,7 +595,7 @@ export default function ClientConfigStatus() {
                       <Button
                         size="sm"
                         variant={isClientConfigUpToDate(data.claudeCode) ? "outline" : "default"}
-                        className="h-7 text-xs min-w-[7rem]"
+                        className={`${actionButton} min-w-[7rem]`}
                         disabled={
                           isClientConfigUpToDate(data.claudeCode) ||
                           applyMutation.isPending ||
@@ -358,7 +604,7 @@ export default function ClientConfigStatus() {
                         onClick={() => onConfigureClick("claudeCode")}
                       >
                         {applyMutation.isPending && applyingTo === "claudeCode" ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <Loader2 className={`${actionIcon} animate-spin`} />
                         ) : isClientConfigUpToDate(data.claudeCode) ? (
                           t("clientConfig.claudeCode.upToDate")
                         ) : (
@@ -367,25 +613,41 @@ export default function ClientConfigStatus() {
                       </Button>
                     </>
                   }
+                  metaBanner={
+                    <ClaudeCliVersionInfoRow
+                      info={data.claudeCli}
+                      t={t}
+                      refreshing={isFetching}
+                      onRefresh={() => {
+                        void refetch();
+                      }}
+                    />
+                  }
                 >
-                  <div className="mt-2 pt-2 border-t border-border/50 space-y-1.5 w-full">
-                    <p className="text-[10px] text-muted-foreground">
-                      <span className="font-medium text-foreground/90">
-                        {t("clientConfig.claudeCode.optionalModels.title")}
-                      </span>{" "}
-                      {t("clientConfig.claudeCode.optionalModels.description")}
-                    </p>
+                  <OptionalModelConfigRow
+                    title={t("clientConfig.claudeCode.optionalModels.title")}
+                    description={t("clientConfig.claudeCode.optionalModels.description")}
+                    buttonLabel={t("clientConfig.claudeCode.configureModels")}
+                    buttonDisabled={applyMutation.isPending || modelsMutation.isPending}
+                    onConfigure={() => {
+                      const m = data.claudeDefaultModels;
+                      setOpus(m?.opus ?? CLAUDE_CODE_DEFAULT_MODELS.opus);
+                      setSonnet(m?.sonnet ?? CLAUDE_CODE_DEFAULT_MODELS.sonnet);
+                      setHaiku(m?.haiku ?? CLAUDE_CODE_DEFAULT_MODELS.haiku);
+                      setModelModalOpen(true);
+                    }}
+                  >
                     {data.claudeDefaultModels &&
                     (data.claudeDefaultModels.opus ||
                       data.claudeDefaultModels.sonnet ||
                       data.claudeDefaultModels.haiku) ? (
-                      <p className="text-[10px] font-mono break-all text-foreground/80">
+                      <p className={`${monoValue} break-all`}>
                         Opus: {data.claudeDefaultModels.opus || "—"} · Sonnet:{" "}
                         {data.claudeDefaultModels.sonnet || "—"} · Haiku:{" "}
                         {data.claudeDefaultModels.haiku || "—"}
                       </p>
                     ) : (
-                      <p className="text-[10px] text-muted-foreground">
+                      <p className={metaText}>
                         <span className="italic">
                           {t("clientConfig.claudeCode.optionalModels.notSet")}
                         </span>{" "}
@@ -396,33 +658,14 @@ export default function ClientConfigStatus() {
                         </span>
                       </p>
                     )}
-                    <div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        className="h-7 text-xs gap-1"
-                        disabled={applyMutation.isPending || modelsMutation.isPending}
-                        onClick={() => {
-                          const m = data.claudeDefaultModels;
-                          setOpus(m?.opus ?? CLAUDE_CODE_DEFAULT_MODELS.opus);
-                          setSonnet(m?.sonnet ?? CLAUDE_CODE_DEFAULT_MODELS.sonnet);
-                          setHaiku(m?.haiku ?? CLAUDE_CODE_DEFAULT_MODELS.haiku);
-                          setModelModalOpen(true);
-                        }}
-                      >
-                        <SlidersHorizontal className="h-3 w-3" />
-                        {t("clientConfig.claudeCode.configureModels")}
-                      </Button>
-                    </div>
-                  </div>
+                  </OptionalModelConfigRow>
                   <ConfigFieldList fields={data.claudeCode.fields ?? []} />
                 </ClientConfigSection>
               )}
 
               {data?.codex && (
                 <ClientConfigSection
-                  icon={<FileCode2 className="h-3.5 w-3.5" />}
+                  icon={<FileCode2 className="h-4 w-4" />}
                   title={t("clientConfig.codex.name")}
                   status={data.codex.status}
                   filePath={data.codex.filePath}
@@ -433,7 +676,7 @@ export default function ClientConfigStatus() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-7 text-xs gap-1 text-muted-foreground hover:text-destructive"
+                          className={`${actionButton} text-muted-foreground hover:text-destructive`}
                           disabled={restoreMutation.isPending}
                           onClick={() => {
                             setRestoreTarget("codex");
@@ -441,9 +684,9 @@ export default function ClientConfigStatus() {
                           }}
                         >
                           {restoreMutation.isPending && applyingTo === "codex" ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
+                            <Loader2 className={`${actionIcon} animate-spin`} />
                           ) : (
-                            <RotateCcw className="h-3 w-3" />
+                            <RotateCcw className={actionIcon} />
                           )}
                           <span className="hidden sm:inline">
                             {t("clientConfig.codex.restore")}
@@ -453,7 +696,7 @@ export default function ClientConfigStatus() {
                       <Button
                         size="sm"
                         variant={isClientConfigUpToDate(data.codex) ? "outline" : "default"}
-                        className="h-7 text-xs min-w-[7rem]"
+                        className={`${actionButton} min-w-[7rem]`}
                         disabled={
                           isClientConfigUpToDate(data.codex) ||
                           applyMutation.isPending ||
@@ -463,7 +706,7 @@ export default function ClientConfigStatus() {
                         onClick={() => onConfigureClick("codex")}
                       >
                         {applyMutation.isPending && applyingTo === "codex" ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <Loader2 className={`${actionIcon} animate-spin`} />
                         ) : isClientConfigUpToDate(data.codex) ? (
                           t("clientConfig.codex.upToDate")
                         ) : (
@@ -473,48 +716,33 @@ export default function ClientConfigStatus() {
                     </>
                   }
                 >
-                  <div className="mt-2 pt-2 border-t border-border/50 space-y-1.5 w-full">
-                    <p className="text-[10px] text-muted-foreground">
-                      <span className="font-medium text-foreground/90">
-                        {t("clientConfig.codex.model.label")}
-                      </span>{" "}
-                      {t("clientConfig.codex.model.description")}
-                    </p>
+                  <OptionalModelConfigRow
+                    title={t("clientConfig.codex.model.label")}
+                    description={t("clientConfig.codex.model.description")}
+                    buttonLabel={t("clientConfig.codex.configureModel")}
+                    buttonDisabled={applyMutation.isPending || codexModelPatchMutation.isPending}
+                    onConfigure={() => {
+                      setCodexModalMode("configure");
+                      setCodexModel(data.codex?.model ?? "");
+                      setCodexModelModalOpen(true);
+                    }}
+                  >
                     {data.codex.model ? (
-                      <p className="text-[10px] font-mono text-foreground/80">{data.codex.model}</p>
+                      <p className={monoValue}>{data.codex.model}</p>
                     ) : (
-                      <p className="text-[10px] text-muted-foreground">
+                      <p className={metaText}>
                         <span className="italic">{t("clientConfig.codex.model.notSet")}</span>{" "}
                         {t("clientConfig.codex.model.default")}{" "}
                         <span className="font-mono text-foreground/80">{CODEX_DEFAULT_MODEL}</span>
                       </p>
                     )}
-                    <div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        className="h-7 text-xs gap-1"
-                        disabled={applyMutation.isPending || codexModelPatchMutation.isPending}
-                        onClick={() => {
-                          setCodexModalMode("configure");
-                          setCodexModel(data.codex?.model ?? "");
-                          setCodexModelModalOpen(true);
-                        }}
-                      >
-                        <SlidersHorizontal className="h-3 w-3" />
-                        {t("clientConfig.codex.configureModel")}
-                      </Button>
-                    </div>
-                  </div>
+                  </OptionalModelConfigRow>
                   <ConfigFieldList fields={data.codex.fields ?? []} />
                 </ClientConfigSection>
               )}
 
               {applyMutation.isError && (
-                <p className="text-[10px] text-destructive">
-                  {(applyMutation.error as Error).message}
-                </p>
+                <p className="text-xs text-destructive">{(applyMutation.error as Error).message}</p>
               )}
             </>
           )}
@@ -561,7 +789,7 @@ export default function ClientConfigStatus() {
               }}
             >
               {restoreMutation.isPending ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
+                <Loader2 className={`${actionIcon} animate-spin`} />
               ) : (
                 t("clientConfig.dialog.restore.action")
               )}
@@ -629,7 +857,7 @@ export default function ClientConfigStatus() {
               }}
             >
               {applyMutation.isPending ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
+                <Loader2 className={`${actionIcon} animate-spin`} />
               ) : (
                 t("clientConfig.dialog.overwrite.action")
               )}
@@ -654,9 +882,7 @@ export default function ClientConfigStatus() {
                   <X className="h-4 w-4" />
                 </Button>
               </div>
-              <p className="text-[10px] text-muted-foreground font-normal pt-1">
-                {t("clientConfig.codexModelModal.description")}
-              </p>
+              <p className={`${metaText} pt-1`}>{t("clientConfig.codexModelModal.description")}</p>
             </CardHeader>
             <CardContent className="p-4 space-y-2">
               <div className="space-y-1">
@@ -690,12 +916,10 @@ export default function ClientConfigStatus() {
                 />
               </div>
               {applyMutation.isError && (
-                <p className="text-[10px] text-destructive">
-                  {(applyMutation.error as Error).message}
-                </p>
+                <p className="text-xs text-destructive">{(applyMutation.error as Error).message}</p>
               )}
               {codexModelPatchMutation.isError && (
-                <p className="text-[10px] text-destructive">
+                <p className="text-xs text-destructive">
                   {(codexModelPatchMutation.error as Error).message}
                 </p>
               )}
@@ -704,7 +928,7 @@ export default function ClientConfigStatus() {
               <Button
                 type="button"
                 size="sm"
-                className="h-7 text-xs"
+                className={actionButton}
                 disabled={applyMutation.isPending || codexModelPatchMutation.isPending}
                 onClick={() => {
                   if (codexModalMode === "configure") {
@@ -724,7 +948,7 @@ export default function ClientConfigStatus() {
                 }}
               >
                 {applyMutation.isPending || codexModelPatchMutation.isPending ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <Loader2 className={`${actionIcon} animate-spin`} />
                 ) : codexModalMode === "configure" ? (
                   t("common.save")
                 ) : (
@@ -752,9 +976,7 @@ export default function ClientConfigStatus() {
                   <X className="h-4 w-4" />
                 </Button>
               </div>
-              <p className="text-[10px] text-muted-foreground font-normal pt-1">
-                {t("clientConfig.modelsModal.description")}
-              </p>
+              <p className={`${metaText} pt-1`}>{t("clientConfig.modelsModal.description")}</p>
             </CardHeader>
             <CardContent className="p-4 space-y-2">
               <div className="space-y-1">
@@ -790,7 +1012,7 @@ export default function ClientConfigStatus() {
                 />
               </div>
               {modelsMutation.isError && (
-                <p className="text-[10px] text-destructive">
+                <p className="text-xs text-destructive">
                   {(modelsMutation.error as Error).message}
                 </p>
               )}
@@ -800,7 +1022,7 @@ export default function ClientConfigStatus() {
                 type="button"
                 size="sm"
                 variant="secondary"
-                className="h-7 text-xs"
+                className={actionButton}
                 disabled={modelsMutation.isPending}
                 onClick={() => {
                   setOpus(CLAUDE_CODE_DEFAULT_MODELS.opus);
@@ -814,7 +1036,7 @@ export default function ClientConfigStatus() {
                 type="button"
                 size="sm"
                 variant="outline"
-                className="h-7 text-xs"
+                className={actionButton}
                 onClick={() => {
                   setOpus("");
                   setSonnet("");
@@ -828,7 +1050,7 @@ export default function ClientConfigStatus() {
                 type="button"
                 size="sm"
                 variant="secondary"
-                className="h-7 text-xs"
+                className={actionButton}
                 disabled={modelsMutation.isPending}
                 onClick={() => modelsMutation.mutate({ opus: "", sonnet: "", haiku: "" })}
               >
@@ -837,12 +1059,12 @@ export default function ClientConfigStatus() {
               <Button
                 type="button"
                 size="sm"
-                className="h-7 text-xs"
+                className={actionButton}
                 disabled={modelsMutation.isPending}
                 onClick={() => modelsMutation.mutate({ opus, sonnet, haiku })}
               >
                 {modelsMutation.isPending ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <Loader2 className={`${actionIcon} animate-spin`} />
                 ) : (
                   t("common.save")
                 )}

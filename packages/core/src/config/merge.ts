@@ -253,6 +253,13 @@ export function mergeFileConfigWithDefaults(
             (file.smartRouting ?? {}) as Record<string, unknown>
           )
         : undefined,
+    clientVersionDetection:
+      (defaults.clientVersionDetection ?? file.clientVersionDetection)
+        ? deepMerge(
+            (defaults.clientVersionDetection ?? {}) as Record<string, unknown>,
+            (file.clientVersionDetection ?? {}) as Record<string, unknown>
+          )
+        : undefined,
   };
 
   return merged;

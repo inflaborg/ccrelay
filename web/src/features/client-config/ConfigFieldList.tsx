@@ -31,41 +31,54 @@ function expectedHint(
   return translated === `clientConfig.rules.${slug}` ? expected : translated;
 }
 
-function FieldRow({
+function OkFieldRow({
   field,
-  variant,
   t,
 }: {
   field: ClientConfigField;
-  variant: "gap" | "ok";
+  t: (k: string, options?: Record<string, unknown>) => string;
+}) {
+  const label = fieldLabel(field.key, t);
+  const value = field.current ?? "";
+
+  return (
+    <div className="flex items-start gap-1.5 min-w-0 rounded-md border border-border/40 bg-muted/20 px-2 py-1.5">
+      <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-500 shrink-0 mt-0.5" />
+      <div className="min-w-0 flex-1 grid grid-cols-1 gap-0.5 sm:grid-cols-[minmax(5.5rem,42%)_1fr] sm:gap-x-2 sm:items-baseline">
+        <span className="text-xs text-muted-foreground truncate" title={label}>
+          {label}
+        </span>
+        {value ? (
+          <span className="text-xs font-mono text-muted-foreground truncate" title={value}>
+            {value}
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground/60">—</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function GapFieldRow({
+  field,
+  t,
+}: {
+  field: ClientConfigField;
   t: (k: string, options?: Record<string, unknown>) => string;
 }) {
   const label = fieldLabel(field.key, t);
 
-  if (variant === "ok") {
-    return (
-      <div className="flex items-start gap-1.5 py-0.5">
-        <Check className="h-3 w-3 text-green-600 dark:text-green-500 shrink-0 mt-0.5" />
-        <div className="min-w-0">
-          <span className="text-[10px] text-muted-foreground">{label}</span>
-          {field.current && (
-            <p className="text-[10px] font-mono text-muted-foreground break-all">{field.current}</p>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="rounded border border-amber-500/40 px-2 py-1.5 space-y-0.5">
-      <p className="text-[10px] font-medium text-amber-700 dark:text-amber-400">{label}</p>
-      <p className="text-[10px] text-muted-foreground">
+    <div className="rounded border border-amber-500/40 px-2.5 py-2 space-y-1 col-span-full">
+      <p className="text-xs font-medium text-amber-700 dark:text-amber-400">{label}</p>
+      <p className="text-xs text-muted-foreground">
         <span className="text-amber-600 dark:text-amber-500">
           {t("clientConfig.diff.expectedLabel")}
         </span>{" "}
         <span className="font-mono break-all">{expectedHint(field.expected, t)}</span>
       </p>
-      <p className="text-[10px] text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         <span className="text-amber-600 dark:text-amber-500">
           {t("clientConfig.diff.currentLabel")}
         </span>{" "}
@@ -79,49 +92,48 @@ function FieldRow({
 
 export default function ConfigFieldList({ fields }: { fields: ClientConfigField[] }) {
   const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
+  const gaps = fields.filter(f => !f.ok);
+  const okFields = fields.filter(f => f.ok);
+  const allOk = gaps.length === 0;
+  const [expanded, setExpanded] = useState(allOk);
 
   if (fields.length === 0) {
     return null;
   }
 
-  const gaps = fields.filter(f => !f.ok);
-  const okFields = fields.filter(f => f.ok);
-  const allOk = gaps.length === 0;
+  const toggleButton = okFields.length > 0 && (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="h-7 px-2 text-xs gap-1 shrink-0"
+      onClick={() => setExpanded(v => !v)}
+    >
+      {expanded ? (
+        <>
+          <ChevronUp className="h-3.5 w-3.5" />
+          {allOk ? t("clientConfig.diff.collapse") : t("clientConfig.diff.collapseOk")}
+        </>
+      ) : (
+        <>
+          <ChevronDown className="h-3.5 w-3.5" />
+          {allOk ? t("clientConfig.diff.expandAll") : t("clientConfig.diff.expandOk")}
+        </>
+      )}
+    </Button>
+  );
 
   if (allOk) {
     return (
-      <div className="mt-2 pt-2 border-t border-border/50 space-y-1 w-full">
+      <div className="space-y-2 w-full">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-[10px] text-muted-foreground">
-            {t("clientConfig.diff.allConfigured")}
-          </p>
-          {okFields.length > 0 && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-6 px-1.5 text-[10px] gap-0.5"
-              onClick={() => setExpanded(v => !v)}
-            >
-              {expanded ? (
-                <>
-                  <ChevronUp className="h-3 w-3" />
-                  {t("clientConfig.diff.collapse")}
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="h-3 w-3" />
-                  {t("clientConfig.diff.expandAll")}
-                </>
-              )}
-            </Button>
-          )}
+          <p className="text-xs text-muted-foreground">{t("clientConfig.diff.allConfigured")}</p>
+          {toggleButton}
         </div>
         {expanded && (
-          <div className="space-y-0.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
             {okFields.map(field => (
-              <FieldRow key={field.key} field={field} variant="ok" t={t} />
+              <OkFieldRow key={field.key} field={field} t={t} />
             ))}
           </div>
         )}
@@ -130,35 +142,19 @@ export default function ConfigFieldList({ fields }: { fields: ClientConfigField[
   }
 
   return (
-    <div className="mt-2 pt-2 border-t border-border/50 space-y-1.5 w-full">
-      {gaps.map(field => (
-        <FieldRow key={field.key} field={field} variant="gap" t={t} />
-      ))}
+    <div className="space-y-2 w-full">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+        {gaps.map(field => (
+          <GapFieldRow key={field.key} field={field} t={t} />
+        ))}
+      </div>
       {okFields.length > 0 && (
         <>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-6 px-1.5 text-[10px] gap-0.5"
-            onClick={() => setExpanded(v => !v)}
-          >
-            {expanded ? (
-              <>
-                <ChevronUp className="h-3 w-3" />
-                {t("clientConfig.diff.collapseOk")}
-              </>
-            ) : (
-              <>
-                <ChevronDown className="h-3 w-3" />
-                {t("clientConfig.diff.expandOk")}
-              </>
-            )}
-          </Button>
+          <div className="flex items-center justify-end gap-2 pt-1">{toggleButton}</div>
           {expanded && (
-            <div className="space-y-0.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
               {okFields.map(field => (
-                <FieldRow key={field.key} field={field} variant="ok" t={t} />
+                <OkFieldRow key={field.key} field={field} t={t} />
               ))}
             </div>
           )}
