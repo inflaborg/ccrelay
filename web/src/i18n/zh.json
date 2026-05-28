@@ -337,7 +337,10 @@
       "coworkHelperAdd": "添加一行",
       "coworkHelperPreview": "预览",
       "coworkHelperApply": "应用",
-      "coworkHelperRemoveRow": "删除此行"
+      "coworkHelperRemoveRow": "删除此行",
+      "coworkHelperRequiresId": "请先填写 Provider ID 与协议类型，再生成 alias。",
+      "rebuildModelMap": "重建 modelMap",
+      "rebuildModelMapHelp": "根据自定义模型列表重建 alias 精确映射，并保留 wildcard 规则。"
     },
     "validation": {
       "mustBeYamlArray": "必须是 YAML 数组",

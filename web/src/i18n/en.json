@@ -337,7 +337,10 @@
       "coworkHelperAdd": "Add row",
       "coworkHelperPreview": "Preview",
       "coworkHelperApply": "Apply",
-      "coworkHelperRemoveRow": "Remove row"
+      "coworkHelperRemoveRow": "Remove row",
+      "coworkHelperRequiresId": "Fill in Provider ID and protocol before generating aliases.",
+      "rebuildModelMap": "Rebuild model map",
+      "rebuildModelMapHelp": "Rebuild exact alias rules from the custom model list and keep wildcards."
     },
     "validation": {
       "mustBeYamlArray": "Must be a YAML array",

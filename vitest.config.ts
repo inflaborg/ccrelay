@@ -12,6 +12,7 @@ export default {
     alias: {
       "@": resolve(__dirname, "./packages/core/src"),
       "@ccrelay/core": resolve(__dirname, "./packages/core/src/index.ts"),
+      "@ccrelay/shared": resolve(__dirname, "./packages/core/src/shared"),
     },
   },
 };

@@ -9,6 +9,7 @@ describe("aliasHash", () => {
   it("builds stable canonical hash per provider+protocol+model", () => {
     const a = computeCanonicalAliasHash("CN_GLM", "anthropic", "glm-5.1");
     const b = computeCanonicalAliasHash("GLOBAL_GLM", "anthropic", "glm-5.1");
+    expect(a).toBe("claude-6e17ce8d");
     expect(a).not.toBe(b);
     expect(a).toMatch(/^claude-[0-9a-f]{8}$/);
   });

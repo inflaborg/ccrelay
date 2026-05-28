@@ -38,6 +38,8 @@ import { SelectField } from "@/components/select-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { rebuildCoworkModelMap } from "@ccrelay/shared/coworkModelMap";
+import type { AliasHashProtocol } from "@ccrelay/shared/aliasHash";
 import { api } from "@/api/client";
 import type { AddProviderRequest, Provider, ModelMapEntry } from "@/types/api";
 import { WizardDialog } from "./wizard/WizardDialog";
@@ -145,6 +147,8 @@ export default function Providers() {
   });
 
   const srEnabled = config?.smartRouting?.enabled === true;
+  const aliasPrefix = config?.smartRouting?.aliasPrefix ?? "claude-";
+  const coworkHelperReady = formData.id.trim().length > 0 && Boolean(formData.providerType);
 
   const { data: catalog, isLoading: catalogLoading } = useQuery({
     queryKey: ["smartRoutingCatalog"],
@@ -451,6 +455,32 @@ export default function Providers() {
     },
     []
   );
+
+  const handleRebuildModelMap = useCallback(() => {
+    const lines = customModelsText
+      .split("\n")
+      .map(l => l.trim())
+      .filter(l => l.length > 0);
+    if (lines.length === 0 || !formData.id.trim()) {
+      return;
+    }
+    const rebuilt = rebuildCoworkModelMap({
+      customModelsList: lines,
+      existingModelMap: formData.modelMap,
+      aliasPrefix,
+    });
+    if (modelMapTimerRef.current) {
+      clearTimeout(modelMapTimerRef.current);
+      modelMapTimerRef.current = null;
+    }
+    setModelMapText(yaml.dump(rebuilt, { indent: 2, lineWidth: -1 }));
+    setModelMapError(null);
+    setFormData(prev => ({
+      ...prev,
+      modelMappingEnabled: true,
+      modelMap: rebuilt,
+    }));
+  }, [aliasPrefix, customModelsText, formData.id, formData.modelMap]);
 
   const providers = (providersData?.providers || []).sort((a, b) => {
     const sortGroup = (p: Provider) => {
@@ -848,6 +878,7 @@ export default function Providers() {
       <WizardDialog
         open={showWizard}
         onOpenChange={setShowWizard}
+        aliasPrefix={aliasPrefix}
         onCustom={() => {
           setShowWizard(false);
           openLegacyAddModal();
@@ -1051,6 +1082,12 @@ export default function Providers() {
                         variant="ghost"
                         size="sm"
                         className="h-5 shrink-0 px-1.5 text-[10px] mt-0.5"
+                        disabled={!coworkHelperReady}
+                        title={
+                          coworkHelperReady
+                            ? undefined
+                            : t("providers.modal.coworkHelperRequiresId")
+                        }
                         onClick={() => {
                           setCoworkHelperKey(k => k + 1);
                           setCoworkHelperOpen(true);
@@ -1089,9 +1126,28 @@ export default function Providers() {
                   {t("providers.modal.modelMappingHelp")}
                 </p>
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground">
-                    {t("providers.modal.modelMap")}
-                  </label>
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      {t("providers.modal.modelMap")}
+                    </label>
+                    {formData.useCustomModelsList ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 shrink-0 px-1.5 text-[10px]"
+                        disabled={!coworkHelperReady || customModelsText.trim().length === 0}
+                        title={
+                          coworkHelperReady
+                            ? t("providers.modal.rebuildModelMapHelp")
+                            : t("providers.modal.coworkHelperRequiresId")
+                        }
+                        onClick={handleRebuildModelMap}
+                      >
+                        {t("providers.modal.rebuildModelMap")}
+                      </Button>
+                    ) : null}
+                  </div>
                   <textarea
                     className={`w-full px-2 py-1 text-xs border rounded-md bg-background font-mono ${modelMapError ? "border-destructive" : ""} ${formData.modelMappingEnabled === false ? "opacity-60 bg-muted/20" : ""}`}
                     placeholder={`- pattern: "claude-*"\n  model: "custom-model"`}
@@ -1154,6 +1210,9 @@ export default function Providers() {
         key={coworkHelperKey}
         open={coworkHelperOpen}
         initialCustomModelsText={customModelsText}
+        providerId={formData.id}
+        providerType={formData.providerType as AliasHashProtocol}
+        aliasPrefix={aliasPrefix}
         onOpenChange={setCoworkHelperOpen}
         onApply={handleCoworkHelperApply}
       />

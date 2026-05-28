@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Minus, Plus } from "lucide-react";
+import type { AliasHashProtocol } from "@ccrelay/shared/aliasHash";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,6 +19,9 @@ export interface CoworkAliasHelperProps {
   open: boolean;
   /** Current custom models textarea value; used to seed rows when the dialog mounts. */
   initialCustomModelsText: string;
+  providerId: string;
+  providerType: AliasHashProtocol;
+  aliasPrefix: string;
   onOpenChange: (open: boolean) => void;
   onApply: (result: { customModelsList: string[]; modelMap: ModelMapEntry[] }) => void;
 }
@@ -43,6 +47,9 @@ function rowsFromSeed(text: string): HelperRow[] {
 export function CoworkAliasHelper({
   open,
   initialCustomModelsText,
+  providerId,
+  providerType,
+  aliasPrefix,
   onOpenChange,
   onApply,
 }: CoworkAliasHelperProps) {
@@ -56,15 +63,22 @@ export function CoworkAliasHelper({
       .filter(r => r.real.length > 0)
       .map(r => (r.dn.length > 0 ? `${r.real};${r.dn}` : r.real));
 
-    if (validLines.length === 0) {
+    if (validLines.length === 0 || !providerId.trim()) {
       return null;
     }
-    const c = buildModelConfig(validLines, true, true);
+    const c = buildModelConfig({
+      providerId: providerId.trim(),
+      providerType,
+      aliasPrefix,
+      modelIds: validLines,
+      claudeSupport: true,
+      useCustomModels: true,
+    });
     if (!c.useCustomModelsList) {
       return null;
     }
     return { customModelsList: c.customModelsList, modelMap: c.modelMap };
-  }, [rows]);
+  }, [rows, providerId, providerType, aliasPrefix]);
 
   const addRow = useCallback(() => {
     setRows(prev => [...prev, newRow()]);

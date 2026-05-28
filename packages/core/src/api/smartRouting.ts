@@ -9,6 +9,7 @@ import { collectAliasDrifts, applyAliasDriftUpdates } from "../server/smartRouti
 import { computeCanonicalAliasHash } from "../server/smartRouting/aliasHash";
 import { buildSmartRoutingConfig } from "../config/builders/smart-routing";
 import { parseCustomModelLine } from "../converter/models-fallback";
+import { rebuildCoworkModelMap } from "../server/smartRouting/coworkModelMap";
 import type { ModelCatalog } from "../server/smartRouting/modelCatalog";
 import { sendJson, parseJsonBody } from "./httpJson";
 
@@ -123,8 +124,18 @@ export async function handleSmartRoutingAliasDriftApply(
     if (!provider?.customModelsList) {
       continue;
     }
-    const next = applyAliasDriftUpdates(provider.customModelsList, providerUpdates);
-    if (!config.updateProviderCustomModelsList(providerId, next)) {
+    const nextList = applyAliasDriftUpdates(provider.customModelsList, providerUpdates);
+    const nextModelMap = rebuildCoworkModelMap({
+      customModelsList: nextList,
+      existingModelMap: provider.modelMap,
+      aliasPrefix: smartRouting.aliasPrefix,
+    });
+    if (
+      !config.updateProviderCowork(providerId, {
+        customModelsList: nextList,
+        modelMap: nextModelMap,
+      })
+    ) {
       sendJson(res, 500, { status: "error", message: `Failed to update ${providerId}` });
       return;
     }

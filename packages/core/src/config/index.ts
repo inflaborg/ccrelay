@@ -703,6 +703,13 @@ export class ConfigManager {
   }
 
   updateProviderCustomModelsList(providerId: string, list: string[]): boolean {
+    return this.updateProviderCowork(providerId, { customModelsList: list });
+  }
+
+  updateProviderCowork(
+    providerId: string,
+    patch: { customModelsList: string[]; modelMap?: Array<{ pattern: string; model: string }> }
+  ): boolean {
     try {
       const content = fs.readFileSync(this.configPath, "utf-8");
       const rawConfig = yaml.load(content) as Record<string, unknown>;
@@ -720,10 +727,16 @@ export class ConfigManager {
         return false;
       }
       const providerObj = { ...(providerRaw as Record<string, unknown>) };
-      providerObj.customModelsList = list;
-      providerObj.custom_models_list = list;
+      providerObj.customModelsList = patch.customModelsList;
+      providerObj.custom_models_list = patch.customModelsList;
       providerObj.useCustomModelsList = true;
       providerObj.use_custom_models_list = true;
+      if (patch.modelMap !== undefined) {
+        providerObj.modelMap = patch.modelMap;
+        providerObj.model_map = patch.modelMap;
+        providerObj.modelMappingEnabled = true;
+        providerObj.model_mapping_enabled = true;
+      }
       providers[resolved] = providerObj;
       rawConfig.providers = sortProviderMapKeys(providers as Record<string, ProviderConfigInput>);
 
@@ -741,7 +754,7 @@ export class ConfigManager {
       return true;
     } catch (err) {
       this.saving = false;
-      console.error("[ConfigManager] Failed to update customModelsList:", err);
+      console.error("[ConfigManager] Failed to update provider Cowork config:", err);
       return false;
     }
   }

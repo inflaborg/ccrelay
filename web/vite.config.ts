@@ -12,6 +12,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@ccrelay/shared": path.resolve(__dirname, "../packages/core/src/shared"),
     },
   },
   base: "/ccrelay/",

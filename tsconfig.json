@@ -5,7 +5,8 @@
     "paths": {
       "@/*": ["packages/core/src/*"],
       "@ccrelay/core": ["packages/core/src/index.ts"],
-      "@ccrelay/core/*": ["packages/core/src/*"]
+      "@ccrelay/core/*": ["packages/core/src/*"],
+      "@ccrelay/shared/*": ["packages/core/src/shared/*"]
     },
     "noEmit": true
   },

@@ -19,7 +19,8 @@
     /* Path alias */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@ccrelay/shared/*": ["../packages/core/src/shared/*"]
     },
 
     /* Linting */
