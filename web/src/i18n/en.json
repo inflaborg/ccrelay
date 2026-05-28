@@ -8,6 +8,13 @@
     "apply": "Apply",
     "delete": "Delete"
   },
+  "serverOffline": {
+    "title": "Server not running",
+    "description": "No CCRelay instance is available. Start the server from the desktop tray or extension menu.",
+    "checking": "Checking for server…",
+    "waiting": "Waiting for server to come back…",
+    "hint": "The dashboard will reopen automatically when the server is reachable again."
+  },
   "nav": {
     "clientConfig": "Client Config",
     "dashboard": "Dashboard",

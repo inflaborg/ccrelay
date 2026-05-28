@@ -1,19 +1,35 @@
 /**
- * Electron BrowserWindow loads the dashboard over HTTP served by ProxyServer.
+ * Electron BrowserWindow loads the dashboard from bundled web assets (custom protocol).
+ * API calls still target the proxy server on the configured host/port.
  */
 
 import { BrowserWindow, app } from "electron";
 import type { ProxyServer, ConfigManager } from "@ccrelay/core";
+import {
+  dashboardLocalUrl,
+  setDashboardInjectConfig,
+  type DashboardInjectConfig,
+} from "./dashboardProtocol";
 
 let dashboardWin: BrowserWindow | null = null;
 
-export function dashboardWebUrl(server: ProxyServer, config: ConfigManager): string {
+function resolveApiOrigin(server: ProxyServer, config: ConfigManager): string {
   const base = server.getLeaderUrl() ?? `http://${config.host}:${config.port}`;
-  const normalized = base.endsWith("/") ? base.slice(0, -1) : base;
-  return `${normalized}/ccrelay/`;
+  return base.endsWith("/") ? base.slice(0, -1) : base;
 }
 
-export function showDashboardWindow(url: string): void {
+function buildInjectConfig(server: ProxyServer, config: ConfigManager): DashboardInjectConfig {
+  return {
+    apiOrigin: resolveApiOrigin(server, config),
+    apiBearer: config.getApiBearerToken(),
+    locale: config.locale,
+  };
+}
+
+export function showDashboardWindow(server: ProxyServer, config: ConfigManager): void {
+  setDashboardInjectConfig(buildInjectConfig(server, config));
+  const url = dashboardLocalUrl();
+
   if (dashboardWin) {
     if (dashboardWin.webContents.getURL() !== url) {
       void dashboardWin.loadURL(url).catch(() => {

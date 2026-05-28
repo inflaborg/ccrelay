@@ -27,6 +27,7 @@ import type {
   SmartRoutingCatalogResponse,
   AliasDriftResponse,
 } from "../types/api";
+import { fetchServerStatus } from "./serverReachability";
 
 // Re-export types for convenience
 export type { LogEntry, LogsQuery };
@@ -98,7 +99,7 @@ async function fetchWizardPostJson<T>(
 
 export const api = {
   // Status
-  getStatus: (): Promise<ServerStatus> => fetchAPI<ServerStatus>("/status"),
+  getStatus: (): Promise<ServerStatus> => fetchServerStatus(),
 
   // Providers
   getProviders: (): Promise<ProvidersResponse> => fetchAPI<ProvidersResponse>("/providers"),

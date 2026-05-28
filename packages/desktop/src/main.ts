@@ -17,7 +17,13 @@ import {
   setWebDistPath,
 } from "@ccrelay/core";
 import { createTray } from "./tray";
-import { showDashboardWindow, dashboardWebUrl } from "./window";
+import { showDashboardWindow } from "./window";
+import {
+  registerDashboardProtocolHandler,
+  registerDashboardProtocolSchemes,
+} from "./dashboardProtocol";
+
+registerDashboardProtocolSchemes();
 
 function registerLocalCcrelayRequestHeaders(configManager: ConfigManager): void {
   const port = configManager.port;
@@ -72,6 +78,7 @@ void app.whenReady().then(async () => {
   }
 
   setWebDistPath(resolveWebDist());
+  registerDashboardProtocolHandler(resolveWebDist());
 
   const configManager = new ConfigManager();
   setLogDatabaseDriverConfigResolver(() => {
@@ -95,7 +102,7 @@ void app.whenReady().then(async () => {
     } catch {
       console.log("[Desktop] Second instance attempted launch");
     }
-    showDashboardWindow(dashboardWebUrl(server, configManager));
+    showDashboardWindow(server, configManager);
   });
 
   Api.setServer(server);
@@ -109,5 +116,5 @@ void app.whenReady().then(async () => {
   }
 
   createTray(server, configManager);
-  showDashboardWindow(dashboardWebUrl(server, configManager));
+  showDashboardWindow(server, configManager);
 });
