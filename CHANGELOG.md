@@ -24,8 +24,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Desktop**
 
 - Electron desktop app serves the dashboard from bundled UI assets, so the window can open even when the HTTP proxy is not running.
+- Electron and Tauri log build version at startup (version, build hash, git hash), matching the VS Code extension.
 
 ### Changed
+
+**Logging database**
+
+- Token usage, model, timing, and success status are stored separately from request log bodies, so clearing request logs does not reset dashboard statistics.
+- Log database schema upgrades are version-tracked; startup logs report the current schema version and any migration steps applied.
+- Native SQLite logging requires SQLite 3.35 or newer; older system SQLite disables request log storage (same behavior as when the sqlite3 CLI is unavailable).
 
 **UI**
 
