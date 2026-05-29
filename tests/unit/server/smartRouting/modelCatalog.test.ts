@@ -144,6 +144,35 @@ describe("ModelCatalog", () => {
     expect(catalog.getStats().providerCount).toBe(1);
   });
 
+  it("keeps excluded models in manageable catalog but not in routed catalog", async () => {
+    const providers = {
+      cn: {
+        id: "cn",
+        name: "CN",
+        baseUrl: "https://cn.example.com",
+        mode: "inject" as const,
+        providerType: "anthropic" as const,
+        enabled: true,
+        useCustomModelsList: true,
+        customModelsList: ["glm-5.1", "glm-5.2"],
+      },
+    };
+    const manager = mockConfig(providers);
+    manager.configValue.smartRouting = {
+      ...manager.configValue.smartRouting!,
+      exclude: ["cn:glm-5.1"],
+    };
+    const catalog = new ModelCatalog(manager);
+    await catalog.refreshAll();
+    expect(catalog.getAll().map(e => e.publicId)).toEqual(["cn:glm-5.2"]);
+    expect(
+      catalog
+        .getManageableEntries()
+        .map(e => e.publicId)
+        .sort()
+    ).toEqual(["cn:glm-5.1", "cn:glm-5.2"]);
+  });
+
   it("includes official provider when not in passthrough mode", async () => {
     const providers = {
       official: {

@@ -26,6 +26,7 @@ import type {
   SmartRoutingProviderError,
   SmartRoutingSettings,
 } from "@/types/api";
+import { matchesSmartRoutingExclude } from "@/utils/glob";
 
 type DriftChoice = "update" | "keep";
 
@@ -97,15 +98,22 @@ export default function SmartRouting() {
   const stats = catalog?.stats;
   const providerErrors = catalog?.providerErrors ?? [];
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, SmartRoutingCatalogEntry[]>();
-    for (const e of catalog?.entries ?? []) {
-      const list = map.get(e.providerId) ?? [];
-      list.push(e);
-      map.set(e.providerId, list);
-    }
-    return map;
-  }, [catalog?.entries]);
+  const sortedEntries = useMemo(() => {
+    const excludePatterns = smartRouting.exclude ?? [];
+    const entries = catalog?.entries ?? [];
+    return [...entries].sort((a, b) => {
+      const aExcluded = matchesSmartRoutingExclude(a.publicId, excludePatterns) ? 1 : 0;
+      const bExcluded = matchesSmartRoutingExclude(b.publicId, excludePatterns) ? 1 : 0;
+      if (aExcluded !== bExcluded) {
+        return aExcluded - bExcluded;
+      }
+      const providerCmp = a.providerId.localeCompare(b.providerId);
+      if (providerCmp !== 0) {
+        return providerCmp;
+      }
+      return a.publicId.localeCompare(b.publicId);
+    });
+  }, [catalog?.entries, smartRouting.exclude]);
 
   const totalEntries = catalog?.entries?.length ?? 0;
 
@@ -376,40 +384,41 @@ export default function SmartRouting() {
                   </tr>
                 </thead>
                 <tbody>
-                  {[...grouped.entries()].map(([providerId, rows]) =>
-                    rows.map(row => {
-                      const excluded = (smartRouting.exclude ?? []).includes(row.publicId);
-                      const displayLabels = catalogDisplayLabels(row);
-                      return (
-                        <tr key={row.publicId} className="border-b border-border last:border-0">
-                          <td className="py-1.5 pr-2 font-mono text-[10px] max-w-[180px] truncate">
-                            {row.publicId}
-                            <div className="text-muted-foreground">{providerId}</div>
-                          </td>
-                          <td className="py-1.5 px-2 font-mono text-[10px]">
-                            <div>{row.aliasHash}</div>
-                            {displayLabels.length > 0 ? (
-                              <div className="font-sans text-muted-foreground mt-0.5">
-                                {displayLabels.join(" · ")}
-                              </div>
-                            ) : null}
-                          </td>
-                          <td className="py-1.5 px-2">{row.protocol}</td>
-                          <td className="py-1.5 px-2">
-                            <Badge variant="outline" className="text-[10px]">
-                              {row.source}
-                            </Badge>
-                          </td>
-                          <td className="py-1.5 pl-2 text-center">
-                            <Checkbox
-                              checked={excluded}
-                              onCheckedChange={v => toggleExclude(row.publicId, v === true)}
-                            />
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
+                  {sortedEntries.map(row => {
+                    const excluded = matchesSmartRoutingExclude(
+                      row.publicId,
+                      smartRouting.exclude ?? []
+                    );
+                    const displayLabels = catalogDisplayLabels(row);
+                    return (
+                      <tr key={row.publicId} className="border-b border-border last:border-0">
+                        <td className="py-1.5 pr-2 font-mono text-[10px] max-w-[180px] truncate">
+                          {row.publicId}
+                          <div className="text-muted-foreground">{row.providerId}</div>
+                        </td>
+                        <td className="py-1.5 px-2 font-mono text-[10px]">
+                          <div>{row.aliasHash}</div>
+                          {displayLabels.length > 0 ? (
+                            <div className="font-sans text-muted-foreground mt-0.5">
+                              {displayLabels.join(" · ")}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="py-1.5 px-2">{row.protocol}</td>
+                        <td className="py-1.5 px-2">
+                          <Badge variant="outline" className="text-[10px]">
+                            {row.source}
+                          </Badge>
+                        </td>
+                        <td className="py-1.5 pl-2 text-center">
+                          <Checkbox
+                            checked={excluded}
+                            onCheckedChange={v => toggleExclude(row.publicId, v === true)}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
