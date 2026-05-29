@@ -7,6 +7,7 @@ import type {
   LogsQuery,
   LogStats,
   VersionResponse,
+  UpdateCheckResponse,
   AddProviderRequest,
   AddProviderResponse,
   DuplicateProviderRequest,
@@ -190,6 +191,20 @@ export const api = {
 
   // Version
   getVersion: (): Promise<VersionResponse> => fetchAPI<VersionResponse>("/version"),
+
+  getUpdateCheck: (): Promise<UpdateCheckResponse> =>
+    fetchAPI<UpdateCheckResponse>("/update-check"),
+
+  triggerUpdateCheck: async (): Promise<UpdateCheckResponse> => {
+    const response = await fetch(`${API_BASE}/update-check`, {
+      method: "POST",
+      headers: buildDefaultHeaders(false),
+    });
+    if (!response.ok) {
+      throw new Error(`Update check failed: ${response.status}`);
+    }
+    return (await response.json()) as UpdateCheckResponse;
+  },
 
   getClientConfig: (): Promise<ClientConfigGetResponse> =>
     fetchAPI<ClientConfigGetResponse>("/client-config"),

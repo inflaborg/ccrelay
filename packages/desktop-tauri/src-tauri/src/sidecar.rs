@@ -6,6 +6,23 @@ use tauri_plugin_shell::{process::CommandChild, ShellExt};
 
 use crate::tray;
 
+/// Keep proxy UI in the webview; open other http(s) URLs in the system browser.
+fn should_navigate_in_webview(url: &url::Url, proxy_port: u16) -> bool {
+    if url.scheme() != "http" && url.scheme() != "https" {
+        return true;
+    }
+    let port = url.port_or_known_default().unwrap_or(80);
+    if port != proxy_port {
+        return false;
+    }
+    match url.host() {
+        Some(url::Host::Domain(h)) if h == "localhost" || h == "127.0.0.1" => true,
+        Some(url::Host::Ipv4(ip)) if ip.is_loopback() => true,
+        Some(url::Host::Ipv6(ip)) if ip.is_loopback() => true,
+        _ => false,
+    }
+}
+
 fn dev_js_entry_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../out/ccrelay-server.js")
 }
@@ -196,6 +213,7 @@ fn show_dashboard(app: &AppHandle, port: u16, host: &str, token: &str) {
         #[cfg(target_os = "macos")]
         let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
     } else {
+        let proxy_port = port;
         match WebviewWindowBuilder::new(
             app,
             "dashboard",
@@ -204,6 +222,15 @@ fn show_dashboard(app: &AppHandle, port: u16, host: &str, token: &str) {
         .title("CCRelay")
         .inner_size(1024.0, 720.0)
         .min_inner_size(640.0, 480.0)
+        .on_navigation(move |nav_url| {
+            if should_navigate_in_webview(nav_url, proxy_port) {
+                return true;
+            }
+            if nav_url.scheme() == "http" || nav_url.scheme() == "https" {
+                let _ = open::that(nav_url.as_str());
+            }
+            false
+        })
         .build()
         {
             Ok(window) => {

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.5] - 2026-05-28
 
-Smart Routing aggregates provider models with unified `/v1/models` routing. The dashboard adds an offline gate, client configuration, and a metrics split so statistics survive log clears. Desktop can open the bundled UI without a running proxy; multi-instance leader election follows the active proxy port.
+Smart Routing aggregates provider models with unified `/v1/models` routing. The dashboard adds an offline gate, client configuration, a metrics split so statistics survive log clears, and release update checks against GitHub. Desktop can open the bundled UI without a running proxy; multi-instance leader election follows the active proxy port.
 
 ### Added
 
@@ -19,6 +19,8 @@ Smart Routing aggregates provider models with unified `/v1/models` routing. The 
 - **Smart Routing** tab between Dashboard and Providers: aggregates all provider model lists, exposes unified `/v1/models` with `<providerId>:<modelId>` ids, and routes requests by model without switching the active provider.
 - **Providers** page: Smart Routing card and provider cards are mutually exclusive routing modes — enable Smart Routing from the Providers tab; selecting a fallback provider disables Smart Routing. Aggregated catalog shows provider fetch errors when upstream model lists fail.
 - **Client configuration** page shows installed Claude Desktop claude-code bundles (scanned from the Claude-3p directory) and the Claude Code CLI version (via `claude --version`). CLI version detection can be disabled on the page.
+- **Release update check** in the footer: compares your build to the latest formal GitHub Release (not the development version on `main`). Checks run about one minute after the proxy starts and once every 24 hours while it keeps running; you can also check immediately from the footer.
+- When a newer release is available, the dashboard opens an update dialog with release notes and a link to download on GitHub (opened in your system browser on desktop). The dialog refreshes if a later release appears on a subsequent check.
 
 **Config**
 
@@ -29,6 +31,7 @@ Smart Routing aggregates provider models with unified `/v1/models` routing. The 
 
 - Electron desktop app serves the dashboard from bundled UI assets, so the window can open even when the HTTP proxy is not running.
 - Electron and Tauri log build version at startup (version, build hash, git hash), matching the VS Code extension.
+- Dashboard external links (including the update download page on GitHub) open in the system default browser instead of inside the app window.
 
 ### Changed
 

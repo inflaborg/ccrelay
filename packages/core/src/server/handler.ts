@@ -28,6 +28,7 @@ import {
 import { LeaderElection } from "./leaderElection";
 import { isStaticRequest, serveStatic } from "./static";
 import { isApiRequest, handleApiRequest } from "../api";
+import { cancelUpdateCheck, scheduleUpdateCheck } from "./updateCheck";
 import { ProxyExecutor } from "./proxy/executor";
 import { QueueManager } from "./queueManager";
 import { ResponseLogger } from "./responseLogger";
@@ -568,6 +569,7 @@ export class ProxyServer {
         if (this.modelCatalog.isEnabled()) {
           void this.modelCatalog.ensureReady();
         }
+        scheduleUpdateCheck();
         resolve(undefined);
       });
 
@@ -607,6 +609,7 @@ export class ProxyServer {
    * Stop only the HTTP server (no election cleanup)
    */
   private async stopServerOnly(): Promise<void> {
+    cancelUpdateCheck();
     return new Promise((resolve, reject) => {
       if (!this.server || !this.isRunning) {
         resolve();

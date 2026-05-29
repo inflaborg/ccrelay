@@ -263,6 +263,17 @@ export interface VersionResponse {
   };
 }
 
+export type UpdateCheckStatus = "pending" | "checking" | "idle" | "available";
+
+export interface UpdateCheckResponse {
+  status: UpdateCheckStatus;
+  currentVersion: string;
+  latestVersion?: string;
+  releaseUrl?: string;
+  releaseNotes?: string;
+  checkedAt?: string;
+}
+
 export type ClientConfigItemStatus = "ok" | "missing" | "wrong_target" | "invalid";
 
 export interface ClientConfigField {

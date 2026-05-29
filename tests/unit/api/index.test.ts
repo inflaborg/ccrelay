@@ -18,6 +18,7 @@ import {
   handleApiRequest,
 } from "@/api/index";
 import { resetProxyServerForApi, setProxyServerForApi } from "@/api/serverRef";
+import { cancelUpdateCheck } from "@/server/updateCheck";
 import type { ProxyServer } from "@/server/handler";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { EventEmitter } from "stream";
@@ -622,5 +623,58 @@ describe("api: handleApiRequest specific routes", () => {
     // Version endpoint doesn't require server initialization
     // It should return 200 with version info
     expect(res.statusCode).toBe(200);
+  });
+
+  it("should handle GET /ccrelay/api/update-check", () => {
+    const req = new MockIncomingMessage(
+      "/ccrelay/api/update-check",
+      "GET"
+    ) as unknown as MockIncomingMessage & IncomingMessage;
+    const res = new MockServerResponse() as unknown as MockServerResponse & ServerResponse;
+
+    handleApiRequest(req, res);
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as { status: string; currentVersion: string };
+    expect(body.status).toBe("pending");
+    expect(typeof body.currentVersion).toBe("string");
+  });
+
+  it("should handle POST /ccrelay/api/update-check", async () => {
+    cancelUpdateCheck();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) => {
+        if (url.includes("/releases/latest")) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                // eslint-disable-next-line @typescript-eslint/naming-convention -- GitHub API field
+                tag_name: "v0.0.1",
+                prerelease: false,
+              }),
+          });
+        }
+        return Promise.resolve({ ok: false, status: 404 });
+      })
+    );
+
+    const req = new MockIncomingMessage(
+      "/ccrelay/api/update-check",
+      "POST"
+    ) as unknown as MockIncomingMessage & IncomingMessage;
+    const res = new MockServerResponse() as unknown as MockServerResponse & ServerResponse;
+
+    handleApiRequest(req, res);
+
+    await vi.waitFor(() => expect(res.ended).toBe(true));
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as { status: string; checkedAt?: string };
+    expect(body.status).toBe("idle");
+    expect(body.checkedAt).toBeDefined();
+
+    vi.unstubAllGlobals();
+    cancelUpdateCheck();
   });
 });

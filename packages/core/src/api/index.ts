@@ -24,6 +24,7 @@ import { handleSwitchProvider, setServer as setSwitchServer } from "./switch";
 import { handleLogs, handleLogDetail, handleDeleteLogs, handleClearLogs } from "./logs";
 import { handleStats } from "./stats";
 import { handleVersion } from "./version";
+import { handleUpdateCheck, handleTriggerUpdateCheck } from "./updateCheck";
 import { handleQueueStats, handleClearQueue, setServer as setQueueServer } from "./queue";
 import {
   handleGetClientConfig,
@@ -79,6 +80,7 @@ const API_ROUTES: Record<string, ApiHandler> = {
   "/ccrelay/api/logs": handleLogs,
   "/ccrelay/api/stats": handleStats,
   "/ccrelay/api/version": handleVersion,
+  "/ccrelay/api/update-check": handleUpdateCheck,
   "/ccrelay/api/queue": handleQueueStats,
   "/ccrelay/api/internal/ui-token": handleUiToken,
 };
@@ -292,6 +294,16 @@ export function handleApiRequest(req: http.IncomingMessage, res: http.ServerResp
   if (reqPath === "/ccrelay/api/smart-routing/alias-drift/apply" && method === "POST") {
     handleSmartRoutingAliasDriftApply(req, res).catch(err => {
       log.error("Error handling POST /smart-routing/alias-drift/apply", err);
+      if (!res.headersSent) {
+        sendJson(res, 500, { error: "Internal server error" });
+      }
+    });
+    return true;
+  }
+
+  if (reqPath === "/ccrelay/api/update-check" && method === "POST") {
+    handleTriggerUpdateCheck(req, res).catch(err => {
+      log.error("Error handling POST /update-check", err);
       if (!res.headersSent) {
         sendJson(res, 500, { error: "Internal server error" });
       }
