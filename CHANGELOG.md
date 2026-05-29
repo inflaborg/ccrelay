@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-05-28
+
+Smart Routing aggregates provider models with unified `/v1/models` routing. The dashboard adds an offline gate, client configuration, and a metrics split so statistics survive log clears. Desktop can open the bundled UI without a running proxy; multi-instance leader election follows the active proxy port.
+
 ### Added
 
 **UI**
@@ -44,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **UI**
 
 - Dashboard and VS Code status bar show **Smart Routing** as the current provider when smart routing is enabled; the status bar **Switch Provider** menu can enable or disable Smart Routing.
+- Smart Routing settings list excluded models again (non-excluded first) while runtime routing still omits them from `/v1/models`.
 - Electron desktop dashboard no longer fails to load scripts and styles when opened while the proxy is stopped.
 
 **Multi-instance**
@@ -65,10 +70,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Request logs for cross-protocol streaming (Chat SSE to Responses SSE) now update from `pending` to `completed` when the stream finishes, matching passthrough streaming behavior.
 - Cross-protocol streaming request logs now store the converted Responses SSE sent to the client and the upstream wire body, not only status and duration.
 - Xiaomi MiMo (Anthropic protocol): Claude Agent SDK requests that put system instructions in `messages` with `role: system` no longer fail upstream validation; those entries are rewritten as user messages and merged with adjacent user turns when needed.
-
-## [0.2.5] - 2026-05-26 (pre-release)
-
-Pre-release line for 0.2.5.
 
 ## [0.2.4] - 2026-05-19
 
