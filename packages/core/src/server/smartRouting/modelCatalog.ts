@@ -91,12 +91,39 @@ export class ModelCatalog {
     this.rebuildCatalog();
   }
 
+  /** Entries visible to clients (include/exclude filters applied). */
   getAll(): SmartRoutingCatalogEntry[] {
-    return this.applyFilters([...this.entries]);
+    return this.applyRoutingFilters([...this.entries]);
+  }
+
+  /** Full catalog for settings UI — exclude filter not applied so excluded models stay manageable. */
+  getManageableEntries(): SmartRoutingCatalogEntry[] {
+    return this.applyIncludeFilter([...this.entries]);
   }
 
   getStats(): SmartRoutingCatalogStats {
     const entries = this.getAll();
+    const providerIds = new Set(entries.map(e => e.providerId));
+    let lastRefreshedAt = 0;
+    for (const cache of this.upstreamCache.values()) {
+      if (cache.fetchedAt > lastRefreshedAt) {
+        lastRefreshedAt = cache.fetchedAt;
+      }
+    }
+    for (const entry of this.entries) {
+      if (entry.fetchedAt > lastRefreshedAt) {
+        lastRefreshedAt = entry.fetchedAt;
+      }
+    }
+    return {
+      providerCount: providerIds.size,
+      modelCount: entries.length,
+      ...(lastRefreshedAt > 0 ? { lastRefreshedAt } : {}),
+    };
+  }
+
+  getManageableStats(): SmartRoutingCatalogStats {
+    const entries = this.getManageableEntries();
     const providerIds = new Set(entries.map(e => e.providerId));
     let lastRefreshedAt = 0;
     for (const cache of this.upstreamCache.values()) {
@@ -319,18 +346,24 @@ export class ModelCatalog {
     }
   }
 
-  private applyFilters(entries: SmartRoutingCatalogEntry[]): SmartRoutingCatalogEntry[] {
+  private applyIncludeFilter(entries: SmartRoutingCatalogEntry[]): SmartRoutingCatalogEntry[] {
     const sr = this.smartRouting;
     if (sr.include?.length) {
       return entries.filter(e => sr.include!.some(p => minimatch(e.publicId, p)));
     }
-    if (sr.exclude?.length) {
-      return entries.filter(e => !sr.exclude!.some(p => minimatch(e.publicId, p)));
-    }
     return entries;
   }
 
+  private applyRoutingFilters(entries: SmartRoutingCatalogEntry[]): SmartRoutingCatalogEntry[] {
+    const filtered = this.applyIncludeFilter(entries);
+    const sr = this.smartRouting;
+    if (sr.exclude?.length) {
+      return filtered.filter(e => !sr.exclude!.some(p => minimatch(e.publicId, p)));
+    }
+    return filtered;
+  }
+
   private isEntryVisible(entry: SmartRoutingCatalogEntry): boolean {
-    return this.applyFilters([entry]).length > 0;
+    return this.applyRoutingFilters([entry]).length > 0;
   }
 }

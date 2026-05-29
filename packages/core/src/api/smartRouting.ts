@@ -18,8 +18,8 @@ let serverInstance: ProxyServer | null = null;
 function buildCatalogPayload(catalog: ModelCatalog) {
   return {
     enabled: catalog.isEnabled(),
-    entries: catalog.getAll(),
-    stats: catalog.getStats(),
+    entries: catalog.getManageableEntries(),
+    stats: catalog.getManageableStats(),
     providerErrors: catalog.getProviderErrors(),
   };
 }
