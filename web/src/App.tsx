@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
   Server,
@@ -10,6 +11,7 @@ import {
   Route,
 } from "lucide-react";
 import { api } from "./api/client";
+import { applyAppLocale, parseAppLocale } from "./i18n";
 import ClientConfig from "./features/client-config/ClientConfig";
 import Dashboard from "./features/dashboard/Dashboard";
 import Providers from "./features/providers/Providers";
@@ -73,31 +75,28 @@ function useHashTab(defaultTab: Tab): [Tab, (tab: Tab) => void] {
 function App() {
   const { t, i18n } = useTranslation();
   const [activeTab, setActiveTab] = useHashTab("clientConfig");
-  const [showLangModal, setShowLangModal] = useState(false);
-  const [loggingEnabled, setLoggingEnabled] = useState(true);
+  const [languagePromptDismissed, setLanguagePromptDismissed] = useState(false);
 
+  const { data: config } = useQuery({
+    queryKey: ["config"],
+    queryFn: () => api.getConfig(),
+  });
+
+  const loggingEnabled = config?.logging?.enabled ?? true;
+
+  const showLanguagePrompt =
+    config !== undefined &&
+    !languagePromptDismissed &&
+    !parseAppLocale(config.server?.locale) &&
+    !parseAppLocale(window.CCRELAY_LOCALE);
+
+  // Sync language when config changes (e.g. Settings save in Electron).
   useEffect(() => {
-    const vsLocale = window.CCRELAY_LOCALE;
-    if (vsLocale) {
-      void i18n.changeLanguage(vsLocale);
+    const locale = parseAppLocale(config?.server?.locale) ?? parseAppLocale(window.CCRELAY_LOCALE);
+    if (locale) {
+      void applyAppLocale(locale);
     }
-    api
-      .getConfig()
-      .then(cfg => {
-        if (!vsLocale) {
-          const locale = cfg.server?.locale as string | undefined;
-          if (locale) {
-            void i18n.changeLanguage(locale);
-          } else {
-            setShowLangModal(true);
-          }
-        }
-        setLoggingEnabled(cfg.logging?.enabled ?? false);
-      })
-      .catch(() => {
-        if (!vsLocale) setShowLangModal(true);
-      });
-  }, [i18n]);
+  }, [config?.server?.locale]);
 
   // Redirect away from logs tab if logging is disabled
   useEffect(() => {
@@ -106,8 +105,10 @@ function App() {
     }
   }, [loggingEnabled, activeTab, setActiveTab]);
 
+  const uiLanguageKey = i18n.resolvedLanguage ?? i18n.language;
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+    <div key={uiLanguageKey} className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
       {/* Header - Tab Style */}
       <header className="bg-card flex-shrink-0 border-b border-border">
         <div className="max-w-full px-2 sm:px-4">
@@ -233,7 +234,12 @@ function App() {
         </div>
       </footer>
 
-      <LanguageModal open={showLangModal} onOpenChange={setShowLangModal} />
+      <LanguageModal
+        open={showLanguagePrompt}
+        onOpenChange={open => {
+          if (!open) setLanguagePromptDismissed(true);
+        }}
+      />
     </div>
   );
 }

@@ -610,7 +610,8 @@
       "port": "Port",
       "host": "Host",
       "autoStart": "Auto-start server on extension activation",
-      "language": "Language"
+      "language": "Language",
+      "languageAutoSave": "Applies immediately when changed."
     },
     "routing": {
       "title": "Routing",

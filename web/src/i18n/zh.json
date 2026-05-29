@@ -610,7 +610,8 @@
       "port": "端口",
       "host": "主机",
       "autoStart": "扩展激活时自动启动服务器",
-      "language": "语言"
+      "language": "语言",
+      "languageAutoSave": "切换后立即生效，无需点击保存。"
     },
     "routing": {
       "title": "路由",

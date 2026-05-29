@@ -15,6 +15,24 @@ export function setServer(server: ProxyServer): void {
   serverInstance = server;
 }
 
+function serverPatchRequiresRestart(
+  data: Record<string, unknown>,
+  configManager: { getConfigRawForApi(): Record<string, unknown> }
+): boolean {
+  const current =
+    (configManager.getConfigRawForApi().server as Record<string, unknown> | undefined) ?? {};
+  if ("port" in data && data.port !== undefined && data.port !== current.port) {
+    return true;
+  }
+  if ("host" in data && data.host !== undefined && data.host !== current.host) {
+    return true;
+  }
+  if ("autoStart" in data && data.autoStart !== undefined && data.autoStart !== current.autoStart) {
+    return true;
+  }
+  return false;
+}
+
 const ALLOWED_SECTIONS = new Set([
   "logging",
   "concurrency",
@@ -103,6 +121,10 @@ export async function handlePatchConfig(
       return;
     }
 
+    const restartRequired =
+      section === "logging" ||
+      (section === "server" && serverPatchRequiresRestart(body.data, configManager));
+
     const result = configManager.updateConfigSection(
       section as
         | "logging"
@@ -120,7 +142,6 @@ export async function handlePatchConfig(
       return;
     }
 
-    const restartRequired = section === "server" || section === "logging";
     sendJson(res, 200, { status: "ok", restartRequired });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

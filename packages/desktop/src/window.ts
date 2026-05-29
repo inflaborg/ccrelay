@@ -27,8 +27,12 @@ function buildInjectConfig(server: ProxyServer, config: ConfigManager): Dashboar
   };
 }
 
-export function showDashboardWindow(server: ProxyServer, config: ConfigManager): void {
+export function updateDashboardInjectConfig(server: ProxyServer, config: ConfigManager): void {
   setDashboardInjectConfig(buildInjectConfig(server, config));
+}
+
+export function showDashboardWindow(server: ProxyServer, config: ConfigManager): void {
+  updateDashboardInjectConfig(server, config);
   const url = dashboardLocalUrl();
 
   if (dashboardWin) {
