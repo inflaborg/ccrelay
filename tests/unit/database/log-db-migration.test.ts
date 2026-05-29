@@ -147,7 +147,7 @@ describe.skipIf(!nativeForNode)("log-db-migration", () => {
             request_body, response_body, original_request_body, original_response_body,
             status_code, duration, success, error_message, client_id, status, route_type,
             input_tokens, output_tokens, cache_tokens, ttfb
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         ).run(...params);
       },
       "migrate"
