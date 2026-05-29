@@ -6,9 +6,12 @@ import { Menu, app, session } from "electron";
 import * as path from "path";
 import {
   Api,
+  BUILD_HASH,
+  BUILD_VERSION,
   CCRELAY_UI_HEADER_NAME,
   CCRELAY_UI_HEADER_VALUE,
   ConfigManager,
+  GIT_HASH,
   LeaderElection,
   Logger,
   ProxyServer,
@@ -71,7 +74,10 @@ app.on("window-all-closed", () => {
 
 void app.whenReady().then(async () => {
   const logger = Logger.getInstance();
-  logger.info("[Desktop] App ready");
+  logger.info(`[Desktop] App ready (pid=${process.pid})`);
+  logger.info(
+    `[Desktop] Build version=${BUILD_VERSION} buildHash=${BUILD_HASH} gitHash=${GIT_HASH}`
+  );
 
   if (process.platform !== "darwin") {
     Menu.setApplicationMenu(null);

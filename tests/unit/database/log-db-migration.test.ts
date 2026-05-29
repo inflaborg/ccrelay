@@ -18,7 +18,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { runSqliteStartupMigration, sqlitePrecheckMigration } from "@/database/migration";
-import { LEGACY_TABLE, TABLE } from "@/database/schema";
+import { LEGACY_TABLE, TABLE, METRICS_TABLE } from "@/database/schema";
 function encodeForStorageLegacy(value: string): string {
   return "B64:" + Buffer.from(value, "utf-8").toString("base64");
 }
@@ -127,6 +127,47 @@ describe.skipIf(!nativeForNode)("log-db-migration", () => {
       request_body: Buffer;
     };
     expect(row.request_body.toString("utf-8")).toContain("claude-3");
+    db.close();
+  });
+
+  it("split_metrics migration creates metrics table and drops v2 token columns", () => {
+    createLegacyWithRows();
+    const db = openDb();
+    runSqliteStartupMigration(
+      dbPath,
+      sql => (db.prepare(sql).get() as { c?: number } | undefined)?.c,
+      sql => db.prepare(sql).all() as Array<Record<string, unknown>>,
+      sql => {
+        db.exec(sql);
+      },
+      params => {
+        db.prepare(
+          `INSERT INTO ${TABLE} (
+            timestamp, provider_id, provider_name, method, path, target_url,
+            request_body, response_body, original_request_body, original_response_body,
+            status_code, duration, success, error_message, client_id, status, route_type,
+            input_tokens, output_tokens, cache_tokens, ttfb
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).run(...params);
+      },
+      "migrate"
+    );
+
+    const metricsExists = db
+      .prepare(`SELECT COUNT(*) as c FROM sqlite_master WHERE type='table' AND name=?`)
+      .get(METRICS_TABLE) as { c: number };
+    expect(metricsExists.c).toBe(1);
+
+    const tokenCol = db
+      .prepare(`SELECT COUNT(*) as c FROM pragma_table_info('${TABLE}') WHERE name='input_tokens'`)
+      .get() as { c: number };
+    expect(tokenCol.c).toBe(0);
+
+    const metricsCount = db.prepare(`SELECT COUNT(*) as c FROM ${METRICS_TABLE}`).get() as {
+      c: number;
+    };
+    expect(metricsCount.c).toBe(1);
+
     db.close();
   });
 

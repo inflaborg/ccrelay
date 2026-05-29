@@ -10,6 +10,7 @@ import type { LogDatabase, RequestStatus, RouteType } from "../../database";
 import type { QueueManager } from "../queueManager";
 import type { ProxyExecutor } from "../proxy/executor";
 import { ScopedLogger } from "../../utils/logger";
+import { extractModelFromPartialJson } from "../../database/shared-utils";
 
 const log = new ScopedLogger("TaskExecutor");
 
@@ -110,6 +111,15 @@ export class TaskExecutor {
     const routeType: RouteType =
       options?.routeType ?? (routing.isRouted ? "router" : "passthrough");
 
+    const upstreamModel =
+      (bodyResult.requestBodyLog
+        ? extractModelFromPartialJson(bodyResult.requestBodyLog)
+        : undefined) ??
+      (bodyResult.originalRequestBody
+        ? extractModelFromPartialJson(bodyResult.originalRequestBody)
+        : undefined) ??
+      bodyResult.originalModel;
+
     this.database.insertLogPending({
       timestamp: Date.now(),
       providerId: routing.provider.id,
@@ -125,6 +135,7 @@ export class TaskExecutor {
       clientId,
       status: "pending",
       routeType,
+      model: upstreamModel,
     });
   }
 

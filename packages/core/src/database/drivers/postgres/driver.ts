@@ -6,8 +6,13 @@
 
 import { Pool, PoolClient } from "pg";
 import { Logger } from "../../../utils/logger";
-import { TABLE } from "../../schema";
-import { runPostgresStartupMigration } from "../../migration";
+import { TABLE, METRICS_TABLE } from "../../schema";
+import { runPostgresMigrations } from "../../migration";
+import {
+  shouldTrackMetrics,
+  POSTGRES_UPDATE_METRICS_COMPLETED,
+  POSTGRES_UPDATE_METRICS_STATUS,
+} from "../../metrics-sql";
 import type {
   DatabaseDriver,
   PostgresDriverConfig,
@@ -63,7 +68,12 @@ export class PostgresDriver implements DatabaseDriver {
     client.release();
 
     const choice = options?.migrationChoice ?? "migrate";
-    await runPostgresStartupMigration((sql, params) => this.pool!.query(sql, params), choice);
+    this.log.info("[PostgresDriver] Running database migrations...");
+    await runPostgresMigrations({
+      query: (sql, params) => this.pool!.query(sql, params),
+      migrationChoice: choice,
+      dbLabel: `${this.config.host}:${this.config.port}/${this.config.database}`,
+    });
     this.isInitialized = true;
 
     this.log.info("[PostgresDriver] Connected successfully");
@@ -110,9 +120,8 @@ export class PostgresDriver implements DatabaseDriver {
       `INSERT INTO ${TABLE} (
         timestamp, provider_id, provider_name, method, path, target_url,
         request_body, response_body, original_request_body, original_response_body,
-        status_code, duration, success, error_message, client_id, status, route_type,
-        input_tokens, output_tokens, cache_tokens, ttfb
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
+        status_code, duration, success, error_message, client_id, status, route_type
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
       [
         log.timestamp,
         log.providerId,
@@ -131,10 +140,56 @@ export class PostgresDriver implements DatabaseDriver {
         log.clientId ?? null,
         "completed",
         log.routeType ?? null,
+      ]
+    );
+    if (shouldTrackMetrics(log)) {
+      await this.insertMetricsCompleted(log);
+    }
+  }
+
+  private async insertMetricsPending(log: RequestLog): Promise<void> {
+    if (!this.pool) {
+      return;
+    }
+    await this.pool.query(
+      `INSERT INTO ${METRICS_TABLE} (
+        timestamp, provider_id, provider_name, model, client_id,
+        input_tokens, output_tokens, cache_tokens, ttfb, duration, success, status_code
+      ) VALUES ($1, $2, $3, $4, $5, NULL, NULL, NULL, NULL, NULL, NULL, NULL)`,
+      [log.timestamp, log.providerId, log.providerName, log.model ?? null, log.clientId ?? null]
+    );
+  }
+
+  private async insertMetricsCompleted(log: RequestLog): Promise<void> {
+    if (!this.pool) {
+      return;
+    }
+    await this.pool.query(
+      `INSERT INTO ${METRICS_TABLE} (
+        timestamp, provider_id, provider_name, model, client_id,
+        input_tokens, output_tokens, cache_tokens, ttfb, duration, success, status_code
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      ON CONFLICT (client_id) DO UPDATE SET
+        input_tokens = EXCLUDED.input_tokens,
+        output_tokens = EXCLUDED.output_tokens,
+        cache_tokens = EXCLUDED.cache_tokens,
+        ttfb = EXCLUDED.ttfb,
+        duration = EXCLUDED.duration,
+        success = EXCLUDED.success,
+        status_code = EXCLUDED.status_code`,
+      [
+        log.timestamp,
+        log.providerId,
+        log.providerName,
+        log.model ?? null,
+        log.clientId ?? null,
         log.inputTokens ?? null,
         log.outputTokens ?? null,
         log.cacheTokens ?? null,
         log.ttfb ?? null,
+        log.duration,
+        log.success,
+        log.statusCode ?? null,
       ]
     );
   }
@@ -161,9 +216,8 @@ export class PostgresDriver implements DatabaseDriver {
       `INSERT INTO ${TABLE} (
         timestamp, provider_id, provider_name, method, path, target_url,
         request_body, response_body, original_request_body, original_response_body,
-        status_code, duration, success, error_message, client_id, status, route_type,
-        input_tokens, output_tokens, cache_tokens, ttfb
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
+        status_code, duration, success, error_message, client_id, status, route_type
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
       [
         log.timestamp,
         log.providerId,
@@ -182,12 +236,11 @@ export class PostgresDriver implements DatabaseDriver {
         log.clientId ?? null,
         "pending",
         log.routeType ?? null,
-        log.inputTokens ?? null,
-        log.outputTokens ?? null,
-        log.cacheTokens ?? null,
-        log.ttfb ?? null,
       ]
     );
+    if (shouldTrackMetrics(log)) {
+      await this.insertMetricsPending(log);
+    }
   }
 
   /**
@@ -210,34 +263,38 @@ export class PostgresDriver implements DatabaseDriver {
       return;
     }
 
-    this.pool!.query(
-      `UPDATE ${TABLE}
+    Promise.all([
+      this.pool!.query(
+        `UPDATE ${TABLE}
          SET status_code = $1,
              response_body = $2,
              original_response_body = $3,
              duration = $4,
              success = $5,
              error_message = $6,
-             status = 'completed',
-             input_tokens = $7,
-             output_tokens = $8,
-             cache_tokens = $9,
-             ttfb = $10
-         WHERE client_id = $11`,
-      [
-        statusCode,
-        utf8StringToBlob(responseBody),
-        utf8StringToBlob(originalResponseBody),
-        duration,
-        success,
-        utf8StringToBlob(errorMessage),
+             status = 'completed'
+         WHERE client_id = $7`,
+        [
+          statusCode,
+          utf8StringToBlob(responseBody),
+          utf8StringToBlob(originalResponseBody),
+          duration,
+          success,
+          utf8StringToBlob(errorMessage),
+          clientId,
+        ]
+      ),
+      this.pool!.query(POSTGRES_UPDATE_METRICS_COMPLETED, [
         inputTokens ?? null,
         outputTokens ?? null,
         cacheTokens ?? null,
         ttfb ?? null,
+        duration,
+        success,
+        statusCode,
         clientId,
-      ]
-    ).catch(err => {
+      ]),
+    ]).catch(err => {
       this.log.error("[PostgresDriver] Failed to update log:", err);
     });
   }
@@ -256,8 +313,8 @@ export class PostgresDriver implements DatabaseDriver {
       return;
     }
 
-    this.pool
-      .query(
+    Promise.all([
+      this.pool.query(
         `UPDATE ${TABLE}
          SET status_code = $1,
              duration = $2,
@@ -265,18 +322,12 @@ export class PostgresDriver implements DatabaseDriver {
              error_message = $4,
              status = $5
          WHERE client_id = $6`,
-        [
-          statusCode,
-          duration,
-          false, // success is always false for cancelled/timeout
-          utf8StringToBlob(errorMessage),
-          status,
-          clientId,
-        ]
-      )
-      .catch(err => {
-        this.log.error("[PostgresDriver] Failed to update log status:", err);
-      });
+        [statusCode, duration, false, utf8StringToBlob(errorMessage), status, clientId]
+      ),
+      this.pool.query(POSTGRES_UPDATE_METRICS_STATUS, [duration, false, statusCode, clientId]),
+    ]).catch(err => {
+      this.log.error("[PostgresDriver] Failed to update log status:", err);
+    });
   }
 
   /**
@@ -296,9 +347,8 @@ export class PostgresDriver implements DatabaseDriver {
           `INSERT INTO ${TABLE} (
             timestamp, provider_id, provider_name, method, path, target_url,
             request_body, response_body, original_request_body, original_response_body,
-            status_code, duration, success, error_message, client_id, status, route_type,
-            input_tokens, output_tokens, cache_tokens, ttfb
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
+            status_code, duration, success, error_message, client_id, status, route_type
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
           [
             log.timestamp,
             log.providerId,
@@ -317,12 +367,11 @@ export class PostgresDriver implements DatabaseDriver {
             log.clientId ?? null,
             "completed",
             log.routeType ?? null,
-            log.inputTokens ?? null,
-            log.outputTokens ?? null,
-            log.cacheTokens ?? null,
-            log.ttfb ?? null,
           ]
         );
+        if (shouldTrackMetrics(log)) {
+          await this.insertMetricsCompleted(log);
+        }
       }
 
       await client.query("COMMIT");
@@ -347,60 +396,61 @@ export class PostgresDriver implements DatabaseDriver {
     let paramIndex = 1;
 
     if (filter.providerId) {
-      conditions.push(`provider_id = $${paramIndex++}`);
+      conditions.push(`v.provider_id = $${paramIndex++}`);
       params.push(filter.providerId);
     }
 
     if (filter.method) {
-      conditions.push(`method = $${paramIndex++}`);
+      conditions.push(`v.method = $${paramIndex++}`);
       params.push(filter.method);
     }
 
     if (filter.pathPattern) {
-      conditions.push(`path LIKE $${paramIndex++}`);
+      conditions.push(`v.path LIKE $${paramIndex++}`);
       params.push(`%${filter.pathPattern}%`);
     }
 
     if (filter.minDuration !== undefined) {
-      conditions.push(`duration >= $${paramIndex++}`);
+      conditions.push(`v.duration >= $${paramIndex++}`);
       params.push(filter.minDuration);
     }
 
     if (filter.maxDuration !== undefined) {
-      conditions.push(`duration <= $${paramIndex++}`);
+      conditions.push(`v.duration <= $${paramIndex++}`);
       params.push(filter.maxDuration);
     }
 
     if (filter.hasError !== undefined) {
-      conditions.push(`success = $${paramIndex++}`);
+      conditions.push(`v.success = $${paramIndex++}`);
       params.push(!filter.hasError);
     }
 
     if (filter.startTime !== undefined) {
-      conditions.push(`timestamp >= $${paramIndex++}`);
+      conditions.push(`v.timestamp >= $${paramIndex++}`);
       params.push(filter.startTime);
     }
 
     if (filter.endTime !== undefined) {
-      conditions.push(`timestamp <= $${paramIndex++}`);
+      conditions.push(`v.timestamp <= $${paramIndex++}`);
       params.push(filter.endTime);
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
-    // Get total count
     const countResult = await this.pool.query<{ count: string }>(
-      `SELECT COUNT(*) as count FROM ${TABLE} ${whereClause}`,
+      `SELECT COUNT(*) as count FROM ${TABLE} v ${whereClause}`,
       params
     );
     const total = parseInt(countResult.rows[0]?.count ?? "0", 10) || 0;
 
-    // Get paginated logs
     const limit = filter.limit || 100;
     const offset = filter.offset || 0;
 
     const rowsResult = await this.pool.query(
-      `SELECT * FROM ${TABLE} ${whereClause} ORDER BY timestamp DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
+      `SELECT v.*, m.input_tokens, m.output_tokens, m.cache_tokens, m.ttfb
+       FROM ${TABLE} v
+       LEFT JOIN ${METRICS_TABLE} m ON m.client_id = v.client_id
+       ${whereClause} ORDER BY v.timestamp DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
       [...params, limit, offset]
     );
 
@@ -417,7 +467,13 @@ export class PostgresDriver implements DatabaseDriver {
       return null;
     }
 
-    const result = await this.pool.query(`SELECT * FROM ${TABLE} WHERE id = $1`, [id]);
+    const result = await this.pool.query(
+      `SELECT v.*, m.input_tokens, m.output_tokens, m.cache_tokens, m.ttfb
+       FROM ${TABLE} v
+       LEFT JOIN ${METRICS_TABLE} m ON m.client_id = v.client_id
+       WHERE v.id = $1`,
+      [id]
+    );
 
     if (result.rows.length === 0) {
       return null;
@@ -457,7 +513,7 @@ export class PostgresDriver implements DatabaseDriver {
     }
 
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    await this.pool.query("DELETE FROM ${TABLE} WHERE timestamp < $1", [thirtyDaysAgo]);
+    await this.pool.query(`DELETE FROM ${TABLE} WHERE timestamp < $1`, [thirtyDaysAgo]);
 
     // PostgreSQL doesn't need VACUUM like SQLite, but we can run VACUUM ANALYZE
     // Note: VACUUM cannot run inside a transaction block
@@ -505,7 +561,7 @@ export class PostgresDriver implements DatabaseDriver {
               AVG(ttfb) as "avgTtfb",
               percentile_cont(0.5) WITHIN GROUP (ORDER BY duration) as "p50Duration",
               percentile_cont(0.9) WITHIN GROUP (ORDER BY duration) as "p90Duration"
-       FROM ${TABLE}
+       FROM ${METRICS_TABLE}
        WHERE ${timeFilter}`,
       timeParams
     );
@@ -525,7 +581,7 @@ export class PostgresDriver implements DatabaseDriver {
       `SELECT COALESCE(SUM(output_tokens), 0) as "filteredTokens",
               COALESCE(SUM(duration - ttfb), 0) as "filteredGenTime",
               COUNT(*) as "filteredCount"
-       FROM ${TABLE}
+       FROM ${METRICS_TABLE}
        WHERE ${timeFilter}
          AND ttfb IS NOT NULL
          AND output_tokens IS NOT NULL
@@ -545,7 +601,7 @@ export class PostgresDriver implements DatabaseDriver {
               COALESCE(SUM(input_tokens), 0) as "totalInputTokens",
               COALESCE(SUM(output_tokens), 0) as "totalOutputTokens",
               COALESCE(SUM(cache_tokens), 0) as "totalCacheTokens"
-       FROM ${TABLE}
+       FROM ${METRICS_TABLE}
        WHERE ${timeFilter}
        GROUP BY provider_id`,
       timeParams
