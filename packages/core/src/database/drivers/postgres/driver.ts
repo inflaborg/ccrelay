@@ -25,7 +25,12 @@ import type {
   StatsQuery,
   DatabaseInitializeOptions,
 } from "../../types";
-import { utf8StringToBlob, dbRowToLog, dbRowToLogWithoutBody } from "../../shared-utils";
+import {
+  utf8StringToBlob,
+  dbRowToLog,
+  dbRowToLogWithoutBody,
+  filterProviderBreakdownByTokenUsage,
+} from "../../shared-utils";
 
 /**
  * PostgreSQL driver implementation
@@ -643,7 +648,7 @@ export class PostgresDriver implements DatabaseDriver {
       outputTpsSampleCount: filteredCount,
       p50Duration: Math.round(fnum(base.p50Duration)),
       p90Duration: Math.round(fnum(base.p90Duration)),
-      providerBreakdown,
+      providerBreakdown: filterProviderBreakdownByTokenUsage(providerBreakdown),
     };
   }
 

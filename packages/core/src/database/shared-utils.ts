@@ -189,3 +189,16 @@ export function dbRowToLog(row: Record<string, unknown>): RequestLog {
     ...models,
   };
 }
+
+/** Omit per-provider breakdown rows with no token usage (Input, Output, Cache all zero). */
+export function filterProviderBreakdownByTokenUsage<
+  T extends {
+    totalInputTokens: number;
+    totalOutputTokens: number;
+    totalCacheTokens: number;
+  },
+>(rows: T[]): T[] {
+  return rows.filter(
+    row => row.totalInputTokens > 0 || row.totalOutputTokens > 0 || row.totalCacheTokens > 0
+  );
+}
