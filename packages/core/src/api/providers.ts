@@ -3,6 +3,7 @@
  * GET /ccrelay/api/providers
  * POST /ccrelay/api/providers
  * POST /ccrelay/api/providers/duplicate
+ * POST /ccrelay/api/providers/rename
  * DELETE /ccrelay/api/providers/:id
  */
 
@@ -223,6 +224,89 @@ function buildDuplicateConfigFromProvider(source: Provider, name: string): Provi
     out.openaiCompat = source.openaiCompat;
   }
   return out;
+}
+
+/**
+ * Handle POST /ccrelay/api/providers/rename
+ * Renames a provider key in YAML (preserves apiKey and updates references).
+ */
+export async function handleRenameProvider(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  _params: Record<string, string>
+): Promise<void> {
+  if (!serverInstance) {
+    sendJson(res, 503, { error: "Server not initialized" });
+    return;
+  }
+
+  try {
+    const body = await parseJsonBody<{
+      oldId?: string;
+      newId?: string;
+    }>(req);
+
+    if (!body.oldId || !body.newId) {
+      sendJson(res, 400, { status: "error", message: "oldId and newId are required" });
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9_-]+$/.test(body.newId)) {
+      sendJson(res, 400, {
+        status: "error",
+        message: "Invalid newId format. Only alphanumeric, underscore, and hyphen are allowed.",
+      });
+      return;
+    }
+
+    if (body.newId === body.oldId) {
+      sendJson(res, 400, { status: "error", message: "newId must differ from oldId" });
+      return;
+    }
+
+    if (body.oldId === "official" || body.newId === "official") {
+      sendJson(res, 400, { status: "error", message: "Cannot rename the official provider" });
+      return;
+    }
+
+    const configManager = serverInstance.getConfig();
+    const router = serverInstance.getRouter();
+    const wasActive = router.getCurrentProviderId() === body.oldId;
+
+    const source = configManager.getProvider(body.oldId);
+    if (!source) {
+      sendJson(res, 404, {
+        status: "error",
+        message: `Provider "${body.oldId}" not found`,
+      });
+      return;
+    }
+
+    if (configManager.getProvider(body.newId)) {
+      sendJson(res, 400, {
+        status: "error",
+        message: `Provider "${body.newId}" already exists`,
+      });
+      return;
+    }
+
+    const success = configManager.renameProvider(body.oldId, body.newId);
+
+    if (success) {
+      if (wasActive) {
+        void router.switchProvider(body.newId);
+      }
+      sendJson(res, 200, {
+        status: "ok",
+        id: body.newId,
+      });
+    } else {
+      sendJson(res, 500, { status: "error", message: "Failed to rename provider" });
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    sendJson(res, 500, { status: "error", message });
+  }
 }
 
 /**

@@ -13,6 +13,7 @@ import {
   handleListProviders,
   handleAddProvider,
   handleDuplicateProvider,
+  handleRenameProvider,
   handleDeleteProvider,
   handleExportProviders,
   handleImportProviders,
@@ -151,6 +152,17 @@ export function handleApiRequest(req: http.IncomingMessage, res: http.ServerResp
   if (reqPath === "/ccrelay/api/providers/duplicate" && method === "POST") {
     handleDuplicateProvider(req, res, {}).catch(err => {
       log.error("Error handling POST /providers/duplicate", err);
+      if (!res.headersSent) {
+        sendJson(res, 500, { error: "Internal server error" });
+      }
+    });
+    return true;
+  }
+
+  // Check for POST /ccrelay/api/providers/rename
+  if (reqPath === "/ccrelay/api/providers/rename" && method === "POST") {
+    handleRenameProvider(req, res, {}).catch(err => {
+      log.error("Error handling POST /providers/rename", err);
       if (!res.headersSent) {
         sendJson(res, 500, { error: "Internal server error" });
       }
@@ -325,6 +337,7 @@ export {
   handleListProviders,
   handleAddProvider,
   handleDuplicateProvider,
+  handleRenameProvider,
   handleDeleteProvider,
   handleExportProviders,
   handleImportProviders,

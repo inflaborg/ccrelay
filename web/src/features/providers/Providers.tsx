@@ -13,6 +13,7 @@ import {
   Download,
   CheckSquare,
   MinusSquare,
+  Pencil,
 } from "lucide-react";
 import * as yaml from "js-yaml";
 import { Button } from "@/components/ui/button";
@@ -83,6 +84,11 @@ export default function Providers() {
   const [dupNewId, setDupNewId] = useState("");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [pendingDeleteProvider, setPendingDeleteProvider] = useState<Provider | null>(null);
+  const [fieldEdit, setFieldEdit] = useState<null | "id" | "apiKey">(null);
+  const [fieldEditValue, setFieldEditValue] = useState("");
+  const [idChanged, setIdChanged] = useState(false);
+  const [apiKeyChanged, setApiKeyChanged] = useState(false);
+  const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
   // Raw text states for YAML fields (allow editing invalid YAML temporarily)
   const [modelMapText, setModelMapText] = useState("");
   const [modelMapError, setModelMapError] = useState<string | null>(null);
@@ -249,7 +255,26 @@ export default function Providers() {
     setShowAddModal(true);
   };
 
+  const resetSensitiveEditState = () => {
+    setFieldEdit(null);
+    setFieldEditValue("");
+    setIdChanged(false);
+    setApiKeyChanged(false);
+    setSaveConfirmOpen(false);
+  };
+
+  const maskApiKeyDisplay = (key: string | undefined): string => {
+    if (!key) {
+      return t("providers.modal.apiKeyNotSet");
+    }
+    if (key.length <= 8) {
+      return "************";
+    }
+    return `${key.slice(0, 4)}************${key.slice(-4)}`;
+  };
+
   const openEditModal = (provider: Provider) => {
+    resetSensitiveEditState();
     setEditingProvider(provider);
     const modelMap = provider.modelMap;
     setFormData({
@@ -280,6 +305,7 @@ export default function Providers() {
   const closeModal = () => {
     setShowAddModal(false);
     setEditingProvider(null);
+    resetSensitiveEditState();
     setFormData(DEFAULT_FORM);
     setModelMapText("");
     setModelMapError(null);
@@ -316,22 +342,27 @@ export default function Providers() {
     });
   };
 
-  const handleAddSubmit = () => {
+  const buildSubmitPayload = (): AddProviderRequest | null => {
     if (!formData.id || !formData.name || !formData.baseUrl) {
-      return;
+      return null;
     }
-    // When editing, use the provider we opened (ids stay in sync) and never send apiKey.
     const isOfficial = editingProvider?.id === "official" || formData.id === "official";
     const customLines = customModelsText
       .split("\n")
       .map(l => l.trim())
       .filter(l => l.length > 0);
 
+    const effectiveId = editingProvider
+      ? idChanged
+        ? formData.id
+        : editingProvider.id
+      : formData.id;
+
     const payload = editingProvider
       ? {
           ...formData,
-          id: editingProvider.id,
-          apiKey: undefined,
+          id: effectiveId,
+          apiKey: apiKeyChanged ? formData.apiKey : undefined,
           enabled: isOfficial ? true : formData.enabled,
         }
       : {
@@ -339,13 +370,82 @@ export default function Providers() {
           enabled: isOfficial ? true : formData.enabled,
         };
 
-    const dataToSubmit: AddProviderRequest = {
+    return {
       ...payload,
       useCustomModelsList: formData.useCustomModelsList === true,
       customModelsList: formData.useCustomModelsList === true ? customLines : undefined,
     };
-    addMutation.mutate(dataToSubmit);
   };
+
+  const saveProviderMutation = useMutation({
+    mutationFn: async (args: {
+      data: AddProviderRequest;
+      rename?: { oldId: string; newId: string };
+    }) => {
+      if (args.rename) {
+        await api.renameProvider(args.rename);
+      }
+      return api.addProvider(args.data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["providers"] });
+      queryClient.invalidateQueries({ queryKey: ["status"] });
+      closeModal();
+    },
+  });
+
+  const doSubmit = () => {
+    const dataToSubmit = buildSubmitPayload();
+    if (!dataToSubmit) {
+      return;
+    }
+    saveProviderMutation.mutate({
+      data: dataToSubmit,
+      rename:
+        editingProvider && idChanged
+          ? { oldId: editingProvider.id, newId: dataToSubmit.id }
+          : undefined,
+    });
+  };
+
+  const handleAddSubmit = () => {
+    if (!formData.id || !formData.name || !formData.baseUrl) {
+      return;
+    }
+    if (editingProvider && (idChanged || apiKeyChanged)) {
+      setSaveConfirmOpen(true);
+      return;
+    }
+    doSubmit();
+  };
+
+  const openFieldEdit = (field: "id" | "apiKey") => {
+    setFieldEdit(field);
+    setFieldEditValue(field === "id" ? formData.id : "");
+  };
+
+  const confirmFieldEdit = () => {
+    if (!fieldEdit) {
+      return;
+    }
+    if (fieldEdit === "id") {
+      updateForm("id", fieldEditValue);
+      setIdChanged(Boolean(editingProvider && fieldEditValue !== editingProvider.id));
+    } else {
+      updateForm("apiKey", fieldEditValue);
+      setApiKeyChanged(true);
+    }
+    setFieldEdit(null);
+    setFieldEditValue("");
+  };
+
+  const existingProviderIds = new Set((providersData?.providers ?? []).map(p => p.id));
+
+  const fieldEditIdInvalid =
+    fieldEdit === "id" &&
+    (fieldEditValue.trim() === "" ||
+      fieldEditValue === "official" ||
+      (existingProviderIds.has(fieldEditValue) && fieldEditValue !== editingProvider?.id));
 
   const requestDelete = (provider: Provider) => {
     setPendingDeleteProvider(provider);
@@ -851,9 +951,9 @@ export default function Providers() {
           {(switchMutation.error as Error).message}
         </p>
       )}
-      {addMutation.error && (
+      {(addMutation.error || saveProviderMutation.error) && (
         <p className="text-xs text-destructive text-center">
-          {(addMutation.error as Error).message}
+          {((saveProviderMutation.error ?? addMutation.error) as Error).message}
         </p>
       )}
       {deleteMutation.error && (
@@ -916,14 +1016,38 @@ export default function Providers() {
                   <Label className="text-xs font-medium">
                     {t("providers.modal.providerId")} <span className="text-destructive">*</span>
                   </Label>
-                  <Input
-                    type="text"
-                    className="h-8 text-xs disabled:opacity-50"
-                    placeholder={t("providers.placeholder.id")}
-                    value={editingProvider != null ? editingProvider.id : formData.id}
-                    onChange={e => updateForm("id", e.target.value.replace(/[^A-Za-z0-9_-]/g, ""))}
-                    disabled={editingProvider != null}
-                  />
+                  {editingProvider != null ? (
+                    <div className="flex gap-2">
+                      <Input
+                        type="text"
+                        className="h-8 flex-1 text-xs bg-muted disabled:opacity-50"
+                        value={formData.id}
+                        disabled
+                      />
+                      {editingProvider.id !== "official" ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 w-8 shrink-0 p-0"
+                          title={t("providers.modal.editField")}
+                          onClick={() => openFieldEdit("id")}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <Input
+                      type="text"
+                      className="h-8 text-xs"
+                      placeholder={t("providers.placeholder.id")}
+                      value={formData.id}
+                      onChange={e =>
+                        updateForm("id", e.target.value.replace(/[^A-Za-z0-9_-]/g, ""))
+                      }
+                    />
+                  )}
                   <p className="text-[10px] text-muted-foreground">
                     {t("providers.modal.providerIdHelp")}
                   </p>
@@ -1023,16 +1147,24 @@ export default function Providers() {
                 <Label className="text-xs font-medium">{t("providers.modal.apiKey")}</Label>
                 {editingProvider ? (
                   <>
-                    <Input
-                      type="text"
-                      className="h-8 cursor-not-allowed bg-muted text-xs"
-                      value={
-                        formData.apiKey
-                          ? `${formData.apiKey.slice(0, 4)}************${formData.apiKey.slice(-4)}`
-                          : t("providers.modal.apiKeyNotSet")
-                      }
-                      disabled
-                    />
+                    <div className="flex gap-2">
+                      <Input
+                        type="text"
+                        className="h-8 flex-1 cursor-not-allowed bg-muted text-xs"
+                        value={maskApiKeyDisplay(formData.apiKey)}
+                        disabled
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 w-8 shrink-0 p-0"
+                        title={t("providers.modal.editField")}
+                        onClick={() => openFieldEdit("apiKey")}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                     <p className="text-[10px] text-muted-foreground">
                       {t("providers.modal.apiKeyHelpEdit")}
                     </p>
@@ -1186,14 +1318,14 @@ export default function Providers() {
                 className="h-7 text-xs"
                 onClick={handleAddSubmit}
                 disabled={
-                  addMutation.isPending ||
+                  saveProviderMutation.isPending ||
                   !formData.id ||
                   !formData.name ||
                   !formData.baseUrl ||
                   (formData.modelMappingEnabled !== false && !!modelMapError)
                 }
               >
-                {addMutation.isPending ? (
+                {saveProviderMutation.isPending ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
                 ) : editingProvider ? (
                   t("common.save")
@@ -1205,6 +1337,117 @@ export default function Providers() {
           </Card>
         </div>
       )}
+
+      {/* Field edit popup (ID / API Key) */}
+      {fieldEdit && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <Card className="w-full max-w-[400px] flex flex-col">
+            <CardHeader className="border-b p-3 flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm">
+                  {fieldEdit === "id"
+                    ? t("providers.modal.editIdTitle")
+                    : t("providers.modal.editApiKeyTitle")}
+                </CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0"
+                  onClick={() => {
+                    setFieldEdit(null);
+                    setFieldEditValue("");
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4 space-y-2">
+              <Input
+                type={fieldEdit === "apiKey" ? "password" : "text"}
+                className={`h-8 text-xs ${fieldEdit === "id" ? "font-mono" : ""}`}
+                value={fieldEditValue}
+                onChange={e => {
+                  const v =
+                    fieldEdit === "id"
+                      ? e.target.value.replace(/[^A-Za-z0-9_-]/g, "")
+                      : e.target.value;
+                  setFieldEditValue(v);
+                }}
+                autoFocus
+              />
+              {fieldEdit === "id" && fieldEditValue === "official" ? (
+                <p className="text-[10px] text-destructive">
+                  {t("providers.modal.idCannotBeOfficial")}
+                </p>
+              ) : null}
+              {fieldEdit === "id" &&
+              fieldEditValue &&
+              existingProviderIds.has(fieldEditValue) &&
+              fieldEditValue !== editingProvider?.id ? (
+                <p className="text-[10px] text-destructive">{t("providers.modal.idTaken")}</p>
+              ) : null}
+            </CardContent>
+            <div className="border-t p-3 flex-shrink-0 flex justify-end gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                onClick={() => {
+                  setFieldEdit(null);
+                  setFieldEditValue("");
+                }}
+              >
+                {t("common.cancel")}
+              </Button>
+              <Button
+                size="sm"
+                className="h-7 text-xs"
+                onClick={confirmFieldEdit}
+                disabled={fieldEditIdInvalid}
+              >
+                {t("common.save")}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      <AlertDialog
+        open={saveConfirmOpen}
+        onOpenChange={o => {
+          setSaveConfirmOpen(o);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("providers.modal.saveConfirmTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {idChanged && apiKeyChanged
+                ? t("providers.modal.saveConfirmBoth")
+                : idChanged
+                  ? t("providers.modal.saveConfirmIdChanged")
+                  : t("providers.modal.saveConfirmApiKeyChanged")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={e => {
+                e.preventDefault();
+                setSaveConfirmOpen(false);
+                doSubmit();
+              }}
+            >
+              {saveProviderMutation.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                t("common.save")
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <CoworkAliasHelper
         key={coworkHelperKey}

@@ -11,6 +11,8 @@ import type {
   AddProviderResponse,
   DuplicateProviderRequest,
   DuplicateProviderResponse,
+  RenameProviderRequest,
+  RenameProviderResponse,
   DeleteProviderResponse,
   ReloadConfigResponse,
   ExportProvidersResponse,
@@ -118,6 +120,12 @@ export const api = {
 
   duplicateProvider: (data: DuplicateProviderRequest): Promise<DuplicateProviderResponse> =>
     fetchAPI<DuplicateProviderResponse>("/providers/duplicate", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  renameProvider: (data: RenameProviderRequest): Promise<RenameProviderResponse> =>
+    fetchAPI<RenameProviderResponse>("/providers/rename", {
       method: "POST",
       body: JSON.stringify(data),
     }),
