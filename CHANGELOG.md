@@ -64,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cross-protocol Responses to OpenAI Chat now strips unsupported hosted tools on GLM, MiMo, DeepSeek, Gemini, and MiniMax; Codex `apply_patch` freeform tools are downgraded to string-arg functions so Chat-only upstreams no longer reject requests with `Param Incorrect`.
 - Request logs for cross-protocol streaming (Chat SSE to Responses SSE) now update from `pending` to `completed` when the stream finishes, matching passthrough streaming behavior.
 - Cross-protocol streaming request logs now store the converted Responses SSE sent to the client and the upstream wire body, not only status and duration.
+- Xiaomi MiMo (Anthropic protocol): Claude Agent SDK requests that put system instructions in `messages` with `role: system` no longer fail upstream validation; those entries are rewritten as user messages and merged with adjacent user turns when needed.
 
 ## [0.2.5] - 2026-05-26 (pre-release)
 
