@@ -14,8 +14,18 @@ interface WorkingBlock {
   inputJsonBuf: string;
 }
 
-function isSseLogBody(trimmed: string): boolean {
-  return trimmed.startsWith("event:") || trimmed.startsWith("data:");
+/** True when the body contains SSE `event:` / `data:` lines (ignores comment and blank lines). */
+export function isSseLogBody(trimmed: string): boolean {
+  for (const line of trimmed.split("\n")) {
+    const t = line.trim();
+    if (!t || t.startsWith(":")) {
+      continue;
+    }
+    if (t.startsWith("event:") || t.startsWith("data:")) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function shallowCloneUsage(u: unknown): Record<string, unknown> | undefined {
