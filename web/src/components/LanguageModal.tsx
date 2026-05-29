@@ -1,5 +1,7 @@
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
+import { applyAppLocale } from "@/i18n";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import { Button } from "./ui/button";
 
@@ -10,14 +12,16 @@ export function LanguageModal({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
 
   const handleSelect = async (locale: "en" | "zh") => {
-    await i18n.changeLanguage(locale);
+    await applyAppLocale(locale);
     try {
       await api.patchConfig({ section: "server", data: { locale } });
+      await queryClient.invalidateQueries({ queryKey: ["config"] });
     } catch {
-      // locale saved to i18n for this session; backend failure is non-fatal
+      // locale applied for this session; backend failure is non-fatal
     }
     onOpenChange(false);
   };

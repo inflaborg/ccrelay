@@ -38,6 +38,7 @@ import {
   utf8StringToBlob,
   dbRowToLogWithoutBody,
   dbRowToLog,
+  filterProviderBreakdownByTokenUsage,
 } from "../../shared-utils";
 import { buildInsertSql, normalizeCliRow, type SqlInsertParam } from "./utils";
 import { sqlLiteralForBlob } from "./cli-wire";
@@ -1429,7 +1430,7 @@ export class SqliteCliDriver implements DatabaseDriver {
       outputTpsSampleCount: filteredCount,
       p50Duration,
       p90Duration,
-      providerBreakdown,
+      providerBreakdown: filterProviderBreakdownByTokenUsage(providerBreakdown),
     };
   }
 

@@ -29,6 +29,18 @@
       "project": "Project CCRelay"
     }
   },
+  "update": {
+    "pending": "Check scheduled",
+    "checkNowHint": "Click to check now",
+    "upToDate": "Up to date",
+    "recheckHint": "Click to check again",
+    "checking": "Checking…",
+    "available": "Update available",
+    "modalTitle": "New version {{version}}",
+    "download": "View release on GitHub",
+    "current": "Current version: {{version}}",
+    "noNotes": "No release notes provided."
+  },
   "language": {
     "title": "Choose Language",
     "description": "Select your preferred language for the interface.",
@@ -598,7 +610,8 @@
       "port": "Port",
       "host": "Host",
       "autoStart": "Auto-start server on extension activation",
-      "language": "Language"
+      "language": "Language",
+      "languageAutoSave": "Applies immediately when changed."
     },
     "routing": {
       "title": "Routing",

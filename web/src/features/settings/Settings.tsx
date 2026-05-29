@@ -29,9 +29,11 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { api } from "@/api/client";
+import { applyAppLocale } from "@/i18n";
 import type {
   LoggingSettings,
   ConcurrencySettings,
+  PatchConfigResponse,
   ServerSettings,
   RoutingSettings,
   RoutingBlockRule,
@@ -139,13 +141,18 @@ function cloneRouting(routing: RoutingSettings): RoutingSettings {
 function SaveBar({
   mutation,
   onSave,
-  restartRequired,
 }: {
-  mutation: { isPending: boolean; isError: boolean; error: unknown; isSuccess: boolean };
+  mutation: {
+    isPending: boolean;
+    isError: boolean;
+    error: unknown;
+    isSuccess: boolean;
+    data?: PatchConfigResponse;
+  };
   onSave: () => void;
-  restartRequired?: boolean;
 }) {
   const { t } = useTranslation();
+  const restartRequired = Boolean(mutation.isSuccess && mutation.data?.restartRequired);
   return (
     <div className="space-y-2 pt-2">
       <div className="flex items-center justify-end gap-2">
@@ -231,33 +238,104 @@ function RoutingSaveBar({
 
 // ─── section wrapper (always expanded) ─────────────────────────────────────
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
   return (
     <Card className="p-0">
       <CardHeader className="p-3 pb-2">
         <CardTitle className="text-xs font-medium">{title}</CardTitle>
+        {description ? (
+          <p className="text-[10px] text-muted-foreground font-normal leading-snug">
+            {description}
+          </p>
+        ) : null}
       </CardHeader>
       <CardContent className="p-3 pt-0 space-y-3">{children}</CardContent>
     </Card>
   );
 }
 
+// ─── Language (auto-save) ───────────────────────────────────────────────────
+
+function LanguageSettingsSection({ locale }: { locale?: string }) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const [value, setValue] = useState(locale ?? "");
+
+  const localeMutation = useMutation({
+    mutationFn: (nextLocale: string | undefined) =>
+      api.patchConfig({ section: "server", data: { locale: nextLocale } }),
+    onSuccess: async (_res, nextLocale) => {
+      await applyAppLocale(nextLocale);
+      await queryClient.invalidateQueries({ queryKey: ["config"] });
+    },
+  });
+
+  const handleLocaleChange = (locale: string) => {
+    const nextLocale = locale || undefined;
+    setValue(locale);
+    void applyAppLocale(nextLocale);
+    localeMutation.mutate(nextLocale);
+  };
+
+  return (
+    <Section title={t("language.title")} description={t("settings.server.languageAutoSave")}>
+      <div className="flex items-center gap-2">
+        <SelectField
+          value={value}
+          options={[
+            { value: "", label: t("common.na") },
+            { value: "en", label: t("language.en") },
+            { value: "zh", label: t("language.zh") },
+          ]}
+          onChange={handleLocaleChange}
+          className="h-8 flex-1 text-xs"
+          disabled={localeMutation.isPending}
+        />
+        {localeMutation.isPending ? (
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+        ) : localeMutation.isSuccess ? (
+          <span className="shrink-0 text-[10px] text-green-600 dark:text-green-500">
+            {t("settings.saved")}
+          </span>
+        ) : null}
+      </div>
+      {localeMutation.isError ? (
+        <p className="text-[10px] text-destructive">{(localeMutation.error as Error).message}</p>
+      ) : null}
+    </Section>
+  );
+}
+
 // ─── Server section ─────────────────────────────────────────────────────────
 
 function ServerSection({ data }: { data: ServerSettings }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const [form, setForm] = useState(data);
+  const [form, setForm] = useState({
+    port: data.port,
+    host: data.host,
+    autoStart: data.autoStart,
+  });
 
-  const mutation = useMutation({
+  const serverMutation = useMutation({
     mutationFn: (d: Record<string, unknown>) => api.patchConfig({ section: "server", data: d }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["config"] }),
   });
 
-  const handleLocaleChange = (locale: string) => {
-    setForm(f => ({ ...f, locale }));
-    void i18n.changeLanguage(locale);
-    mutation.mutate({ ...form, locale });
+  const saveServerSettings = () => {
+    serverMutation.mutate({
+      port: form.port,
+      host: form.host,
+      autoStart: form.autoStart,
+    });
   };
 
   return (
@@ -284,23 +362,7 @@ function ServerSection({ data }: { data: ServerSettings }) {
         onChange={v => setForm(f => ({ ...f, autoStart: v }))}
         label={t("settings.server.autoStart")}
       />
-      <Field label={t("settings.server.language")}>
-        <SelectField
-          value={form.locale || ""}
-          options={[
-            { value: "", label: t("common.na") },
-            { value: "en", label: t("language.en") },
-            { value: "zh", label: t("language.zh") },
-          ]}
-          onChange={handleLocaleChange}
-          className="h-8 text-xs"
-        />
-      </Field>
-      <SaveBar
-        mutation={mutation}
-        onSave={() => mutation.mutate(form as unknown as Record<string, unknown>)}
-        restartRequired
-      />
+      <SaveBar mutation={serverMutation} onSave={saveServerSettings} />
     </Section>
   );
 }
@@ -1209,7 +1271,7 @@ function LoggingSection({ data }: { data: LoggingSettings }) {
           </div>
         </div>
       )}
-      <SaveBar mutation={mutation} onSave={() => mutation.mutate(form)} restartRequired />
+      <SaveBar mutation={mutation} onSave={() => mutation.mutate(form)} />
     </Section>
   );
 }
@@ -1251,7 +1313,18 @@ export default function Settings() {
         </Card>
       ) : data ? (
         <>
-          <ServerSection key={JSON.stringify(data.server)} data={data.server} />
+          <LanguageSettingsSection
+            key={`locale:${data.server?.locale ?? ""}`}
+            locale={data.server?.locale}
+          />
+          <ServerSection
+            key={JSON.stringify({
+              port: data.server?.port,
+              host: data.server?.host,
+              autoStart: data.server?.autoStart,
+            })}
+            data={data.server}
+          />
           <RoutingSection
             key={JSON.stringify(data.routing)}
             routing={{

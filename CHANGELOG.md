@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-05-28
+
+Smart Routing aggregates provider models with unified `/v1/models` routing. The dashboard adds an offline gate, client configuration, a metrics split so statistics survive log clears, and release update checks against GitHub. Desktop can open the bundled UI without a running proxy; multi-instance leader election follows the active proxy port.
+
 ### Added
 
 **UI**
@@ -15,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Smart Routing** tab between Dashboard and Providers: aggregates all provider model lists, exposes unified `/v1/models` with `<providerId>:<modelId>` ids, and routes requests by model without switching the active provider.
 - **Providers** page: Smart Routing card and provider cards are mutually exclusive routing modes — enable Smart Routing from the Providers tab; selecting a fallback provider disables Smart Routing. Aggregated catalog shows provider fetch errors when upstream model lists fail.
 - **Client configuration** page shows installed Claude Desktop claude-code bundles (scanned from the Claude-3p directory) and the Claude Code CLI version (via `claude --version`). CLI version detection can be disabled on the page.
+- **Release update check** in the footer: compares your build to the latest formal GitHub Release (not the development version on `main`). Checks run about one minute after the proxy starts and once every 24 hours while it keeps running; you can also check immediately from the footer.
+- When a newer release is available, the dashboard opens an update dialog with release notes and a link to download on GitHub (opened in your system browser on desktop). The dialog refreshes if a later release appears on a subsequent check.
 
 **Config**
 
@@ -25,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Electron desktop app serves the dashboard from bundled UI assets, so the window can open even when the HTTP proxy is not running.
 - Electron and Tauri log build version at startup (version, build hash, git hash), matching the VS Code extension.
+- Dashboard external links (including the update download page on GitHub) open in the system default browser instead of inside the app window.
 
 ### Changed
 
@@ -44,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **UI**
 
 - Dashboard and VS Code status bar show **Smart Routing** as the current provider when smart routing is enabled; the status bar **Switch Provider** menu can enable or disable Smart Routing.
+- Smart Routing settings list excluded models again (non-excluded first) while runtime routing still omits them from `/v1/models`.
 - Electron desktop dashboard no longer fails to load scripts and styles when opened while the proxy is stopped.
 
 **Multi-instance**
@@ -65,10 +73,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Request logs for cross-protocol streaming (Chat SSE to Responses SSE) now update from `pending` to `completed` when the stream finishes, matching passthrough streaming behavior.
 - Cross-protocol streaming request logs now store the converted Responses SSE sent to the client and the upstream wire body, not only status and duration.
 - Xiaomi MiMo (Anthropic protocol): Claude Agent SDK requests that put system instructions in `messages` with `role: system` no longer fail upstream validation; those entries are rewritten as user messages and merged with adjacent user turns when needed.
-
-## [0.2.5] - 2026-05-26 (pre-release)
-
-Pre-release line for 0.2.5.
 
 ## [0.2.4] - 2026-05-19
 

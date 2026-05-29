@@ -10,6 +10,7 @@ import {
   setDashboardInjectConfig,
   type DashboardInjectConfig,
 } from "./dashboardProtocol";
+import { attachExternalLinkHandlers } from "./externalLinks";
 
 let dashboardWin: BrowserWindow | null = null;
 
@@ -26,8 +27,12 @@ function buildInjectConfig(server: ProxyServer, config: ConfigManager): Dashboar
   };
 }
 
-export function showDashboardWindow(server: ProxyServer, config: ConfigManager): void {
+export function updateDashboardInjectConfig(server: ProxyServer, config: ConfigManager): void {
   setDashboardInjectConfig(buildInjectConfig(server, config));
+}
+
+export function showDashboardWindow(server: ProxyServer, config: ConfigManager): void {
+  updateDashboardInjectConfig(server, config);
   const url = dashboardLocalUrl();
 
   if (dashboardWin) {
@@ -57,6 +62,8 @@ export function showDashboardWindow(server: ProxyServer, config: ConfigManager):
       sandbox: true,
     },
   });
+
+  attachExternalLinkHandlers(dashboardWin.webContents);
 
   void dashboardWin.loadURL(url).catch(() => {
     /* ERR_CONNECTION_* etc.: user sees Electron error page */

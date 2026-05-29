@@ -38,6 +38,7 @@ import {
   utf8StringToBlob,
   dbRowToLogWithoutBody,
   dbRowToLog,
+  filterProviderBreakdownByTokenUsage,
 } from "../../shared-utils";
 import { buildInsertSql } from "./utils";
 
@@ -495,7 +496,7 @@ export class SqliteNativeDriver implements DatabaseDriver {
       outputTpsSampleCount: filteredCount,
       p50Duration,
       p90Duration,
-      providerBreakdown,
+      providerBreakdown: filterProviderBreakdownByTokenUsage(providerBreakdown),
     };
   }
 

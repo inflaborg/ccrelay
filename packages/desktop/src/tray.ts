@@ -6,7 +6,7 @@ import { Tray, Menu, shell, nativeImage, app } from "electron";
 import * as path from "path";
 import { getLogDir, type ConfigManager, type ProxyServer } from "@ccrelay/core";
 import { setOpenAtLogin, getOpenAtLogin } from "./autoLaunch";
-import { showDashboardWindow } from "./window";
+import { showDashboardWindow, updateDashboardInjectConfig } from "./window";
 
 /** macOS tray uses template (monochrome); Windows/Linux use the full-color asset. */
 function trayIconFile(): string {
@@ -149,7 +149,10 @@ export function createTray(server: ProxyServer, config: ConfigManager): Tray {
 
   server.onRoleChanged(() => updateMenu());
   server.getRouter().onProviderChanged(() => updateMenu());
-  config.onConfigChanged(() => updateMenu());
+  config.onConfigChanged(() => {
+    updateDashboardInjectConfig(server, config);
+    updateMenu();
+  });
 
   tray.setToolTip("CCRelay");
 

@@ -5,6 +5,7 @@
 
 import * as http from "http";
 import { getDatabase } from "../database";
+import { filterProviderBreakdownByTokenUsage } from "../database/shared-utils";
 import { sendJson } from "./index";
 import { rejectLogStorageApiIfNotLeader } from "./serverRef";
 import { SMART_ROUTING_PROVIDER_ID } from "../server/smartRouting/virtualProvider";
@@ -61,6 +62,8 @@ export async function handleStats(
   const stats = await db.getStats(since ? { since } : undefined);
   sendJson(res, 200, {
     ...stats,
-    providerBreakdown: omitVirtualProviderFromBreakdown(stats.providerBreakdown),
+    providerBreakdown: filterProviderBreakdownByTokenUsage(
+      omitVirtualProviderFromBreakdown(stats.providerBreakdown)
+    ),
   });
 }
