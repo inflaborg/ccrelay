@@ -2,9 +2,33 @@ import { describe, it, expect } from "vitest";
 import {
   isOpenAIChatCompletionsWirePath,
   isOpenAIType,
+  isTokenUsageRequestPath,
   mapAnthropicWirePathToOpenAiUpstream,
   mapOpenAiWirePathToAnthropicUpstream,
 } from "@/converter/paths";
+
+describe("isTokenUsageRequestPath", () => {
+  it("returns true for POST /v1/messages", () => {
+    expect(isTokenUsageRequestPath("POST", "/v1/messages")).toBe(true);
+  });
+
+  it("returns false for POST /v1/messages/count_tokens", () => {
+    expect(isTokenUsageRequestPath("POST", "/v1/messages/count_tokens")).toBe(false);
+  });
+
+  it("returns true for chat completions and responses paths", () => {
+    expect(isTokenUsageRequestPath("POST", "/chat/completions")).toBe(true);
+    expect(isTokenUsageRequestPath("POST", "/v1/chat/completions")).toBe(true);
+    expect(isTokenUsageRequestPath("POST", "/responses")).toBe(true);
+    expect(isTokenUsageRequestPath("POST", "/v1/responses")).toBe(true);
+  });
+
+  it("returns false for models and non-POST", () => {
+    expect(isTokenUsageRequestPath("GET", "/v1/messages")).toBe(false);
+    expect(isTokenUsageRequestPath("POST", "/models")).toBe(false);
+    expect(isTokenUsageRequestPath("POST", "/v1/models")).toBe(false);
+  });
+});
 
 describe("isOpenAIChatCompletionsWirePath", () => {
   it("accepts /v1/chat/completions", () => {

@@ -24,8 +24,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Desktop**
 
 - Electron desktop app serves the dashboard from bundled UI assets, so the window can open even when the HTTP proxy is not running.
+- Electron and Tauri log build version at startup (version, build hash, git hash), matching the VS Code extension.
 
 ### Changed
+
+**Logging database**
+
+- Token usage, model, timing, and success status are stored separately from request log bodies, so clearing request logs does not reset dashboard statistics.
+- Log database schema upgrades are version-tracked; startup logs report the current schema version and any migration steps applied.
+- Native SQLite logging requires SQLite 3.35 or newer; older system SQLite disables request log storage (same behavior as when the sqlite3 CLI is unavailable).
 
 **UI**
 
@@ -57,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cross-protocol Responses to OpenAI Chat now strips unsupported hosted tools on GLM, MiMo, DeepSeek, Gemini, and MiniMax; Codex `apply_patch` freeform tools are downgraded to string-arg functions so Chat-only upstreams no longer reject requests with `Param Incorrect`.
 - Request logs for cross-protocol streaming (Chat SSE to Responses SSE) now update from `pending` to `completed` when the stream finishes, matching passthrough streaming behavior.
 - Cross-protocol streaming request logs now store the converted Responses SSE sent to the client and the upstream wire body, not only status and duration.
+- Xiaomi MiMo (Anthropic protocol): Claude Agent SDK requests that put system instructions in `messages` with `role: system` no longer fail upstream validation; those entries are rewritten as user messages and merged with adjacent user turns when needed.
 
 ## [0.2.5] - 2026-05-26 (pre-release)
 

@@ -668,6 +668,118 @@ export class ConfigManager {
     }
   }
 
+  /**
+   * Rename a provider key in config.yaml, preserving all fields (including apiKey).
+   * Updates defaultProvider, webSearch provider lists, routing forward rules, and persisted current provider id.
+   */
+  renameProvider(oldId: string, newId: string): boolean {
+    try {
+      if (oldId === "official" || newId === "official") {
+        console.error("[ConfigManager] Cannot rename the official provider");
+        return false;
+      }
+
+      const content = fs.readFileSync(this.configPath, "utf-8");
+      const rawConfig = yaml.load(content) as Record<string, unknown>;
+
+      const providers = rawConfig.providers as Record<string, unknown> | undefined;
+      if (!providers) {
+        console.error(`[ConfigManager] Provider "${oldId}" not found (no providers map)`);
+        return false;
+      }
+
+      const keys = Object.keys(providers);
+      const resolvedOld = resolveProviderKeyInMap(keys, oldId);
+      if (!resolvedOld) {
+        console.error(`[ConfigManager] Provider "${oldId}" not found in config file`);
+        return false;
+      }
+
+      if (resolveProviderKeyInMap(keys, newId) ?? (keys.includes(newId) ? newId : null)) {
+        console.error(`[ConfigManager] Provider "${newId}" already exists`);
+        return false;
+      }
+
+      const providerEntry = providers[resolvedOld];
+      delete providers[resolvedOld];
+      providers[newId] = providerEntry;
+
+      const dfp = rawConfig.defaultProvider;
+      if (dfp !== undefined && dfp !== null) {
+        const dfpStr = typeof dfp === "string" || typeof dfp === "number" ? String(dfp) : null;
+        if (dfpStr) {
+          const defKey =
+            resolveProviderKeyInMap(keys, dfpStr) ?? (keys.includes(dfpStr) ? dfpStr : null);
+          if (defKey === resolvedOld) {
+            rawConfig.defaultProvider = newId;
+          }
+        }
+      }
+
+      const updateProviderIdInWebSearch = (ws: unknown): void => {
+        if (!ws || typeof ws !== "object" || Array.isArray(ws)) {
+          return;
+        }
+        const wsObj = ws as Record<string, unknown>;
+        const list = wsObj.providers;
+        if (!Array.isArray(list)) {
+          return;
+        }
+        wsObj.providers = list.map((entry: unknown): unknown =>
+          typeof entry === "string" && entry === resolvedOld ? newId : entry
+        );
+      };
+
+      updateProviderIdInWebSearch(rawConfig.webSearch);
+      updateProviderIdInWebSearch(rawConfig.web_search);
+
+      const routing = rawConfig.routing;
+      if (routing && typeof routing === "object" && !Array.isArray(routing)) {
+        const routingObj = routing as Record<string, unknown>;
+        const forward = routingObj.forward;
+        if (Array.isArray(forward)) {
+          for (const rule of forward) {
+            if (rule && typeof rule === "object" && !Array.isArray(rule)) {
+              const r = rule as Record<string, unknown>;
+              if (r.provider === resolvedOld) {
+                r.provider = newId;
+              }
+            }
+          }
+        }
+      }
+
+      rawConfig.providers = sortProviderMapKeys(providers);
+
+      const yamlContent = yaml.dump(rawConfig, {
+        indent: 2,
+        lineWidth: -1,
+        noRefs: true,
+      });
+      this.saving = true;
+      fs.writeFileSync(this.configPath, yamlContent, "utf-8");
+      this.saving = false;
+
+      const persistedCurrent = this.configState.readCurrentProviderId();
+      const shouldUpdatePersisted =
+        persistedCurrent &&
+        (resolveProviderKeyInMap(keys, persistedCurrent) === resolvedOld ||
+          persistedCurrent === resolvedOld);
+
+      this.reload();
+
+      if (shouldUpdatePersisted) {
+        void this.setCurrentProviderId(newId);
+      }
+
+      return true;
+    } catch (err) {
+      this.saving = false;
+      console.error("[ConfigManager] Failed to rename provider:", err);
+      return false;
+    }
+  }
+
   getConfigRawForApi(): Record<string, unknown> {
     const raw = this.getConfigRaw();
     const serverRaw = raw.server as Record<string, unknown> | undefined;

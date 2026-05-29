@@ -18,9 +18,27 @@ export function isOpenAIType(providerType: ProviderType): boolean {
   return providerType === "openai" || providerType === "openai_chat";
 }
 
-function pathOnly(pathOrUrlPath: string): string {
+export function pathOnly(pathOrUrlPath: string): string {
   const bare = pathOrUrlPath.split("?")[0] || pathOrUrlPath;
   return bare.startsWith("/") ? bare : `/${bare}`;
+}
+
+/**
+ * True when the request is an LLM inference call that returns token usage in the response.
+ * Used to gate writes to `request_metrics` (excludes /models, count_tokens, health checks, etc.).
+ */
+export function isTokenUsageRequestPath(method: string, path: string): boolean {
+  if ((method || "GET").toUpperCase() !== "POST") {
+    return false;
+  }
+  const p = pathOnly(path);
+  if (p === "/v1/messages") {
+    return true;
+  }
+  if (isOpenAIChatCompletionsWirePath(p)) {
+    return true;
+  }
+  return p === "/responses" || p === "/v1/responses";
 }
 
 /**

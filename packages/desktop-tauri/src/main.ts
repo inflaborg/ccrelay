@@ -12,7 +12,10 @@ import * as path from "path";
 import * as fs from "fs";
 import {
   Api,
+  BUILD_HASH,
+  BUILD_VERSION,
   ConfigManager,
+  GIT_HASH,
   LeaderElection,
   Logger,
   ProxyServer,
@@ -92,6 +95,10 @@ function fetchLeaderUiToken(leaderUrl: string, bearerToken: string): Promise<str
 
 async function main(): Promise<void> {
   const logger = Logger.getInstance();
+  logger.info(`[Sidecar] Starting (pid=${process.pid})`);
+  logger.info(
+    `[Sidecar] Build version=${BUILD_VERSION} buildHash=${BUILD_HASH} gitHash=${GIT_HASH}`
+  );
 
   setWebDistPath(resolveWebDist());
 

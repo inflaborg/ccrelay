@@ -32,7 +32,7 @@ import {
 import { InfiniteTable, type InfiniteTableColumn } from "@/components/ui/infinite-table";
 import { MarkdownViewer } from "@/components/ui/markdown-viewer";
 import { api, type LogEntry } from "@/api/client";
-import { reconstructMessageFromSseLogBody } from "./reconstructAnthropicSseMessage";
+import { isSseLogBody, reconstructMessageFromSseLogBody } from "./reconstructAnthropicSseMessage";
 
 const PAGE_SIZE = 50;
 
@@ -42,7 +42,7 @@ const formatJson = (str: string): string => {
   const trimmed = str.trim();
 
   // Check if it's SSE (Server-Sent Events) format - not JSON
-  if (trimmed.startsWith("event:") || trimmed.startsWith("data:")) {
+  if (isSseLogBody(trimmed)) {
     return str;
   }
 
@@ -419,7 +419,7 @@ export default function Logs() {
     if (reconstructed.ok) {
       return JSON.stringify(reconstructed.message, null, 2);
     }
-    if (!trimmed.startsWith("event:") && !trimmed.startsWith("data:")) {
+    if (!isSseLogBody(trimmed)) {
       try {
         return JSON.stringify(JSON.parse(trimmed), null, 2);
       } catch {

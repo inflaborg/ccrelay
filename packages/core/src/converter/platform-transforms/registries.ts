@@ -15,6 +15,7 @@ import { glmFlattenContentTransform } from "./glm/messages";
 import { glmWebSearchResponseTransform } from "./glm/responses";
 import { mimoWebSearchTransform } from "./xiaomimimo/tools";
 import { mimoAnnotationsWebSearchResponseTransform } from "./xiaomimimo/responses";
+import { mimoAnthropicRequestSanitize } from "./xiaomimimo/anthropic-request";
 import type { PlatformRequestOverrideTransform } from "./rules";
 import { azureChatSanitize } from "./azure-openai/chat-sanitize";
 import { glmChatSanitize } from "./glm/request-sanitize";
@@ -46,6 +47,9 @@ export type PlatformAnthropicSseTransform = (
 
 /** Outbound Chat Completions JSON body sanitize (provider-specific). */
 export type PlatformRequestSanitizeTransform = (body: Record<string, unknown>) => void;
+
+/** Outbound Anthropic Messages JSON body sanitize (same-protocol passthrough). */
+export type PlatformAnthropicRequestSanitizeTransform = (body: Record<string, unknown>) => void;
 
 export const REQUEST_OVERRIDE_REGISTRY: Readonly<Record<string, PlatformRequestOverrideTransform>> =
   {
@@ -85,12 +89,19 @@ export const REQUEST_SANITIZE_REGISTRY: Readonly<Record<string, PlatformRequestS
     "minimax-chat-sanitize": minimaxChatSanitize,
   };
 
+export const ANTHROPIC_REQUEST_SANITIZE_REGISTRY: Readonly<
+  Record<string, PlatformAnthropicRequestSanitizeTransform>
+> = {
+  "mimo-anthropic-sanitize": mimoAnthropicRequestSanitize,
+};
+
 export { passthroughTransform, isPlainObject } from "./passthrough";
 export { glmWebSearchEnvelopeTransform } from "./glm/tools";
 export { glmFlattenContentTransform } from "./glm/messages";
 export { glmWebSearchResponseTransform } from "./glm/responses";
 export { mimoAnnotationsWebSearchResponseTransform } from "./xiaomimimo/responses";
 export { mimoWebSearchTransform } from "./xiaomimimo/tools";
+export { mimoAnthropicRequestSanitize } from "./xiaomimimo/anthropic-request";
 export { azureWebSearchRequestOverride } from "./azure-openai/request-override";
 export { azureResponsesWebSearchResponseTransform } from "./azure-openai/responses-web-search";
 export {

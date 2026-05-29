@@ -22,6 +22,7 @@ import {
   applyPlatformQueryPolicy,
   applyPlatformRequestOverride,
   applyPlatformRequestSanitize,
+  applyAnthropicRequestSanitize,
   matchAnthropicSseRule,
   openaiChatStrictToolsSanitize,
 } from "../../converter/platform-transforms";
@@ -76,6 +77,22 @@ function applyPlatformTransformsToOpenAiChatBody(body: Buffer, baseUrl: string):
     openaiChatStrictToolsSanitize(data, baseUrl);
     applyPlatformMessagesToOpenAiChatRecord(data, baseUrl);
     applyPlatformRequestSanitize(data, baseUrl);
+    return Buffer.from(JSON.stringify(data), "utf-8");
+  } catch {
+    return body;
+  }
+}
+
+function applyAnthropicRequestSanitizeToBody(body: Buffer, baseUrl: string): Buffer {
+  if (!body.length) {
+    return body;
+  }
+  try {
+    const data = JSON.parse(body.toString("utf-8")) as Record<string, unknown>;
+    if (!Array.isArray(data.messages)) {
+      return body;
+    }
+    applyAnthropicRequestSanitize(data, baseUrl);
     return Buffer.from(JSON.stringify(data), "utf-8");
   } catch {
     return body;
@@ -236,7 +253,16 @@ export class BodyProcessor {
     }
 
     if (!needsConversion) {
-      // Same protocol: pass through (only modelMap changes were applied)
+      // Same protocol: pass through (only modelMap changes were applied).
+      // Anthropic passthrough may still need host-specific body sanitization (e.g. MiMo
+      // rejects `role: "system"` entries inside `messages[]`).
+      if (
+        clientSurface === "anthropic" &&
+        upstreamWire === "anthropic" &&
+        routing.targetPath.includes("/v1/messages")
+      ) {
+        body = applyAnthropicRequestSanitizeToBody(body, routing.provider.baseUrl);
+      }
     } else if (clientSurface === "openai_responses" && upstreamWire === "openai") {
       const result = this.convertResponsesToChatCompletionsOnly(body, routing);
       if (result) {

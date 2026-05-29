@@ -91,6 +91,18 @@ export interface DuplicateProviderResponse {
   message?: string;
 }
 
+/** POST /providers/rename */
+export interface RenameProviderRequest {
+  oldId: string;
+  newId: string;
+}
+
+export interface RenameProviderResponse {
+  status: "ok" | "error";
+  id?: string;
+  message?: string;
+}
+
 export interface DeleteProviderResponse {
   status: "ok" | "error";
   message?: string;
