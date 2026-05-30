@@ -37,6 +37,7 @@ import {
   MAX_LOG_AGE_DAYS,
   utf8StringToBlob,
   dbRowToLogWithoutBody,
+  sqliteListBodyPreviewColumns,
   dbRowToLog,
   filterProviderBreakdownByTokenUsage,
 } from "../../shared-utils";
@@ -338,8 +339,8 @@ export class SqliteNativeDriver implements DatabaseDriver {
                 v.status_code, v.duration, v.success, v.error_message, v.client_id,
                 v.status, v.route_type,
                 m.input_tokens, m.output_tokens, m.cache_tokens, m.ttfb,
-                SUBSTR(v.request_body, 1, 500) as request_body,
-                SUBSTR(v.original_request_body, 1, 500) as original_request_body
+                m.model as metrics_model,
+                ${sqliteListBodyPreviewColumns("v")}
          FROM ${TABLE} v
          LEFT JOIN ${METRICS_TABLE} m ON m.client_id = v.client_id
          ${whereClause} ORDER BY v.timestamp DESC LIMIT ? OFFSET ?`

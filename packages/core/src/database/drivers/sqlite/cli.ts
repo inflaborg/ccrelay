@@ -40,7 +40,12 @@ import {
   dbRowToLog,
   filterProviderBreakdownByTokenUsage,
 } from "../../shared-utils";
-import { buildInsertSql, normalizeCliRow, type SqlInsertParam } from "./utils";
+import {
+  buildInsertSql,
+  CLI_BODY_PREVIEW_HEX,
+  normalizeCliRow,
+  type SqlInsertParam,
+} from "./utils";
 import { sqlLiteralForBlob } from "./cli-wire";
 
 /** Thrown when the `sqlite3` executable is absent; callers may degrade to disabled log storage. */
@@ -1250,16 +1255,13 @@ export class SqliteCliDriver implements DatabaseDriver {
     const limit = filter.limit || 100;
     const offset = filter.offset || 0;
 
-    const bodyPreview = `
-  hex(SUBSTR(v.request_body, 1, 500)) as request_body,
-  hex(SUBSTR(v.original_request_body, 1, 500)) as original_request_body`;
-
     const rows = await this.readConn.query(
       `SELECT v.id, v.timestamp, v.provider_id, v.provider_name, v.method, v.path,
               v.status_code, v.duration, v.success, v.error_message, v.client_id,
               v.status, v.route_type,
               m.input_tokens, m.output_tokens, m.cache_tokens, m.ttfb,
-              ${bodyPreview}
+              m.model as metrics_model,
+              ${CLI_BODY_PREVIEW_HEX}
        FROM ${TABLE} v
        LEFT JOIN ${METRICS_TABLE} m ON m.client_id = v.client_id
        ${whereClause} ORDER BY v.timestamp DESC LIMIT ? OFFSET ?`,

@@ -452,7 +452,7 @@ export class PostgresDriver implements DatabaseDriver {
     const offset = filter.offset || 0;
 
     const rowsResult = await this.pool.query(
-      `SELECT v.*, m.input_tokens, m.output_tokens, m.cache_tokens, m.ttfb
+      `SELECT v.*, m.input_tokens, m.output_tokens, m.cache_tokens, m.ttfb, m.model as metrics_model
        FROM ${TABLE} v
        LEFT JOIN ${METRICS_TABLE} m ON m.client_id = v.client_id
        ${whereClause} ORDER BY v.timestamp DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`,

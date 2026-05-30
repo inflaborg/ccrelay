@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **UI**
 
 - Request log **Response → Analysis** now reconstructs OpenAI Chat Completions streaming bodies (including `reasoning_content` and streamed tool calls) and OpenAI Responses API streaming bodies, so MiMo and cross-protocol Responses streams show a readable merged JSON instead of a blank panel.
+- Request log list **Model** column again shows client → upstream mapping for large Chat Completions bodies where `model` appears after a long `messages` array (previously only the first 500 bytes were scanned).
 
 **Protocol/Conversion**
 
