@@ -234,8 +234,120 @@ describe("processStreamingChunk", () => {
     expect(idxReasoningTextDone).toBeGreaterThanOrEqual(0);
     expect(idxReasoningItemDone).toBeGreaterThan(idxReasoningTextDone);
     expect(idxFnItemAdded).toBeGreaterThan(idxReasoningItemDone);
-    expect(types).toContain("response.content_part.added");
+    expect(types).not.toContain("response.content_part.added");
+    const messageItemAdded = events.filter(
+      (e: string) =>
+        e.includes('"type":"response.output_item.added"') &&
+        e.includes('"type":"message"') &&
+        !e.includes('"type":"reasoning"')
+    );
+    expect(messageItemAdded).toHaveLength(0);
     expect(state.phase).toBe("tool");
+  });
+
+  it("MiMo log regression: role → reasoning → tool_calls(fields) → finish → usage → [DONE]", () => {
+    const state = createStreamingState();
+    const allEvents: string[] = [];
+
+    allEvents.push(
+      ...processStreamingChunk(
+        state,
+        chunk({
+          role: "assistant",
+          content: "",
+          reasoning_content: null,
+        })
+      )
+    );
+    expect(state.phase).toBe("created");
+
+    for (const piece of ["用户询问", "的是", '"10k']) {
+      allEvents.push(
+        ...processStreamingChunk(state, chunk({ content: null, reasoning_content: piece }))
+      );
+    }
+    expect(state.phase).toBe("reasoning");
+
+    allEvents.push(
+      ...processStreamingChunk(
+        state,
+        chunk({
+          tool_calls: [
+            {
+              index: 0,
+              id: "call_ad44e7079f6946deac787adb",
+              type: "function",
+              function: { name: "fields", arguments: "" },
+            },
+          ],
+        })
+      )
+    );
+    allEvents.push(
+      ...processStreamingChunk(
+        state,
+        chunk({
+          tool_calls: [
+            {
+              index: 0,
+              function: { arguments: "{}" },
+            },
+          ],
+        })
+      )
+    );
+
+    allEvents.push(...processStreamingChunk(state, chunk({}, "tool_calls")));
+
+    const usageOnly = JSON.stringify({
+      id: "2825b425dc434407addf27684a090fc9",
+      object: "chat.completion.chunk",
+      created: 1780150873,
+      model: "mimo-v2.5-pro",
+      choices: [],
+      usage: {
+        prompt_tokens: 3350,
+        completion_tokens: 168,
+        total_tokens: 3518,
+        completion_tokens_details: { reasoning_tokens: 154 },
+      },
+    });
+    allEvents.push(...processStreamingChunk(state, usageOnly));
+    allEvents.push(...processStreamingChunk(state, "[DONE]"));
+
+    const joined = allEvents.join("");
+    expect(joined).not.toContain('"type":"message"');
+    expect(joined).not.toContain("response.content_part.added");
+
+    const outputIndices: number[] = [];
+    for (const e of allEvents) {
+      const m = e.match(/"output_index":(\d+)/);
+      if (m) {
+        outputIndices.push(Number(m[1]));
+      }
+    }
+    expect(outputIndices.filter((i: number) => i === 1).length).toBeGreaterThan(0);
+    expect(outputIndices.filter((i: number) => i === 0).length).toBeGreaterThan(0);
+
+    const completedEvent = allEvents.find((e: string) => e.includes("response.completed"));
+    expect(completedEvent).toBeDefined();
+    const dataLine =
+      completedEvent!
+        .split("\n")
+        .find((l: string) => l.startsWith("data:"))
+        ?.slice("data:".length)
+        .trim() ?? "{}";
+    const parsed = JSON.parse(dataLine) as {
+      response?: { output?: Array<Record<string, unknown>> };
+    };
+    const output = parsed.response?.output ?? [];
+    expect(output).toHaveLength(2);
+    expect(output[0]?.type).toBe("reasoning");
+    expect(output[1]?.type).toBe("function_call");
+    expect(output[1]?.name).toBe("fields");
+    expect(output[1]?.arguments).toBe("{}");
+    expect(state.accumulatedReasoning).toContain("用户询问");
+    expect(state.phase).toBe("done");
   });
 
   it("handles tool call streaming", () => {

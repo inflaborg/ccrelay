@@ -176,24 +176,19 @@ export function processStreamingChunk(state: StreamingConversionState, line: str
 
   // Tool call deltas
   if (Array.isArray(delta.tool_calls) && delta.tool_calls.length > 0) {
-    // Tool-only prelude: emit response/message shell so function_call sits at correct output indices.
     if (state.phase === "initial") {
       events.push(...emitResponseCreated(state));
       state.phase = "created";
-    }
-    if (state.phase === "created") {
-      state.phase = "text";
-      events.push(...emitOutputItemAdded(state, "message"));
-      events.push(...emitContentPartAdded(state, state.messageId, "output_text"));
     }
     // MiMo et al.: reasoning_content deltas then tool_calls with no intervening assistant text
     if (state.phase === "reasoning") {
       events.push(...emitReasoningTextDone(state));
       events.push(...emitReasoningItemDone(state));
       state.outputIndex++;
-      state.phase = "text";
-      events.push(...emitOutputItemAdded(state, "message"));
-      events.push(...emitContentPartAdded(state, state.messageId, "output_text"));
+    }
+    // created/reasoning → tool directly; only open message when delta.content arrives
+    if (state.phase === "created" || state.phase === "reasoning") {
+      state.phase = "tool";
     }
 
     for (const tc of delta.tool_calls as Record<string, unknown>[]) {
