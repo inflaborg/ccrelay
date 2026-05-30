@@ -17,7 +17,6 @@ import {
   MESSAGE_TRANSFORM_REGISTRY,
   REQUEST_OVERRIDE_REGISTRY,
   REQUEST_SANITIZE_REGISTRY,
-  ANTHROPIC_REQUEST_SANITIZE_REGISTRY,
   RESPONSE_TRANSFORM_REGISTRY,
   TOOL_TRANSFORM_REGISTRY,
   ANTHROPIC_SSE_TRANSFORM_REGISTRY,
@@ -37,7 +36,6 @@ export type {
   PlatformAnthropicSseTransform,
   PlatformMessageTransform,
   PlatformRequestSanitizeTransform,
-  PlatformAnthropicRequestSanitizeTransform,
   PlatformResponseTransform,
   PlatformToolTransform,
 } from "./registries";
@@ -49,7 +47,6 @@ export {
   glmChatSanitize,
   mimoAnnotationsWebSearchResponseTransform,
   mimoWebSearchTransform,
-  mimoAnthropicRequestSanitize,
   minimaxChatSanitize,
   minimaxReasoningDetailsResponseTransform,
   deepseekChatSanitize,
@@ -71,7 +68,6 @@ export {
   MESSAGE_TRANSFORM_REGISTRY,
   REQUEST_OVERRIDE_REGISTRY,
   REQUEST_SANITIZE_REGISTRY,
-  ANTHROPIC_REQUEST_SANITIZE_REGISTRY,
   RESPONSE_TRANSFORM_REGISTRY,
   ANTHROPIC_SSE_TRANSFORM_REGISTRY,
   TRANSFORM_REGISTRY,
@@ -290,40 +286,6 @@ export function applyPlatformRequestSanitize(body: Record<string, unknown>, base
     return;
   }
   const fn = REQUEST_SANITIZE_REGISTRY[key];
-  fn?.(body);
-}
-
-/** Match first rule that declares an Anthropic Messages request sanitize transform. */
-function matchAnthropicRequestSanitizeRule(baseUrl: string): HostedToolRule | undefined {
-  const hostname = normalizedHostnameFromBaseUrl(baseUrl);
-  if (!hostname) {
-    return undefined;
-  }
-  for (const rule of PLATFORM_TRANSFORM_RULES) {
-    if (!rule.anthropicRequestSanitize) {
-      continue;
-    }
-    if (ruleHostnameMatches(hostname, rule)) {
-      return rule;
-    }
-  }
-  return undefined;
-}
-
-/**
- * Apply Anthropic Messages body sanitization on same-protocol passthrough when the matched
- * platform rule declares `anthropicRequestSanitize`. No-op for unmatched hosts.
- */
-export function applyAnthropicRequestSanitize(
-  body: Record<string, unknown>,
-  baseUrl: string
-): void {
-  const rule = matchAnthropicRequestSanitizeRule(baseUrl);
-  const key = rule?.anthropicRequestSanitize;
-  if (!key) {
-    return;
-  }
-  const fn = ANTHROPIC_REQUEST_SANITIZE_REGISTRY[key];
   fn?.(body);
 }
 
