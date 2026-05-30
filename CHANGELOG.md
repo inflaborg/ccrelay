@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+**UI**
+
+- Request log **Response → Analysis** now reconstructs OpenAI Chat Completions streaming bodies (including `reasoning_content` and streamed tool calls) and OpenAI Responses API streaming bodies, so MiMo and cross-protocol Responses streams show a readable merged JSON instead of a blank panel.
+
+**Protocol/Conversion**
+
+- Cross-protocol Chat-to-Responses streaming no longer opens an empty assistant message item when the model goes from reasoning straight to tool calls; function calls keep the correct output index and clients parse the stream reliably.
+
 ## [0.2.5] - 2026-05-28
 
 Smart Routing aggregates provider models with unified `/v1/models` routing. The dashboard adds an offline gate, client configuration, a metrics split so statistics survive log clears, and release update checks against GitHub. Desktop can open the bundled UI without a running proxy; multi-instance leader election follows the active proxy port.

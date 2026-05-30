@@ -33,6 +33,8 @@ import { InfiniteTable, type InfiniteTableColumn } from "@/components/ui/infinit
 import { MarkdownViewer } from "@/components/ui/markdown-viewer";
 import { api, type LogEntry } from "@/api/client";
 import { isSseLogBody, reconstructMessageFromSseLogBody } from "./reconstructAnthropicSseMessage";
+import { reconstructOpenAIChatFromSseLogBody } from "./reconstructOpenAIChatSseMessage";
+import { reconstructOpenAIResponsesFromSseLogBody } from "./reconstructOpenAIResponsesSseMessage";
 
 const PAGE_SIZE = 50;
 
@@ -418,6 +420,14 @@ export default function Logs() {
     const reconstructed = reconstructMessageFromSseLogBody(raw);
     if (reconstructed.ok) {
       return JSON.stringify(reconstructed.message, null, 2);
+    }
+    const openaiResponses = reconstructOpenAIResponsesFromSseLogBody(raw);
+    if (openaiResponses.ok) {
+      return JSON.stringify(openaiResponses.message, null, 2);
+    }
+    const openaiChat = reconstructOpenAIChatFromSseLogBody(raw);
+    if (openaiChat.ok) {
+      return JSON.stringify(openaiChat.message, null, 2);
     }
     if (!isSseLogBody(trimmed)) {
       try {
