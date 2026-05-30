@@ -1,4 +1,5 @@
 import type { PartnerPreset } from "./types";
+import { partnerPresetSortIndex } from "../providerSortOrder";
 
 /** Known vendor tokens → preferred display casing */
 const VENDOR_DISPLAY: Record<string, string> = {
@@ -127,7 +128,7 @@ export const GENERIC_ENDPOINT_PRESETS: readonly PartnerPreset[] = [
   },
 ];
 
-export const PARTNER_PRESETS: readonly PartnerPreset[] = [
+const PARTNER_PRESETS_LIST: PartnerPreset[] = [
   {
     id: "tuning-engines",
     nameKey: "wizard.brand.tuningEngines",
@@ -450,6 +451,11 @@ export const PARTNER_PRESETS: readonly PartnerPreset[] = [
     ],
   },
 ];
+
+/** Partner vendors (合作商) in product display order. */
+export const PARTNER_PRESETS: readonly PartnerPreset[] = [...PARTNER_PRESETS_LIST].sort(
+  (a, b) => partnerPresetSortIndex(a.id) - partnerPresetSortIndex(b.id)
+);
 
 const ALL_PRESETS: readonly PartnerPreset[] = [...GENERIC_ENDPOINT_PRESETS, ...PARTNER_PRESETS];
 

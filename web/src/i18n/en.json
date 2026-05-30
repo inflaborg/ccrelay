@@ -724,6 +724,7 @@
     "subtitle": "Configure extra service capabilities for providers",
     "webSearch": {
       "title": "Web Search",
+      "description": "For Claude Desktop and Claude Code only. When the client invokes the built-in WebSearch tool, ccrelay intercepts that tool call and runs search using the backend you configure below (Tavily or GLM).",
       "enable": "Enable web search",
       "disabledHint": "Web search is off. Provider assignments and search settings are kept and apply when you turn it on again.",
       "searchBackend": "Search Backend",

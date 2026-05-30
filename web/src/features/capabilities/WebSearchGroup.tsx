@@ -244,6 +244,9 @@ export default function WebSearchGroup() {
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-sm font-medium">{t("capabilities.webSearch.title")}</CardTitle>
+        <p className="text-xs text-muted-foreground leading-relaxed pt-1">
+          {t("capabilities.webSearch.description")}
+        </p>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Global enable toggle */}

@@ -43,6 +43,7 @@ import { rebuildCoworkModelMap } from "@ccrelay/shared/coworkModelMap";
 import type { AliasHashProtocol } from "@ccrelay/shared/aliasHash";
 import { api } from "@/api/client";
 import type { AddProviderRequest, Provider, ModelMapEntry } from "@/types/api";
+import { providerVendorSortRank } from "./providerSortOrder";
 import { WizardDialog } from "./wizard/WizardDialog";
 import { CoworkAliasHelper } from "./CoworkAliasHelper";
 
@@ -593,6 +594,10 @@ export default function Providers() {
     const gb = sortGroup(b);
     if (ga !== gb) {
       return ga - gb;
+    }
+    const rankDiff = providerVendorSortRank(a) - providerVendorSortRank(b);
+    if (rankDiff !== 0) {
+      return rankDiff;
     }
     const byName = a.name.localeCompare(b.name, "en", { sensitivity: "base", numeric: true });
     if (byName !== 0) {
@@ -1309,7 +1314,7 @@ export default function Providers() {
             </CardContent>
 
             {/* Modal Footer */}
-            <div className="border-t p-3 flex-shrink-0 flex justify-end gap-2">
+            <div className="border-t px-4 pt-4 pb-5 flex-shrink-0 flex justify-end gap-2">
               <Button size="sm" variant="outline" className="h-7 text-xs" onClick={closeModal}>
                 {t("common.cancel")}
               </Button>
