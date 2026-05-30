@@ -36,11 +36,6 @@ export interface PlatformTransformRule {
   strictTools?: boolean;
   /** Outbound Chat Completions JSON sanitize registry key (runs after tools/messages transforms). */
   requestSanitize?: string;
-  /**
-   * Outbound Anthropic Messages JSON body sanitize registry key (same-protocol passthrough).
-   * Runs on `/v1/messages` bodies when client and upstream are both Anthropic.
-   */
-  anthropicRequestSanitize?: string;
 }
 
 /** Legacy name for tooling that matched hosted-tool-only rules (same payload). */
@@ -78,13 +73,11 @@ export const PLATFORM_TRANSFORM_RULES: readonly PlatformTransformRule[] = [
     domains: ["api.xiaomimimo.com"],
     tools: { web_search: "mimo-web-search" },
     responses: "mimo-annotations-web-search",
-    anthropicRequestSanitize: "mimo-anthropic-sanitize",
     strictTools: true,
   },
   {
     provider: "xiaomimimo-token-plan",
     domainParents: ["xiaomimimo.com"],
-    anthropicRequestSanitize: "mimo-anthropic-sanitize",
     strictTools: true,
   },
   {
