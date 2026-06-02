@@ -84,7 +84,6 @@ Smart Routing aggregates provider models with unified `/v1/models` routing and o
 - Request logs for cross-protocol streaming (Chat SSE to Responses SSE) now update from `pending` to `completed` when the stream finishes, matching passthrough streaming behavior.
 - Cross-protocol streaming request logs now store the converted Responses SSE sent to the client and the upstream wire body, not only status and duration.
 - Cross-protocol Chat-to-Responses streaming no longer opens an empty assistant message item when the model goes from reasoning straight to tool calls; function calls keep the correct output index and clients parse the stream reliably.
-- Xiaomi MiMo (Anthropic protocol): Claude Agent SDK requests that put system instructions in `messages` with `role: system` no longer fail upstream validation; those entries are rewritten as user messages and merged with adjacent user turns when needed.
 
 ## [0.2.4] - 2026-05-19
 

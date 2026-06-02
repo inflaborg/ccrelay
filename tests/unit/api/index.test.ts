@@ -18,6 +18,7 @@ import {
   handleApiRequest,
 } from "@/api/index";
 import { resetProxyServerForApi, setProxyServerForApi } from "@/api/serverRef";
+import * as versionApi from "@/api/version";
 import { cancelUpdateCheck } from "@/server/updateCheck";
 import type { ProxyServer } from "@/server/handler";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -641,6 +642,13 @@ describe("api: handleApiRequest specific routes", () => {
   });
 
   it("should handle POST /ccrelay/api/update-check", async () => {
+    const versionSpy = vi.spyOn(versionApi, "getBuildVersionInfo").mockReturnValue({
+      version: "0.2.5",
+      packageVersion: "0.2.5",
+      date: "2026-01-01",
+      hash: "abc",
+      gitHash: "def",
+    });
     cancelUpdateCheck();
     vi.stubGlobal(
       "fetch",
@@ -675,6 +683,7 @@ describe("api: handleApiRequest specific routes", () => {
     expect(body.checkedAt).toBeDefined();
 
     vi.unstubAllGlobals();
+    versionSpy.mockRestore();
     cancelUpdateCheck();
   });
 });
