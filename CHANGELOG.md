@@ -7,36 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+## [0.2.5] - 2026-06-02
 
-**Smart Routing**
-
-- `smartRouting.modelRules`: optional custom model routing checked before the aggregated catalog. Map client model ids (exact or `*`/`?` wildcards) to a target provider and upstream model; rules are not listed in `/v1/models`.
-
-### Changed
-
-**UI**
-
-- Request log **TTFB** and **TPS**, plus dashboard **Avg TTFB** and **Output TPS**, apply only to genuine SSE streaming; non-streaming and synthetic-stream responses show `-` instead of misleading values. Short streamed replies (e.g. a few tokens) now show TTFB/TPS in the log list when the proxy recorded stream metrics.
-
-**Config**
-
-- Default `concurrency.requestTimeout` is now `0` (no queue wait timeout). Configs below `configVersion` `0.2.5` are auto-upgraded on startup; installs that still had the previous default of `60` seconds are migrated to `0`. Set `requestTimeout` explicitly if you need a queue limit.
-
-### Fixed
-
-**UI**
-
-- Request log **Response → Analysis** now reconstructs OpenAI Chat Completions streaming bodies (including `reasoning_content` and streamed tool calls) and OpenAI Responses API streaming bodies, so MiMo and cross-protocol Responses streams show a readable merged JSON instead of a blank panel.
-- Request log list **Model** column again shows client → upstream mapping for large Chat Completions bodies where `model` appears after a long `messages` array (previously only the first 500 bytes were scanned).
-
-**Protocol/Conversion**
-
-- Cross-protocol Chat-to-Responses streaming no longer opens an empty assistant message item when the model goes from reasoning straight to tool calls; function calls keep the correct output index and clients parse the stream reliably.
-
-## [0.2.5] - 2026-05-28
-
-Smart Routing aggregates provider models with unified `/v1/models` routing. The dashboard adds an offline gate, client configuration, a metrics split so statistics survive log clears, and release update checks against GitHub. Desktop can open the bundled UI without a running proxy; multi-instance leader election follows the active proxy port.
+Smart Routing aggregates provider models with unified `/v1/models` routing and optional `modelRules` for custom model mapping. The dashboard adds an offline gate, client configuration, release update checks, and log metrics that only count genuine SSE streams. Request log Analysis and model mapping are more reliable for large bodies and cross-protocol streams. Desktop can open the bundled UI without a running proxy; multi-instance leader election follows the active proxy port. Default queue wait timeout is removed (`requestTimeout` `0`).
 
 ### Added
 
@@ -48,6 +21,10 @@ Smart Routing aggregates provider models with unified `/v1/models` routing. The 
 - **Client configuration** page shows installed Claude Desktop claude-code bundles (scanned from the Claude-3p directory) and the Claude Code CLI version (via `claude --version`). CLI version detection can be disabled on the page.
 - **Release update check** in the footer: compares your build to the latest formal GitHub Release (not the development version on `main`). Checks run about one minute after the proxy starts and once every 24 hours while it keeps running; you can also check immediately from the footer.
 - When a newer release is available, the dashboard opens an update dialog with release notes and a link to download on GitHub (opened in your system browser on desktop). The dialog refreshes if a later release appears on a subsequent check.
+
+**Smart Routing**
+
+- `smartRouting.modelRules`: optional custom model routing checked before the aggregated catalog. Map client model ids (exact or `*`/`?` wildcards) to a target provider and upstream model; rules are not listed in `/v1/models`.
 
 **Config**
 
@@ -72,6 +49,11 @@ Smart Routing aggregates provider models with unified `/v1/models` routing. The 
 
 - Dashboard **Overview** combines server status, current provider, and total requests in one card, aligned with Performance and Token Usage.
 - Provider wizard and Cowork quick-fill generate canonical alias hashes (`claude-{8 hex}` from `providerId:protocol:upstreamModelId`); the same upstream model on different providers or protocols gets a different alias.
+- Request log **TTFB** and **TPS**, plus dashboard **Avg TTFB** and **Output TPS**, apply only to genuine SSE streaming; non-streaming and synthetic-stream responses show `-` instead of misleading values. Short streamed replies (e.g. a few tokens) now show TTFB/TPS in the log list when the proxy recorded stream metrics.
+
+**Config**
+
+- Default `concurrency.requestTimeout` is now `0` (no queue wait timeout). Configs below `configVersion` `0.2.5` are auto-upgraded on startup; installs that still had the previous default of `60` seconds are migrated to `0`. Set `requestTimeout` explicitly if you need a queue limit.
 
 ### Fixed
 
@@ -80,6 +62,8 @@ Smart Routing aggregates provider models with unified `/v1/models` routing. The 
 - Dashboard and VS Code status bar show **Smart Routing** as the current provider when smart routing is enabled; the status bar **Switch Provider** menu can enable or disable Smart Routing.
 - Smart Routing settings list excluded models again (non-excluded first) while runtime routing still omits them from `/v1/models`.
 - Electron desktop dashboard no longer fails to load scripts and styles when opened while the proxy is stopped.
+- Request log **Response → Analysis** now reconstructs OpenAI Chat Completions streaming bodies (including `reasoning_content` and streamed tool calls) and OpenAI Responses API streaming bodies, so MiMo and cross-protocol Responses streams show a readable merged JSON instead of a blank panel.
+- Request log list **Model** column again shows client → upstream mapping for large Chat Completions bodies where `model` appears after a long `messages` array (previously only the first 500 bytes were scanned).
 
 **Multi-instance**
 
@@ -99,6 +83,7 @@ Smart Routing aggregates provider models with unified `/v1/models` routing. The 
 - Cross-protocol Responses to OpenAI Chat now strips unsupported hosted tools on GLM, MiMo, DeepSeek, Gemini, and MiniMax; Codex `apply_patch` freeform tools are downgraded to string-arg functions so Chat-only upstreams no longer reject requests with `Param Incorrect`.
 - Request logs for cross-protocol streaming (Chat SSE to Responses SSE) now update from `pending` to `completed` when the stream finishes, matching passthrough streaming behavior.
 - Cross-protocol streaming request logs now store the converted Responses SSE sent to the client and the upstream wire body, not only status and duration.
+- Cross-protocol Chat-to-Responses streaming no longer opens an empty assistant message item when the model goes from reasoning straight to tool calls; function calls keep the correct output index and clients parse the stream reliably.
 - Xiaomi MiMo (Anthropic protocol): Claude Agent SDK requests that put system instructions in `messages` with `role: system` no longer fail upstream validation; those entries are rewritten as user messages and merged with adjacent user turns when needed.
 
 ## [0.2.4] - 2026-05-19
