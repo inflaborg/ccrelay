@@ -2,6 +2,7 @@ import type { ConfigManager } from "../../config";
 import type { Router } from "../router";
 import type { RoutingContext } from "./context";
 import type { ModelCatalog } from "../smartRouting/modelCatalog";
+import { matchSmartRoutingModelRules } from "../smartRouting/resolveModelRules";
 import { SMART_ROUTING_VIRTUAL_PROVIDER } from "../smartRouting/virtualProvider";
 import {
   isModelsListUpstreamPath,
@@ -74,16 +75,25 @@ export class SmartRoutingStage {
       return { routing, body: rawBody };
     }
 
-    const entry = this.catalog.resolveModelWireId(model);
-    if (!entry) {
+    const modelRules = this.config.configValue.smartRouting?.modelRules;
+    const customMatch = matchSmartRoutingModelRules(model, modelRules, id =>
+      this.config.getProvider(id)
+    );
+    const catalogEntry = customMatch ? null : this.catalog.resolveModelWireId(model);
+    const providerId = customMatch?.providerId ?? catalogEntry?.providerId;
+    const upstreamModelId = customMatch?.upstreamModelId ?? catalogEntry?.upstreamModelId;
+
+    if (!providerId || !upstreamModelId) {
       log.warn(`[route] unresolved model "${model}"`);
       return { routing, body: rawBody };
     }
 
-    const provider = this.config.getProvider(entry.providerId);
+    const provider = this.config.getProvider(providerId);
     if (!provider) {
       return { routing, body: rawBody };
     }
+
+    const routeSource = customMatch ? "custom-rule" : "catalog";
 
     routing.smartRoutingClientModel = model;
     routing.provider = provider;
@@ -93,10 +103,10 @@ export class SmartRoutingStage {
     if (routing.targetQuery) {
       routing.targetUrl += routing.targetQuery;
     }
-    const nextBody = rewriteBodyModel(rawBody, entry.upstreamModelId);
+    const nextBody = rewriteBodyModel(rawBody, upstreamModelId);
 
     log.info(
-      `[route] model="${model}" -> provider=${provider.id} upstreamModel=${entry.upstreamModelId}`
+      `[route] model="${model}" -> provider=${provider.id} upstreamModel=${upstreamModelId} (${routeSource})`
     );
 
     return { routing, body: nextBody };

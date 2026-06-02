@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**Smart Routing**
+
+- `smartRouting.modelRules`: optional custom model routing checked before the aggregated catalog. Map client model ids (exact or `*`/`?` wildcards) to a target provider and upstream model; rules are not listed in `/v1/models`.
+
 ### Changed
 
 **UI**

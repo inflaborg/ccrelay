@@ -489,7 +489,7 @@ Each provider supports:
 
 Enable **Smart Routing** on the **Providers** tab (top card). It aggregates all enabled providers' model lists and routes each request to the matching provider by model id. Smart Routing and the single fallback provider are **mutually exclusive**: when Smart Routing is active, provider cards are deselected; choosing a fallback provider disables Smart Routing.
 
-Use the **Smart Routing** tab for settings only (alias prefix, bare model id fallback, exclude list, aggregated model table).
+Use the **Smart Routing** tab for settings (alias prefix, bare model id fallback, exclude list, custom routing rules, aggregated model table).
 
 | Setting                          | Default         | Description                                                                                    |
 | -------------------------------- | --------------- | ---------------------------------------------------------------------------------------------- |
@@ -499,6 +499,7 @@ Use the **Smart Routing** tab for settings only (alias prefix, bare model id fal
 | `smartRouting.include`           | —               | When set, only matching public ids are exposed (mutually exclusive with exclude)               |
 | `smartRouting.modelsCache.ttlSeconds` | `600`      | Upstream models list cache TTL for non-custom providers                                        |
 | `smartRouting.bareModelFallback.mode` | `first-match` | When client sends a bare model id (no prefix), match first provider in YAML order or reject |
+| `smartRouting.modelRules`           | —               | Custom rules (`pattern`, `provider`, `model`) matched before the catalog; not exposed in `/v1/models` |
 
 ### Routing
 

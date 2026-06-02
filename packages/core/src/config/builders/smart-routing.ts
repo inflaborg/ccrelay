@@ -1,9 +1,28 @@
-import type { SmartRoutingConfig, SmartRoutingConfigInput } from "../../types";
+import type {
+  SmartRoutingConfig,
+  SmartRoutingConfigInput,
+  SmartRoutingModelRule,
+} from "../../types";
+
+function buildModelRules(
+  rules: SmartRoutingConfigInput["modelRules"]
+): SmartRoutingModelRule[] | undefined {
+  if (!rules?.length) {
+    return undefined;
+  }
+  return rules.map(r => ({
+    pattern: r.pattern,
+    provider: r.provider,
+    model: r.model,
+    ...(r.enabled === false ? { enabled: false } : {}),
+  }));
+}
 
 export function buildSmartRoutingConfig(
   raw: SmartRoutingConfigInput | undefined
 ): SmartRoutingConfig {
   const parsed = raw ?? {};
+  const modelRules = buildModelRules(parsed.modelRules);
   return {
     enabled: parsed.enabled ?? false,
     modelsCache: {
@@ -17,5 +36,6 @@ export function buildSmartRoutingConfig(
     bareModelFallback: {
       mode: parsed.bareModelFallback?.mode ?? "first-match",
     },
+    ...(modelRules?.length ? { modelRules } : {}),
   };
 }

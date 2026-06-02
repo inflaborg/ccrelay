@@ -67,6 +67,11 @@ smartRouting:
     onUpstreamFail: stale
   bareModelFallback:
     mode: first-match
+  # Custom model routing (checked before aggregated catalog). Not listed in /v1/models.
+  # modelRules:
+  #   - pattern: "my-sonnet"
+  #     provider: openrouter
+  #     model: anthropic/claude-3.5-sonnet
 
 # ==================== Client Version Detection ====================
 # Dashboard Client Config: scan Claude Desktop bundles and run claude --version.

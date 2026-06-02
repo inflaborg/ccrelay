@@ -259,7 +259,23 @@
       "aliasPrefix": "别名前缀",
       "bareFallback": "裸 model id 兜底",
       "firstMatch": "首个匹配（按 provider 排序）",
-      "reject": "拒绝"
+      "reject": "拒绝",
+      "unsaved": "有未保存的更改"
+    },
+    "customRules": {
+      "title": "自定义路由规则",
+      "subtitle": "优先于聚合目录匹配。规则中的 pattern 不会出现在 /v1/models 中，客户端需在请求 body 里填写。支持 * 与 ? 通配，先匹配先生效。",
+      "pattern": "输入 pattern",
+      "patternHelp": "客户端 model id（精确或通配）",
+      "targetProvider": "目标供应商",
+      "targetModel": "目标模型",
+      "enabled": "启用",
+      "order": "顺序",
+      "add": "添加规则",
+      "empty": "暂无自定义规则。可添加规则，为指定 model id 覆盖目录路由。",
+      "moveUp": "上移",
+      "moveDown": "下移",
+      "remove": "删除"
     },
     "catalog": {
       "title": "聚合模型",

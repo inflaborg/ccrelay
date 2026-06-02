@@ -6,7 +6,10 @@ import { SmartRoutingStage } from "@/server/request/smartRoutingStage";
 import type { RoutingContext } from "@/server/request/context";
 import { ModelCatalog } from "@/server/smartRouting/modelCatalog";
 
-function mockConfig(providers: Record<string, Provider>): ConfigManager {
+function mockConfig(
+  providers: Record<string, Provider>,
+  smartRoutingExtra?: Partial<NonNullable<RouterConfig["smartRouting"]>>
+): ConfigManager {
   const cfg: RouterConfig = {
     port: 7575,
     host: "127.0.0.1",
@@ -21,6 +24,7 @@ function mockConfig(providers: Record<string, Provider>): ConfigManager {
       aliasPrefix: "claude-",
       modelsCache: { ttlSeconds: 600, refreshOnStart: false, onUpstreamFail: "stale" },
       bareModelFallback: { mode: "first-match" },
+      ...smartRoutingExtra,
     },
   };
 
@@ -124,5 +128,64 @@ describe("SmartRoutingStage", () => {
     expect(result.routing.smartRoutingClientModel).toBe(publicId);
     const parsedBody = JSON.parse(result.body.toString("utf-8")) as { model: string };
     expect(parsedBody.model).toBe("glm-4.7");
+  });
+
+  it("applies modelRules before catalog resolution", async () => {
+    const anthropicUpstreamId = "anthropic-upstream";
+    const glmProviderId = "glm-intl-anthropic";
+    const providers: Record<string, Provider> = {
+      [anthropicUpstreamId]: {
+        id: anthropicUpstreamId,
+        name: "Anthropic",
+        baseUrl: "https://anthropic.example.com",
+        mode: "passthrough",
+        providerType: "anthropic",
+        enabled: true,
+      },
+      [glmProviderId]: {
+        id: glmProviderId,
+        name: "GLM Intl",
+        baseUrl: "https://glm.example.com",
+        mode: "passthrough",
+        providerType: "anthropic",
+        enabled: true,
+        useCustomModelsList: true,
+        customModelsList: ["glm-4.7"],
+      },
+    };
+
+    const config = mockConfig(providers);
+    const catalog = new ModelCatalog(config);
+    await catalog.refreshAll();
+    const publicId = catalog.getAll()[0]?.publicId;
+    expect(publicId).toBeDefined();
+    if (!publicId) {
+      return;
+    }
+
+    const configWithRule = mockConfig(providers, {
+      modelRules: [
+        {
+          pattern: publicId,
+          provider: anthropicUpstreamId,
+          model: "custom-upstream-model",
+        },
+      ],
+    });
+    const getTargetUrl = vi.fn((path: string, provider: Provider) => `${provider.baseUrl}${path}`);
+    const router = {
+      prepareHeaders: (_c: Record<string, string>, p: Provider) => ({
+        authorization: `Bearer ${p.id}`,
+      }),
+      getTargetUrl,
+    } as unknown as Router;
+
+    const stage = new SmartRoutingStage(configWithRule, router, catalog);
+    const body = Buffer.from(JSON.stringify({ model: publicId }), "utf-8");
+    const result = stage.process(makeRouting({}), body);
+
+    expect(result.routing.provider.id).toBe(anthropicUpstreamId);
+    const parsedBody = JSON.parse(result.body.toString("utf-8")) as { model: string };
+    expect(parsedBody.model).toBe("custom-upstream-model");
   });
 });

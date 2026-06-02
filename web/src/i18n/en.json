@@ -259,7 +259,23 @@
       "aliasPrefix": "Alias prefix",
       "bareFallback": "Bare model id fallback",
       "firstMatch": "First match (provider order)",
-      "reject": "Reject"
+      "reject": "Reject",
+      "unsaved": "Unsaved changes"
+    },
+    "customRules": {
+      "title": "Custom routing rules",
+      "subtitle": "Matched before the aggregated catalog. Patterns are not listed in /v1/models — clients must send them in the request body. Supports * and ? wildcards; first match wins.",
+      "pattern": "Input pattern",
+      "patternHelp": "Client model id (exact or wildcard)",
+      "targetProvider": "Target provider",
+      "targetModel": "Target model",
+      "enabled": "Enabled",
+      "order": "Order",
+      "add": "Add rule",
+      "empty": "No custom rules. Add a rule to override catalog routing for specific model ids.",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "remove": "Remove"
     },
     "catalog": {
       "title": "Aggregated models",
