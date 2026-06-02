@@ -7,11 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**Smart Routing**
+
+- `smartRouting.modelRules`: optional custom model routing checked before the aggregated catalog. Map client model ids (exact or `*`/`?` wildcards) to a target provider and upstream model; rules are not listed in `/v1/models`.
+
+### Changed
+
+**UI**
+
+- Request log **TTFB** and **TPS**, plus dashboard **Avg TTFB** and **Output TPS**, apply only to genuine SSE streaming; non-streaming and synthetic-stream responses show `-` instead of misleading values. Short streamed replies (e.g. a few tokens) now show TTFB/TPS in the log list when the proxy recorded stream metrics.
+
+**Config**
+
+- Default `concurrency.requestTimeout` is now `0` (no queue wait timeout). Configs below `configVersion` `0.2.5` are auto-upgraded on startup; installs that still had the previous default of `60` seconds are migrated to `0`. Set `requestTimeout` explicitly if you need a queue limit.
+
 ### Fixed
 
 **UI**
 
 - Request log **Response → Analysis** now reconstructs OpenAI Chat Completions streaming bodies (including `reasoning_content` and streamed tool calls) and OpenAI Responses API streaming bodies, so MiMo and cross-protocol Responses streams show a readable merged JSON instead of a blank panel.
+- Request log list **Model** column again shows client → upstream mapping for large Chat Completions bodies where `model` appears after a long `messages` array (previously only the first 500 bytes were scanned).
 
 **Protocol/Conversion**
 

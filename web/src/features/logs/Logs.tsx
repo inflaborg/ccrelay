@@ -35,6 +35,7 @@ import { api, type LogEntry } from "@/api/client";
 import { isSseLogBody, reconstructMessageFromSseLogBody } from "./reconstructAnthropicSseMessage";
 import { reconstructOpenAIChatFromSseLogBody } from "./reconstructOpenAIChatSseMessage";
 import { reconstructOpenAIResponsesFromSseLogBody } from "./reconstructOpenAIResponsesSseMessage";
+import { hasStreamPerfMetrics, outputTps } from "./streamPerf";
 
 const PAGE_SIZE = 50;
 
@@ -644,12 +645,13 @@ export default function Logs() {
     },
     {
       id: "ttfb",
-      header: "TTFB",
+      header: t("logs.table.header.ttfb"),
+      headerTitle: t("logs.table.ttfbTooltip"),
       cell: log => {
-        if (log.ttfb == null) return <span className="text-[11px]">-</span>;
+        if (!hasStreamPerfMetrics(log)) return <span className="text-[11px]">-</span>;
         return (
           <span className="text-[11px]">
-            {log.ttfb >= 1000 ? `${(log.ttfb / 1000).toFixed(1)}s` : `${log.ttfb}ms`}
+            {log.ttfb! >= 1000 ? `${(log.ttfb! / 1000).toFixed(1)}s` : `${log.ttfb}ms`}
           </span>
         );
       },
@@ -659,13 +661,12 @@ export default function Logs() {
     },
     {
       id: "tps",
-      header: "TPS",
+      header: t("logs.table.header.tps"),
+      headerTitle: t("logs.table.tpsTooltip"),
       cell: log => {
-        if (log.outputTokens == null || !log.duration)
-          return <span className="text-[11px]">-</span>;
-        const genTime = log.ttfb != null && log.ttfb > 0 ? log.duration - log.ttfb : log.duration;
-        const calcTime = genTime >= 1000 ? genTime : 1000;
-        const tps = (log.outputTokens / calcTime) * 1000;
+        const tps = outputTps(log);
+        if (tps == null) return <span className="text-[11px]">-</span>;
+        const genTime = log.duration - log.ttfb!;
         return (
           <span
             className="font-mono text-[11px]"
@@ -929,38 +930,33 @@ export default function Logs() {
                     </div>
                   )}
 
-                  {selectedLog.ttfb != null && (
+                  {hasStreamPerfMetrics(selectedLog) && (
                     <div className="text-xs">
                       <span className="text-muted-foreground">TTFB</span>
                       <p className="font-mono text-[11px] mt-0.5">
-                        {selectedLog.ttfb >= 1000
-                          ? `${(selectedLog.ttfb / 1000).toFixed(2)}s`
+                        {selectedLog.ttfb! >= 1000
+                          ? `${(selectedLog.ttfb! / 1000).toFixed(2)}s`
                           : `${selectedLog.ttfb}ms`}
                       </p>
                     </div>
                   )}
 
-                  {selectedLog.outputTokens != null &&
-                    selectedLog.duration > 0 &&
-                    (() => {
-                      const genTime =
-                        selectedLog.ttfb != null && selectedLog.ttfb > 0
-                          ? selectedLog.duration - selectedLog.ttfb
-                          : selectedLog.duration;
-                      const calcTime = genTime >= 1000 ? genTime : 1000;
-                      const tps = (selectedLog.outputTokens / calcTime) * 1000;
-                      return (
-                        <div className="text-xs">
-                          <span className="text-muted-foreground">Output TPS</span>
-                          <p className="font-mono text-[11px] mt-0.5">
-                            {tps.toFixed(1)} t/s
-                            <span className="text-muted-foreground ml-2">
-                              ({selectedLog.outputTokens} tokens / {genTime}ms)
-                            </span>
-                          </p>
-                        </div>
-                      );
-                    })()}
+                  {(() => {
+                    const tps = outputTps(selectedLog);
+                    if (tps == null) return null;
+                    const genTime = selectedLog.duration - selectedLog.ttfb!;
+                    return (
+                      <div className="text-xs">
+                        <span className="text-muted-foreground">Output TPS</span>
+                        <p className="font-mono text-[11px] mt-0.5">
+                          {tps.toFixed(1)} t/s
+                          <span className="text-muted-foreground ml-2">
+                            ({selectedLog.outputTokens} tokens / {genTime}ms)
+                          </span>
+                        </p>
+                      </div>
+                    );
+                  })()}
 
                   {selectedLog.errorMessage && (
                     <div className="text-xs">

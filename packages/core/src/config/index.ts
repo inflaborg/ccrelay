@@ -28,7 +28,12 @@ import { expandEnvVarsInObject } from "./env";
 import { deepMerge, mergeFileConfigWithDefaults } from "./merge";
 import { parseProvider, sortProviderMapKeys, resolveProviderKeyInMap } from "./provider-utils";
 import { ConfigState, STATE_FILENAME } from "./state";
-import { computeLegacyMigratedRouting } from "./migration";
+import {
+  applyConcurrencyRequestTimeoutMigration,
+  computeLegacyMigratedRouting,
+  needsConfigUpgrade,
+  prepareConfigUpgrade025,
+} from "./migration";
 import { buildRoutingFromMerged } from "./builders/routing";
 import { buildConcurrencyConfig, buildRouteQueues } from "./builders/concurrency";
 import { buildDatabaseConfig } from "./builders/database";
@@ -56,6 +61,16 @@ function expandPath(filepath: string): string {
 
 function generateApiBearerToken(): string {
   return crypto.randomBytes(32).toString("base64url");
+}
+
+function dumpConfigYaml(raw: Record<string, unknown>): string {
+  return yaml.dump(raw, {
+    indent: 2,
+    lineWidth: -1,
+    noRefs: true,
+    quotingType: '"',
+    forceQuotes: false,
+  });
 }
 
 export class ConfigManager {
@@ -113,6 +128,15 @@ export class ConfigManager {
     if (this.fileWatcher) {
       this.fileWatcher.close();
       this.fileWatcher = null;
+    }
+  }
+
+  private writeConfigYamlToDisk(raw: Record<string, unknown>): void {
+    this.saving = true;
+    try {
+      fs.writeFileSync(this.configPath, dumpConfigYaml(raw), "utf-8");
+    } finally {
+      this.saving = false;
     }
   }
 
@@ -307,8 +331,6 @@ export class ConfigManager {
       };
     }
 
-    const concurrency = buildConcurrencyConfig(merged.concurrency);
-    const routeQueues = buildRouteQueues(merged.concurrency?.routes);
     const database = buildDatabaseConfig(merged.logging);
 
     const rawFileObj = ((): Record<string, unknown> => {
@@ -321,13 +343,13 @@ export class ConfigManager {
     })();
     const fileConfigVersion =
       typeof rawFileObj.configVersion === "string" ? rawFileObj.configVersion : null;
-    const needsMigration = !fileConfigVersion;
+    const needsLegacyRoutingMigration = !fileConfigVersion;
 
     const rawRouting = merged.routing ?? {};
     let forwardRules: ForwardRule[];
     let blockRules: BlockRule[];
 
-    if (!needsMigration) {
+    if (!needsLegacyRoutingMigration) {
       const r = buildRoutingFromMerged(rawRouting);
       forwardRules = r.forward;
       blockRules = r.block;
@@ -346,24 +368,39 @@ export class ConfigManager {
           delete rt.passthrough;
           delete rt.openaiBlock;
         }
-        const yamlContent = yaml.dump(writeTarget, {
-          indent: 2,
-          lineWidth: -1,
-          noRefs: true,
-          quotingType: '"',
-          forceQuotes: false,
-        });
-        this.saving = true;
-        fs.writeFileSync(this.configPath, yamlContent, "utf-8");
-        this.saving = false;
+        const concurrencyTimeoutMigrated = applyConcurrencyRequestTimeoutMigration(writeTarget);
+        if (concurrencyTimeoutMigrated && merged.concurrency) {
+          merged.concurrency.requestTimeout = 0;
+        }
+        this.writeConfigYamlToDisk(writeTarget);
         console.log(`[ConfigManager] Migrated config to version ${CONFIG_VERSION}`);
       } catch (err) {
-        this.saving = false;
         console.error("[ConfigManager] Failed to write migrated config:", err);
       }
     }
 
+    if (!needsLegacyRoutingMigration && needsConfigUpgrade(fileConfigVersion)) {
+      try {
+        const upgrade = prepareConfigUpgrade025(rawFileObj, fileConfigVersion);
+        if (upgrade.changed) {
+          if (upgrade.concurrencyTimeoutMigrated && merged.concurrency) {
+            merged.concurrency.requestTimeout = 0;
+          }
+          merged.configVersion = CONFIG_VERSION;
+          this.writeConfigYamlToDisk(rawFileObj);
+          console.log(
+            `[ConfigManager] Upgraded config to version ${CONFIG_VERSION}` +
+              (upgrade.concurrencyTimeoutMigrated ? " (concurrency.requestTimeout 60 → 0)" : "")
+          );
+        }
+      } catch (err) {
+        console.error("[ConfigManager] Failed to upgrade config version:", err);
+      }
+    }
+
     const routing = { forward: forwardRules, block: blockRules };
+    const concurrency = buildConcurrencyConfig(merged.concurrency);
+    const routeQueues = buildRouteQueues(merged.concurrency?.routes);
 
     let apiBearerTok =
       typeof merged.server?.apiBearerToken === "string" ? merged.server.apiBearerToken.trim() : "";

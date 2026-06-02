@@ -274,7 +274,7 @@ export function WizardDialog({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-4">
           {phase === "choose" ? (
             <WizardChooser
               onSelectCustom={handleSelectCustom}
@@ -319,7 +319,7 @@ export function WizardDialog({
           ) : null}
         </div>
 
-        <DialogFooter className="shrink-0 flex-col gap-3 border-t px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <DialogFooter className="mx-0 mb-0 shrink-0 flex-col gap-3 rounded-b-xl border-t bg-muted/50 px-6 pt-4 pb-6 sm:flex-row sm:items-center sm:justify-between">
           {phase === "choose" ? (
             <Button
               type="button"

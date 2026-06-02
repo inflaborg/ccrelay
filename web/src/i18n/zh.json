@@ -72,8 +72,9 @@
       "p50Latency": "P50 延迟",
       "p90Latency": "P90 延迟",
       "avgTtfb": "平均首字节时间",
+      "avgTtfbTooltip": "仅统计真实 SSE 流式请求",
       "outputTps": "输出 TPS",
-      "outputTpsTooltip": "仅统计真实流式请求（生成时间 > 500ms）"
+      "outputTpsTooltip": "仅统计真实 SSE 流式请求（生成时间 > 500ms）"
     },
     "tokens": {
       "title": "Token 用量",
@@ -258,7 +259,23 @@
       "aliasPrefix": "别名前缀",
       "bareFallback": "裸 model id 兜底",
       "firstMatch": "首个匹配（按 provider 排序）",
-      "reject": "拒绝"
+      "reject": "拒绝",
+      "unsaved": "有未保存的更改"
+    },
+    "customRules": {
+      "title": "自定义路由规则",
+      "subtitle": "优先于聚合目录匹配。规则中的 pattern 不会出现在 /v1/models 中，客户端需在请求 body 里填写。支持 * 与 ? 通配，先匹配先生效。",
+      "pattern": "输入 pattern",
+      "patternHelp": "客户端 model id（精确或通配）",
+      "targetProvider": "目标供应商",
+      "targetModel": "目标模型",
+      "enabled": "启用",
+      "order": "顺序",
+      "add": "添加规则",
+      "empty": "暂无自定义规则。可添加规则，为指定 model id 覆盖目录路由。",
+      "moveUp": "上移",
+      "moveDown": "下移",
+      "remove": "删除"
     },
     "catalog": {
       "title": "聚合模型",
@@ -533,8 +550,12 @@
         "provider": "提供商",
         "status": "状态",
         "duration": "耗时",
-        "time": "时间"
+        "time": "时间",
+        "ttfb": "TTFB",
+        "tps": "TPS"
       },
+      "ttfbTooltip": "首字节时间 — 仅流式 SSE 请求",
+      "tpsTooltip": "输出 token 速率 — 仅流式 SSE 请求",
       "routeType": {
         "block": "拦截",
         "pass": "透传",
@@ -689,7 +710,7 @@
       "enable": "启用并发管理器",
       "maxWorkers": "最大并发数",
       "maxQueueSize": "最大队列长度",
-      "requestTimeout": "请求超时（秒）",
+      "requestTimeout": "请求超时（秒，0 = 不超时）",
       "retry429": {
         "title": "429 重试",
         "enable": "启用 429 重试",
@@ -723,6 +744,7 @@
     "subtitle": "为提供商配置额外的服务能力",
     "webSearch": {
       "title": "网络搜索",
+      "description": "本功能仅面向 Claude Desktop 与 Claude Code。当客户端发起内置 WebSearch 工具调用时，ccrelay 会接管该 tool call，并使用下方配置的搜索引擎（Tavily 或 GLM）执行检索。",
       "enable": "启用网络搜索",
       "disabledHint": "网络搜索已关闭。提供商分配与搜索设置会保留，重新启用后即可生效。",
       "searchBackend": "搜索引擎",

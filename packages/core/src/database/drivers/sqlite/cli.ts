@@ -40,8 +40,14 @@ import {
   dbRowToLog,
   filterProviderBreakdownByTokenUsage,
 } from "../../shared-utils";
-import { buildInsertSql, normalizeCliRow, type SqlInsertParam } from "./utils";
+import {
+  buildInsertSql,
+  CLI_BODY_PREVIEW_HEX,
+  normalizeCliRow,
+  type SqlInsertParam,
+} from "./utils";
 import { sqlLiteralForBlob } from "./cli-wire";
+import { STREAM_PERF_SQL_COND } from "../../stream-metrics";
 
 /** Thrown when the `sqlite3` executable is absent; callers may degrade to disabled log storage. */
 export const SQLITE_CLI_NOT_FOUND_MESSAGE = "sqlite3 CLI not found. Please install SQLite3.";
@@ -1250,16 +1256,13 @@ export class SqliteCliDriver implements DatabaseDriver {
     const limit = filter.limit || 100;
     const offset = filter.offset || 0;
 
-    const bodyPreview = `
-  hex(SUBSTR(v.request_body, 1, 500)) as request_body,
-  hex(SUBSTR(v.original_request_body, 1, 500)) as original_request_body`;
-
     const rows = await this.readConn.query(
       `SELECT v.id, v.timestamp, v.provider_id, v.provider_name, v.method, v.path,
               v.status_code, v.duration, v.success, v.error_message, v.client_id,
               v.status, v.route_type,
               m.input_tokens, m.output_tokens, m.cache_tokens, m.ttfb,
-              ${bodyPreview}
+              m.model as metrics_model,
+              ${CLI_BODY_PREVIEW_HEX}
        FROM ${TABLE} v
        LEFT JOIN ${METRICS_TABLE} m ON m.client_id = v.client_id
        ${whereClause} ORDER BY v.timestamp DESC LIMIT ? OFFSET ?`,
@@ -1334,7 +1337,7 @@ export class SqliteCliDriver implements DatabaseDriver {
               COALESCE(SUM(input_tokens), 0) as totalInputTokens,
               COALESCE(SUM(output_tokens), 0) as totalOutputTokens,
               COALESCE(SUM(cache_tokens), 0) as totalCacheTokens,
-              AVG(ttfb) as avgTtfb
+              AVG(CASE WHEN ${STREAM_PERF_SQL_COND} THEN ttfb END) as avgTtfb
        FROM ${METRICS_TABLE}
        WHERE ${timeFilter}`,
       timeParams
@@ -1352,10 +1355,9 @@ export class SqliteCliDriver implements DatabaseDriver {
               COUNT(*) as filteredCount
        FROM ${METRICS_TABLE}
        WHERE ${timeFilter}
-         AND ttfb IS NOT NULL
+         AND ${STREAM_PERF_SQL_COND}
          AND output_tokens IS NOT NULL
-         AND output_tokens > 0
-         AND (duration - ttfb) > 500`,
+         AND output_tokens > 0`,
       timeParams
     );
     const tps = tpsRows[0] ?? {};

@@ -350,6 +350,13 @@ export interface ClientVersionDetectionSettings {
   enabled?: boolean;
 }
 
+export interface SmartRoutingModelRule {
+  pattern: string;
+  provider: string;
+  model: string;
+  enabled?: boolean;
+}
+
 export interface SmartRoutingSettings {
   enabled?: boolean;
   aliasPrefix?: string;
@@ -363,6 +370,7 @@ export interface SmartRoutingSettings {
   bareModelFallback?: {
     mode?: "first-match" | "reject";
   };
+  modelRules?: SmartRoutingModelRule[];
 }
 
 export interface SmartRoutingCatalogEntry {

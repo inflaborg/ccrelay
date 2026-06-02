@@ -253,11 +253,14 @@ export default function Dashboard() {
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">
+                    <span
+                      className="text-xs text-muted-foreground"
+                      title={t("dashboard.performance.avgTtfbTooltip")}
+                    >
                       {t("dashboard.performance.avgTtfb")}
                     </span>
                     <span className="text-xs font-medium">
-                      {formatDuration(stats?.avgTtfb || 0)}
+                      {stats?.avgTtfb ? formatDuration(stats.avgTtfb) : "-"}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">

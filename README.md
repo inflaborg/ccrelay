@@ -489,7 +489,7 @@ Each provider supports:
 
 Enable **Smart Routing** on the **Providers** tab (top card). It aggregates all enabled providers' model lists and routes each request to the matching provider by model id. Smart Routing and the single fallback provider are **mutually exclusive**: when Smart Routing is active, provider cards are deselected; choosing a fallback provider disables Smart Routing.
 
-Use the **Smart Routing** tab for settings only (alias prefix, bare model id fallback, exclude list, aggregated model table).
+Use the **Smart Routing** tab for settings (alias prefix, bare model id fallback, exclude list, custom routing rules, aggregated model table).
 
 | Setting                          | Default         | Description                                                                                    |
 | -------------------------------- | --------------- | ---------------------------------------------------------------------------------------------- |
@@ -499,12 +499,13 @@ Use the **Smart Routing** tab for settings only (alias prefix, bare model id fal
 | `smartRouting.include`           | —               | When set, only matching public ids are exposed (mutually exclusive with exclude)               |
 | `smartRouting.modelsCache.ttlSeconds` | `600`      | Upstream models list cache TTL for non-custom providers                                        |
 | `smartRouting.bareModelFallback.mode` | `first-match` | When client sends a bare model id (no prefix), match first provider in YAML order or reject |
+| `smartRouting.modelRules`           | —               | Custom rules (`pattern`, `provider`, `model`) matched before the catalog; not exposed in `/v1/models` |
 
 ### Routing
 
 | Setting           | Default                                | Description                                                                                                                    |
 | ----------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `configVersion`   | `"0.2.0"`                              | Config schema version. Legacy configs auto-migrated.                                                                           |
+| `configVersion`   | `"0.2.5"`                              | Config schema version. Older configs auto-upgraded on startup.                                                                 |
 | `routing.forward` | `[{path, provider}]`                   | Forward rules — first match wins. `provider: "auto"` = current provider. Unmatched → 404.                                      |
 | `routing.block`   | `[{path, response, code, condition?}]` | Block rules — return custom response. Optional `condition.providers` (allowlist) and `condition.providerNot` (exclusion list). |
 
@@ -515,7 +516,7 @@ Use the **Smart Routing** tab for settings only (alias prefix, bare model id fal
 | `concurrency.enabled`        | `true`  | Enable request queue                     |
 | `concurrency.maxWorkers`     | `3`     | Max concurrent requests                  |
 | `concurrency.maxQueueSize`   | `100`   | Max queued requests (0 = unlimited)      |
-| `concurrency.requestTimeout` | `60`    | Queue timeout in seconds (0 = unlimited) |
+| `concurrency.requestTimeout` | `0`     | Queue timeout in seconds (0 = unlimited) |
 | `concurrency.routes`         | `[]`    | Per-route queue config (by `pattern`)    |
 
 ### Logging
@@ -599,7 +600,7 @@ Edit the same fields from the dashboard **Capabilities** tab.
 ### Full Example
 
 ```yaml
-configVersion: "0.2.0"
+configVersion: "0.2.5"
 
 server:
   port: 7575
@@ -665,7 +666,7 @@ concurrency:
   enabled: true
   maxWorkers: 3
   maxQueueSize: 100
-  requestTimeout: 60
+  requestTimeout: 0
 
 logging:
   enabled: true

@@ -5,6 +5,8 @@ import { cn } from "@/lib/utils";
 export interface InfiniteTableColumn<T> {
   id: string;
   header: string;
+  /** Optional native tooltip on the column header */
+  headerTitle?: string;
   cell: (item: T, index: number) => React.ReactNode;
   className?: string;
   headerClassName?: string;
@@ -138,6 +140,7 @@ export function InfiniteTable<T>({
               {columns.map(col => (
                 <th
                   key={col.id}
+                  title={col.headerTitle}
                   className={cn(
                     "h-8 px-4 text-left align-middle font-medium text-muted-foreground text-[11px]",
                     col.headerClassName

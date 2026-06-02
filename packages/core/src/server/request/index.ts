@@ -219,7 +219,7 @@ export class RequestHandler {
       [Buffer.from(intercepted.body, "utf-8")],
       undefined,
       intercepted.body,
-      duration,
+      undefined,
       intercepted.tokens
     );
   }

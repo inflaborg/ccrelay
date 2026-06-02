@@ -263,6 +263,15 @@ export const SmartRoutingBareModelFallbackSchema = z.object({
   mode: z.enum(["first-match", "reject"]).default("first-match"),
 });
 
+export const SmartRoutingModelRuleSchema = z.object({
+  pattern: z.string(),
+  provider: z.string(),
+  model: z.string(),
+  enabled: z.boolean().optional(),
+});
+
+export type SmartRoutingModelRuleInput = z.infer<typeof SmartRoutingModelRuleSchema>;
+
 export const SmartRoutingConfigSchema = z.object({
   enabled: z.boolean().optional(),
   modelsCache: SmartRoutingModelsCacheSchema.optional(),
@@ -270,6 +279,7 @@ export const SmartRoutingConfigSchema = z.object({
   exclude: z.array(z.string()).optional(),
   include: z.array(z.string()).optional(),
   bareModelFallback: SmartRoutingBareModelFallbackSchema.optional(),
+  modelRules: z.array(SmartRoutingModelRuleSchema).optional(),
 });
 
 export type SmartRoutingConfigInput = z.infer<typeof SmartRoutingConfigSchema>;
@@ -284,6 +294,13 @@ export interface SmartRoutingBareModelFallbackConfig {
   mode: "first-match" | "reject";
 }
 
+export interface SmartRoutingModelRule {
+  pattern: string;
+  provider: string;
+  model: string;
+  enabled?: boolean;
+}
+
 export interface SmartRoutingConfig {
   enabled: boolean;
   modelsCache: SmartRoutingModelsCacheConfig;
@@ -291,6 +308,7 @@ export interface SmartRoutingConfig {
   exclude?: string[];
   include?: string[];
   bareModelFallback: SmartRoutingBareModelFallbackConfig;
+  modelRules?: SmartRoutingModelRule[];
 }
 
 export const ClientVersionDetectionConfigSchema = z.object({

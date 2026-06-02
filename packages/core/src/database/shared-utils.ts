@@ -7,6 +7,24 @@ import type { RequestLog } from "./types";
 export const MAX_LOG_ROWS = 10000;
 export const MAX_LOG_AGE_DAYS = 30;
 
+/** List-view prefix of request bodies for model extraction (Chat bodies often place `model` after long `messages`). */
+export const LIST_LOG_MODEL_BODY_HEAD_BYTES = 32_768;
+/** List-view suffix when the body exceeds the head prefix (late `model` field). */
+export const LIST_LOG_MODEL_BODY_TAIL_BYTES = 8_192;
+
+/** SQLite SELECT fragments for list-view model extraction from BLOB bodies. */
+export function sqliteListBodyPreviewColumns(tableAlias = "v"): string {
+  const head = LIST_LOG_MODEL_BODY_HEAD_BYTES;
+  const tail = LIST_LOG_MODEL_BODY_TAIL_BYTES;
+  return `
+    SUBSTR(${tableAlias}.request_body, 1, ${head}) as request_body,
+    SUBSTR(${tableAlias}.original_request_body, 1, ${head}) as original_request_body,
+    CASE WHEN length(${tableAlias}.request_body) > ${head}
+      THEN SUBSTR(${tableAlias}.request_body, -${tail}) ELSE NULL END as request_body_tail,
+    CASE WHEN length(${tableAlias}.original_request_body) > ${head}
+      THEN SUBSTR(${tableAlias}.original_request_body, -${tail}) ELSE NULL END as original_request_body_tail`;
+}
+
 /** Legacy on-disk prefix for TEXT columns (import only). */
 const BASE64_PREFIX = "B64:";
 
@@ -55,9 +73,35 @@ export function extractModelFromPartialJson(body: string): string | undefined {
     const parsed = JSON.parse(body) as { model?: string; data?: { model?: string } };
     return (typeof parsed.model === "string" && parsed.model) || parsed.data?.model || undefined;
   } catch {
-    const match = body.match(/"model"\s*:\s*"([^"]+)"/);
-    return match?.[1];
+    const matches = [...body.matchAll(/"model"\s*:\s*"([^"]+)"/g)];
+    if (matches.length === 0) {
+      return undefined;
+    }
+    // Chat Completions often places `model` after a large `messages` array; prefer the last match.
+    return matches[matches.length - 1][1];
   }
+}
+
+function bodyPreviewForModelExtract(
+  row: Record<string, unknown>,
+  headKey: string,
+  tailKey: string
+): string | undefined {
+  const head = bodyFieldToString(row[headKey]);
+  const tail = bodyFieldToString(row[tailKey]);
+  if (!head && !tail) {
+    return undefined;
+  }
+  if (!tail) {
+    return head;
+  }
+  if (!head) {
+    return tail;
+  }
+  if (head.includes('"model"')) {
+    return head;
+  }
+  return head + tail;
 }
 
 function bodyFieldToString(raw: unknown): string | undefined {
@@ -81,12 +125,16 @@ export function extractModelsFromBodies(
 ): Pick<RequestLog, "model" | "mappedModel"> {
   const result: Pick<RequestLog, "model" | "mappedModel"> = {};
 
-  const originalBody = bodyFieldToString(row.original_request_body);
+  const originalBody = bodyPreviewForModelExtract(
+    row,
+    "original_request_body",
+    "original_request_body_tail"
+  );
   if (originalBody) {
     result.model = extractModelFromPartialJson(originalBody);
   }
 
-  const requestBody = bodyFieldToString(row.request_body);
+  const requestBody = bodyPreviewForModelExtract(row, "request_body", "request_body_tail");
   if (requestBody) {
     const model = extractModelFromPartialJson(requestBody);
     if (model) {
@@ -94,6 +142,13 @@ export function extractModelsFromBodies(
       if (!result.model) {
         result.model = model;
       }
+    }
+  }
+
+  if (!result.mappedModel && typeof row.metrics_model === "string" && row.metrics_model) {
+    result.mappedModel = row.metrics_model;
+    if (!result.model) {
+      result.model = row.metrics_model;
     }
   }
 
@@ -112,6 +167,7 @@ export function extractModelsFromBodies(
  * Convert a database row to RequestLog (without body fields for list view).
  */
 export function dbRowToLogWithoutBody(row: Record<string, unknown>): RequestLog {
+  const models = extractModelsFromBodies(row);
   const log: RequestLog = {
     id: row.id as number,
     timestamp: row.timestamp as number,
@@ -130,23 +186,8 @@ export function dbRowToLogWithoutBody(row: Record<string, unknown>): RequestLog 
     outputTokens: row.output_tokens as number | undefined,
     cacheTokens: row.cache_tokens as number | undefined,
     ttfb: row.ttfb as number | undefined,
+    ...models,
   };
-
-  const originalBody = bodyFieldToString(row.original_request_body);
-  if (originalBody) {
-    log.model = extractModelFromPartialJson(originalBody);
-  }
-
-  const requestBody = bodyFieldToString(row.request_body);
-  if (requestBody) {
-    const model = extractModelFromPartialJson(requestBody);
-    if (model) {
-      log.mappedModel = model;
-      if (!log.model) {
-        log.model = model;
-      }
-    }
-  }
 
   if (!log.model) {
     const pathMatch = log.path.match(/\/models\/([^\/\?]+)/);

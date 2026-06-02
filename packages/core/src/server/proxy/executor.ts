@@ -150,6 +150,14 @@ interface ExecutionContext {
   streamCompleted?: boolean;
 }
 
+/** TTFB for DB logs: only when the response was incrementally streamed (not buffered/synthetic). */
+function ttfbForStreamLog(ctx: ExecutionContext, isStream: boolean): number | undefined {
+  if (!isStream || ctx.firstByteTime <= 0) {
+    return undefined;
+  }
+  return ctx.firstByteTime - ctx.startTime;
+}
+
 /** Cheap regex check for SSE terminal events across the supported protocols. */
 const TERMINAL_SSE_MARKER_RE =
   /event:\s*(?:response\.completed|response\.failed|message_stop|error)\b|^data:\s*\[DONE\]/m;
@@ -918,7 +926,7 @@ export class ProxyExecutor {
         ctx.responseChunks,
         aborted ? "Client disconnected" : undefined,
         this.upstreamLogBody(upstreamLog),
-        ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+        ttfbForStreamLog(ctx, true)
       );
       resolve({
         statusCode: aborted ? 499 : status,
@@ -1034,7 +1042,7 @@ export class ProxyExecutor {
         ctx.responseChunks,
         aborted ? "Client disconnected" : undefined,
         this.upstreamLogBody(upstreamLog),
-        ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+        ttfbForStreamLog(ctx, true)
       );
 
       resolve({
@@ -1155,7 +1163,7 @@ export class ProxyExecutor {
         ctx.responseChunks,
         err.message,
         upstreamBody,
-        ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+        ttfbForStreamLog(ctx, false)
       );
 
       resolve({
@@ -1232,7 +1240,7 @@ export class ProxyExecutor {
           ctx.responseChunks,
           undefined,
           ctx.originalResponseBody,
-          ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+          ttfbForStreamLog(ctx, false)
         );
 
         resolve({
@@ -1265,7 +1273,7 @@ export class ProxyExecutor {
           ctx.responseChunks,
           `OpenAI conversion failed: ${errMsg}`,
           ctx.originalResponseBody,
-          ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+          ttfbForStreamLog(ctx, false)
         );
 
         resolve({
@@ -1331,7 +1339,7 @@ export class ProxyExecutor {
           ctx.responseChunks,
           undefined,
           ctx.originalResponseBody,
-          ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+          ttfbForStreamLog(ctx, false)
         );
 
         resolve({
@@ -1364,7 +1372,7 @@ export class ProxyExecutor {
           ctx.responseChunks,
           `Responses conversion failed: ${errMsg}`,
           ctx.originalResponseBody,
-          ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+          ttfbForStreamLog(ctx, false)
         );
 
         resolve({
@@ -1425,7 +1433,7 @@ export class ProxyExecutor {
             ctx.responseChunks,
             undefined,
             ctx.originalResponseBody,
-            ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+            ttfbForStreamLog(ctx, false)
           );
           resolve({
             statusCode: status,
@@ -1445,7 +1453,7 @@ export class ProxyExecutor {
             ctx.responseChunks,
             undefined,
             ctx.originalResponseBody,
-            ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+            ttfbForStreamLog(ctx, false)
           );
           resolve({
             statusCode: status,
@@ -1474,7 +1482,7 @@ export class ProxyExecutor {
           ctx.responseChunks,
           `Anthropic to OpenAI conversion failed: ${errMsg}`,
           ctx.originalResponseBody,
-          ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+          ttfbForStreamLog(ctx, false)
         );
         resolve({
           statusCode: 502,
@@ -1551,7 +1559,7 @@ export class ProxyExecutor {
             ctx.responseChunks,
             undefined,
             ctx.originalResponseBody,
-            ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+            ttfbForStreamLog(ctx, false)
           );
           resolve({
             statusCode: status,
@@ -1571,7 +1579,7 @@ export class ProxyExecutor {
             ctx.responseChunks,
             undefined,
             ctx.originalResponseBody,
-            ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+            ttfbForStreamLog(ctx, false)
           );
           resolve({
             statusCode: status,
@@ -1596,7 +1604,7 @@ export class ProxyExecutor {
           ctx.responseChunks,
           `Chat to Responses failed: ${errMsg}`,
           ctx.originalResponseBody,
-          ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+          ttfbForStreamLog(ctx, false)
         );
         resolve({
           statusCode: 502,
@@ -1706,7 +1714,7 @@ export class ProxyExecutor {
         ctx.responseChunks,
         aborted ? "Client disconnected" : undefined,
         this.upstreamLogBody(upstreamLog),
-        ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+        ttfbForStreamLog(ctx, true)
       );
 
       resolve({
@@ -1783,7 +1791,7 @@ export class ProxyExecutor {
             ctx.responseChunks,
             undefined,
             ctx.originalResponseBody,
-            ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+            ttfbForStreamLog(ctx, false)
           );
           resolve({
             statusCode: status,
@@ -1803,7 +1811,7 @@ export class ProxyExecutor {
             ctx.responseChunks,
             undefined,
             ctx.originalResponseBody,
-            ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+            ttfbForStreamLog(ctx, false)
           );
           resolve({
             statusCode: status,
@@ -1828,7 +1836,7 @@ export class ProxyExecutor {
           ctx.responseChunks,
           `A to Responses failed: ${errMsg}`,
           ctx.originalResponseBody,
-          ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+          ttfbForStreamLog(ctx, false)
         );
         resolve({
           statusCode: 502,
@@ -1914,7 +1922,7 @@ export class ProxyExecutor {
           ctx.responseChunks,
           "Client disconnected",
           undefined,
-          ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+          ttfbForStreamLog(ctx, false)
         );
         resolve({
           statusCode: 499,
@@ -1967,7 +1975,7 @@ export class ProxyExecutor {
         ctx.responseChunks,
         undefined,
         undefined,
-        ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+        ttfbForStreamLog(ctx, false)
       );
       resolve({
         statusCode: status,
@@ -2083,7 +2091,7 @@ export class ProxyExecutor {
         ctx.responseChunks,
         aborted ? "Client disconnected" : undefined,
         undefined,
-        ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+        ttfbForStreamLog(ctx, true)
       );
       if (!aborted) {
         task.streamCompleted = true;
@@ -2285,7 +2293,7 @@ export class ProxyExecutor {
         ctx.responseChunks,
         undefined,
         undefined,
-        ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+        ttfbForStreamLog(ctx, false)
       );
       resolve({
         statusCode: outStatus,
@@ -2338,7 +2346,7 @@ export class ProxyExecutor {
             ctx.responseChunks,
             undefined,
             undefined,
-            ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+            ttfbForStreamLog(ctx, true)
           );
           resolve({
             statusCode: 200,
@@ -2359,7 +2367,7 @@ export class ProxyExecutor {
           ctx.responseChunks,
           "Client disconnected",
           undefined,
-          ctx.firstByteTime > 0 ? ctx.firstByteTime - ctx.startTime : undefined
+          ttfbForStreamLog(ctx, false)
         );
         resolve({
           statusCode: 499,

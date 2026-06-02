@@ -1,7 +1,16 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Loader2, RefreshCw, Route } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Route,
+  Trash2,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +32,7 @@ import { api } from "@/api/client";
 import type {
   AliasDrift,
   SmartRoutingCatalogEntry,
+  SmartRoutingModelRule,
   SmartRoutingProviderError,
   SmartRoutingSettings,
 } from "@/types/api";
@@ -46,43 +56,169 @@ function catalogDisplayLabels(row: SmartRoutingCatalogEntry): string[] {
   return [`${providerLabel} · ${modelLabel}`];
 }
 
-function buildSettingsPayload(
-  settings: SmartRoutingSettings,
+type CoreSettingsDraft = Pick<SmartRoutingSettings, "aliasPrefix" | "bareModelFallback">;
+
+function buildCoreSettingsPayload(
+  settings: CoreSettingsDraft,
   savedEnabled: boolean
 ): Record<string, unknown> {
   return {
     enabled: savedEnabled,
     aliasPrefix: settings.aliasPrefix,
     bareModelFallback: settings.bareModelFallback,
-    exclude: settings.exclude,
-    modelsCache: settings.modelsCache,
-    include: settings.include,
   };
 }
+
+function modelRulesForPersist(rules: SmartRoutingModelRule[]): SmartRoutingModelRule[] {
+  return rules.filter(r => r.pattern.trim() && r.provider.trim() && r.model.trim());
+}
+
+function emptyModelRule(): SmartRoutingModelRule {
+  return { pattern: "", provider: "", model: "", enabled: true };
+}
+
+function moveModelRule(
+  rules: SmartRoutingModelRule[],
+  index: number,
+  direction: -1 | 1
+): SmartRoutingModelRule[] {
+  const next = [...rules];
+  const target = index + direction;
+  if (target < 0 || target >= next.length) {
+    return next;
+  }
+  const tmp = next[index];
+  next[index] = next[target]!;
+  next[target] = tmp!;
+  return next;
+}
+
+/** Shared column template for custom rules header + rows. */
+const CUSTOM_RULES_GRID =
+  "grid grid-cols-[2.25rem_minmax(0,1.15fr)_minmax(0,1.35fr)_minmax(0,1fr)_2.25rem_2rem] gap-x-2";
 
 export default function SmartRouting() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const [draft, setDraft] = useState<SmartRoutingSettings | null>(null);
+  const [settingsDraft, setSettingsDraft] = useState<CoreSettingsDraft | null>(null);
+  const [modelRulesOverride, setModelRulesOverride] = useState<SmartRoutingModelRule[] | null>(
+    null
+  );
+  const [excludeOverride, setExcludeOverride] = useState<string[] | null>(null);
+  const modelRulesSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [driftOpen, setDriftOpen] = useState(false);
   const [pendingDrifts, setPendingDrifts] = useState<AliasDrift[]>([]);
   const [driftChoices, setDriftChoices] = useState<Record<string, DriftChoice>>({});
+  const [pendingCoreSettings, setPendingCoreSettings] = useState<CoreSettingsDraft | null>(null);
 
   const { data: config, isLoading: configLoading } = useQuery({
     queryKey: ["config"],
     queryFn: () => api.getConfig(),
   });
 
-  const savedEnabled = config?.smartRouting?.enabled === true;
+  const { data: providersData } = useQuery({
+    queryKey: ["providers"],
+    queryFn: () => api.getProviders(),
+  });
 
-  const smartRouting = draft ??
-    (config?.smartRouting as SmartRoutingSettings | undefined) ?? {
-      enabled: false,
-      aliasPrefix: "claude-",
-      modelsCache: { ttlSeconds: 600, refreshOnStart: true, onUpstreamFail: "stale" },
-      bareModelFallback: { mode: "first-match" },
-      exclude: [],
+  const providerOptions = useMemo(() => {
+    const list = providersData?.providers ?? [];
+    return list
+      .filter(p => p.enabled !== false)
+      .map(p => ({ value: p.id, label: p.name !== p.id ? `${p.name} (${p.id})` : p.id }));
+  }, [providersData?.providers]);
+
+  const savedEnabled = config?.smartRouting?.enabled === true;
+  const savedSmartRouting = config?.smartRouting as SmartRoutingSettings | undefined;
+  const savedModelRules = savedSmartRouting?.modelRules ?? [];
+  const savedExclude = savedSmartRouting?.exclude ?? [];
+  const modelRules = modelRulesOverride ?? savedModelRules;
+  const exclude = excludeOverride ?? savedExclude;
+
+  const coreSettings: CoreSettingsDraft = settingsDraft ?? {
+    aliasPrefix: savedSmartRouting?.aliasPrefix ?? "claude-",
+    bareModelFallback: savedSmartRouting?.bareModelFallback ?? { mode: "first-match" },
+  };
+
+  const coreSettingsDirty =
+    coreSettings.aliasPrefix !== (savedSmartRouting?.aliasPrefix ?? "claude-") ||
+    (coreSettings.bareModelFallback?.mode ?? "first-match") !==
+      (savedSmartRouting?.bareModelFallback?.mode ?? "first-match");
+
+  const autoSaveMutation = useMutation({
+    mutationFn: (data: Record<string, unknown>) =>
+      api.patchConfig({ section: "smartRouting", data }),
+    onSuccess: async () => {
+      setModelRulesOverride(null);
+      setExcludeOverride(null);
+      await queryClient.invalidateQueries({ queryKey: ["config"] });
+    },
+  });
+
+  const persistModelRules = useCallback(
+    (rules: SmartRoutingModelRule[]) => {
+      const persisted = modelRulesForPersist(rules);
+      autoSaveMutation.mutate({
+        modelRules: persisted.length > 0 ? persisted : [],
+      });
+    },
+    [autoSaveMutation]
+  );
+
+  const scheduleModelRulesSave = useCallback(
+    (rules: SmartRoutingModelRule[]) => {
+      if (modelRulesSaveTimer.current) {
+        clearTimeout(modelRulesSaveTimer.current);
+      }
+      modelRulesSaveTimer.current = setTimeout(() => {
+        persistModelRules(rules);
+      }, 450);
+    },
+    [persistModelRules]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (modelRulesSaveTimer.current) {
+        clearTimeout(modelRulesSaveTimer.current);
+      }
     };
+  }, []);
+
+  const applyModelRules = (
+    rules: SmartRoutingModelRule[],
+    options?: { debounce?: boolean; skipSave?: boolean }
+  ) => {
+    setModelRulesOverride(rules);
+    if (options?.skipSave) {
+      return;
+    }
+    if (options?.debounce) {
+      scheduleModelRulesSave(rules);
+    } else {
+      persistModelRules(rules);
+    }
+  };
+
+  const updateModelRule = (
+    index: number,
+    patch: Partial<SmartRoutingModelRule>,
+    options?: { debounce?: boolean }
+  ) => {
+    const next = modelRules.map((r, i) => (i === index ? { ...r, ...patch } : r));
+    applyModelRules(next, options);
+  };
+
+  const addModelRule = () => {
+    const firstProvider = providerOptions[0]?.value ?? "";
+    applyModelRules([...modelRules, { ...emptyModelRule(), provider: firstProvider }], {
+      skipSave: true,
+    });
+  };
+
+  const removeModelRule = (index: number) => {
+    applyModelRules(modelRules.filter((_, i) => i !== index));
+  };
 
   const {
     data: catalog,
@@ -99,7 +235,7 @@ export default function SmartRouting() {
   const providerErrors = catalog?.providerErrors ?? [];
 
   const sortedEntries = useMemo(() => {
-    const excludePatterns = smartRouting.exclude ?? [];
+    const excludePatterns = exclude;
     const entries = catalog?.entries ?? [];
     return [...entries].sort((a, b) => {
       const aExcluded = matchesSmartRoutingExclude(a.publicId, excludePatterns) ? 1 : 0;
@@ -113,12 +249,12 @@ export default function SmartRouting() {
       }
       return a.publicId.localeCompare(b.publicId);
     });
-  }, [catalog?.entries, smartRouting.exclude]);
+  }, [catalog?.entries, exclude]);
 
   const totalEntries = catalog?.entries?.length ?? 0;
 
-  const saveMutation = useMutation({
-    mutationFn: async (payload: SmartRoutingSettings) => {
+  const saveCoreSettingsMutation = useMutation({
+    mutationFn: async (payload: CoreSettingsDraft) => {
       const drifts = await api.getSmartRoutingAliasDrift();
       if (drifts.drifts.length > 0) {
         setPendingDrifts(drifts.drifts);
@@ -127,13 +263,13 @@ export default function SmartRouting() {
           initial[driftKey(d)] = d.collision ? "update" : "keep";
         }
         setDriftChoices(initial);
-        setDraft(payload);
+        setPendingCoreSettings(payload);
         setDriftOpen(true);
         return { deferred: true as const };
       }
       await api.patchConfig({
         section: "smartRouting",
-        data: buildSettingsPayload(payload, savedEnabled),
+        data: buildCoreSettingsPayload(payload, savedEnabled),
       });
       return { deferred: false as const };
     },
@@ -143,7 +279,7 @@ export default function SmartRouting() {
       }
       await queryClient.invalidateQueries({ queryKey: ["config"] });
       await queryClient.invalidateQueries({ queryKey: ["smartRoutingCatalog"] });
-      setDraft(null);
+      setSettingsDraft(null);
     },
   });
 
@@ -155,17 +291,18 @@ export default function SmartRouting() {
       if (updates.length > 0) {
         await api.applySmartRoutingAliasDrift({ updates });
       }
-      if (draft) {
+      if (pendingCoreSettings) {
         await api.patchConfig({
           section: "smartRouting",
-          data: buildSettingsPayload(draft, savedEnabled),
+          data: buildCoreSettingsPayload(pendingCoreSettings, savedEnabled),
         });
       }
     },
     onSuccess: async () => {
       setDriftOpen(false);
       setPendingDrifts([]);
-      setDraft(null);
+      setPendingCoreSettings(null);
+      setSettingsDraft(null);
       await queryClient.invalidateQueries({ queryKey: ["config"] });
       await queryClient.invalidateQueries({ queryKey: ["smartRoutingCatalog"] });
       await queryClient.invalidateQueries({ queryKey: ["providers"] });
@@ -180,17 +317,19 @@ export default function SmartRouting() {
   });
 
   const toggleExclude = (publicId: string, excluded: boolean) => {
-    const exclude = new Set(smartRouting.exclude ?? []);
+    const next = new Set(exclude);
     if (excluded) {
-      exclude.add(publicId);
+      next.add(publicId);
     } else {
-      exclude.delete(publicId);
+      next.delete(publicId);
     }
-    setDraft({ ...smartRouting, exclude: [...exclude] });
+    const nextExclude = [...next];
+    setExcludeOverride(nextExclude);
+    autoSaveMutation.mutate({ exclude: nextExclude });
   };
 
-  const handleSave = () => {
-    saveMutation.mutate(smartRouting);
+  const handleSaveCoreSettings = () => {
+    saveCoreSettingsMutation.mutate(coreSettings);
   };
 
   const goToProviders = () => {
@@ -235,19 +374,6 @@ export default function SmartRouting() {
             )}
             <span className="ml-1 hidden sm:inline">{t("smartRouting.refreshAll")}</span>
           </Button>
-          <Button
-            type="button"
-            size="sm"
-            className="h-7 text-xs"
-            disabled={saveMutation.isPending}
-            onClick={handleSave}
-          >
-            {saveMutation.isPending ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              t("common.save")
-            )}
-          </Button>
         </div>
       </div>
 
@@ -263,8 +389,13 @@ export default function SmartRouting() {
               </Label>
               <Input
                 className="h-8 text-xs"
-                value={smartRouting.aliasPrefix ?? "claude-"}
-                onChange={e => setDraft({ ...smartRouting, aliasPrefix: e.target.value })}
+                value={coreSettings.aliasPrefix ?? "claude-"}
+                onChange={e =>
+                  setSettingsDraft({
+                    ...coreSettings,
+                    aliasPrefix: e.target.value,
+                  })
+                }
               />
             </div>
             <div className="space-y-1">
@@ -272,10 +403,10 @@ export default function SmartRouting() {
                 {t("smartRouting.settings.bareFallback")}
               </Label>
               <SelectField
-                value={smartRouting.bareModelFallback?.mode ?? "first-match"}
+                value={coreSettings.bareModelFallback?.mode ?? "first-match"}
                 onChange={v =>
-                  setDraft({
-                    ...smartRouting,
+                  setSettingsDraft({
+                    ...coreSettings,
                     bareModelFallback: { mode: v as "first-match" | "reject" },
                   })
                 }
@@ -286,12 +417,161 @@ export default function SmartRouting() {
               />
             </div>
           </div>
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+            <div className="flex-1 min-w-0 min-h-[1.25rem] flex items-center justify-end text-right text-[10px]">
+              {saveCoreSettingsMutation.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+              ) : coreSettingsDirty ? (
+                <span className="text-amber-600 dark:text-amber-500">
+                  {t("smartRouting.settings.unsaved")}
+                </span>
+              ) : (
+                <span className="text-green-600 dark:text-green-500">{t("settings.saved")}</span>
+              )}
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              className="h-7 shrink-0 min-w-[7rem] text-xs"
+              disabled={saveCoreSettingsMutation.isPending || !coreSettingsDirty}
+              onClick={handleSaveCoreSettings}
+            >
+              {saveCoreSettingsMutation.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                t("common.save")
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="p-0">
+        <CardHeader className="p-3 pb-2 space-y-1">
+          <div className="flex flex-row items-center justify-between gap-2">
+            <CardTitle className="text-xs font-medium flex items-center gap-1.5">
+              {t("smartRouting.customRules.title")}
+              {autoSaveMutation.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+              ) : null}
+            </CardTitle>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={addModelRule}
+            >
+              <Plus className="h-3 w-3" />
+              <span className="ml-1">{t("smartRouting.customRules.add")}</span>
+            </Button>
+          </div>
+          <p className="text-[10px] text-muted-foreground font-normal">
+            {t("smartRouting.customRules.subtitle")}
+          </p>
+        </CardHeader>
+        <CardContent className="p-3 pt-0 space-y-2">
+          {modelRules.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-2 text-center">
+              {t("smartRouting.customRules.empty")}
+            </p>
+          ) : (
+            <div className="overflow-x-auto min-w-[36rem]">
+              <div
+                className={`${CUSTOM_RULES_GRID} border-b border-border pb-1.5 text-[10px] text-muted-foreground font-medium`}
+              >
+                <span>{t("smartRouting.customRules.order")}</span>
+                <span>{t("smartRouting.customRules.pattern")}</span>
+                <span>{t("smartRouting.customRules.targetProvider")}</span>
+                <span>{t("smartRouting.customRules.targetModel")}</span>
+                <span className="text-center">{t("smartRouting.customRules.enabled")}</span>
+                <span className="sr-only">{t("smartRouting.customRules.remove")}</span>
+              </div>
+              <div className="divide-y divide-border">
+                {modelRules.map((rule, index) => (
+                  <div key={index} className={`${CUSTOM_RULES_GRID} py-1.5 items-center`}>
+                    <div className="flex flex-col gap-0.5 self-center">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        disabled={index === 0}
+                        title={t("smartRouting.customRules.moveUp")}
+                        onClick={() => applyModelRules(moveModelRule(modelRules, index, -1))}
+                      >
+                        <ChevronUp className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        disabled={index === modelRules.length - 1}
+                        title={t("smartRouting.customRules.moveDown")}
+                        onClick={() => applyModelRules(moveModelRule(modelRules, index, 1))}
+                      >
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <Input
+                      className="h-8 w-full min-w-0 text-xs font-mono"
+                      placeholder={t("smartRouting.customRules.patternHelp")}
+                      value={rule.pattern}
+                      onChange={e =>
+                        updateModelRule(index, { pattern: e.target.value }, { debounce: true })
+                      }
+                    />
+                    <div className="min-w-0 w-full">
+                      <SelectField
+                        value={rule.provider || (providerOptions[0]?.value ?? "")}
+                        onChange={v => updateModelRule(index, { provider: v })}
+                        options={
+                          providerOptions.length > 0
+                            ? providerOptions
+                            : [{ value: rule.provider, label: rule.provider || "—" }]
+                        }
+                      />
+                    </div>
+                    <Input
+                      className="h-8 w-full min-w-0 text-xs font-mono"
+                      value={rule.model}
+                      onChange={e =>
+                        updateModelRule(index, { model: e.target.value }, { debounce: true })
+                      }
+                    />
+                    <div className="flex justify-center">
+                      <Checkbox
+                        checked={rule.enabled !== false}
+                        onCheckedChange={v => updateModelRule(index, { enabled: v === true })}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      title={t("smartRouting.customRules.remove")}
+                      onClick={() => removeModelRule(index)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
       <Card className="p-0">
         <CardHeader className="p-3 pb-2 flex flex-row items-center justify-between gap-2">
-          <CardTitle className="text-xs font-medium">{t("smartRouting.catalog.title")}</CardTitle>
+          <CardTitle className="text-xs font-medium flex items-center gap-1.5">
+            {t("smartRouting.catalog.title")}
+            {autoSaveMutation.isPending ? (
+              <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+            ) : null}
+          </CardTitle>
           <div className="flex flex-wrap items-center gap-1.5 shrink-0">
             {stats ? (
               <Badge variant="secondary" className="text-[10px]">
@@ -385,10 +665,7 @@ export default function SmartRouting() {
                 </thead>
                 <tbody>
                   {sortedEntries.map(row => {
-                    const excluded = matchesSmartRoutingExclude(
-                      row.publicId,
-                      smartRouting.exclude ?? []
-                    );
+                    const excluded = matchesSmartRoutingExclude(row.publicId, exclude);
                     const displayLabels = catalogDisplayLabels(row);
                     return (
                       <tr key={row.publicId} className="border-b border-border last:border-0">

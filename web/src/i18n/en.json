@@ -72,8 +72,9 @@
       "p50Latency": "P50 Latency",
       "p90Latency": "P90 Latency",
       "avgTtfb": "Avg TTFB",
+      "avgTtfbTooltip": "From genuinely streamed SSE requests only",
       "outputTps": "Output TPS",
-      "outputTpsTooltip": "From genuinely streamed requests (gen time > 500ms)"
+      "outputTpsTooltip": "From genuinely streamed SSE requests only (gen time > 500ms)"
     },
     "tokens": {
       "title": "Token Usage",
@@ -258,7 +259,23 @@
       "aliasPrefix": "Alias prefix",
       "bareFallback": "Bare model id fallback",
       "firstMatch": "First match (provider order)",
-      "reject": "Reject"
+      "reject": "Reject",
+      "unsaved": "Unsaved changes"
+    },
+    "customRules": {
+      "title": "Custom routing rules",
+      "subtitle": "Matched before the aggregated catalog. Patterns are not listed in /v1/models — clients must send them in the request body. Supports * and ? wildcards; first match wins.",
+      "pattern": "Input pattern",
+      "patternHelp": "Client model id (exact or wildcard)",
+      "targetProvider": "Target provider",
+      "targetModel": "Target model",
+      "enabled": "Enabled",
+      "order": "Order",
+      "add": "Add rule",
+      "empty": "No custom rules. Add a rule to override catalog routing for specific model ids.",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "remove": "Remove"
     },
     "catalog": {
       "title": "Aggregated models",
@@ -534,8 +551,12 @@
         "provider": "Provider",
         "status": "Status",
         "duration": "Duration",
-        "time": "Time"
+        "time": "Time",
+        "ttfb": "TTFB",
+        "tps": "TPS"
       },
+      "ttfbTooltip": "Time to first byte — streamed SSE requests only",
+      "tpsTooltip": "Output tokens per second — streamed SSE requests only",
       "routeType": {
         "block": "Block",
         "pass": "Pass",
@@ -690,7 +711,7 @@
       "enable": "Enable concurrency manager",
       "maxWorkers": "Max workers",
       "maxQueueSize": "Max queue size",
-      "requestTimeout": "Request timeout (s)",
+      "requestTimeout": "Request timeout (s, 0 = no limit)",
       "retry429": {
         "title": "Retry on 429",
         "enable": "Enable 429 retry",
@@ -724,6 +745,7 @@
     "subtitle": "Configure extra service capabilities for providers",
     "webSearch": {
       "title": "Web Search",
+      "description": "For Claude Desktop and Claude Code only. When the client invokes the built-in WebSearch tool, ccrelay intercepts that tool call and runs search using the backend you configure below (Tavily or GLM).",
       "enable": "Enable web search",
       "disabledHint": "Web search is off. Provider assignments and search settings are kept and apply when you turn it on again.",
       "searchBackend": "Search Backend",

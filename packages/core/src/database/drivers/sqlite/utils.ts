@@ -4,7 +4,11 @@
 
 import { TABLE } from "../../schema";
 import type { RequestLog } from "../../types";
-import { utf8StringToBlob } from "../../shared-utils";
+import {
+  LIST_LOG_MODEL_BODY_HEAD_BYTES,
+  LIST_LOG_MODEL_BODY_TAIL_BYTES,
+  utf8StringToBlob,
+} from "../../shared-utils";
 import { decodeBlobFromCliWire } from "./cli-wire";
 
 export type SqlInsertParam = string | number | boolean | Buffer | null;
@@ -52,8 +56,12 @@ export function buildInsertSql(
  * hex(SUBSTR(blob)) yields pipe-safe strings (no JSON brackets), like V1 base64 TEXT.
  */
 export const CLI_BODY_PREVIEW_HEX = `
-  hex(SUBSTR(request_body, 1, 500)) as request_body,
-  hex(SUBSTR(original_request_body, 1, 500)) as original_request_body`;
+  hex(SUBSTR(v.request_body, 1, ${LIST_LOG_MODEL_BODY_HEAD_BYTES})) as request_body,
+  hex(SUBSTR(v.original_request_body, 1, ${LIST_LOG_MODEL_BODY_HEAD_BYTES})) as original_request_body,
+  hex(CASE WHEN length(v.request_body) > ${LIST_LOG_MODEL_BODY_HEAD_BYTES}
+    THEN SUBSTR(v.request_body, -${LIST_LOG_MODEL_BODY_TAIL_BYTES}) ELSE NULL END) as request_body_tail,
+  hex(CASE WHEN length(v.original_request_body) > ${LIST_LOG_MODEL_BODY_HEAD_BYTES}
+    THEN SUBSTR(v.original_request_body, -${LIST_LOG_MODEL_BODY_TAIL_BYTES}) ELSE NULL END) as original_request_body_tail`;
 
 /** Decode hex wire from sqlite3 -json; fallback to legacy base64/B64: wire formats. */
 function decodeHexBlob(value: unknown): Buffer | null {
@@ -80,8 +88,10 @@ function decodeHexBlob(value: unknown): Buffer | null {
 export function normalizeCliRow(row: Record<string, unknown>): Record<string, unknown> {
   const blobCols = [
     "request_body",
+    "request_body_tail",
     "response_body",
     "original_request_body",
+    "original_request_body_tail",
     "original_response_body",
   ] as const;
   const out = { ...row };

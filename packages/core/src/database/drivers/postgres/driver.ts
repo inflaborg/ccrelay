@@ -31,6 +31,7 @@ import {
   dbRowToLogWithoutBody,
   filterProviderBreakdownByTokenUsage,
 } from "../../shared-utils";
+import { STREAM_PERF_SQL_COND } from "../../stream-metrics";
 
 /**
  * PostgreSQL driver implementation
@@ -452,7 +453,7 @@ export class PostgresDriver implements DatabaseDriver {
     const offset = filter.offset || 0;
 
     const rowsResult = await this.pool.query(
-      `SELECT v.*, m.input_tokens, m.output_tokens, m.cache_tokens, m.ttfb
+      `SELECT v.*, m.input_tokens, m.output_tokens, m.cache_tokens, m.ttfb, m.model as metrics_model
        FROM ${TABLE} v
        LEFT JOIN ${METRICS_TABLE} m ON m.client_id = v.client_id
        ${whereClause} ORDER BY v.timestamp DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
@@ -563,7 +564,7 @@ export class PostgresDriver implements DatabaseDriver {
               COALESCE(SUM(input_tokens), 0) as "totalInputTokens",
               COALESCE(SUM(output_tokens), 0) as "totalOutputTokens",
               COALESCE(SUM(cache_tokens), 0) as "totalCacheTokens",
-              AVG(ttfb) as "avgTtfb",
+              AVG(CASE WHEN ${STREAM_PERF_SQL_COND} THEN ttfb END) as "avgTtfb",
               percentile_cont(0.5) WITHIN GROUP (ORDER BY duration) as "p50Duration",
               percentile_cont(0.9) WITHIN GROUP (ORDER BY duration) as "p90Duration"
        FROM ${METRICS_TABLE}
@@ -588,10 +589,9 @@ export class PostgresDriver implements DatabaseDriver {
               COUNT(*) as "filteredCount"
        FROM ${METRICS_TABLE}
        WHERE ${timeFilter}
-         AND ttfb IS NOT NULL
+         AND ${STREAM_PERF_SQL_COND}
          AND output_tokens IS NOT NULL
-         AND output_tokens > 0
-         AND (duration - ttfb) > 500`,
+         AND output_tokens > 0`,
       timeParams
     );
     const tps = (tpsResult.rows[0] as Record<string, string | number | null> | undefined) ?? {};

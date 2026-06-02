@@ -1121,9 +1121,9 @@ function ConcurrencySection({ data }: { data: ConcurrencySettings }) {
         </Field>
         <Field label="Request timeout (s)">
           <NumberInput
-            value={form.requestTimeout ?? 60}
+            value={form.requestTimeout ?? 0}
             onChange={v => setForm(f => ({ ...f, requestTimeout: v }))}
-            min={1}
+            min={0}
           />
         </Field>
       </div>
