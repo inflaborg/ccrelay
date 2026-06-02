@@ -72,8 +72,9 @@
       "p50Latency": "P50 Latency",
       "p90Latency": "P90 Latency",
       "avgTtfb": "Avg TTFB",
+      "avgTtfbTooltip": "From genuinely streamed SSE requests only",
       "outputTps": "Output TPS",
-      "outputTpsTooltip": "From genuinely streamed requests (gen time > 500ms)"
+      "outputTpsTooltip": "From genuinely streamed SSE requests only (gen time > 500ms)"
     },
     "tokens": {
       "title": "Token Usage",
@@ -534,8 +535,12 @@
         "provider": "Provider",
         "status": "Status",
         "duration": "Duration",
-        "time": "Time"
+        "time": "Time",
+        "ttfb": "TTFB",
+        "tps": "TPS"
       },
+      "ttfbTooltip": "Time to first byte — streamed SSE requests only",
+      "tpsTooltip": "Output tokens per second — streamed SSE requests only",
       "routeType": {
         "block": "Block",
         "pass": "Pass",

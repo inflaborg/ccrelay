@@ -42,6 +42,7 @@ import {
   filterProviderBreakdownByTokenUsage,
 } from "../../shared-utils";
 import { buildInsertSql } from "./utils";
+import { STREAM_PERF_SQL_COND } from "../../stream-metrics";
 
 export class SqliteNativeDriver implements DatabaseDriver {
   private readonly config: SqliteDriverConfig;
@@ -402,7 +403,7 @@ export class SqliteNativeDriver implements DatabaseDriver {
                 COALESCE(SUM(input_tokens), 0) as totalInputTokens,
                 COALESCE(SUM(output_tokens), 0) as totalOutputTokens,
                 COALESCE(SUM(cache_tokens), 0) as totalCacheTokens,
-                AVG(ttfb) as avgTtfb
+                AVG(CASE WHEN ${STREAM_PERF_SQL_COND} THEN ttfb END) as avgTtfb
          FROM ${METRICS_TABLE}
          WHERE ${timeFilter}`
       )
@@ -420,10 +421,9 @@ export class SqliteNativeDriver implements DatabaseDriver {
                 COUNT(*) as filteredCount
          FROM ${METRICS_TABLE}
          WHERE ${timeFilter}
-           AND ttfb IS NOT NULL
+           AND ${STREAM_PERF_SQL_COND}
            AND output_tokens IS NOT NULL
-           AND output_tokens > 0
-           AND (duration - ttfb) > 500`
+           AND output_tokens > 0`
       )
       .get(...timeParams) as Record<string, unknown>;
 

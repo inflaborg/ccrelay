@@ -3,8 +3,12 @@
  */
 
 import { METRICS_TABLE } from "./schema";
+import { STREAM_PERF_SQL_COND } from "./stream-metrics";
 import type { RequestLog } from "./types";
 import { isTokenUsageRequestPath } from "../converter/paths";
+
+/** Re-export for drivers building stats queries. */
+export { STREAM_PERF_SQL_COND };
 
 export function shouldTrackMetrics(log: Pick<RequestLog, "method" | "path">): boolean {
   return isTokenUsageRequestPath(log.method, log.path);

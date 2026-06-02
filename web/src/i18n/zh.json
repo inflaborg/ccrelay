@@ -72,8 +72,9 @@
       "p50Latency": "P50 延迟",
       "p90Latency": "P90 延迟",
       "avgTtfb": "平均首字节时间",
+      "avgTtfbTooltip": "仅统计真实 SSE 流式请求",
       "outputTps": "输出 TPS",
-      "outputTpsTooltip": "仅统计真实流式请求（生成时间 > 500ms）"
+      "outputTpsTooltip": "仅统计真实 SSE 流式请求（生成时间 > 500ms）"
     },
     "tokens": {
       "title": "Token 用量",
@@ -533,8 +534,12 @@
         "provider": "提供商",
         "status": "状态",
         "duration": "耗时",
-        "time": "时间"
+        "time": "时间",
+        "ttfb": "TTFB",
+        "tps": "TPS"
       },
+      "ttfbTooltip": "首字节时间 — 仅流式 SSE 请求",
+      "tpsTooltip": "输出 token 速率 — 仅流式 SSE 请求",
       "routeType": {
         "block": "拦截",
         "pass": "透传",

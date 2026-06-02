@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+**UI**
+
+- Request log **TTFB** and **TPS**, plus dashboard **Avg TTFB** and **Output TPS**, apply only to genuine SSE streaming; non-streaming and synthetic-stream responses show `-` instead of misleading values. Short streamed replies (e.g. a few tokens) now show TTFB/TPS in the log list when the proxy recorded stream metrics.
+
 **Config**
 
 - Default `concurrency.requestTimeout` is now `0` (no queue wait timeout). Configs below `configVersion` `0.2.5` are auto-upgraded on startup; installs that still had the previous default of `60` seconds are migrated to `0`. Set `requestTimeout` explicitly if you need a queue limit.

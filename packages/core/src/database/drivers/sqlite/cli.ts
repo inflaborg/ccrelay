@@ -47,6 +47,7 @@ import {
   type SqlInsertParam,
 } from "./utils";
 import { sqlLiteralForBlob } from "./cli-wire";
+import { STREAM_PERF_SQL_COND } from "../../stream-metrics";
 
 /** Thrown when the `sqlite3` executable is absent; callers may degrade to disabled log storage. */
 export const SQLITE_CLI_NOT_FOUND_MESSAGE = "sqlite3 CLI not found. Please install SQLite3.";
@@ -1336,7 +1337,7 @@ export class SqliteCliDriver implements DatabaseDriver {
               COALESCE(SUM(input_tokens), 0) as totalInputTokens,
               COALESCE(SUM(output_tokens), 0) as totalOutputTokens,
               COALESCE(SUM(cache_tokens), 0) as totalCacheTokens,
-              AVG(ttfb) as avgTtfb
+              AVG(CASE WHEN ${STREAM_PERF_SQL_COND} THEN ttfb END) as avgTtfb
        FROM ${METRICS_TABLE}
        WHERE ${timeFilter}`,
       timeParams
@@ -1354,10 +1355,9 @@ export class SqliteCliDriver implements DatabaseDriver {
               COUNT(*) as filteredCount
        FROM ${METRICS_TABLE}
        WHERE ${timeFilter}
-         AND ttfb IS NOT NULL
+         AND ${STREAM_PERF_SQL_COND}
          AND output_tokens IS NOT NULL
-         AND output_tokens > 0
-         AND (duration - ttfb) > 500`,
+         AND output_tokens > 0`,
       timeParams
     );
     const tps = tpsRows[0] ?? {};
