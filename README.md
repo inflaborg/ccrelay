@@ -504,7 +504,7 @@ Use the **Smart Routing** tab for settings only (alias prefix, bare model id fal
 
 | Setting           | Default                                | Description                                                                                                                    |
 | ----------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `configVersion`   | `"0.2.0"`                              | Config schema version. Legacy configs auto-migrated.                                                                           |
+| `configVersion`   | `"0.2.5"`                              | Config schema version. Older configs auto-upgraded on startup.                                                                 |
 | `routing.forward` | `[{path, provider}]`                   | Forward rules — first match wins. `provider: "auto"` = current provider. Unmatched → 404.                                      |
 | `routing.block`   | `[{path, response, code, condition?}]` | Block rules — return custom response. Optional `condition.providers` (allowlist) and `condition.providerNot` (exclusion list). |
 
@@ -515,7 +515,7 @@ Use the **Smart Routing** tab for settings only (alias prefix, bare model id fal
 | `concurrency.enabled`        | `true`  | Enable request queue                     |
 | `concurrency.maxWorkers`     | `3`     | Max concurrent requests                  |
 | `concurrency.maxQueueSize`   | `100`   | Max queued requests (0 = unlimited)      |
-| `concurrency.requestTimeout` | `60`    | Queue timeout in seconds (0 = unlimited) |
+| `concurrency.requestTimeout` | `0`     | Queue timeout in seconds (0 = unlimited) |
 | `concurrency.routes`         | `[]`    | Per-route queue config (by `pattern`)    |
 
 ### Logging
@@ -599,7 +599,7 @@ Edit the same fields from the dashboard **Capabilities** tab.
 ### Full Example
 
 ```yaml
-configVersion: "0.2.0"
+configVersion: "0.2.5"
 
 server:
   port: 7575
@@ -665,7 +665,7 @@ concurrency:
   enabled: true
   maxWorkers: 3
   maxQueueSize: 100
-  requestTimeout: 60
+  requestTimeout: 0
 
 logging:
   enabled: true

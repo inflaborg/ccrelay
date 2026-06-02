@@ -1,6 +1,55 @@
+import semver from "semver";
 import type { BlockPattern, BlockRule, ForwardRule, RoutingConfigInput } from "../types";
-import { getDefaultConfig } from "./defaults";
+import {
+  CONFIG_VERSION,
+  DEFAULT_CONCURRENCY_REQUEST_TIMEOUT,
+  getDefaultConfig,
+  LEGACY_CONCURRENCY_REQUEST_TIMEOUT,
+} from "./defaults";
 import { mergeBlockRuleLists, mergeForwardRuleLists } from "./merge";
+
+const CONFIG_UPGRADE_TARGET = CONFIG_VERSION;
+
+/** True when the on-disk config should be upgraded to {@link CONFIG_VERSION}. */
+export function needsConfigUpgrade(fileVersion: string | null): boolean {
+  if (!fileVersion) {
+    return true;
+  }
+  const coerced = semver.coerce(fileVersion);
+  return !coerced || semver.lt(coerced, CONFIG_UPGRADE_TARGET);
+}
+
+/**
+ * If `concurrency.requestTimeout` is still the legacy default (60), set it to 0 (unlimited).
+ * Mutates `rawFile` in place. Returns whether the timeout field changed.
+ */
+export function applyConcurrencyRequestTimeoutMigration(rawFile: Record<string, unknown>): boolean {
+  const concurrency = rawFile.concurrency;
+  if (!concurrency || typeof concurrency !== "object" || Array.isArray(concurrency)) {
+    return false;
+  }
+  const c = concurrency as Record<string, unknown>;
+  if (c.requestTimeout === LEGACY_CONCURRENCY_REQUEST_TIMEOUT) {
+    c.requestTimeout = DEFAULT_CONCURRENCY_REQUEST_TIMEOUT;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Bump `configVersion` to {@link CONFIG_VERSION} and migrate legacy concurrency timeout when applicable.
+ */
+export function prepareConfigUpgrade025(
+  rawFile: Record<string, unknown>,
+  fileVersion: string | null
+): { changed: boolean; concurrencyTimeoutMigrated: boolean } {
+  if (!needsConfigUpgrade(fileVersion)) {
+    return { changed: false, concurrencyTimeoutMigrated: false };
+  }
+  const concurrencyTimeoutMigrated = applyConcurrencyRequestTimeoutMigration(rawFile);
+  rawFile.configVersion = CONFIG_VERSION;
+  return { changed: true, concurrencyTimeoutMigrated };
+}
 
 /**
  * Legacy config (no `configVersion` in YAML): derive unified forward/block rules from

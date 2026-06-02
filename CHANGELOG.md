@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+**Config**
+
+- Default `concurrency.requestTimeout` is now `0` (no queue wait timeout). Configs below `configVersion` `0.2.5` are auto-upgraded on startup; installs that still had the previous default of `60` seconds are migrated to `0`. Set `requestTimeout` explicitly if you need a queue limit.
+
 ### Fixed
 
 **UI**

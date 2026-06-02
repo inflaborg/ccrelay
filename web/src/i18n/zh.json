@@ -689,7 +689,7 @@
       "enable": "启用并发管理器",
       "maxWorkers": "最大并发数",
       "maxQueueSize": "最大队列长度",
-      "requestTimeout": "请求超时（秒）",
+      "requestTimeout": "请求超时（秒，0 = 不超时）",
       "retry429": {
         "title": "429 重试",
         "enable": "启用 429 重试",

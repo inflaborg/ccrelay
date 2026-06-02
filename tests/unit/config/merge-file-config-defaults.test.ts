@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { getDefaultConfig } from "@/config/defaults";
 import { mergeFileConfigWithDefaults, getDefaultRoutingSettings } from "@/config/index";
 import { FileConfigSchema, type FileConfigInput } from "@/types";
 
@@ -6,7 +7,7 @@ describe("mergeFileConfigWithDefaults", () => {
   const mkDefaults = (): FileConfigInput => {
     const routing = getDefaultRoutingSettings();
     return FileConfigSchema.parse({
-      configVersion: "0.2.0",
+      configVersion: "0.2.5",
       server: { port: 7575, host: "127.0.0.1", autoStart: true },
       defaultProvider: "official",
       providers: {
@@ -125,6 +126,14 @@ describe("mergeFileConfigWithDefaults", () => {
     expect(merged.providers?.official?.baseUrl).toBe("https://api.default.com");
     expect(merged.providers?.official?.modelMap?.[0]).toEqual({ pattern: "x", model: "y" });
     expect(merged.providers?.extra?.name).toBe("Extra");
+  });
+
+  it("uses default requestTimeout 0 when user omits it", () => {
+    const defaults = getDefaultConfig();
+    const merged = mergeFileConfigWithDefaults(defaults, {
+      concurrency: { enabled: true, maxWorkers: 3 },
+    });
+    expect(merged.concurrency?.requestTimeout).toBe(0);
   });
 
   it("deep-merges smartRouting from user config", () => {

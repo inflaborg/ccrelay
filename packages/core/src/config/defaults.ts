@@ -1,7 +1,13 @@
 import * as yaml from "js-yaml";
 import { FileConfigSchema, type BlockRule, type FileConfigInput, type ForwardRule } from "../types";
 
-export const CONFIG_VERSION = "0.2.0";
+export const CONFIG_VERSION = "0.2.5";
+
+/** Previous bundled default for `concurrency.requestTimeout` (seconds). */
+export const LEGACY_CONCURRENCY_REQUEST_TIMEOUT = 60;
+
+/** Current bundled default: 0 = no queue wait timeout. */
+export const DEFAULT_CONCURRENCY_REQUEST_TIMEOUT = 0;
 
 // Default config with comments template
 export const DEFAULT_CONFIG_YAML = `# CCRelay Configuration
@@ -144,7 +150,7 @@ concurrency:
   # Request timeout: Maximum wait time in queue (seconds)
   # Requests exceeding this will return 503
   # 0 or not set = unlimited
-  requestTimeout: 60
+  requestTimeout: 0
 
   # 429 Retry configuration
   retry429:
