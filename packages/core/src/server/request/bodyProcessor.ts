@@ -13,6 +13,7 @@ import {
   isOpenAIResponsesRequest,
   mapAnthropicWirePathToOpenAiUpstream,
   mapOpenAiWirePathToAnthropicUpstream,
+  stripBillingHeaderFromAnthropicBody,
   type ResponsesRequestEcho,
 } from "../../converter";
 import type { OpenAIMessage } from "../../converter/adapters/anthropic-to-openai-chat-request";
@@ -198,6 +199,10 @@ export class BodyProcessor {
 
     const clientWireModel = extractClientWireModel(rawBody);
     let body = applyModelMapping(rawBody, routing.provider);
+
+    if (clientSurface === "anthropic") {
+      body = stripBillingHeaderFromAnthropicBody(body);
+    }
 
     let upstreamResponseFormat: string | undefined;
 
