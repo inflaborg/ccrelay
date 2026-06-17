@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+**UI**
+
+- Token usage and performance metrics on the Dashboard are always recorded when the local database is available, even if request/response body logging is disabled. The logging toggle now only controls the Logs tab and stored request bodies.
+- When the local database cannot be opened (for example, sqlite3 CLI is missing in the VS Code extension), the Dashboard shows a clear unavailable state instead of empty statistics.
+
+**Logging database**
+
+- Clearing all logs also clears token metrics, so dashboard statistics stay consistent with log storage.
+
 ## [0.2.6] - 2026-06-16 (pre-release)
 
 Pre-release line for 0.2.6.

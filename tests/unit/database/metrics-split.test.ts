@@ -72,9 +72,9 @@ describe.skipIf(!nativeForNode)("metrics split (native driver)", () => {
     await driver.close();
   });
 
-  it("completion updates metrics tokens; clear v2 leaves metrics", async () => {
+  it("completion updates metrics tokens; clearAllLogs clears metrics too", async () => {
     const driver = new SqliteNativeDriver({ type: "sqlite", path: dbPath });
-    await driver.initialize();
+    await driver.initialize({ logsEnabled: true });
 
     const clientId = "c-complete";
     driver.insertLogPending({
@@ -102,7 +102,59 @@ describe.skipIf(!nativeForNode)("metrics split (native driver)", () => {
     await driver.clearAllLogs();
 
     const statsAfter = await driver.getStats();
-    expect(statsAfter.totalInputTokens).toBe(10);
+    expect(statsAfter.totalInputTokens).toBe(0);
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/naming-convention
+    const BetterSqlite3 = require("better-sqlite3") as typeof import("better-sqlite3");
+    const db = new BetterSqlite3(dbPath);
+    const v2Count = db.prepare(`SELECT COUNT(*) as c FROM ${TABLE}`).get() as { c: number };
+    const mCount = db.prepare(`SELECT COUNT(*) as c FROM ${METRICS_TABLE}`).get() as { c: number };
+    expect(v2Count.c).toBe(0);
+    expect(mCount.c).toBe(0);
+    db.close();
+
+    await driver.close();
+  });
+
+  it("logsEnabled false writes metrics only (no request_logs_v2 rows)", async () => {
+    const driver = new SqliteNativeDriver({ type: "sqlite", path: dbPath });
+    await driver.initialize({ logsEnabled: false });
+
+    const clientId = "metrics-only";
+    driver.insertLogPending({
+      timestamp: Date.now(),
+      providerId: "p1",
+      providerName: "P",
+      method: "POST",
+      path: "/v1/messages",
+      duration: 0,
+      success: false,
+      clientId,
+      model: "claude-3",
+      requestBody: '{"model":"claude-3"}',
+    });
+
+    driver.updateLogCompleted(
+      clientId,
+      200,
+      '{"usage":{"input_tokens":100,"output_tokens":50}}',
+      80,
+      true,
+      undefined,
+      undefined,
+      100,
+      50,
+      0,
+      30
+    );
+
+    const { logs, total } = await driver.queryLogs({ limit: 10 });
+    expect(total).toBe(0);
+    expect(logs).toHaveLength(0);
+
+    const stats = await driver.getStats();
+    expect(stats.totalInputTokens).toBe(100);
+    expect(stats.totalOutputTokens).toBe(50);
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/naming-convention
     const BetterSqlite3 = require("better-sqlite3") as typeof import("better-sqlite3");

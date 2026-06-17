@@ -37,6 +37,7 @@ export interface ServerStatus {
   providerMode: "inject" | "passthrough" | null;
   port: number;
   host: string;
+  dbAvailable?: boolean;
 }
 
 export interface SwitchRequest {
@@ -181,6 +182,7 @@ export interface ProviderBreakdownRow {
 }
 
 export interface LogStats {
+  dbAvailable?: boolean;
   totalLogs: number;
   successCount: number;
   errorCount: number;

@@ -130,6 +130,8 @@ interface ExecutionContext {
   streamTotalBytes: number;
   firstChunkLogged: boolean;
   responseChunks: Buffer[];
+  /** When true, mirror upstream/client response bytes for metrics or body logging. */
+  captureResponse: boolean;
   originalResponseBody?: string;
   clientDisconnected: boolean;
   /**
@@ -181,7 +183,7 @@ export class ProxyExecutor {
     this.modelCatalog = catalog;
   }
 
-  /** Write converted SSE to the client and mirror into `ctx.responseChunks` when DB logging is on. */
+  /** Write converted SSE to the client and mirror into `ctx.responseChunks` when capture is on. */
   private writeClientStreamForLog(
     clientRes: http.ServerResponse,
     chunk: string | Buffer,
@@ -189,13 +191,17 @@ export class ProxyExecutor {
   ): void {
     const buf = typeof chunk === "string" ? Buffer.from(chunk, "utf-8") : chunk;
     clientRes.write(buf);
-    if (this.responseLogger.enabled) {
+    if (ctx.captureResponse) {
       ctx.responseChunks.push(buf);
     }
   }
 
-  private recordUpstreamChunkForLog(chunk: Buffer, upstreamLog: Buffer[]): void {
-    if (this.responseLogger.enabled) {
+  private recordUpstreamChunkForLog(
+    chunk: Buffer,
+    upstreamLog: Buffer[],
+    ctx: ExecutionContext
+  ): void {
+    if (ctx.captureResponse) {
       upstreamLog.push(chunk);
     }
   }
@@ -486,6 +492,7 @@ export class ProxyExecutor {
       streamTotalBytes: 0,
       firstChunkLogged: false,
       responseChunks: [],
+      captureResponse: this.responseLogger.shouldCaptureResponse(method, task.requestPath),
       originalResponseBody: undefined,
       clientDisconnected: false,
     };
@@ -898,7 +905,7 @@ export class ProxyExecutor {
       if (!ctx.upstreamTerminalSeen && chunkContainsTerminalMarker(chunk)) {
         ctx.upstreamTerminalSeen = true;
       }
-      this.recordUpstreamChunkForLog(chunk, upstreamLog);
+      this.recordUpstreamChunkForLog(chunk, upstreamLog, ctx);
       sseBuffer.push(chunk);
     });
 
@@ -1006,7 +1013,7 @@ export class ProxyExecutor {
       if (!ctx.upstreamTerminalSeen && chunkContainsTerminalMarker(chunk)) {
         ctx.upstreamTerminalSeen = true;
       }
-      this.recordUpstreamChunkForLog(chunk, upstreamLog);
+      this.recordUpstreamChunkForLog(chunk, upstreamLog, ctx);
       sseBuffer.push(chunk);
     });
 
@@ -1101,7 +1108,7 @@ export class ProxyExecutor {
         ctx.upstreamTerminalSeen = true;
       }
       upstreamBody += chunk.toString();
-      if (this.responseLogger.enabled) {
+      if (ctx.captureResponse) {
         ctx.responseChunks.push(chunk);
       }
     });
@@ -1141,7 +1148,7 @@ export class ProxyExecutor {
       );
 
       ctx.originalResponseBody = upstreamBody;
-      if (this.responseLogger.enabled) {
+      if (ctx.captureResponse) {
         ctx.responseChunks = [Buffer.from(sseBody, "utf-8")];
       }
 
@@ -1666,7 +1673,7 @@ export class ProxyExecutor {
       if (!ctx.upstreamTerminalSeen && chunkContainsTerminalMarker(chunk)) {
         ctx.upstreamTerminalSeen = true;
       }
-      this.recordUpstreamChunkForLog(chunk, upstreamLog);
+      this.recordUpstreamChunkForLog(chunk, upstreamLog, ctx);
       if (chunkCount === 1) {
         firstChunkTime = Date.now() - startTime;
         log.debug(`[Chat->Responses SSE] First chunk: ${chunk.length} bytes`);
@@ -1883,7 +1890,7 @@ export class ProxyExecutor {
         ctx.upstreamTerminalSeen = true;
       }
       chunks.push(chunk);
-      if (this.responseLogger.enabled) {
+      if (ctx.captureResponse) {
         ctx.responseChunks.push(chunk);
       }
     });
@@ -1943,7 +1950,7 @@ export class ProxyExecutor {
         rows = applyAnthropicSseRowsPlatformTransform(rows, provider.baseUrl);
         const outgoing = serializeAnthropicSseRows(rows);
 
-        if (this.responseLogger.enabled) {
+        if (ctx.captureResponse) {
           ctx.responseChunks.length = 0;
           if (outgoing.length > 0) {
             ctx.responseChunks.push(Buffer.from(outgoing, "utf-8"));
@@ -1957,7 +1964,7 @@ export class ProxyExecutor {
         log.warn(
           `[${clientId}] Buffered Anthropic SSE transform failed (${provider.id}): ${errMsg}; replaying raw upstream stream`
         );
-        if (this.responseLogger.enabled) {
+        if (ctx.captureResponse) {
           ctx.responseChunks.length = 0;
           for (const c of chunks) {
             ctx.responseChunks.push(c);
@@ -2054,7 +2061,7 @@ export class ProxyExecutor {
         );
       }
 
-      if (this.responseLogger.enabled) {
+      if (ctx.captureResponse) {
         ctx.responseChunks.push(chunk);
       }
     });

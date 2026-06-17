@@ -89,10 +89,17 @@ void app.whenReady().then(async () => {
   const configManager = new ConfigManager();
   setLogDatabaseDriverConfigResolver(() => {
     const base = loggingDatabaseConfigToDriver(configManager.configValue.logging.database);
+    if (base?.type === "postgres") {
+      return base;
+    }
     if (base?.type === "sqlite") {
       return { ...base, driver: base.driver === "cli" ? "cli" : "native" };
     }
-    return base;
+    return {
+      type: "sqlite",
+      path: path.join(app.getPath("home"), ".ccrelay", "logs.db"),
+      driver: "native",
+    };
   });
 
   const leaderElection = new LeaderElection(configManager.port, configManager.host, () =>

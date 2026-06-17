@@ -143,6 +143,8 @@ export type LogDbMigrationChoice = "migrate" | "discard";
 
 export interface DatabaseInitializeOptions {
   migrationChoice?: LogDbMigrationChoice;
+  /** When false, only request_metrics rows are written (no request body logging). */
+  logsEnabled?: boolean;
 }
 
 /**
@@ -237,6 +239,17 @@ export interface DatabaseDriver {
    * Check if the driver is enabled and ready
    */
   readonly enabled: boolean;
+
+  /**
+   * Whether request/response body logging to request_logs_v2 is enabled.
+   * Metrics are always written when the driver is enabled.
+   */
+  readonly logsEnabled: boolean;
+
+  /**
+   * Toggle body logging without closing the database connection.
+   */
+  setLogsEnabled(enabled: boolean): void;
 
   /**
    * Force flush any pending writes

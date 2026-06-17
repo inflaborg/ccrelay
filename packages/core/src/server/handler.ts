@@ -197,17 +197,17 @@ export class ProxyServer {
   }
 
   /**
-   * Open persisted logs only on the leader (before HTTP accepts proxy traffic).
+   * Open persisted storage on the leader (metrics always; body logs when logging.enabled).
    */
   private async ensureLeaderLogStorage(): Promise<void> {
-    const enabled = this.config.enableLogStorage;
+    const logsEnabled = this.config.enableLogStorage;
     this.log.info(
-      `[Server:${this.instanceId}] Initializing log database (leader). config.enableLogStorage=${enabled}`
+      `[Server:${this.instanceId}] Initializing database (leader). logging.enabled=${logsEnabled}`
     );
     const dbStart = Date.now();
-    await this.database.initialize(enabled);
+    await this.database.initialize(true, logsEnabled);
     this.log.info(
-      `[Server:${this.instanceId}] Database initialized in ${Date.now() - dbStart}ms. enabled=${this.database.enabled}`
+      `[Server:${this.instanceId}] Database initialized in ${Date.now() - dbStart}ms. available=${this.database.enabled}, logsEnabled=${this.database.logsEnabled}`
     );
   }
 
@@ -409,6 +409,7 @@ export class ProxyServer {
    * - Leader: Broadcast to Followers so they reload local config
    */
   private handleConfigChanged(): void {
+    this.database.setLogsEnabled(this.config.enableLogStorage);
     if (this.wsBroadcaster) {
       this.wsBroadcaster.broadcastConfigChanged();
     }

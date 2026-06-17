@@ -8,6 +8,7 @@
 import * as zlib from "zlib";
 import { ScopedLogger } from "../utils/logger";
 import type { LogDatabase } from "../database";
+import { isTokenUsageRequestPath } from "../converter/paths";
 
 export interface LogResponseTokenOverrides {
   inputTokens?: number;
@@ -117,10 +118,30 @@ export class ResponseLogger {
   constructor(private database: LogDatabase) {}
 
   /**
-   * Check if database logging is enabled
+   * Check if the database driver is available (metrics can be persisted).
    */
   get enabled(): boolean {
     return this.database.enabled;
+  }
+
+  /**
+   * Whether request/response body logging is enabled.
+   */
+  get logsEnabled(): boolean {
+    return this.database.logsEnabled;
+  }
+
+  /**
+   * Whether to capture response chunks for DB writes (body logs or token metrics).
+   */
+  shouldCaptureResponse(method: string, path: string): boolean {
+    if (!this.database.enabled) {
+      return false;
+    }
+    if (this.database.logsEnabled) {
+      return true;
+    }
+    return isTokenUsageRequestPath(method, path);
   }
 
   /**

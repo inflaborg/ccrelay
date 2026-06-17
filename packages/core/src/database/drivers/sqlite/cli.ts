@@ -780,6 +780,7 @@ class WriteQueue {
   private readonly batchSize = 50;
   private readonly flushInterval = 1000;
   private isEnabled = false;
+  private logsEnabled = false;
 
   setConnection(conn: CliConnection, failedWritesPath: string): void {
     this.conn = conn;
@@ -791,6 +792,10 @@ class WriteQueue {
     if (!enabled) {
       this.clear();
     }
+  }
+
+  setLogsEnabled(enabled: boolean): void {
+    this.logsEnabled = enabled;
   }
 
   add(log: RequestLog): void {
@@ -860,8 +865,10 @@ class WriteQueue {
     }
     const stmts: string[] = [];
     for (const log of logs) {
-      const { sql, params } = buildInsertSql(log);
-      stmts.push(interpolateSql(sql, params));
+      if (this.logsEnabled) {
+        const { sql, params } = buildInsertSql(log);
+        stmts.push(interpolateSql(sql, params));
+      }
       if (shouldTrackMetrics(log)) {
         const metrics = buildMetricsCompletedInsertSql(log);
         stmts.push(interpolateSql(metrics.sql, metrics.params));
@@ -936,6 +943,7 @@ export class SqliteCliDriver implements DatabaseDriver {
 
   private readonly writeQueue: WriteQueue = new WriteQueue();
   private isEnabled = false;
+  private _logsEnabled = false;
 
   constructor(config: SqliteDriverConfig) {
     this.config = config;
@@ -986,6 +994,8 @@ export class SqliteCliDriver implements DatabaseDriver {
     await this.writeQueue.replayFailedWrites();
 
     this.isEnabled = true;
+    this._logsEnabled = options?.logsEnabled ?? false;
+    this.writeQueue.setLogsEnabled(this._logsEnabled);
     this.writeQueue.setEnabled(true);
 
     this.writeConn.startHealthCheck();
@@ -1051,8 +1061,11 @@ export class SqliteCliDriver implements DatabaseDriver {
       return;
     }
 
-    const { sql, params } = buildInsertSql(log, "pending");
-    const pending = this.writeConn.exec(sql, params);
+    let pending: Promise<void> = Promise.resolve();
+    if (this._logsEnabled) {
+      const { sql, params } = buildInsertSql(log, "pending");
+      pending = this.writeConn.exec(sql, params);
+    }
     let metrics: Promise<void> = Promise.resolve();
     if (shouldTrackMetrics(log)) {
       const m = buildMetricsPendingInsertSql(log);
@@ -1080,9 +1093,11 @@ export class SqliteCliDriver implements DatabaseDriver {
       return;
     }
 
-    Promise.all([
-      this.writeConn.exec(
-        `UPDATE ${TABLE}
+    const updates: Promise<void>[] = [];
+    if (this._logsEnabled) {
+      updates.push(
+        this.writeConn.exec(
+          `UPDATE ${TABLE}
        SET status_code = ?,
            response_body = ?,
            original_response_body = ?,
@@ -1091,16 +1106,19 @@ export class SqliteCliDriver implements DatabaseDriver {
            error_message = ?,
            status = 'completed'
        WHERE client_id = ?`,
-        [
-          statusCode,
-          utf8StringToBlob(responseBody),
-          utf8StringToBlob(originalResponseBody),
-          duration,
-          success ? 1 : 0,
-          errorMessage ?? null,
-          clientId,
-        ]
-      ),
+          [
+            statusCode,
+            utf8StringToBlob(responseBody),
+            utf8StringToBlob(originalResponseBody),
+            duration,
+            success ? 1 : 0,
+            errorMessage ?? null,
+            clientId,
+          ]
+        )
+      );
+    }
+    updates.push(
       this.writeConn.exec(SQLITE_UPDATE_METRICS_COMPLETED, [
         inputTokens ?? null,
         outputTokens ?? null,
@@ -1110,8 +1128,9 @@ export class SqliteCliDriver implements DatabaseDriver {
         success ? 1 : 0,
         statusCode,
         clientId,
-      ]),
-    ]).catch(err => {
+      ])
+    );
+    Promise.all(updates).catch(err => {
       this.log.error("[SqliteCli] Failed to update log:", err);
     });
   }
@@ -1127,19 +1146,25 @@ export class SqliteCliDriver implements DatabaseDriver {
       return;
     }
 
-    Promise.all([
-      this.writeConn.exec(
-        `UPDATE ${TABLE}
+    const updates: Promise<void>[] = [];
+    if (this._logsEnabled) {
+      updates.push(
+        this.writeConn.exec(
+          `UPDATE ${TABLE}
        SET status_code = ?,
            duration = ?,
            success = ?,
            error_message = ?,
            status = ?
        WHERE client_id = ?`,
-        [statusCode, duration, 0, errorMessage ?? null, status, clientId]
-      ),
-      this.writeConn.exec(SQLITE_UPDATE_METRICS_STATUS, [duration, 0, statusCode, clientId]),
-    ]).catch(err => {
+          [statusCode, duration, 0, errorMessage ?? null, status, clientId]
+        )
+      );
+    }
+    updates.push(
+      this.writeConn.exec(SQLITE_UPDATE_METRICS_STATUS, [duration, 0, statusCode, clientId])
+    );
+    Promise.all(updates).catch(err => {
       this.log.error("[SqliteCli] Failed to update log status:", err);
     });
   }
@@ -1151,8 +1176,10 @@ export class SqliteCliDriver implements DatabaseDriver {
 
     const stmts: string[] = [];
     for (const log of logs) {
-      const { sql, params } = buildInsertSql(log);
-      stmts.push(interpolateSql(sql, params));
+      if (this._logsEnabled) {
+        const { sql, params } = buildInsertSql(log);
+        stmts.push(interpolateSql(sql, params));
+      }
       if (shouldTrackMetrics(log)) {
         const metrics = buildMetricsCompletedInsertSql(log);
         stmts.push(interpolateSql(metrics.sql, metrics.params));
@@ -1176,6 +1203,7 @@ export class SqliteCliDriver implements DatabaseDriver {
       return;
     }
     await this.writeConn.exec(`DELETE FROM ${TABLE}`);
+    await this.writeConn.exec(`DELETE FROM ${METRICS_TABLE}`);
     await this.writeConn.exec("VACUUM");
   }
 
@@ -1193,6 +1221,7 @@ export class SqliteCliDriver implements DatabaseDriver {
         SELECT id FROM ${TABLE} ORDER BY timestamp DESC LIMIT ${MAX_LOG_ROWS}
       )
     `);
+    await this.writeConn.exec(`DELETE FROM ${METRICS_TABLE} WHERE timestamp < ?`, [cutoff]);
   }
 
   // ---- Read operations (readConn) ----------------------------------------
@@ -1440,6 +1469,15 @@ export class SqliteCliDriver implements DatabaseDriver {
 
   get enabled(): boolean {
     return this.isEnabled && this.writeConn?.started === true;
+  }
+
+  get logsEnabled(): boolean {
+    return this._logsEnabled;
+  }
+
+  setLogsEnabled(enabled: boolean): void {
+    this._logsEnabled = enabled;
+    this.writeQueue.setLogsEnabled(enabled);
   }
 
   forceFlush(): void {

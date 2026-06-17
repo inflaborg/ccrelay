@@ -491,6 +491,7 @@ export interface RouterStatus {
   providerMode?: ProviderMode;
   port?: number;
   host?: string;
+  dbAvailable?: boolean;
 }
 
 export interface ProvidersResponse {

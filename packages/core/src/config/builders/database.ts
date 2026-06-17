@@ -3,7 +3,7 @@ import type { DatabaseConfig, LoggingConfigInput } from "../../types";
 export function buildDatabaseConfig(
   logging: LoggingConfigInput | undefined
 ): DatabaseConfig | undefined {
-  if (!logging?.enabled || !logging.database) {
+  if (!logging?.database) {
     return undefined;
   }
   const db = logging.database;

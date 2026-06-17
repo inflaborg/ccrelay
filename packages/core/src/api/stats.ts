@@ -27,6 +27,7 @@ export async function handleStats(
 
   if (!db.enabled) {
     sendJson(res, 200, {
+      dbAvailable: false,
       totalLogs: 0,
       successCount: 0,
       errorCount: 0,
@@ -61,6 +62,7 @@ export async function handleStats(
 
   const stats = await db.getStats(since ? { since } : undefined);
   sendJson(res, 200, {
+    dbAvailable: true,
     ...stats,
     providerBreakdown: filterProviderBreakdownByTokenUsage(
       omitVirtualProviderFromBreakdown(stats.providerBreakdown)

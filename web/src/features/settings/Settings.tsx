@@ -1182,8 +1182,12 @@ function LoggingSection({ data }: { data: LoggingSettings }) {
       <Toggle
         checked={form.enabled}
         onChange={v => setForm(f => ({ ...f, enabled: v }))}
-        label="Enable request log storage"
+        label="Enable request/response body logging"
       />
+      <p className="text-[11px] text-muted-foreground -mt-1">
+        Token usage and performance metrics are always recorded when the database is available. This
+        toggle only controls storing full request and response bodies in the Logs tab.
+      </p>
       <Field label="Database type">
         <SelectField
           value={db.type}

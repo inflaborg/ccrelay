@@ -41,6 +41,7 @@ export class PostgresDriver implements DatabaseDriver {
   private readonly config: PostgresDriverConfig;
   private readonly log = Logger.getInstance();
   private isInitialized = false;
+  private _logsEnabled = false;
 
   constructor(config: PostgresDriverConfig) {
     this.config = config;
@@ -81,6 +82,7 @@ export class PostgresDriver implements DatabaseDriver {
       dbLabel: `${this.config.host}:${this.config.port}/${this.config.database}`,
     });
     this.isInitialized = true;
+    this._logsEnabled = options?.logsEnabled ?? false;
 
     this.log.info("[PostgresDriver] Connected successfully");
 
@@ -122,32 +124,34 @@ export class PostgresDriver implements DatabaseDriver {
       return;
     }
 
-    await this.pool.query(
-      `INSERT INTO ${TABLE} (
+    if (this._logsEnabled) {
+      await this.pool.query(
+        `INSERT INTO ${TABLE} (
         timestamp, provider_id, provider_name, method, path, target_url,
         request_body, response_body, original_request_body, original_response_body,
         status_code, duration, success, error_message, client_id, status, route_type
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
-      [
-        log.timestamp,
-        log.providerId,
-        log.providerName,
-        log.method,
-        log.path,
-        log.targetUrl ?? null,
-        utf8StringToBlob(log.requestBody),
-        utf8StringToBlob(log.responseBody),
-        utf8StringToBlob(log.originalRequestBody),
-        utf8StringToBlob(log.originalResponseBody),
-        log.statusCode ?? null,
-        log.duration,
-        log.success,
-        utf8StringToBlob(log.errorMessage),
-        log.clientId ?? null,
-        "completed",
-        log.routeType ?? null,
-      ]
-    );
+        [
+          log.timestamp,
+          log.providerId,
+          log.providerName,
+          log.method,
+          log.path,
+          log.targetUrl ?? null,
+          utf8StringToBlob(log.requestBody),
+          utf8StringToBlob(log.responseBody),
+          utf8StringToBlob(log.originalRequestBody),
+          utf8StringToBlob(log.originalResponseBody),
+          log.statusCode ?? null,
+          log.duration,
+          log.success,
+          utf8StringToBlob(log.errorMessage),
+          log.clientId ?? null,
+          "completed",
+          log.routeType ?? null,
+        ]
+      );
+    }
     if (shouldTrackMetrics(log)) {
       await this.insertMetricsCompleted(log);
     }
@@ -218,32 +222,34 @@ export class PostgresDriver implements DatabaseDriver {
       return;
     }
 
-    await this.pool.query(
-      `INSERT INTO ${TABLE} (
+    if (this._logsEnabled) {
+      await this.pool.query(
+        `INSERT INTO ${TABLE} (
         timestamp, provider_id, provider_name, method, path, target_url,
         request_body, response_body, original_request_body, original_response_body,
         status_code, duration, success, error_message, client_id, status, route_type
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
-      [
-        log.timestamp,
-        log.providerId,
-        log.providerName,
-        log.method,
-        log.path,
-        log.targetUrl ?? null,
-        utf8StringToBlob(log.requestBody),
-        utf8StringToBlob(log.responseBody),
-        utf8StringToBlob(log.originalRequestBody),
-        utf8StringToBlob(log.originalResponseBody),
-        log.statusCode ?? null,
-        log.duration,
-        log.success,
-        utf8StringToBlob(log.errorMessage),
-        log.clientId ?? null,
-        "pending",
-        log.routeType ?? null,
-      ]
-    );
+        [
+          log.timestamp,
+          log.providerId,
+          log.providerName,
+          log.method,
+          log.path,
+          log.targetUrl ?? null,
+          utf8StringToBlob(log.requestBody),
+          utf8StringToBlob(log.responseBody),
+          utf8StringToBlob(log.originalRequestBody),
+          utf8StringToBlob(log.originalResponseBody),
+          log.statusCode ?? null,
+          log.duration,
+          log.success,
+          utf8StringToBlob(log.errorMessage),
+          log.clientId ?? null,
+          "pending",
+          log.routeType ?? null,
+        ]
+      );
+    }
     if (shouldTrackMetrics(log)) {
       await this.insertMetricsPending(log);
     }
@@ -270,8 +276,10 @@ export class PostgresDriver implements DatabaseDriver {
     }
 
     Promise.all([
-      this.pool!.query(
-        `UPDATE ${TABLE}
+      ...(this._logsEnabled
+        ? [
+            this.pool!.query(
+              `UPDATE ${TABLE}
          SET status_code = $1,
              response_body = $2,
              original_response_body = $3,
@@ -280,16 +288,18 @@ export class PostgresDriver implements DatabaseDriver {
              error_message = $6,
              status = 'completed'
          WHERE client_id = $7`,
-        [
-          statusCode,
-          utf8StringToBlob(responseBody),
-          utf8StringToBlob(originalResponseBody),
-          duration,
-          success,
-          utf8StringToBlob(errorMessage),
-          clientId,
-        ]
-      ),
+              [
+                statusCode,
+                utf8StringToBlob(responseBody),
+                utf8StringToBlob(originalResponseBody),
+                duration,
+                success,
+                utf8StringToBlob(errorMessage),
+                clientId,
+              ]
+            ),
+          ]
+        : []),
       this.pool!.query(POSTGRES_UPDATE_METRICS_COMPLETED, [
         inputTokens ?? null,
         outputTokens ?? null,
@@ -320,16 +330,20 @@ export class PostgresDriver implements DatabaseDriver {
     }
 
     Promise.all([
-      this.pool.query(
-        `UPDATE ${TABLE}
+      ...(this._logsEnabled
+        ? [
+            this.pool.query(
+              `UPDATE ${TABLE}
          SET status_code = $1,
              duration = $2,
              success = $3,
              error_message = $4,
              status = $5
          WHERE client_id = $6`,
-        [statusCode, duration, false, utf8StringToBlob(errorMessage), status, clientId]
-      ),
+              [statusCode, duration, false, utf8StringToBlob(errorMessage), status, clientId]
+            ),
+          ]
+        : []),
       this.pool.query(POSTGRES_UPDATE_METRICS_STATUS, [duration, false, statusCode, clientId]),
     ]).catch(err => {
       this.log.error("[PostgresDriver] Failed to update log status:", err);
@@ -349,32 +363,34 @@ export class PostgresDriver implements DatabaseDriver {
       await client.query("BEGIN");
 
       for (const log of logs) {
-        await client.query(
-          `INSERT INTO ${TABLE} (
+        if (this._logsEnabled) {
+          await client.query(
+            `INSERT INTO ${TABLE} (
             timestamp, provider_id, provider_name, method, path, target_url,
             request_body, response_body, original_request_body, original_response_body,
             status_code, duration, success, error_message, client_id, status, route_type
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
-          [
-            log.timestamp,
-            log.providerId,
-            log.providerName,
-            log.method,
-            log.path,
-            log.targetUrl ?? null,
-            utf8StringToBlob(log.requestBody),
-            utf8StringToBlob(log.responseBody),
-            utf8StringToBlob(log.originalRequestBody),
-            utf8StringToBlob(log.originalResponseBody),
-            log.statusCode ?? null,
-            log.duration,
-            log.success,
-            utf8StringToBlob(log.errorMessage),
-            log.clientId ?? null,
-            "completed",
-            log.routeType ?? null,
-          ]
-        );
+            [
+              log.timestamp,
+              log.providerId,
+              log.providerName,
+              log.method,
+              log.path,
+              log.targetUrl ?? null,
+              utf8StringToBlob(log.requestBody),
+              utf8StringToBlob(log.responseBody),
+              utf8StringToBlob(log.originalRequestBody),
+              utf8StringToBlob(log.originalResponseBody),
+              log.statusCode ?? null,
+              log.duration,
+              log.success,
+              utf8StringToBlob(log.errorMessage),
+              log.clientId ?? null,
+              "completed",
+              log.routeType ?? null,
+            ]
+          );
+        }
         if (shouldTrackMetrics(log)) {
           await this.insertMetricsCompleted(log);
         }
@@ -508,6 +524,7 @@ export class PostgresDriver implements DatabaseDriver {
       return;
     }
     await this.pool.query(`DELETE FROM ${TABLE}`);
+    await this.pool.query(`DELETE FROM ${METRICS_TABLE}`);
   }
 
   /**
@@ -520,6 +537,7 @@ export class PostgresDriver implements DatabaseDriver {
 
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
     await this.pool.query(`DELETE FROM ${TABLE} WHERE timestamp < $1`, [thirtyDaysAgo]);
+    await this.pool.query(`DELETE FROM ${METRICS_TABLE} WHERE timestamp < $1`, [thirtyDaysAgo]);
 
     // PostgreSQL doesn't need VACUUM like SQLite, but we can run VACUUM ANALYZE
     // Note: VACUUM cannot run inside a transaction block
@@ -657,6 +675,14 @@ export class PostgresDriver implements DatabaseDriver {
    */
   get enabled(): boolean {
     return this.isEnabled;
+  }
+
+  get logsEnabled(): boolean {
+    return this._logsEnabled;
+  }
+
+  setLogsEnabled(enabled: boolean): void {
+    this._logsEnabled = enabled;
   }
 
   private get isEnabled(): boolean {

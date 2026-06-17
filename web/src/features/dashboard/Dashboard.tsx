@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, RotateCw } from "lucide-react";
+import { Loader2, RotateCw, Database } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { api } from "@/api/client";
@@ -87,6 +87,7 @@ export default function Dashboard() {
   };
 
   const provider = getProviderDisplay(status, t);
+  const dbUnavailable = !statsLoading && stats?.dbAvailable === false;
   const totalLogs = stats?.totalLogs ?? 0;
   const successCount = stats?.successCount ?? 0;
   const errorCount = stats?.errorCount ?? 0;
@@ -182,33 +183,41 @@ export default function Dashboard() {
                     <p className="text-[10px] text-muted-foreground mb-1">
                       {t("dashboard.totalRequests.title")}
                     </p>
-                    <p className="text-base font-semibold">{totalLogs}</p>
-                    {totalLogs > 0 ? (
+                    {dbUnavailable ? (
+                      <p className="text-base font-semibold text-muted-foreground">
+                        {t("common.na")}
+                      </p>
+                    ) : (
                       <>
-                        <p className="text-[10px] mt-0.5">
-                          <span className="text-green-600 dark:text-green-500">
-                            {successCount} {t("dashboard.totalRequests.success")}
-                          </span>
-                          {errorCount > 0 ? (
-                            <>
-                              <span className="text-muted-foreground mx-1">·</span>
-                              <span className="text-destructive">
-                                {errorCount} {t("dashboard.totalRequests.errors")}
+                        <p className="text-base font-semibold">{totalLogs}</p>
+                        {totalLogs > 0 ? (
+                          <>
+                            <p className="text-[10px] mt-0.5">
+                              <span className="text-green-600 dark:text-green-500">
+                                {successCount} {t("dashboard.totalRequests.success")}
                               </span>
-                            </>
-                          ) : null}
-                        </p>
-                        <div
-                          className="mt-1.5 h-1 rounded-full bg-muted overflow-hidden"
-                          role="presentation"
-                        >
-                          <div
-                            className="h-full bg-green-500 transition-[width]"
-                            style={{ width: `${successRate}%` }}
-                          />
-                        </div>
+                              {errorCount > 0 ? (
+                                <>
+                                  <span className="text-muted-foreground mx-1">·</span>
+                                  <span className="text-destructive">
+                                    {errorCount} {t("dashboard.totalRequests.errors")}
+                                  </span>
+                                </>
+                              ) : null}
+                            </p>
+                            <div
+                              className="mt-1.5 h-1 rounded-full bg-muted overflow-hidden"
+                              role="presentation"
+                            >
+                              <div
+                                className="h-full bg-green-500 transition-[width]"
+                                style={{ width: `${successRate}%` }}
+                              />
+                            </div>
+                          </>
+                        ) : null}
                       </>
-                    ) : null}
+                    )}
                   </div>
                 </div>
               </>
@@ -216,129 +225,141 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
-          <Card className="p-0">
-            <CardHeader className="p-3 pb-2">
-              <CardTitle className="text-xs font-medium">
-                {t("dashboard.performance.title")}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-3 pt-0">
-              {statsLoading ? (
-                <div className="h-20 animate-pulse bg-muted rounded" />
-              ) : (
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">
-                      {t("dashboard.performance.avgResponseTime")}
-                    </span>
-                    <span className="text-xs font-medium">
-                      {formatDuration(stats?.avgDuration || 0)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">
-                      {t("dashboard.performance.p50Latency")}
-                    </span>
-                    <span className="text-xs font-medium">
-                      {formatDuration(stats?.p50Duration || 0)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">
-                      {t("dashboard.performance.p90Latency")}
-                    </span>
-                    <span className="text-xs font-medium">
-                      {formatDuration(stats?.p90Duration || 0)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span
-                      className="text-xs text-muted-foreground"
-                      title={t("dashboard.performance.avgTtfbTooltip")}
-                    >
-                      {t("dashboard.performance.avgTtfb")}
-                    </span>
-                    <span className="text-xs font-medium">
-                      {stats?.avgTtfb ? formatDuration(stats.avgTtfb) : "-"}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">
-                      {t("dashboard.performance.successRate")}
-                    </span>
-                    <span className="text-xs font-medium">
-                      {stats?.totalLogs
-                        ? `${Math.round((stats.successCount / stats.totalLogs) * 100)}%`
-                        : t("common.na")}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span
-                      className="text-xs text-muted-foreground"
-                      title={t("dashboard.performance.outputTpsTooltip")}
-                    >
-                      {t("dashboard.performance.outputTps")}
-                    </span>
-                    <span className="text-xs font-medium">
-                      {stats?.outputTps ? `${stats.outputTps.toFixed(1)} t/s` : "-"}
-                    </span>
-                  </div>
-                </div>
-              )}
+        {dbUnavailable ? (
+          <Card className="p-0 lg:col-span-1">
+            <CardContent className="p-6 flex flex-col items-center justify-center text-center gap-2 min-h-[12rem]">
+              <Database className="h-8 w-8 text-muted-foreground" aria-hidden />
+              <p className="text-sm font-semibold">{t("dashboard.dbUnavailable.title")}</p>
+              <p className="text-xs text-muted-foreground max-w-sm">
+                {t("dashboard.dbUnavailable.description")}
+              </p>
             </CardContent>
           </Card>
+        ) : (
+          <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 lg:col-span-1">
+            <Card className="p-0">
+              <CardHeader className="p-3 pb-2">
+                <CardTitle className="text-xs font-medium">
+                  {t("dashboard.performance.title")}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-3 pt-0">
+                {statsLoading ? (
+                  <div className="h-20 animate-pulse bg-muted rounded" />
+                ) : (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">
+                        {t("dashboard.performance.avgResponseTime")}
+                      </span>
+                      <span className="text-xs font-medium">
+                        {formatDuration(stats?.avgDuration || 0)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">
+                        {t("dashboard.performance.p50Latency")}
+                      </span>
+                      <span className="text-xs font-medium">
+                        {formatDuration(stats?.p50Duration || 0)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">
+                        {t("dashboard.performance.p90Latency")}
+                      </span>
+                      <span className="text-xs font-medium">
+                        {formatDuration(stats?.p90Duration || 0)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span
+                        className="text-xs text-muted-foreground"
+                        title={t("dashboard.performance.avgTtfbTooltip")}
+                      >
+                        {t("dashboard.performance.avgTtfb")}
+                      </span>
+                      <span className="text-xs font-medium">
+                        {stats?.avgTtfb ? formatDuration(stats.avgTtfb) : "-"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">
+                        {t("dashboard.performance.successRate")}
+                      </span>
+                      <span className="text-xs font-medium">
+                        {stats?.totalLogs
+                          ? `${Math.round((stats.successCount / stats.totalLogs) * 100)}%`
+                          : t("common.na")}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span
+                        className="text-xs text-muted-foreground"
+                        title={t("dashboard.performance.outputTpsTooltip")}
+                      >
+                        {t("dashboard.performance.outputTps")}
+                      </span>
+                      <span className="text-xs font-medium">
+                        {stats?.outputTps ? `${stats.outputTps.toFixed(1)} t/s` : "-"}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
-          <Card className="p-0">
-            <CardHeader className="p-3 pb-2">
-              <CardTitle className="text-xs font-medium">{t("dashboard.tokens.title")}</CardTitle>
-            </CardHeader>
-            <CardContent className="p-3 pt-0">
-              {statsLoading ? (
-                <div className="h-20 animate-pulse bg-muted rounded" />
-              ) : (
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">
-                      {t("dashboard.tokens.input")}
-                    </span>
-                    <span className="text-xs font-medium">
-                      {formatTokenCount(stats?.totalInputTokens || 0)}
-                    </span>
+            <Card className="p-0">
+              <CardHeader className="p-3 pb-2">
+                <CardTitle className="text-xs font-medium">{t("dashboard.tokens.title")}</CardTitle>
+              </CardHeader>
+              <CardContent className="p-3 pt-0">
+                {statsLoading ? (
+                  <div className="h-20 animate-pulse bg-muted rounded" />
+                ) : (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">
+                        {t("dashboard.tokens.input")}
+                      </span>
+                      <span className="text-xs font-medium">
+                        {formatTokenCount(stats?.totalInputTokens || 0)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">
+                        {t("dashboard.tokens.output")}
+                      </span>
+                      <span className="text-xs font-medium">
+                        {formatTokenCount(stats?.totalOutputTokens || 0)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">
+                        {t("dashboard.tokens.cache")}
+                      </span>
+                      <span className="text-xs font-medium">
+                        {formatTokenCount(stats?.totalCacheTokens || 0)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">
+                        {t("dashboard.tokens.cacheHitRate")}
+                      </span>
+                      <span className="text-xs font-medium">
+                        {stats?.cacheHitRate != null ? `${stats.cacheHitRate}%` : "-"}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">
-                      {t("dashboard.tokens.output")}
-                    </span>
-                    <span className="text-xs font-medium">
-                      {formatTokenCount(stats?.totalOutputTokens || 0)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">
-                      {t("dashboard.tokens.cache")}
-                    </span>
-                    <span className="text-xs font-medium">
-                      {formatTokenCount(stats?.totalCacheTokens || 0)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">
-                      {t("dashboard.tokens.cacheHitRate")}
-                    </span>
-                    <span className="text-xs font-medium">
-                      {stats?.cacheHitRate != null ? `${stats.cacheHitRate}%` : "-"}
-                    </span>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
 
       {/* Provider Breakdown */}
-      {stats?.providerBreakdown && stats.providerBreakdown.length > 0 && (
+      {!dbUnavailable && stats?.providerBreakdown && stats.providerBreakdown.length > 0 && (
         <Card className="p-0">
           <CardHeader className="p-3 pb-2">
             <CardTitle className="text-xs font-medium">
