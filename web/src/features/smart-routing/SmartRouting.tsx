@@ -9,6 +9,7 @@ import {
   Plus,
   RefreshCw,
   Route,
+  ShieldCheck,
   Trash2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -73,6 +74,10 @@ function modelRulesForPersist(rules: SmartRoutingModelRule[]): SmartRoutingModel
   return rules.filter(r => r.pattern.trim() && r.provider.trim() && r.model.trim());
 }
 
+function isIncompleteRule(r: SmartRoutingModelRule): boolean {
+  return !(r.pattern.trim() && r.provider.trim() && r.model.trim());
+}
+
 function emptyModelRule(): SmartRoutingModelRule {
   return { pattern: "", provider: "", model: "", enabled: true };
 }
@@ -110,6 +115,8 @@ export default function SmartRouting() {
   const [pendingDrifts, setPendingDrifts] = useState<AliasDrift[]>([]);
   const [driftChoices, setDriftChoices] = useState<Record<string, DriftChoice>>({});
   const [pendingCoreSettings, setPendingCoreSettings] = useState<CoreSettingsDraft | null>(null);
+  const [validateOk, setValidateOk] = useState(false);
+  const validateOkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: config, isLoading: configLoading } = useQuery({
     queryKey: ["config"],
@@ -149,9 +156,9 @@ export default function SmartRouting() {
     mutationFn: (data: Record<string, unknown>) =>
       api.patchConfig({ section: "smartRouting", data }),
     onSuccess: async () => {
-      setModelRulesOverride(null);
-      setExcludeOverride(null);
       await queryClient.invalidateQueries({ queryKey: ["config"] });
+      setExcludeOverride(null);
+      setModelRulesOverride(prev => (prev && prev.some(isIncompleteRule) ? prev : null));
     },
   });
 
@@ -181,6 +188,9 @@ export default function SmartRouting() {
     return () => {
       if (modelRulesSaveTimer.current) {
         clearTimeout(modelRulesSaveTimer.current);
+      }
+      if (validateOkTimer.current) {
+        clearTimeout(validateOkTimer.current);
       }
     };
   }, []);
@@ -313,6 +323,30 @@ export default function SmartRouting() {
     mutationFn: () => api.refreshSmartRoutingCatalog(),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["smartRoutingCatalog"] });
+    },
+  });
+
+  const validateMutation = useMutation({
+    mutationFn: () => api.getSmartRoutingAliasDrift(),
+    onSuccess: ({ drifts }) => {
+      if (drifts.length > 0) {
+        setPendingDrifts(drifts);
+        const initial: Record<string, DriftChoice> = {};
+        for (const d of drifts) {
+          initial[driftKey(d)] = d.collision ? "update" : "keep";
+        }
+        setDriftChoices(initial);
+        setPendingCoreSettings(null);
+        setDriftOpen(true);
+        return;
+      }
+      setValidateOk(true);
+      if (validateOkTimer.current) {
+        clearTimeout(validateOkTimer.current);
+      }
+      validateOkTimer.current = setTimeout(() => {
+        setValidateOk(false);
+      }, 2500);
     },
   });
 
@@ -585,6 +619,26 @@ export default function SmartRouting() {
                 {totalEntries} {t("smartRouting.catalog.models")}
               </Badge>
             )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-[10px]"
+              disabled={validateMutation.isPending}
+              onClick={() => validateMutation.mutate()}
+            >
+              {validateMutation.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <ShieldCheck className="h-3 w-3" />
+              )}
+              <span className="ml-1">{t("smartRouting.catalog.validate")}</span>
+            </Button>
+            {validateOk ? (
+              <span className="text-[10px] text-green-600 dark:text-green-500">
+                {t("smartRouting.catalog.allAligned")}
+              </span>
+            ) : null}
             <Button
               type="button"
               variant="ghost"

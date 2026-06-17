@@ -289,7 +289,10 @@
       "protocol": "协议",
       "source": "来源",
       "excluded": "排除",
-      "reload": "重新加载"
+      "reload": "重新加载",
+      "validate": "校验别名",
+      "validating": "校验中",
+      "allAligned": "别名均已对齐"
     },
     "providerErrors": {
       "title": "部分供应商拉取模型失败",

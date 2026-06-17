@@ -289,7 +289,10 @@
       "protocol": "Protocol",
       "source": "Source",
       "excluded": "Excluded",
-      "reload": "Reload view"
+      "reload": "Reload view",
+      "validate": "Validate aliases",
+      "validating": "Validating",
+      "allAligned": "All aliases aligned"
     },
     "providerErrors": {
       "title": "Some providers failed to fetch models",
