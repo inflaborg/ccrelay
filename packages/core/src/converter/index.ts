@@ -179,3 +179,8 @@ export {
   openaiChatUsesMaxCompletionTokens,
   type OpenAiChatMaxOutputTarget,
 } from "./rules/openai-chat-model-rules";
+
+export {
+  stripBillingHeaderFromAnthropicBody,
+  isBillingHeaderBlock,
+} from "./anthropic-request-sanitize";

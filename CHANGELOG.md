@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Clearing all logs also clears token metrics, so dashboard statistics stay consistent with log storage.
 
+### Fixed
+
+**Protocol/Conversion**
+
+- Relaying requests from Claude or Cowork now removes volatile billing metadata injected into the system prompt, so prompt caching on upstream Anthropic-compatible providers is not invalidated on every request.
+
 ## [0.2.6] - 2026-06-16 (pre-release)
 
 Pre-release line for 0.2.6.
