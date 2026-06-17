@@ -36,7 +36,7 @@ describe.skipIf(!nativeForNode)("SqliteNativeDriver", () => {
 
   it("inserts and queries logs", async () => {
     const driver = new SqliteNativeDriver({ type: "sqlite", path: dbPath });
-    await driver.initialize();
+    await driver.initialize({ logsEnabled: true });
 
     driver.insertLog({
       timestamp: Date.now(),
