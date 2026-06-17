@@ -7,6 +7,7 @@ import * as http from "http";
 import type { ProxyServer } from "../server/handler";
 import type { RouterStatus } from "../types";
 import { resolveEffectiveRoutingStatus } from "../server/smartRouting/virtualProvider";
+import { getDatabase } from "../database";
 import { sendJson } from "./index";
 
 let serverInstance: ProxyServer | null = null;
@@ -42,6 +43,7 @@ export function handleStatus(
     providerMode: routing.providerMode,
     port: config.port,
     host: config.host,
+    dbAvailable: getDatabase().enabled,
   };
 
   sendJson(res, 200, status);

@@ -31,7 +31,7 @@ export async function handleLogs(
 
   const db = getDatabase();
 
-  if (!db.enabled) {
+  if (!db.enabled || !db.logsEnabled) {
     sendJson(res, 200, {
       logs: [],
       total: 0,
@@ -83,7 +83,7 @@ export async function handleLogDetail(
 
   const db = getDatabase();
 
-  if (!db.enabled) {
+  if (!db.enabled || !db.logsEnabled) {
     sendJson(res, 200, { log: null });
     return;
   }
@@ -112,7 +112,7 @@ export async function handleDeleteLogs(
 
   const db = getDatabase();
 
-  if (!db.enabled) {
+  if (!db.enabled || !db.logsEnabled) {
     sendJson(res, 200, { success: true });
     return;
   }

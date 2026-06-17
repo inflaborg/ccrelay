@@ -32,6 +32,7 @@ export class LogDatabase {
   private readonly driverConfig: DatabaseDriverConfig;
   private readonly log = Logger.getInstance();
   private initPromise: Promise<void> | null = null;
+  private _logsEnabled = false;
 
   constructor(customDbPath?: string, driverConfig?: DatabaseDriverConfig) {
     // Determine default path
@@ -54,12 +55,21 @@ export class LogDatabase {
   }
 
   /**
-   * Initialize the database
+   * Initialize the database for metrics (always on for leader).
+   * @param active When false, closes the database (followers).
+   * @param logsEnabled When true, also persists request/response bodies to request_logs_v2.
    */
-  async initialize(enabled: boolean): Promise<void> {
-    if (!enabled) {
+  async initialize(active: boolean, logsEnabled = false): Promise<void> {
+    this._logsEnabled = logsEnabled;
+
+    if (!active) {
       await this.close();
-      this.log.info("[LogDatabase] Initialization skipped - disabled by config");
+      this.log.info("[LogDatabase] Initialization skipped - inactive (follower)");
+      return;
+    }
+
+    if (this.driver?.enabled) {
+      this.setLogsEnabled(logsEnabled);
       return;
     }
 
@@ -68,7 +78,7 @@ export class LogDatabase {
       return this.initPromise;
     }
 
-    this.initPromise = this.doInitialize();
+    this.initPromise = this.doInitialize(logsEnabled);
 
     try {
       await this.initPromise;
@@ -77,12 +87,12 @@ export class LogDatabase {
     }
   }
 
-  private async doInitialize(): Promise<void> {
+  private async doInitialize(logsEnabled: boolean): Promise<void> {
     try {
       this.log.info(`[LogDatabase] Creating ${this.driverConfig.type} driver...`);
       this.driver = createDriver(this.driverConfig);
 
-      await this.driver.initialize({ migrationChoice: "migrate" });
+      await this.driver.initialize({ migrationChoice: "migrate", logsEnabled });
 
       this.log.info("[LogDatabase] Initialization complete");
     } catch (err) {
@@ -95,7 +105,7 @@ export class LogDatabase {
 
       if (this.driverConfig.type === "sqlite" && isSqliteCliUnavailableError(err)) {
         this.log.warn(
-          "[LogDatabase] sqlite3 CLI is not installed or not on PATH; continuing without persisted request logs (logging remains enabled in config)."
+          "[LogDatabase] sqlite3 CLI is not installed or not on PATH; metrics and logs cannot be persisted."
         );
         return;
       }
@@ -207,10 +217,25 @@ export class LogDatabase {
   }
 
   /**
-   * Check if database is enabled
+   * Check if database driver is available (metrics can be read/written).
    */
   get enabled(): boolean {
     return this.driver?.enabled ?? false;
+  }
+
+  /**
+   * Whether request/response body logging is enabled.
+   */
+  get logsEnabled(): boolean {
+    return this.driver?.logsEnabled ?? this._logsEnabled;
+  }
+
+  /**
+   * Toggle body logging at runtime (e.g. when logging.enabled changes in config).
+   */
+  setLogsEnabled(enabled: boolean): void {
+    this._logsEnabled = enabled;
+    this.driver?.setLogsEnabled(enabled);
   }
 }
 

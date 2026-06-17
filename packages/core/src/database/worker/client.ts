@@ -26,6 +26,7 @@ import type {
 type WorkerMessageType =
   | "init"
   | "close"
+  | "setLogsEnabled"
   | "insertLog"
   | "insertLogPending"
   | "updateLogCompleted"
@@ -77,6 +78,7 @@ export class DatabaseWorkerClient implements DatabaseDriver {
   > = new Map();
   private log = Logger.getInstance();
   private _enabled: boolean = false;
+  private _logsEnabled: boolean = false;
   private config: DatabaseDriverConfig;
   private isClosing = false;
 
@@ -217,10 +219,12 @@ export class DatabaseWorkerClient implements DatabaseDriver {
    */
   async initialize(options?: DatabaseInitializeOptions): Promise<void> {
     this.isClosing = false;
+    this._logsEnabled = options?.logsEnabled ?? false;
     this.startWorker();
     await this.send("init", {
       config: this.config as SqliteDriverConfig,
       migrationChoice: options?.migrationChoice ?? "migrate",
+      logsEnabled: this._logsEnabled,
     });
     this._enabled = true;
     this.log.info("[DatabaseWorker] Initialized");
@@ -258,6 +262,19 @@ export class DatabaseWorkerClient implements DatabaseDriver {
    */
   get enabled(): boolean {
     return this._enabled;
+  }
+
+  get logsEnabled(): boolean {
+    return this._logsEnabled;
+  }
+
+  setLogsEnabled(enabled: boolean): void {
+    this._logsEnabled = enabled;
+    if (this.worker) {
+      void this.send("setLogsEnabled", { enabled }).catch(err => {
+        this.log.error("[DatabaseWorker] setLogsEnabled error:", err);
+      });
+    }
   }
 
   /**

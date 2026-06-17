@@ -89,6 +89,10 @@
       "30d": "30d",
       "all": "All"
     },
+    "dbUnavailable": {
+      "title": "Statistics unavailable",
+      "description": "The local database could not be opened. Token and performance metrics cannot be recorded or displayed. Install sqlite3 on your PATH, or use the Desktop app which includes a built-in database engine."
+    },
     "providerBreakdown": {
       "title": "Provider Breakdown",
       "provider": "Provider",
@@ -289,7 +293,10 @@
       "protocol": "Protocol",
       "source": "Source",
       "excluded": "Excluded",
-      "reload": "Reload view"
+      "reload": "Reload view",
+      "validate": "Validate aliases",
+      "validating": "Validating",
+      "allAligned": "All aliases aligned"
     },
     "providerErrors": {
       "title": "Some providers failed to fetch models",

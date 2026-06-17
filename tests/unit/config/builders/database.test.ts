@@ -6,12 +6,15 @@ describe("buildDatabaseConfig", () => {
     expect(buildDatabaseConfig(undefined)).toBeUndefined();
   });
 
-  it("returns undefined when logging disabled", () => {
-    expect(buildDatabaseConfig({ enabled: false, database: { type: "sqlite" } })).toBeUndefined();
+  it("returns undefined when database missing", () => {
+    expect(buildDatabaseConfig({ enabled: false })).toBeUndefined();
+    expect(buildDatabaseConfig({ enabled: true })).toBeUndefined();
   });
 
-  it("returns undefined when database missing", () => {
-    expect(buildDatabaseConfig({ enabled: true })).toBeUndefined();
+  it("builds sqlite config when database present even if logging disabled", () => {
+    expect(
+      buildDatabaseConfig({ enabled: false, database: { type: "sqlite", path: "/tmp/x.db" } })
+    ).toEqual({ type: "sqlite", path: "/tmp/x.db" });
   });
 
   it("builds sqlite config with optional executable", () => {

@@ -9,6 +9,7 @@
 
 import * as http from "http";
 import * as path from "path";
+import * as os from "os";
 import * as fs from "fs";
 import {
   Api,
@@ -106,10 +107,17 @@ async function main(): Promise<void> {
 
   setLogDatabaseDriverConfigResolver(() => {
     const base = loggingDatabaseConfigToDriver(configManager.configValue.logging.database);
+    if (base?.type === "postgres") {
+      return base;
+    }
     if (base?.type === "sqlite") {
       return { ...base, driver: base.driver === "cli" ? "cli" : "native" };
     }
-    return base;
+    return {
+      type: "sqlite",
+      path: path.join(os.homedir(), ".ccrelay", "logs.db"),
+      driver: "native",
+    };
   });
 
   const leaderElection = new LeaderElection(configManager.port, configManager.host, () =>

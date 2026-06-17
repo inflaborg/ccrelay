@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+**UI**
+
+- Token usage and performance metrics on the Dashboard are always recorded when the local database is available, even if request/response body logging is disabled. The logging toggle now only controls the Logs tab and stored request bodies.
+- When the local database cannot be opened (for example, sqlite3 CLI is missing in the VS Code extension), the Dashboard shows a clear unavailable state instead of empty statistics.
+
+**Logging database**
+
+- Clearing all logs also clears token metrics, so dashboard statistics stay consistent with log storage.
+
+## [0.2.6] - 2026-06-16 (pre-release)
+
+Pre-release line for 0.2.6.
+
 ## [0.2.5] - 2026-06-02
 
 Smart Routing aggregates provider models with unified `/v1/models` routing and optional `modelRules` for custom model mapping. The dashboard adds an offline gate, client configuration, release update checks, and log metrics that only count genuine SSE streams. Request log Analysis and model mapping are more reliable for large bodies and cross-protocol streams. Desktop can open the bundled UI without a running proxy; multi-instance leader election follows the active proxy port. Default queue wait timeout is removed (`requestTimeout` `0`).

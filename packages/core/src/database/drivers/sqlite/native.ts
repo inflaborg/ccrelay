@@ -49,6 +49,7 @@ export class SqliteNativeDriver implements DatabaseDriver {
   private readonly log = Logger.getInstance();
   private db: Database.Database | null = null;
   private isEnabled = false;
+  private _logsEnabled = false;
 
   constructor(config: SqliteDriverConfig) {
     this.config = config;
@@ -110,12 +111,29 @@ export class SqliteNativeDriver implements DatabaseDriver {
     );
 
     this.isEnabled = true;
+    this._logsEnabled = options?.logsEnabled ?? false;
 
     setTimeout(() => {
       this.cleanOldLogs().catch(err => {
         this.log.error("[SqliteNative] Background cleanup failed:", err);
       });
     }, 0);
+  }
+
+  get enabled(): boolean {
+    return this.isEnabled;
+  }
+
+  get logsEnabled(): boolean {
+    return this._logsEnabled;
+  }
+
+  setLogsEnabled(enabled: boolean): void {
+    this._logsEnabled = enabled;
+  }
+
+  forceFlush(): void {
+    // Native driver writes synchronously; nothing to flush.
   }
 
   // ---- Write operations ----------------------------------------------------
@@ -125,8 +143,10 @@ export class SqliteNativeDriver implements DatabaseDriver {
       return;
     }
     try {
-      const { sql, params } = buildInsertSql(log);
-      this.d.prepare(sql).run(...params);
+      if (this._logsEnabled) {
+        const { sql, params } = buildInsertSql(log);
+        this.d.prepare(sql).run(...params);
+      }
       if (shouldTrackMetrics(log)) {
         const metrics = buildMetricsCompletedInsertSql(log);
         this.d.prepare(metrics.sql).run(...metrics.params);
@@ -141,8 +161,10 @@ export class SqliteNativeDriver implements DatabaseDriver {
       return;
     }
     try {
-      const { sql, params } = buildInsertSql(log, "pending");
-      this.d.prepare(sql).run(...params);
+      if (this._logsEnabled) {
+        const { sql, params } = buildInsertSql(log, "pending");
+        this.d.prepare(sql).run(...params);
+      }
       if (shouldTrackMetrics(log)) {
         const metrics = buildMetricsPendingInsertSql(log);
         this.d.prepare(metrics.sql).run(...metrics.params);
@@ -169,7 +191,8 @@ export class SqliteNativeDriver implements DatabaseDriver {
       return;
     }
     try {
-      const stmt = this.d.prepare(`
+      if (this._logsEnabled) {
+        const stmt = this.d.prepare(`
         UPDATE ${TABLE}
         SET status_code = ?,
             response_body = ?,
@@ -180,15 +203,16 @@ export class SqliteNativeDriver implements DatabaseDriver {
             status = 'completed'
         WHERE client_id = ?
       `);
-      stmt.run(
-        statusCode,
-        utf8StringToBlob(responseBody),
-        utf8StringToBlob(originalResponseBody),
-        duration,
-        success ? 1 : 0,
-        errorMessage ?? null,
-        clientId
-      );
+        stmt.run(
+          statusCode,
+          utf8StringToBlob(responseBody),
+          utf8StringToBlob(originalResponseBody),
+          duration,
+          success ? 1 : 0,
+          errorMessage ?? null,
+          clientId
+        );
+      }
       this.d
         .prepare(SQLITE_UPDATE_METRICS_COMPLETED)
         .run(
@@ -217,7 +241,8 @@ export class SqliteNativeDriver implements DatabaseDriver {
       return;
     }
     try {
-      const stmt = this.d.prepare(`
+      if (this._logsEnabled) {
+        const stmt = this.d.prepare(`
         UPDATE ${TABLE}
         SET status_code = ?,
             duration = ?,
@@ -226,7 +251,8 @@ export class SqliteNativeDriver implements DatabaseDriver {
             status = ?
         WHERE client_id = ?
       `);
-      stmt.run(statusCode, duration, 0, errorMessage ?? null, status, clientId);
+        stmt.run(statusCode, duration, 0, errorMessage ?? null, status, clientId);
+      }
       this.d.prepare(SQLITE_UPDATE_METRICS_STATUS).run(duration, 0, statusCode, clientId);
     } catch (err) {
       this.log.error("[SqliteNative] Failed to update log status:", err);
@@ -238,11 +264,13 @@ export class SqliteNativeDriver implements DatabaseDriver {
       return;
     }
 
-    const stmt = this.d.prepare(buildInsertSql(logs[0]).sql);
+    const stmt = this._logsEnabled ? this.d.prepare(buildInsertSql(logs[0]).sql) : null;
     const insertMany = this.d.transaction((items: RequestLog[]) => {
       for (const log of items) {
-        const { params } = buildInsertSql(log);
-        stmt.run(...params);
+        if (this._logsEnabled && stmt) {
+          const { params } = buildInsertSql(log);
+          stmt.run(...params);
+        }
         if (shouldTrackMetrics(log)) {
           const metrics = buildMetricsCompletedInsertSql(log);
           this.d.prepare(metrics.sql).run(...metrics.params);
@@ -265,6 +293,7 @@ export class SqliteNativeDriver implements DatabaseDriver {
       return;
     }
     this.d.exec(`DELETE FROM ${TABLE}`);
+    this.d.exec(`DELETE FROM ${METRICS_TABLE}`);
     this.d.exec("VACUUM");
   }
 
@@ -279,6 +308,7 @@ export class SqliteNativeDriver implements DatabaseDriver {
         `DELETE FROM ${TABLE} WHERE id NOT IN (SELECT id FROM ${TABLE} ORDER BY timestamp DESC LIMIT ?)`
       )
       .run(MAX_LOG_ROWS);
+    this.d.prepare(`DELETE FROM ${METRICS_TABLE} WHERE timestamp < ?`).run(cutoff);
   }
 
   // ---- Read operations -----------------------------------------------------
@@ -499,14 +529,6 @@ export class SqliteNativeDriver implements DatabaseDriver {
       p90Duration,
       providerBreakdown: filterProviderBreakdownByTokenUsage(providerBreakdown),
     };
-  }
-
-  get enabled(): boolean {
-    return this.isEnabled;
-  }
-
-  forceFlush(): void {
-    // Native driver writes synchronously — nothing to flush
   }
 
   async close(): Promise<void> {

@@ -28,6 +28,7 @@ import type {
 type WorkerMessageType =
   | "init"
   | "close"
+  | "setLogsEnabled"
   | "insertLog"
   | "insertLogPending"
   | "updateLogCompleted"
@@ -71,9 +72,11 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
         const p = payload as {
           config: SqliteDriverConfig;
           migrationChoice?: LogDbMigrationChoice;
+          logsEnabled?: boolean;
         };
         const initOptions: DatabaseInitializeOptions = {
           migrationChoice: p.migrationChoice ?? "migrate",
+          logsEnabled: p.logsEnabled ?? false,
         };
         driver = createSqliteDriver(p.config);
         try {
@@ -97,6 +100,11 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
           await driver.close();
           driver = null;
         }
+        return { id, success: true };
+      }
+
+      case "setLogsEnabled": {
+        driver?.setLogsEnabled((payload as { enabled: boolean }).enabled);
         return { id, success: true };
       }
 

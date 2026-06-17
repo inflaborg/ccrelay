@@ -65,10 +65,17 @@ export function activate(context: vscode.ExtensionContext) {
 
   setLogDatabaseDriverConfigResolver(() => {
     const base = loggingDatabaseConfigToDriver(cm.configValue.logging.database);
+    if (base?.type === "postgres") {
+      return base;
+    }
     if (base?.type === "sqlite") {
       return { ...base, driver: base.driver ?? "cli" };
     }
-    return base;
+    return {
+      type: "sqlite",
+      path: path.join(path.dirname(getLogDir()), "logs.db"),
+      driver: "cli",
+    };
   });
 
   const serverStart = Date.now();

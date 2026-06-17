@@ -1,6 +1,6 @@
 {
   "name": "@ccrelay/core",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "private": true,
   "description": "CCRelay proxy server core (Node.js)",
   "license": "MIT",

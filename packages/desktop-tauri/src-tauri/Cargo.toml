@@ -1,6 +1,6 @@
 [package]
 name = "ccrelay"
-version = "0.2.5"
+version = "0.2.6"
 description = "CCRelay desktop app"
 authors = ["Inflab"]
 edition = "2021"

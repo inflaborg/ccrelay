@@ -89,6 +89,10 @@
       "30d": "30天",
       "all": "全部"
     },
+    "dbUnavailable": {
+      "title": "统计数据不可用",
+      "description": "无法打开本地数据库，Token 与性能指标无法记录或展示。请在 PATH 中安装 sqlite3，或使用内置数据库引擎的 Desktop 版本。"
+    },
     "providerBreakdown": {
       "title": "提供商分布",
       "provider": "提供商",
@@ -289,7 +293,10 @@
       "protocol": "协议",
       "source": "来源",
       "excluded": "排除",
-      "reload": "重新加载"
+      "reload": "重新加载",
+      "validate": "校验别名",
+      "validating": "校验中",
+      "allAligned": "别名均已对齐"
     },
     "providerErrors": {
       "title": "部分供应商拉取模型失败",
