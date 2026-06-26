@@ -5,7 +5,14 @@
 import { ScopedLogger } from "../utils/logger";
 import { ConcurrencyManager } from "../queue";
 import type { ConfigManager } from "../config";
-import type { RequestTask, QueueStats, QueueOverview, ProxyResult } from "../types";
+import type {
+  ConcurrencyConfig,
+  RequestTask,
+  QueueStats,
+  QueueOverview,
+  ProxyResult,
+  RouteQueueConfig,
+} from "../types";
 
 const log = new ScopedLogger("QueueManager");
 
@@ -32,42 +39,85 @@ export class QueueManager {
    */
   setExecutor(executor: ProxyExecutor): void {
     this.executor = executor;
-    this.initializeQueues();
+    this.reloadFromConfig();
   }
 
   /**
-   * Initialize default and route-specific queues from config
+   * Sync queue managers with the current config (startup and hot-reload).
    */
-  private initializeQueues(): void {
+  reloadFromConfig(): void {
     if (!this.executor) {
       return;
     }
 
-    // Initialize default concurrency manager
+    this.syncDefaultQueue();
+    this.syncRouteQueues();
+  }
+
+  private routeConfigToConcurrencyConfig(routeConfig: RouteQueueConfig): ConcurrencyConfig {
+    return {
+      enabled: true,
+      maxWorkers: routeConfig.maxWorkers,
+      maxQueueSize: routeConfig.maxQueueSize,
+      requestTimeout: routeConfig.requestTimeout,
+    };
+  }
+
+  private syncDefaultQueue(): void {
+    const executor = this.executor!;
     const concurrencyConfig = this.config.configValue.concurrency;
+
     if (concurrencyConfig?.enabled) {
-      this.defaultQueue = new ConcurrencyManager(concurrencyConfig, this.executor);
-      log.info(
-        `Default queue initialized: maxWorkers=${concurrencyConfig.maxWorkers}, maxQueueSize=${concurrencyConfig.maxQueueSize ?? "unlimited"}`
-      );
+      if (this.defaultQueue) {
+        this.defaultQueue.applyConfig(concurrencyConfig);
+        log.info(
+          `Default queue reloaded: maxWorkers=${concurrencyConfig.maxWorkers}, maxQueueSize=${concurrencyConfig.maxQueueSize ?? "unlimited"}`
+        );
+      } else {
+        this.defaultQueue = new ConcurrencyManager(concurrencyConfig, executor);
+        log.info(
+          `Default queue initialized: maxWorkers=${concurrencyConfig.maxWorkers}, maxQueueSize=${concurrencyConfig.maxQueueSize ?? "unlimited"}`
+        );
+      }
+      return;
+    }
+
+    if (this.defaultQueue) {
+      log.info("Default queue disabled");
     } else {
       log.info(
         `Default queue disabled. Config: ${JSON.stringify(concurrencyConfig ?? "undefined")}`
       );
     }
+    this.defaultQueue = null;
+  }
 
-    // Initialize route-specific queues
-    const routeQueueConfigs = this.config.routeQueues;
-    if (routeQueueConfigs && routeQueueConfigs.length > 0) {
-      for (const routeConfig of routeQueueConfigs) {
-        const queueName = routeConfig.name ?? routeConfig.pattern;
-        const queueConfig = {
-          enabled: true,
-          maxWorkers: routeConfig.maxWorkers,
-          maxQueueSize: routeConfig.maxQueueSize,
-          requestTimeout: routeConfig.requestTimeout,
-        };
-        const routeQueue = new ConcurrencyManager(queueConfig, this.executor);
+  private syncRouteQueues(): void {
+    const executor = this.executor!;
+    const routeQueueConfigs = this.config.routeQueues ?? [];
+    const desiredNames = new Set(
+      routeQueueConfigs.map(routeConfig => routeConfig.name ?? routeConfig.pattern)
+    );
+
+    for (const queueName of this.routeQueues.keys()) {
+      if (!desiredNames.has(queueName)) {
+        this.routeQueues.delete(queueName);
+        log.info(`RouteQueue "${queueName}" removed from config`);
+      }
+    }
+
+    for (const routeConfig of routeQueueConfigs) {
+      const queueName = routeConfig.name ?? routeConfig.pattern;
+      const queueConfig = this.routeConfigToConcurrencyConfig(routeConfig);
+      const existing = this.routeQueues.get(queueName);
+
+      if (existing) {
+        existing.applyConfig(queueConfig);
+        log.info(
+          `RouteQueue "${queueName}" reloaded: pattern=${routeConfig.pattern}, maxWorkers=${routeConfig.maxWorkers}, maxQueueSize=${routeConfig.maxQueueSize ?? "unlimited"}`
+        );
+      } else {
+        const routeQueue = new ConcurrencyManager(queueConfig, executor);
         this.routeQueues.set(queueName, routeQueue);
         log.info(
           `RouteQueue "${queueName}" initialized: pattern=${routeConfig.pattern}, maxWorkers=${routeConfig.maxWorkers}, maxQueueSize=${routeConfig.maxQueueSize ?? "unlimited"}`

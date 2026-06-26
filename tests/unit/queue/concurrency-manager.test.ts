@@ -430,6 +430,66 @@ describe("ConcurrencyManager", () => {
       expect(() => manager.updateMaxWorkers(0)).toThrow("greater than 0");
       expect(() => manager.updateMaxWorkers(-1)).toThrow("greater than 0");
     });
+
+    it("CM010: applyConfig should update maxWorkers via updateMaxWorkers", async () => {
+      config.maxWorkers = 1;
+
+      let releaseTask1: () => void;
+      const blockingTask = new Promise<ProxyResult>(resolve => {
+        releaseTask1 = () => resolve({ statusCode: 200 } as ProxyResult);
+      });
+
+      const executor = vi.fn().mockImplementation(() => blockingTask);
+      manager = new ConcurrencyManager(config, executor);
+
+      const p1 = manager.submit(createMockTask("task1"));
+      const p2 = manager.submit(createMockTask("task2"));
+
+      await new Promise(r => setTimeout(r, 10));
+      expect(manager.getStats().queueLength).toBe(1);
+
+      manager.applyConfig({
+        ...config,
+        maxWorkers: 2,
+      });
+
+      await new Promise(r => setTimeout(r, 200));
+      expect(manager.getStats().activeWorkers).toBe(2);
+      expect(manager.getStats().queueLength).toBe(0);
+
+      releaseTask1!();
+      await Promise.all([p1, p2]);
+    });
+
+    it("CM011: applyConfig should update maxQueueSize for new submissions", async () => {
+      config.maxWorkers = 1;
+      config.maxQueueSize = 2;
+
+      let releaseTask1: () => void;
+      const blockingTask = new Promise<ProxyResult>(resolve => {
+        releaseTask1 = () => resolve({ statusCode: 200 } as ProxyResult);
+      });
+
+      const executor = vi.fn().mockImplementation(() => blockingTask);
+      manager = new ConcurrencyManager(config, executor);
+
+      void manager.submit(createMockTask("task1"));
+      void manager.submit(createMockTask("task2"));
+      const p3 = manager.submit(createMockTask("task3"));
+
+      await new Promise(r => setTimeout(r, 10));
+      expect(manager.getStats().queueLength).toBe(2);
+
+      manager.applyConfig({
+        ...config,
+        maxQueueSize: 1,
+      });
+
+      await expect(manager.submit(createMockTask("task4"))).rejects.toThrow(/Queue is full/);
+
+      releaseTask1!();
+      await p3;
+    });
   });
 
   describe("CM010: Queue clearing", () => {

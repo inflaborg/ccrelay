@@ -22,7 +22,7 @@ import {
 } from "./providers";
 import { handleSwitchProvider, setServer as setSwitchServer } from "./switch";
 import { handleLogs, handleLogDetail, handleDeleteLogs, handleClearLogs } from "./logs";
-import { handleStats } from "./stats";
+import { handleStats, handleClearStats } from "./stats";
 import { handleVersion } from "./version";
 import { handleUpdateCheck, handleTriggerUpdateCheck } from "./updateCheck";
 import { handleQueueStats, handleClearQueue, setServer as setQueueServer } from "./queue";
@@ -135,6 +135,17 @@ export function handleApiRequest(req: http.IncomingMessage, res: http.ServerResp
     handleDeleteLogs(req, res).catch(err => {
       log.error("Error handling DELETE /logs", err);
       sendJson(res, 500, { error: "Internal server error" });
+    });
+    return true;
+  }
+
+  // Check for DELETE /ccrelay/api/stats
+  if (reqPath === "/ccrelay/api/stats" && method === "DELETE") {
+    handleClearStats(req, res).catch(err => {
+      log.error("Error handling DELETE /stats", err);
+      if (!res.headersSent) {
+        sendJson(res, 500, { error: "Internal server error" });
+      }
     });
     return true;
   }

@@ -38,6 +38,7 @@ type WorkerMessageType =
   | "getLogById"
   | "deleteLogs"
   | "clearAllLogs"
+  | "clearAllMetrics"
   | "getStats"
   | "cleanOldLogs"
   | "forceFlush";
@@ -184,6 +185,11 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
 
       case "clearAllLogs": {
         await driver?.clearAllLogs();
+        return { id, success: true };
+      }
+
+      case "clearAllMetrics": {
+        await driver?.clearAllMetrics();
         return { id, success: true };
       }
 

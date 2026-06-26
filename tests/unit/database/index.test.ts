@@ -29,6 +29,7 @@ vi.mock("@/database/drivers/sqlite/cli", async importOriginal => {
         getLogById: vi.fn().mockResolvedValue(null),
         deleteLogs: vi.fn().mockResolvedValue(undefined),
         clearAllLogs: vi.fn().mockResolvedValue(undefined),
+        clearAllMetrics: vi.fn().mockResolvedValue(undefined),
         getStats: vi.fn().mockResolvedValue({
           totalLogs: 0,
           successCount: 0,

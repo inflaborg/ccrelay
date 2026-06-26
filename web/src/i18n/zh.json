@@ -89,6 +89,13 @@
       "30d": "30天",
       "all": "全部"
     },
+    "resetStats": {
+      "action": "复位统计",
+      "title": "复位仪表盘统计",
+      "description": "清空仪表盘上的 Token 用量与性能指标。Logs 页中的请求记录不受影响。",
+      "confirm": "确认复位",
+      "resetting": "复位中…"
+    },
     "dbUnavailable": {
       "title": "统计数据不可用",
       "description": "无法打开本地数据库，Token 与性能指标无法记录或展示。请在 PATH 中安装 sqlite3，或使用内置数据库引擎的 Desktop 版本。"
@@ -624,7 +631,7 @@
     },
     "clearDialog": {
       "title": "清空所有日志",
-      "description": "确定要清空所有日志吗？此操作无法撤销。",
+      "description": "删除 Logs 页中保存的全部请求与响应正文。仪表盘上的 Token 与性能统计不会受影响。",
       "clearing": "清空中...",
       "action": "清空全部"
     }

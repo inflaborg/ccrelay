@@ -25,6 +25,7 @@ vi.mock("@/database", () => ({
     getLogById: vi.fn(),
     deleteLogs: vi.fn(),
     clearAllLogs: vi.fn(),
+    clearAllMetrics: vi.fn(),
   })),
 }));
 

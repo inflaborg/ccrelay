@@ -112,7 +112,7 @@ export async function handleDeleteLogs(
 
   const db = getDatabase();
 
-  if (!db.enabled || !db.logsEnabled) {
+  if (!db.enabled) {
     sendJson(res, 200, { success: true });
     return;
   }
@@ -123,7 +123,16 @@ export async function handleDeleteLogs(
     if (data.clearAll) {
       await db.clearAllLogs();
       log.info("Cleared all logs via API");
-    } else if (data.ids && data.ids.length > 0) {
+      sendJson(res, 200, { success: true });
+      return;
+    }
+
+    if (!db.logsEnabled) {
+      sendJson(res, 200, { success: true });
+      return;
+    }
+
+    if (data.ids && data.ids.length > 0) {
       await db.deleteLogs(data.ids);
       log.info(`Deleted ${data.ids.length} log(s) via API`);
     }

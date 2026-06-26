@@ -296,6 +296,13 @@ export class SqliteNativeDriver implements DatabaseDriver {
       return;
     }
     this.d.exec(`DELETE FROM ${TABLE}`);
+    this.d.exec("VACUUM");
+  }
+
+  async clearAllMetrics(): Promise<void> {
+    if (!this.isEnabled) {
+      return;
+    }
     this.d.exec(`DELETE FROM ${METRICS_TABLE}`);
     this.d.exec("VACUUM");
   }

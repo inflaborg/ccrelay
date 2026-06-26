@@ -1,9 +1,19 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, RotateCw, Database } from "lucide-react";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { Loader2, RotateCw, Database, RotateCcw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { api } from "@/api/client";
 import type { StatsRange, ServerStatus } from "@/types/api";
 import { cn } from "@/lib/utils";
@@ -59,6 +69,7 @@ export default function Dashboard() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
+  const [showResetDialog, setShowResetDialog] = useState(false);
   const [range, setRange] = useState<StatsRange>("7d");
 
   const { data: status, isLoading: statusLoading } = useQuery({
@@ -85,6 +96,14 @@ export default function Dashboard() {
       setRefreshing(false);
     }
   };
+
+  const resetStatsMutation = useMutation({
+    mutationFn: () => api.clearAllMetrics(),
+    onSuccess: async () => {
+      setShowResetDialog(false);
+      await queryClient.invalidateQueries({ queryKey: ["stats"] });
+    },
+  });
 
   const provider = getProviderDisplay(status, t);
   const dbUnavailable = !statsLoading && stats?.dbAvailable === false;
@@ -117,6 +136,22 @@ export default function Dashboard() {
               </button>
             ))}
           </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs gap-1 shrink-0"
+            onClick={() => setShowResetDialog(true)}
+            disabled={dbUnavailable || resetStatsMutation.isPending}
+            title={t("dashboard.resetStats.action")}
+          >
+            {resetStatsMutation.isPending ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <RotateCcw className="h-3 w-3" />
+            )}
+            <span className="hidden sm:inline">{t("dashboard.resetStats.action")}</span>
+          </Button>
           <Button
             type="button"
             size="sm"
@@ -421,6 +456,33 @@ export default function Dashboard() {
       )}
 
       <QueueStatus />
+
+      <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("dashboard.resetStats.title")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("dashboard.resetStats.description")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resetStatsMutation.isPending}>
+              {t("common.cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => resetStatsMutation.mutate()}
+              disabled={resetStatsMutation.isPending}
+            >
+              {resetStatsMutation.isPending ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                  {t("dashboard.resetStats.resetting")}
+                </>
+              ) : (
+                t("dashboard.resetStats.confirm")
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

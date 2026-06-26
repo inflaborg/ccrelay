@@ -1206,6 +1206,13 @@ export class SqliteCliDriver implements DatabaseDriver {
       return;
     }
     await this.writeConn.exec(`DELETE FROM ${TABLE}`);
+    await this.writeConn.exec("VACUUM");
+  }
+
+  async clearAllMetrics(): Promise<void> {
+    if (!this.writeConn?.started) {
+      return;
+    }
     await this.writeConn.exec(`DELETE FROM ${METRICS_TABLE}`);
     await this.writeConn.exec("VACUUM");
   }

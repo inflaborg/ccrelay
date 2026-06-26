@@ -168,10 +168,17 @@ export class LogDatabase {
   }
 
   /**
-   * Clear all logs
+   * Clear all request log rows (bodies only).
    */
   async clearAllLogs(): Promise<void> {
     await this.driver?.clearAllLogs();
+  }
+
+  /**
+   * Clear all dashboard metrics.
+   */
+  async clearAllMetrics(): Promise<void> {
+    await this.driver?.clearAllMetrics();
   }
 
   /**

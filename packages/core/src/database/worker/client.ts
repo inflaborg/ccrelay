@@ -36,6 +36,7 @@ type WorkerMessageType =
   | "getLogById"
   | "deleteLogs"
   | "clearAllLogs"
+  | "clearAllMetrics"
   | "getStats"
   | "cleanOldLogs"
   | "forceFlush";
@@ -398,6 +399,13 @@ export class DatabaseWorkerClient implements DatabaseDriver {
    */
   async clearAllLogs(): Promise<void> {
     await this.send("clearAllLogs");
+  }
+
+  /**
+   * Clear all dashboard metrics
+   */
+  async clearAllMetrics(): Promise<void> {
+    await this.send("clearAllMetrics");
   }
 
   /**
