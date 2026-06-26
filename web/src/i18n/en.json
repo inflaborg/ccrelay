@@ -89,6 +89,13 @@
       "30d": "30d",
       "all": "All"
     },
+    "resetStats": {
+      "action": "Reset stats",
+      "title": "Reset dashboard statistics",
+      "description": "Clear all token usage and performance metrics on the Dashboard. Request logs in the Logs tab are not affected.",
+      "confirm": "Reset statistics",
+      "resetting": "Resetting…"
+    },
     "dbUnavailable": {
       "title": "Statistics unavailable",
       "description": "The local database could not be opened. Token and performance metrics cannot be recorded or displayed. Install sqlite3 on your PATH, or use the Desktop app which includes a built-in database engine."
@@ -625,7 +632,7 @@
     },
     "clearDialog": {
       "title": "Clear All Logs",
-      "description": "Are you sure you want to clear all logs? This action cannot be undone.",
+      "description": "Delete all stored request and response bodies from the Logs tab. Dashboard token and performance statistics are not affected.",
       "clearing": "Clearing...",
       "action": "Clear All"
     }

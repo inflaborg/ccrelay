@@ -22,7 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Logging database**
 
-- Clearing all logs also clears token metrics, so dashboard statistics stay consistent with log storage.
+- Clearing all logs in the Logs tab removes only stored request/response bodies; dashboard token and performance metrics are kept.
+- **Reset stats** on the Dashboard clears token and performance metrics only; stored request logs are not affected.
 
 ### Fixed
 

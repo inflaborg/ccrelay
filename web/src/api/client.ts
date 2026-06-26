@@ -181,6 +181,11 @@ export const api = {
       body: JSON.stringify({ clearAll: true }),
     }),
 
+  clearAllMetrics: (): Promise<void> =>
+    fetchAPI<void>("/stats", {
+      method: "DELETE",
+    }),
+
   // Stats
   getStats: (range?: StatsRange): Promise<LogStats> => {
     const params = range && range !== "all" ? `?range=${range}` : "";

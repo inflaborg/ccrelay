@@ -95,6 +95,10 @@ describe("SqliteCliDriver", () => {
       expect(typeof driver.clearAllLogs).toBe("function");
     });
 
+    it("should have clearAllMetrics method", () => {
+      expect(typeof driver.clearAllMetrics).toBe("function");
+    });
+
     it("should have getStats method", () => {
       expect(typeof driver.getStats).toBe("function");
     });

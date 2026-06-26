@@ -226,9 +226,14 @@ export interface DatabaseDriver {
   deleteLogs(ids: number[]): Promise<void>;
 
   /**
-   * Clear all logs
+   * Clear all request log rows (bodies only; metrics are kept).
    */
   clearAllLogs(): Promise<void>;
+
+  /**
+   * Clear all token / performance metrics (dashboard statistics).
+   */
+  clearAllMetrics(): Promise<void>;
 
   /**
    * Get database statistics

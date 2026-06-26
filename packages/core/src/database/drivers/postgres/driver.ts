@@ -536,6 +536,12 @@ export class PostgresDriver implements DatabaseDriver {
       return;
     }
     await this.pool.query(`DELETE FROM ${TABLE}`);
+  }
+
+  async clearAllMetrics(): Promise<void> {
+    if (!this.pool) {
+      return;
+    }
     await this.pool.query(`DELETE FROM ${METRICS_TABLE}`);
   }
 

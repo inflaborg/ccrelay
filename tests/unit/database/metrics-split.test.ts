@@ -72,7 +72,7 @@ describe.skipIf(!nativeForNode)("metrics split (native driver)", () => {
     await driver.close();
   });
 
-  it("completion updates metrics tokens; clearAllLogs clears metrics too", async () => {
+  it("completion updates metrics tokens; clearAllLogs keeps metrics", async () => {
     const driver = new SqliteNativeDriver({ type: "sqlite", path: dbPath });
     await driver.initialize({ logsEnabled: true });
 
@@ -101,8 +101,8 @@ describe.skipIf(!nativeForNode)("metrics split (native driver)", () => {
 
     await driver.clearAllLogs();
 
-    const statsAfter = await driver.getStats();
-    expect(statsAfter.totalInputTokens).toBe(0);
+    const statsAfterClearLogs = await driver.getStats();
+    expect(statsAfterClearLogs.totalInputTokens).toBe(10);
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/naming-convention
     const BetterSqlite3 = require("better-sqlite3") as typeof import("better-sqlite3");
@@ -110,8 +110,13 @@ describe.skipIf(!nativeForNode)("metrics split (native driver)", () => {
     const v2Count = db.prepare(`SELECT COUNT(*) as c FROM ${TABLE}`).get() as { c: number };
     const mCount = db.prepare(`SELECT COUNT(*) as c FROM ${METRICS_TABLE}`).get() as { c: number };
     expect(v2Count.c).toBe(0);
-    expect(mCount.c).toBe(0);
+    expect(mCount.c).toBe(1);
     db.close();
+
+    await driver.clearAllMetrics();
+
+    const statsAfterClearMetrics = await driver.getStats();
+    expect(statsAfterClearMetrics.totalInputTokens).toBe(0);
 
     await driver.close();
   });

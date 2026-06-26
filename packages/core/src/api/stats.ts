@@ -1,6 +1,7 @@
 /**
  * Stats API endpoint
  * GET /ccrelay/api/stats?range=1d|7d|30d|all
+ * DELETE /ccrelay/api/stats — clear token / performance metrics
  */
 
 import * as http from "http";
@@ -9,6 +10,9 @@ import { filterProviderBreakdownByTokenUsage } from "../database/shared-utils";
 import { sendJson } from "./index";
 import { rejectLogStorageApiIfNotLeader } from "./serverRef";
 import { SMART_ROUTING_PROVIDER_ID } from "../server/smartRouting/virtualProvider";
+import { ScopedLogger } from "../utils/logger";
+
+const log = new ScopedLogger("StatsAPI");
 
 function omitVirtualProviderFromBreakdown<T extends { providerId: string }>(rows: T[]): T[] {
   return rows.filter(row => row.providerId !== SMART_ROUTING_PROVIDER_ID);
@@ -68,4 +72,32 @@ export async function handleStats(
       omitVirtualProviderFromBreakdown(stats.providerBreakdown)
     ),
   });
+}
+
+/**
+ * DELETE /ccrelay/api/stats — reset dashboard token and performance metrics.
+ */
+export async function handleClearStats(
+  _req: http.IncomingMessage,
+  res: http.ServerResponse
+): Promise<void> {
+  if (rejectLogStorageApiIfNotLeader(res)) {
+    return;
+  }
+
+  const db = getDatabase();
+
+  if (!db.enabled) {
+    sendJson(res, 200, { success: true });
+    return;
+  }
+
+  try {
+    await db.clearAllMetrics();
+    log.info("Cleared all metrics via API");
+    sendJson(res, 200, { success: true });
+  } catch (err) {
+    log.error("Error clearing metrics", err);
+    sendJson(res, 500, { error: "Failed to clear metrics" });
+  }
 }
