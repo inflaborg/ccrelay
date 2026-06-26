@@ -143,6 +143,10 @@ export interface LogEntry {
   responseBody?: string;
   originalRequestBody?: string;
   originalResponseBody?: string;
+  /** Masked JSON string of request headers (sensitive values masked). */
+  requestHeaders?: string;
+  /** Masked JSON string of response headers (sensitive values masked). */
+  responseHeaders?: string;
   statusCode: number;
   duration: number;
   success: boolean;

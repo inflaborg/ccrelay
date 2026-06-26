@@ -27,8 +27,9 @@ export function buildInsertSql(
     sql: `INSERT INTO ${TABLE} (
       timestamp, provider_id, provider_name, method, path, target_url,
       request_body, response_body, original_request_body, original_response_body,
-      status_code, duration, success, error_message, client_id, status, route_type
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      status_code, duration, success, error_message, client_id, status, route_type,
+      request_headers, response_headers
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: [
       log.timestamp,
       log.providerId,
@@ -47,6 +48,8 @@ export function buildInsertSql(
       log.clientId ?? null,
       status,
       log.routeType ?? null,
+      log.requestHeaders ?? null,
+      null,
     ],
   };
 }

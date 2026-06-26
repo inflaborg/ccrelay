@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**Logging**
+
+- Request logs now record the request and response headers alongside the bodies (shown in the log detail panel). Sensitive auth headers, such as API keys and Bearer tokens, are masked before storage so secrets are never written to the log database.
+
 ### Changed
 
 **UI**

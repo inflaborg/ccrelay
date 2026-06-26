@@ -155,7 +155,8 @@ export class ResponseLogger {
     errorMessage: string | undefined,
     originalResponseBody?: string,
     ttfb?: number,
-    tokenOverrides?: LogResponseTokenOverrides
+    tokenOverrides?: LogResponseTokenOverrides,
+    responseHeadersMasked?: string
   ): void {
     if (!this.database.enabled) {
       this.log.info(`logResponse skipped - database not enabled. clientId=${clientId}`);
@@ -222,7 +223,8 @@ export class ResponseLogger {
       tokens.inputTokens,
       tokens.outputTokens,
       tokens.cacheTokens,
-      ttfb
+      ttfb,
+      responseHeadersMasked
     );
   }
 }

@@ -469,6 +469,19 @@ export function runSqliteMigrations(ctx: SqliteMigrationContext): void {
     applied = true;
   }
 
+  if (maxVersion < 3) {
+    logMigration(`Applying v3 add_headers${suffix}`);
+    if (!sqliteColumnExists(ctx.queryScalar, TABLE, "request_headers")) {
+      ctx.exec(`ALTER TABLE ${TABLE} ADD COLUMN request_headers TEXT`);
+    }
+    if (!sqliteColumnExists(ctx.queryScalar, TABLE, "response_headers")) {
+      ctx.exec(`ALTER TABLE ${TABLE} ADD COLUMN response_headers TEXT`);
+    }
+    sqliteRecordMigration(ctx.exec, 3, "add_headers");
+    logMigration(`v3 add_headers applied${suffix}`);
+    applied = true;
+  }
+
   if (!applied) {
     logMigration(`Schema up to date (version ${maxVersion})${suffix}`);
   } else {
@@ -549,6 +562,25 @@ export async function runSqliteMigrationsAsync(ctx: SqliteMigrationAsyncContext)
       logMigration(`Token columns already absent on ${TABLE}${suffix}`);
     }
     logMigration(`v2 split_metrics applied${suffix}`);
+    applied = true;
+  }
+
+  if (maxVersion < 3) {
+    logMigration(`Applying v3 add_headers${suffix}`);
+    const headerColExists = async (col: string): Promise<boolean> =>
+      ((await ctx.queryScalar(
+        `SELECT COUNT(*) as c FROM pragma_table_info('${TABLE}') WHERE name='${col}'`
+      )) ?? 0) > 0;
+    if (!(await headerColExists("request_headers"))) {
+      await ctx.exec(`ALTER TABLE ${TABLE} ADD COLUMN request_headers TEXT`);
+    }
+    if (!(await headerColExists("response_headers"))) {
+      await ctx.exec(`ALTER TABLE ${TABLE} ADD COLUMN response_headers TEXT`);
+    }
+    await ctx.exec(
+      `INSERT OR REPLACE INTO ${MIGRATIONS_TABLE} (version, name, applied_at) VALUES (3, 'add_headers', ${Date.now()})`
+    );
+    logMigration(`v3 add_headers applied${suffix}`);
     applied = true;
   }
 
@@ -655,6 +687,26 @@ export async function runPostgresMigrations(ctx: PostgresMigrationContext): Prom
     await runMigrationV2SplitMetricsPostgres(ctx);
     await postgresRecordMigration(ctx.query, 2, "split_metrics");
     logMigration(`v2 split_metrics applied (dropped token columns from ${TABLE})${suffix}`);
+    applied = true;
+  }
+
+  if (maxVersion < 3) {
+    logMigration(`Applying v3 add_headers${suffix}`);
+    const headerColExists = async (col: string): Promise<boolean> => {
+      const res = (await ctx.query(
+        `SELECT COUNT(*)::int as c FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2`,
+        [TABLE, col]
+      )) as { rows: Array<{ c: number }> };
+      return (res.rows[0]?.c ?? 0) > 0;
+    };
+    if (!(await headerColExists("request_headers"))) {
+      await ctx.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS request_headers TEXT`);
+    }
+    if (!(await headerColExists("response_headers"))) {
+      await ctx.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS response_headers TEXT`);
+    }
+    await postgresRecordMigration(ctx.query, 3, "add_headers");
+    logMigration(`v3 add_headers applied${suffix}`);
     applied = true;
   }
 

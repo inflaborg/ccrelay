@@ -129,8 +129,9 @@ export class PostgresDriver implements DatabaseDriver {
         `INSERT INTO ${TABLE} (
         timestamp, provider_id, provider_name, method, path, target_url,
         request_body, response_body, original_request_body, original_response_body,
-        status_code, duration, success, error_message, client_id, status, route_type
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+        status_code, duration, success, error_message, client_id, status, route_type,
+        request_headers, response_headers
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
         [
           log.timestamp,
           log.providerId,
@@ -149,6 +150,8 @@ export class PostgresDriver implements DatabaseDriver {
           log.clientId ?? null,
           "completed",
           log.routeType ?? null,
+          log.requestHeaders ?? null,
+          null,
         ]
       );
     }
@@ -227,8 +230,9 @@ export class PostgresDriver implements DatabaseDriver {
         `INSERT INTO ${TABLE} (
         timestamp, provider_id, provider_name, method, path, target_url,
         request_body, response_body, original_request_body, original_response_body,
-        status_code, duration, success, error_message, client_id, status, route_type
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+        status_code, duration, success, error_message, client_id, status, route_type,
+        request_headers, response_headers
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
         [
           log.timestamp,
           log.providerId,
@@ -247,6 +251,8 @@ export class PostgresDriver implements DatabaseDriver {
           log.clientId ?? null,
           "pending",
           log.routeType ?? null,
+          log.requestHeaders ?? null,
+          null,
         ]
       );
     }
@@ -269,7 +275,8 @@ export class PostgresDriver implements DatabaseDriver {
     inputTokens?: number,
     outputTokens?: number,
     cacheTokens?: number,
-    ttfb?: number
+    ttfb?: number,
+    responseHeadersMasked?: string
   ): void {
     if (!this.isEnabled) {
       return;
@@ -286,8 +293,9 @@ export class PostgresDriver implements DatabaseDriver {
              duration = $4,
              success = $5,
              error_message = $6,
+             response_headers = $7,
              status = 'completed'
-         WHERE client_id = $7`,
+         WHERE client_id = $8`,
               [
                 statusCode,
                 utf8StringToBlob(responseBody),
@@ -295,6 +303,7 @@ export class PostgresDriver implements DatabaseDriver {
                 duration,
                 success,
                 utf8StringToBlob(errorMessage),
+                responseHeadersMasked ?? null,
                 clientId,
               ]
             ),
@@ -368,8 +377,9 @@ export class PostgresDriver implements DatabaseDriver {
             `INSERT INTO ${TABLE} (
             timestamp, provider_id, provider_name, method, path, target_url,
             request_body, response_body, original_request_body, original_response_body,
-            status_code, duration, success, error_message, client_id, status, route_type
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+            status_code, duration, success, error_message, client_id, status, route_type,
+            request_headers, response_headers
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
             [
               log.timestamp,
               log.providerId,
@@ -388,6 +398,8 @@ export class PostgresDriver implements DatabaseDriver {
               log.clientId ?? null,
               "completed",
               log.routeType ?? null,
+              log.requestHeaders ?? null,
+              null,
             ]
           );
         }

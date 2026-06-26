@@ -599,6 +599,8 @@
       "loadError": "加载日志详情失败",
       "requestBody": "请求体",
       "responseBody": "响应体",
+      "requestHeaders": "请求头",
+      "responseHeaders": "响应头",
       "tab": {
         "analysis": "分析",
         "tools": "工具",
