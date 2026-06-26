@@ -410,6 +410,7 @@ export class ProxyServer {
    */
   private handleConfigChanged(): void {
     this.database.setLogsEnabled(this.config.enableLogStorage);
+    this.queueManager.reloadFromConfig();
     if (this.wsBroadcaster) {
       this.wsBroadcaster.broadcastConfigChanged();
     }

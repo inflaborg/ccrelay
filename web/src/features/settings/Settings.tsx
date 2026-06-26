@@ -1,4 +1,4 @@
-import { useId, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ListFilter, Loader2, Plus, Trash2, X } from "lucide-react";
@@ -138,6 +138,8 @@ function cloneRouting(routing: RoutingSettings): RoutingSettings {
   });
 }
 
+const SAVED_MESSAGE_DURATION_MS = 5000;
+
 function SaveBar({
   mutation,
   onSave,
@@ -148,11 +150,22 @@ function SaveBar({
     error: unknown;
     isSuccess: boolean;
     data?: PatchConfigResponse;
+    reset: () => void;
   };
   onSave: () => void;
 }) {
   const { t } = useTranslation();
   const restartRequired = Boolean(mutation.isSuccess && mutation.data?.restartRequired);
+  const { isSuccess, reset } = mutation;
+
+  useEffect(() => {
+    if (!isSuccess || restartRequired) {
+      return;
+    }
+    const timer = setTimeout(() => reset(), SAVED_MESSAGE_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, [isSuccess, reset, restartRequired]);
+
   return (
     <div className="space-y-2 pt-2">
       <div className="flex items-center justify-end gap-2">
@@ -277,6 +290,16 @@ function LanguageSettingsSection({ locale }: { locale?: string }) {
       await queryClient.invalidateQueries({ queryKey: ["config"] });
     },
   });
+
+  const { isSuccess: localeSaved, reset: resetLocaleMutation } = localeMutation;
+
+  useEffect(() => {
+    if (!localeSaved) {
+      return;
+    }
+    const timer = setTimeout(() => resetLocaleMutation(), SAVED_MESSAGE_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, [localeSaved, resetLocaleMutation]);
 
   const handleLocaleChange = (locale: string) => {
     const nextLocale = locale || undefined;
@@ -1317,18 +1340,8 @@ export default function Settings() {
         </Card>
       ) : data ? (
         <>
-          <LanguageSettingsSection
-            key={`locale:${data.server?.locale ?? ""}`}
-            locale={data.server?.locale}
-          />
-          <ServerSection
-            key={JSON.stringify({
-              port: data.server?.port,
-              host: data.server?.host,
-              autoStart: data.server?.autoStart,
-            })}
-            data={data.server}
-          />
+          <LanguageSettingsSection locale={data.server?.locale} />
+          <ServerSection data={data.server} />
           <RoutingSection
             key={JSON.stringify(data.routing)}
             routing={{
@@ -1338,8 +1351,8 @@ export default function Settings() {
             routingDefaults={data.routingDefaults}
             providerOptions={providerOptions}
           />
-          <ConcurrencySection key={JSON.stringify(data.concurrency)} data={data.concurrency} />
-          <LoggingSection key={JSON.stringify(data.logging)} data={data.logging} />
+          <ConcurrencySection data={data.concurrency} />
+          <LoggingSection data={data.logging} />
         </>
       ) : (
         <Card className="p-0">

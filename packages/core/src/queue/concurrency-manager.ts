@@ -432,6 +432,21 @@ export class ConcurrencyManager {
   }
 
   /**
+   * Apply updated concurrency settings without recreating the manager.
+   * In-flight and queued tasks keep their existing timeout handles.
+   */
+  applyConfig(next: ConcurrencyConfig): void {
+    if (next.maxWorkers !== this.config.maxWorkers) {
+      this.updateMaxWorkers(next.maxWorkers);
+    }
+    this.config.maxQueueSize = next.maxQueueSize;
+    this.config.requestTimeout = next.requestTimeout;
+    if (next.retry429 !== undefined) {
+      this.config.retry429 = next.retry429;
+    }
+  }
+
+  /**
    * Update the max workers limit
    */
   updateMaxWorkers(newMax: number): void {
