@@ -185,7 +185,8 @@ export class SqliteNativeDriver implements DatabaseDriver {
     inputTokens?: number,
     outputTokens?: number,
     cacheTokens?: number,
-    ttfb?: number
+    ttfb?: number,
+    responseHeadersMasked?: string
   ): void {
     if (!this.isEnabled) {
       return;
@@ -200,6 +201,7 @@ export class SqliteNativeDriver implements DatabaseDriver {
             duration = ?,
             success = ?,
             error_message = ?,
+            response_headers = ?,
             status = 'completed'
         WHERE client_id = ?
       `);
@@ -210,6 +212,7 @@ export class SqliteNativeDriver implements DatabaseDriver {
           duration,
           success ? 1 : 0,
           errorMessage ?? null,
+          responseHeadersMasked ?? null,
           clientId
         );
       }

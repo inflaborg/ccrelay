@@ -31,7 +31,9 @@ export const SQLITE_CREATE_TABLE_V2 = `
     input_tokens INTEGER,
     output_tokens INTEGER,
     cache_tokens INTEGER,
-    ttfb INTEGER
+    ttfb INTEGER,
+    request_headers TEXT,
+    response_headers TEXT
   )
 `;
 
@@ -64,7 +66,9 @@ export const SQLITE_CREATE_TABLE_V2_FINAL = `
     error_message TEXT,
     client_id TEXT,
     status TEXT DEFAULT 'completed',
-    route_type TEXT
+    route_type TEXT,
+    request_headers TEXT,
+    response_headers TEXT
   )
 `;
 
@@ -125,7 +129,9 @@ export const POSTGRES_CREATE_TABLE_V2 = `
     input_tokens INTEGER,
     output_tokens INTEGER,
     cache_tokens INTEGER,
-    ttfb INTEGER
+    ttfb INTEGER,
+    request_headers TEXT,
+    response_headers TEXT
   )
 `;
 
@@ -157,7 +163,9 @@ export const POSTGRES_CREATE_TABLE_V2_FINAL = `
     error_message TEXT,
     client_id TEXT,
     status TEXT DEFAULT 'completed',
-    route_type TEXT
+    route_type TEXT,
+    request_headers TEXT,
+    response_headers TEXT
   )
 `;
 

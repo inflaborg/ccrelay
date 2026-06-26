@@ -11,6 +11,7 @@ import type { QueueManager } from "../queueManager";
 import type { ProxyExecutor } from "../proxy/executor";
 import { ScopedLogger } from "../../utils/logger";
 import { extractModelFromPartialJson } from "../../database/shared-utils";
+import { maskHeadersForLog } from "../headerMask";
 
 const log = new ScopedLogger("TaskExecutor");
 
@@ -102,7 +103,12 @@ export class TaskExecutor {
     routing: RoutingContext,
     bodyResult: BodyProcessResult,
     clientId: string,
-    options?: { routeType?: RouteType; targetUrl?: string }
+    options?: {
+      routeType?: RouteType;
+      targetUrl?: string;
+      /** Upstream-bound request headers (sensitive values masked before storage). */
+      requestHeaders?: Record<string, string>;
+    }
   ): void {
     if (!this.database.enabled) {
       return;
@@ -129,6 +135,7 @@ export class TaskExecutor {
       targetUrl: options?.targetUrl ?? routing.targetUrl,
       requestBody: bodyResult.requestBodyLog,
       originalRequestBody: bodyResult.originalRequestBody,
+      requestHeaders: maskHeadersForLog(options?.requestHeaders),
       statusCode: undefined,
       duration: 0,
       success: false,
@@ -171,7 +178,8 @@ export class TaskExecutor {
         requestBodyLog: task.requestBodyLog,
         originalRequestBody: task.originalRequestBody,
       } as BodyProcessResult,
-      clientId
+      clientId,
+      { requestHeaders: task.headers }
     );
 
     // Track if client disconnected
@@ -253,7 +261,8 @@ export class TaskExecutor {
         requestBodyLog: task.requestBodyLog,
         originalRequestBody: task.originalRequestBody,
       } as BodyProcessResult,
-      clientId
+      clientId,
+      { requestHeaders: task.headers }
     );
 
     // Execute directly

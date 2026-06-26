@@ -59,6 +59,17 @@ const formatJson = (str: string): string => {
   }
 };
 
+/** Parse a masked-JSON header string into [key, value] entries (arrays joined). */
+const parseHeaderEntries = (headersJson: string | undefined): Array<[string, string]> | null => {
+  if (!headersJson) return null;
+  try {
+    const parsed = JSON.parse(headersJson) as Record<string, string | string[]>;
+    return Object.entries(parsed).map(([k, v]) => [k, Array.isArray(v) ? v.join(", ") : v]);
+  } catch {
+    return null;
+  }
+};
+
 const parseRequestMarkdownAnalysis = (str: string): string => {
   if (!str) return "";
 
@@ -150,6 +161,19 @@ function TabButton({ active, onClick, children }: TabButtonProps) {
   );
 }
 
+function HeaderList({ entries }: { entries: Array<[string, string]> }) {
+  return (
+    <dl className="space-y-0.5">
+      {entries.map(([k, v]) => (
+        <div key={k} className="flex gap-2 text-[11px] font-mono">
+          <dt className="text-muted-foreground shrink-0">{k}:</dt>
+          <dd className="break-all">{v}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 export default function Logs() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -159,10 +183,12 @@ export default function Logs() {
   const [requestBodyCollapsed, setRequestBodyCollapsed] = useState(false);
   const [responseBodyCollapsed, setResponseBodyCollapsed] = useState(false);
   const [copiedSection, setCopiedSection] = useState<"request" | "response" | null>(null);
-  const [requestTab, setRequestTab] = useState<"analysis" | "tools" | "converted" | "original">(
+  const [requestTab, setRequestTab] = useState<
+    "analysis" | "tools" | "converted" | "original" | "headers"
+  >("analysis");
+  const [responseTab, setResponseTab] = useState<"analysis" | "converted" | "original" | "headers">(
     "analysis"
   );
-  const [responseTab, setResponseTab] = useState<"analysis" | "converted" | "original">("analysis");
   const [refreshing, setRefreshing] = useState(false);
 
   // Use ref for stable data access in callbacks
@@ -410,6 +436,16 @@ export default function Logs() {
   const parsedRequestAnalysis = useMemo(() => {
     return selectedLog?.requestBody ? parseRequestMarkdownAnalysis(selectedLog.requestBody) : "";
   }, [selectedLog?.requestBody]);
+
+  /** Parsed [key, value] entries for the masked request/response header JSON. */
+  const parsedRequestHeaders = useMemo(
+    () => parseHeaderEntries(selectedLog?.requestHeaders),
+    [selectedLog?.requestHeaders]
+  );
+  const parsedResponseHeaders = useMemo(
+    () => parseHeaderEntries(selectedLog?.responseHeaders),
+    [selectedLog?.responseHeaders]
+  );
 
   /** Pretty-printed merged message (SSE) or full JSON body (non-SSE). Empty when not reconstructable. */
   const responseStructuredJson = useMemo(() => {
@@ -1010,6 +1046,14 @@ export default function Logs() {
                               >
                                 {t("logs.detail.tab.original")}
                               </TabButton>
+                              {parsedRequestHeaders && (
+                                <TabButton
+                                  active={requestTab === "headers"}
+                                  onClick={() => setRequestTab("headers")}
+                                >
+                                  {t("logs.detail.requestHeaders")}
+                                </TabButton>
+                              )}
                             </div>
                           )}
                           {!selectedLog.originalRequestBody && !requestBodyCollapsed && (
@@ -1034,25 +1078,46 @@ export default function Logs() {
                               >
                                 {t("logs.detail.tab.raw")}
                               </TabButton>
+                              {parsedRequestHeaders && (
+                                <TabButton
+                                  active={requestTab === "headers"}
+                                  onClick={() => setRequestTab("headers")}
+                                >
+                                  {t("logs.detail.requestHeaders")}
+                                </TabButton>
+                              )}
                             </div>
                           )}
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-muted-foreground font-normal">
-                            {
-                              (requestTab === "original" && selectedLog.originalRequestBody
-                                ? selectedLog.originalRequestBody
-                                : selectedLog.requestBody
-                              ).length
-                            }{" "}
-                            {t("logs.detail.chars")}
-                          </span>
+                          {requestTab !== "headers" && (
+                            <span className="text-[10px] text-muted-foreground font-normal">
+                              {
+                                (requestTab === "original" && selectedLog.originalRequestBody
+                                  ? selectedLog.originalRequestBody
+                                  : selectedLog.requestBody
+                                ).length
+                              }{" "}
+                              {t("logs.detail.chars")}
+                            </span>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"
                             className="h-6 px-2 text-[10px]"
                             onClick={() => {
-                              if (requestTab === "analysis") {
+                              if (requestTab === "headers") {
+                                handleCopy(
+                                  JSON.stringify(
+                                    parsedRequestHeaders
+                                      ? Object.fromEntries(parsedRequestHeaders)
+                                      : {},
+                                    null,
+                                    2
+                                  ),
+                                  "request"
+                                );
+                              } else if (requestTab === "analysis") {
                                 handleCopy(parsedRequestAnalysis, "request");
                               } else if (requestTab === "tools" && parsedToolsMarkdown) {
                                 handleCopy(parsedToolsMarkdown, "request");
@@ -1084,7 +1149,9 @@ export default function Logs() {
                       </div>
                       {!requestBodyCollapsed && (
                         <div className="bg-card border p-3 rounded overflow-auto max-h-[500px]">
-                          {requestTab === "analysis" ? (
+                          {requestTab === "headers" ? (
+                            <HeaderList entries={parsedRequestHeaders ?? []} />
+                          ) : requestTab === "analysis" ? (
                             <MarkdownViewer content={parsedRequestAnalysis} />
                           ) : requestTab === "tools" && parsedToolsMarkdown ? (
                             <MarkdownViewer content={parsedToolsMarkdown} />
@@ -1137,6 +1204,14 @@ export default function Logs() {
                               >
                                 {t("logs.detail.tab.original")}
                               </TabButton>
+                              {parsedResponseHeaders && (
+                                <TabButton
+                                  active={responseTab === "headers"}
+                                  onClick={() => setResponseTab("headers")}
+                                >
+                                  {t("logs.detail.responseHeaders")}
+                                </TabButton>
+                              )}
                             </div>
                           )}
                           {!selectedLog.originalResponseBody && !responseBodyCollapsed && (
@@ -1153,25 +1228,49 @@ export default function Logs() {
                               >
                                 {t("logs.detail.tab.raw")}
                               </TabButton>
+                              {parsedResponseHeaders && (
+                                <TabButton
+                                  active={responseTab === "headers"}
+                                  onClick={() => setResponseTab("headers")}
+                                >
+                                  {t("logs.detail.responseHeaders")}
+                                </TabButton>
+                              )}
                             </div>
                           )}
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-muted-foreground font-normal">
-                            {
-                              (responseTab === "original" && selectedLog.originalResponseBody
-                                ? selectedLog.originalResponseBody
-                                : selectedLog.responseBody
-                              ).length
-                            }{" "}
-                            {t("logs.detail.chars")}
-                          </span>
+                          {responseTab !== "headers" && (
+                            <span className="text-[10px] text-muted-foreground font-normal">
+                              {
+                                (responseTab === "original" && selectedLog.originalResponseBody
+                                  ? selectedLog.originalResponseBody
+                                  : selectedLog.responseBody
+                                ).length
+                              }{" "}
+                              {t("logs.detail.chars")}
+                            </span>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"
                             className="h-6 px-2 text-[10px]"
                             onClick={() => {
-                              if (responseTab === "analysis" && hasStructuredResponseAnalysis) {
+                              if (responseTab === "headers") {
+                                handleCopy(
+                                  JSON.stringify(
+                                    parsedResponseHeaders
+                                      ? Object.fromEntries(parsedResponseHeaders)
+                                      : {},
+                                    null,
+                                    2
+                                  ),
+                                  "response"
+                                );
+                              } else if (
+                                responseTab === "analysis" &&
+                                hasStructuredResponseAnalysis
+                              ) {
                                 handleCopy(responseStructuredJson, "response");
                               } else {
                                 handleCopy(
@@ -1201,7 +1300,9 @@ export default function Logs() {
                       </div>
                       {!responseBodyCollapsed && (
                         <div className="bg-card border p-3 rounded overflow-auto max-h-[500px]">
-                          {responseTab === "analysis" && hasStructuredResponseAnalysis ? (
+                          {responseTab === "headers" ? (
+                            <HeaderList entries={parsedResponseHeaders ?? []} />
+                          ) : responseTab === "analysis" && hasStructuredResponseAnalysis ? (
                             <pre className="text-[11px] font-mono m-0 whitespace-pre text-muted-foreground">
                               {responseStructuredJson}
                             </pre>

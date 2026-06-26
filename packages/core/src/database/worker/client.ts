@@ -309,7 +309,8 @@ export class DatabaseWorkerClient implements DatabaseDriver {
     inputTokens?: number,
     outputTokens?: number,
     cacheTokens?: number,
-    ttfb?: number
+    ttfb?: number,
+    responseHeadersMasked?: string
   ): void {
     void this.send("updateLogCompleted", {
       clientId,
@@ -323,6 +324,7 @@ export class DatabaseWorkerClient implements DatabaseDriver {
       outputTokens,
       cacheTokens,
       ttfb,
+      responseHeadersMasked,
     }).catch(err => {
       this.log.error("[DatabaseWorker] updateLogCompleted error:", err);
     });

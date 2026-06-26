@@ -1087,7 +1087,8 @@ export class SqliteCliDriver implements DatabaseDriver {
     inputTokens?: number,
     outputTokens?: number,
     cacheTokens?: number,
-    ttfb?: number
+    ttfb?: number,
+    responseHeadersMasked?: string
   ): void {
     if (!this.isEnabled || !this.writeConn?.started) {
       return;
@@ -1104,6 +1105,7 @@ export class SqliteCliDriver implements DatabaseDriver {
            duration = ?,
            success = ?,
            error_message = ?,
+           response_headers = ?,
            status = 'completed'
        WHERE client_id = ?`,
           [
@@ -1113,6 +1115,7 @@ export class SqliteCliDriver implements DatabaseDriver {
             duration,
             success ? 1 : 0,
             errorMessage ?? null,
+            responseHeadersMasked ?? null,
             clientId,
           ]
         )
@@ -1314,6 +1317,7 @@ export class SqliteCliDriver implements DatabaseDriver {
               hex(v.response_body) as response_body,
               hex(v.original_request_body) as original_request_body,
               hex(v.original_response_body) as original_response_body,
+              v.request_headers, v.response_headers,
               v.status_code, v.duration, v.success, v.error_message, v.client_id, v.status, v.route_type,
               m.input_tokens, m.output_tokens, m.cache_tokens, m.ttfb
        FROM ${TABLE} v

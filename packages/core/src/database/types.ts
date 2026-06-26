@@ -41,6 +41,10 @@ export interface RequestLog {
   outputTokens?: number;
   cacheTokens?: number;
   ttfb?: number;
+  /** Masked JSON string of upstream-bound request headers (sensitive values masked). */
+  requestHeaders?: string;
+  /** Masked JSON string of upstream response headers (sensitive values masked). */
+  responseHeaders?: string;
 }
 
 /**
@@ -186,7 +190,8 @@ export interface DatabaseDriver {
     inputTokens?: number,
     outputTokens?: number,
     cacheTokens?: number,
-    ttfb?: number
+    ttfb?: number,
+    responseHeadersMasked?: string
   ): void;
 
   /**

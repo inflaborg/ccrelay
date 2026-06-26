@@ -9,6 +9,7 @@ import * as http from "http";
 import * as https from "https";
 import * as url from "url";
 import { ScopedLogger } from "../../utils/logger";
+import { maskHeadersForLog } from "../headerMask";
 import { providerHasConfigurableModelMap } from "../../utils/model-map";
 import {
   convertAnthropicResponseToOpenAI,
@@ -133,6 +134,8 @@ interface ExecutionContext {
   /** When true, mirror upstream/client response bytes for metrics or body logging. */
   captureResponse: boolean;
   originalResponseBody?: string;
+  /** Masked JSON of upstream response headers, persisted on log completion. */
+  responseHeadersMasked?: string;
   clientDisconnected: boolean;
   /**
    * Set true once the upstream Readable emitted `'end'` (i.e. fully delivered the response).
@@ -615,6 +618,7 @@ export class ProxyExecutor {
         responseHeaders[key] = value;
       }
     }
+    ctx.responseHeadersMasked = maskHeadersForLog(responseHeaders);
 
     const isJsonResponse = proxyRes.headers["content-type"]?.includes("application/json");
 
@@ -933,7 +937,9 @@ export class ProxyExecutor {
         ctx.responseChunks,
         aborted ? "Client disconnected" : undefined,
         this.upstreamLogBody(upstreamLog),
-        ttfbForStreamLog(ctx, true)
+        ttfbForStreamLog(ctx, true),
+        undefined,
+        ctx.responseHeadersMasked
       );
       resolve({
         statusCode: aborted ? 499 : status,
@@ -1049,7 +1055,9 @@ export class ProxyExecutor {
         ctx.responseChunks,
         aborted ? "Client disconnected" : undefined,
         this.upstreamLogBody(upstreamLog),
-        ttfbForStreamLog(ctx, true)
+        ttfbForStreamLog(ctx, true),
+        undefined,
+        ctx.responseHeadersMasked
       );
 
       resolve({
@@ -1170,7 +1178,9 @@ export class ProxyExecutor {
         ctx.responseChunks,
         err.message,
         upstreamBody,
-        ttfbForStreamLog(ctx, false)
+        ttfbForStreamLog(ctx, false),
+        undefined,
+        ctx.responseHeadersMasked
       );
 
       resolve({
@@ -1247,7 +1257,9 @@ export class ProxyExecutor {
           ctx.responseChunks,
           undefined,
           ctx.originalResponseBody,
-          ttfbForStreamLog(ctx, false)
+          ttfbForStreamLog(ctx, false),
+          undefined,
+          ctx.responseHeadersMasked
         );
 
         resolve({
@@ -1280,7 +1292,9 @@ export class ProxyExecutor {
           ctx.responseChunks,
           `OpenAI conversion failed: ${errMsg}`,
           ctx.originalResponseBody,
-          ttfbForStreamLog(ctx, false)
+          ttfbForStreamLog(ctx, false),
+          undefined,
+          ctx.responseHeadersMasked
         );
 
         resolve({
@@ -1346,7 +1360,9 @@ export class ProxyExecutor {
           ctx.responseChunks,
           undefined,
           ctx.originalResponseBody,
-          ttfbForStreamLog(ctx, false)
+          ttfbForStreamLog(ctx, false),
+          undefined,
+          ctx.responseHeadersMasked
         );
 
         resolve({
@@ -1379,7 +1395,9 @@ export class ProxyExecutor {
           ctx.responseChunks,
           `Responses conversion failed: ${errMsg}`,
           ctx.originalResponseBody,
-          ttfbForStreamLog(ctx, false)
+          ttfbForStreamLog(ctx, false),
+          undefined,
+          ctx.responseHeadersMasked
         );
 
         resolve({
@@ -1440,7 +1458,9 @@ export class ProxyExecutor {
             ctx.responseChunks,
             undefined,
             ctx.originalResponseBody,
-            ttfbForStreamLog(ctx, false)
+            ttfbForStreamLog(ctx, false),
+            undefined,
+            ctx.responseHeadersMasked
           );
           resolve({
             statusCode: status,
@@ -1460,7 +1480,9 @@ export class ProxyExecutor {
             ctx.responseChunks,
             undefined,
             ctx.originalResponseBody,
-            ttfbForStreamLog(ctx, false)
+            ttfbForStreamLog(ctx, false),
+            undefined,
+            ctx.responseHeadersMasked
           );
           resolve({
             statusCode: status,
@@ -1489,7 +1511,9 @@ export class ProxyExecutor {
           ctx.responseChunks,
           `Anthropic to OpenAI conversion failed: ${errMsg}`,
           ctx.originalResponseBody,
-          ttfbForStreamLog(ctx, false)
+          ttfbForStreamLog(ctx, false),
+          undefined,
+          ctx.responseHeadersMasked
         );
         resolve({
           statusCode: 502,
@@ -1566,7 +1590,9 @@ export class ProxyExecutor {
             ctx.responseChunks,
             undefined,
             ctx.originalResponseBody,
-            ttfbForStreamLog(ctx, false)
+            ttfbForStreamLog(ctx, false),
+            undefined,
+            ctx.responseHeadersMasked
           );
           resolve({
             statusCode: status,
@@ -1586,7 +1612,9 @@ export class ProxyExecutor {
             ctx.responseChunks,
             undefined,
             ctx.originalResponseBody,
-            ttfbForStreamLog(ctx, false)
+            ttfbForStreamLog(ctx, false),
+            undefined,
+            ctx.responseHeadersMasked
           );
           resolve({
             statusCode: status,
@@ -1611,7 +1639,9 @@ export class ProxyExecutor {
           ctx.responseChunks,
           `Chat to Responses failed: ${errMsg}`,
           ctx.originalResponseBody,
-          ttfbForStreamLog(ctx, false)
+          ttfbForStreamLog(ctx, false),
+          undefined,
+          ctx.responseHeadersMasked
         );
         resolve({
           statusCode: 502,
@@ -1721,7 +1751,9 @@ export class ProxyExecutor {
         ctx.responseChunks,
         aborted ? "Client disconnected" : undefined,
         this.upstreamLogBody(upstreamLog),
-        ttfbForStreamLog(ctx, true)
+        ttfbForStreamLog(ctx, true),
+        undefined,
+        ctx.responseHeadersMasked
       );
 
       resolve({
@@ -1798,7 +1830,9 @@ export class ProxyExecutor {
             ctx.responseChunks,
             undefined,
             ctx.originalResponseBody,
-            ttfbForStreamLog(ctx, false)
+            ttfbForStreamLog(ctx, false),
+            undefined,
+            ctx.responseHeadersMasked
           );
           resolve({
             statusCode: status,
@@ -1818,7 +1852,9 @@ export class ProxyExecutor {
             ctx.responseChunks,
             undefined,
             ctx.originalResponseBody,
-            ttfbForStreamLog(ctx, false)
+            ttfbForStreamLog(ctx, false),
+            undefined,
+            ctx.responseHeadersMasked
           );
           resolve({
             statusCode: status,
@@ -1843,7 +1879,9 @@ export class ProxyExecutor {
           ctx.responseChunks,
           `A to Responses failed: ${errMsg}`,
           ctx.originalResponseBody,
-          ttfbForStreamLog(ctx, false)
+          ttfbForStreamLog(ctx, false),
+          undefined,
+          ctx.responseHeadersMasked
         );
         resolve({
           statusCode: 502,
@@ -1929,7 +1967,9 @@ export class ProxyExecutor {
           ctx.responseChunks,
           "Client disconnected",
           undefined,
-          ttfbForStreamLog(ctx, false)
+          ttfbForStreamLog(ctx, false),
+          undefined,
+          ctx.responseHeadersMasked
         );
         resolve({
           statusCode: 499,
@@ -1982,7 +2022,9 @@ export class ProxyExecutor {
         ctx.responseChunks,
         undefined,
         undefined,
-        ttfbForStreamLog(ctx, false)
+        ttfbForStreamLog(ctx, false),
+        undefined,
+        ctx.responseHeadersMasked
       );
       resolve({
         statusCode: status,
@@ -2098,7 +2140,9 @@ export class ProxyExecutor {
         ctx.responseChunks,
         aborted ? "Client disconnected" : undefined,
         undefined,
-        ttfbForStreamLog(ctx, true)
+        ttfbForStreamLog(ctx, true),
+        undefined,
+        ctx.responseHeadersMasked
       );
       if (!aborted) {
         task.streamCompleted = true;
@@ -2300,7 +2344,9 @@ export class ProxyExecutor {
         ctx.responseChunks,
         undefined,
         undefined,
-        ttfbForStreamLog(ctx, false)
+        ttfbForStreamLog(ctx, false),
+        undefined,
+        ctx.responseHeadersMasked
       );
       resolve({
         statusCode: outStatus,
@@ -2353,7 +2399,9 @@ export class ProxyExecutor {
             ctx.responseChunks,
             undefined,
             undefined,
-            ttfbForStreamLog(ctx, true)
+            ttfbForStreamLog(ctx, true),
+            undefined,
+            ctx.responseHeadersMasked
           );
           resolve({
             statusCode: 200,
@@ -2374,7 +2422,9 @@ export class ProxyExecutor {
           ctx.responseChunks,
           "Client disconnected",
           undefined,
-          ttfbForStreamLog(ctx, false)
+          ttfbForStreamLog(ctx, false),
+          undefined,
+          ctx.responseHeadersMasked
         );
         resolve({
           statusCode: 499,

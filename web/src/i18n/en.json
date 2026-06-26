@@ -600,6 +600,8 @@
       "loadError": "Failed to load log details",
       "requestBody": "Request Body",
       "responseBody": "Response Body",
+      "requestHeaders": "Request Headers",
+      "responseHeaders": "Response Headers",
       "tab": {
         "analysis": "Analysis",
         "tools": "Tools",

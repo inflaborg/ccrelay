@@ -118,6 +118,23 @@ function bodyFieldToString(raw: unknown): string | undefined {
 }
 
 /**
+ * Read a masked-JSON header column (TEXT). Stored as a plain string; Buffer is
+ * handled defensively. Empty/missing values collapse to undefined.
+ */
+function headerFieldToString(raw: unknown): string | undefined {
+  if (raw === null || raw === undefined) {
+    return undefined;
+  }
+  if (Buffer.isBuffer(raw) || raw instanceof Uint8Array) {
+    return blobToUtf8String(raw);
+  }
+  if (typeof raw === "string") {
+    return raw.length > 0 ? raw : undefined;
+  }
+  return undefined;
+}
+
+/**
  * Populate model/mappedModel from stored bodies.
  */
 export function extractModelsFromBodies(
@@ -216,6 +233,8 @@ export function dbRowToLog(row: Record<string, unknown>): RequestLog {
     responseBody: bodyFieldToString(row.response_body),
     originalRequestBody: bodyFieldToString(row.original_request_body),
     originalResponseBody: bodyFieldToString(row.original_response_body),
+    requestHeaders: headerFieldToString(row.request_headers),
+    responseHeaders: headerFieldToString(row.response_headers),
     statusCode: row.status_code as number | undefined,
     duration: row.duration as number,
     success: (row.success as number) !== 0,
