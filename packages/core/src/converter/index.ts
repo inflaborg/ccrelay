@@ -176,7 +176,10 @@ export {
 
 export {
   assignOpenAiChatMaxOutput,
+  ensureOpenAiChatStreamUsageIncluded,
+  normalizeOpenAiChatMaxOutputFields,
   openaiChatUsesMaxCompletionTokens,
+  resolveOpenAiChatUsesMaxCompletionTokens,
   type OpenAiChatMaxOutputTarget,
 } from "./rules/openai-chat-model-rules";
 

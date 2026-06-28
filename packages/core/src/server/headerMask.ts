@@ -12,6 +12,7 @@ export const SENSITIVE_HEADER_NAMES = new Set([
   "authorization",
   "x-api-key",
   "proxy-authorization",
+  "acl-token",
 ]);
 
 /** Fully masked placeholder for secrets too short to safely show first/last 4. */

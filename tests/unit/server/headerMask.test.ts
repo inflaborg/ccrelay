@@ -72,11 +72,22 @@ describe("server: headerMask", () => {
       expect(parsed["set-cookie"]).toEqual(["s=1; Path=/", "t=2"]);
     });
 
-    it("treats authorization, x-api-key, and proxy-authorization as sensitive", () => {
+    it("treats authorization, x-api-key, proxy-authorization, and acl-token as sensitive", () => {
       expect(SENSITIVE_HEADER_NAMES.has("authorization")).toBe(true);
       expect(SENSITIVE_HEADER_NAMES.has("x-api-key")).toBe(true);
       expect(SENSITIVE_HEADER_NAMES.has("proxy-authorization")).toBe(true);
+      expect(SENSITIVE_HEADER_NAMES.has("acl-token")).toBe(true);
       expect(SENSITIVE_HEADER_NAMES.has("content-type")).toBe(false);
+    });
+
+    it("masks acl-token header values", () => {
+      const out = maskHeadersForLog({
+        "acl-token": "acl-secret-token-value-12345",
+        "content-type": "application/json",
+      });
+      const parsed = JSON.parse(out!) as Record<string, string>;
+      expect(parsed["acl-token"]).toBe("acl-***2345");
+      expect(parsed["content-type"]).toBe("application/json");
     });
   });
 });
