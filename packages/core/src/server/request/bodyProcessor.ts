@@ -18,6 +18,10 @@ import {
 } from "../../converter";
 import type { OpenAIMessage } from "../../converter/adapters/anthropic-to-openai-chat-request";
 import {
+  normalizeOpenAiChatMaxOutputFields,
+  ensureOpenAiChatStreamUsageIncluded,
+} from "../../converter/rules/openai-chat-model-rules";
+import {
   normalizeToolsForProvider,
   applyPlatformMessageTransforms,
   applyPlatformQueryPolicy,
@@ -64,7 +68,11 @@ function applyPlatformMessagesToOpenAiChatRecord(
   data.messages = applyPlatformMessageTransforms(messages as OpenAIMessage[], baseUrl);
 }
 
-function applyPlatformTransformsToOpenAiChatBody(body: Buffer, baseUrl: string): Buffer {
+function applyPlatformTransformsToOpenAiChatBody(
+  body: Buffer,
+  baseUrl: string,
+  clientModelHint?: string
+): Buffer {
   if (!body.length) {
     return body;
   }
@@ -73,6 +81,8 @@ function applyPlatformTransformsToOpenAiChatBody(body: Buffer, baseUrl: string):
     if (!isOpenAIChatCompletionsRequest(data)) {
       return body;
     }
+    normalizeOpenAiChatMaxOutputFields(data, clientModelHint);
+    ensureOpenAiChatStreamUsageIncluded(data);
     applyHostedToolsToOpenAiChatRecord(data, baseUrl);
     openaiChatStrictToolsSanitize(data, baseUrl);
     applyPlatformMessagesToOpenAiChatRecord(data, baseUrl);
@@ -322,7 +332,11 @@ export class BodyProcessor {
     }
 
     if (isOpenAiChatCompletionsTargetPath(routing.targetPath)) {
-      body = applyPlatformTransformsToOpenAiChatBody(body, routing.provider.baseUrl);
+      body = applyPlatformTransformsToOpenAiChatBody(
+        body,
+        routing.provider.baseUrl,
+        clientWireModel
+      );
     }
 
     if (databaseEnabled && body && body.length > 0) {
