@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-06-28 (pre-release)
+
+Pre-release line for 0.2.7.
+
 ## [0.2.6] - 2026-06-26
 
 Request logs now capture request and response headers with sensitive auth values masked. Dashboard token and performance metrics are stored separately from request bodies, so clearing logs or resetting stats affects only the intended data. Relays from Claude or Cowork strip volatile billing metadata from system prompts so upstream prompt caching is not invalidated on every request.
