@@ -35,6 +35,7 @@ import { ResponseLogger } from "./responseLogger";
 import { RequestHandler } from "./request";
 import { ModelCatalog } from "./smartRouting/modelCatalog";
 import { InterceptorRegistry } from "./interceptor";
+import { AvailabilityProbeInterceptor } from "../services/availability-probe";
 import { WebSearchInterceptor } from "../services/web-search";
 import { WsBroadcaster, WsFollowerClient } from "./websocket";
 import {
@@ -108,6 +109,7 @@ export class ProxyServer {
     this.queueManager = new QueueManager(config);
 
     this.interceptorRegistry = new InterceptorRegistry();
+    this.interceptorRegistry.register(new AvailabilityProbeInterceptor());
     this.interceptorRegistry.register(new WebSearchInterceptor(() => this.config.webSearchConfig));
 
     // Listen to Router's provider changes - this is the single source of truth

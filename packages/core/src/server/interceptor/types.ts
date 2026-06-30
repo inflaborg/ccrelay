@@ -27,6 +27,8 @@ export interface ServiceInterceptorContext {
   rawBody: Buffer;
   clientSurface: ApiSurface;
   providerId: string;
+  method: string;
+  path: string;
 }
 
 export interface ServiceInterceptor {

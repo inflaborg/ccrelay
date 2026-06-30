@@ -14,9 +14,11 @@ export class InterceptorRegistry {
   async tryIntercept(
     rawBody: Buffer,
     clientSurface: ApiSurface,
-    providerId: string
+    providerId: string,
+    method: string,
+    path: string
   ): Promise<InterceptResult | null> {
-    const ctx: ServiceInterceptorContext = { rawBody, clientSurface, providerId };
+    const ctx: ServiceInterceptorContext = { rawBody, clientSurface, providerId, method, path };
     for (const interceptor of this.interceptors) {
       if (interceptor.shouldIntercept(ctx)) {
         return await interceptor.execute(ctx);
