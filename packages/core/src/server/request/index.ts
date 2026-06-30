@@ -148,7 +148,9 @@ export class RequestHandler {
             const intercepted = await this.interceptorRegistry.tryIntercept(
               rawBody,
               routing.clientSurface,
-              routing.provider.id
+              routing.provider.id,
+              routing.method,
+              routing.path
             );
             if (intercepted) {
               if (res.writableEnded) {
