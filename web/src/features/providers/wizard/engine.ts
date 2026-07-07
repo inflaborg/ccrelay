@@ -232,6 +232,46 @@ export function buildModelConfig(input: BuildModelConfigInput):
   };
 }
 
+/** Convert a display name into a provider ID segment (lowercase `[a-z0-9_-]`). */
+export function slugifyProviderId(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-+/g, "-");
+}
+
+function resolveProviderIdBase(
+  preset: PartnerPreset,
+  nameRoot: string,
+  idSuffix: string,
+  nameCustomized: boolean
+): string {
+  if (!nameCustomized) {
+    return [preset.idPrefix, idSuffix].filter(s => s.length > 0).join("-");
+  }
+  const slug = slugifyProviderId(nameRoot);
+  if (!slug) {
+    return [preset.idPrefix, idSuffix].filter(s => s.length > 0).join("-");
+  }
+  return [slug, idSuffix].filter(s => s.length > 0).join("-");
+}
+
+function ensureUniqueProviderId(baseId: string, reserved: Set<string>): string {
+  if (!reserved.has(baseId)) {
+    reserved.add(baseId);
+    return baseId;
+  }
+  let n = 2;
+  while (reserved.has(`${baseId}-${n}`)) {
+    n++;
+  }
+  const unique = `${baseId}-${n}`;
+  reserved.add(unique);
+  return unique;
+}
+
 function resolveAuthHeader(
   preset: PartnerPreset,
   selections: Record<string, string | boolean>
@@ -258,14 +298,18 @@ export function generateProviders(preset: PartnerPreset, input: WizardInput): Ad
   const templateValues = buildTemplateValues(preset, input.selections, input.userBaseUrl);
   const aliasPrefix = input.aliasPrefix ?? "claude-";
   const authHeader = resolveAuthHeader(preset, input.selections);
-  const nameRoot = input.nameBase?.trim() || preset.namePrefix;
+  const trimmedNameBase = input.nameBase?.trim();
+  const nameRoot = trimmedNameBase || preset.namePrefix;
+  const nameCustomized = Boolean(trimmedNameBase && trimmedNameBase !== preset.namePrefix);
+  const reservedIds = new Set(input.existingProviderIds ?? []);
 
   return preset.variants.map(variant => {
     const baseUrl = resolveTemplate(variant.urlTemplate, templateValues);
     const idSuffix = resolveTemplate(variant.idSuffix, templateValues);
     const nameSuffix = resolveTemplate(variant.nameSuffix, templateValues);
 
-    const id = [preset.idPrefix, idSuffix].filter(s => s.length > 0).join("-");
+    const idBase = resolveProviderIdBase(preset, nameRoot, idSuffix, nameCustomized);
+    const id = ensureUniqueProviderId(idBase, reservedIds);
     const nameParts = [nameRoot, nameSuffix].filter(s => s.length > 0);
     const name = nameParts.join("-");
 

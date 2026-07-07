@@ -984,6 +984,7 @@ export default function Providers() {
         open={showWizard}
         onOpenChange={setShowWizard}
         aliasPrefix={aliasPrefix}
+        existingProviderIds={(providersData?.providers ?? []).map(p => p.id)}
         onCustom={() => {
           setShowWizard(false);
           openLegacyAddModal();

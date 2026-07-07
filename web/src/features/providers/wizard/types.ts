@@ -73,4 +73,6 @@ export interface WizardInput extends WizardModelInput {
   useCustomModels: boolean;
   /** Smart routing alias prefix; defaults to `claude-` when omitted */
   aliasPrefix?: string;
+  /** Existing provider IDs — used to avoid collisions when deriving IDs from display names */
+  existingProviderIds?: readonly string[];
 }
