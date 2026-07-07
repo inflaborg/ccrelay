@@ -21,6 +21,7 @@ import {
   normalizeOpenAiChatMaxOutputFields,
   ensureOpenAiChatStreamUsageIncluded,
 } from "../../converter/rules/openai-chat-model-rules";
+import { sanitizeOpenAiChatToolArgumentsInMessages } from "../../converter/rules/openai-tool-call-arguments";
 import {
   normalizeToolsForProvider,
   applyPlatformMessageTransforms,
@@ -87,6 +88,7 @@ function applyPlatformTransformsToOpenAiChatBody(
     openaiChatStrictToolsSanitize(data, baseUrl);
     applyPlatformMessagesToOpenAiChatRecord(data, baseUrl);
     applyPlatformRequestSanitize(data, baseUrl);
+    sanitizeOpenAiChatToolArgumentsInMessages(data.messages);
     return Buffer.from(JSON.stringify(data), "utf-8");
   } catch {
     return body;

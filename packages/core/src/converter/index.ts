@@ -184,6 +184,11 @@ export {
 } from "./rules/openai-chat-model-rules";
 
 export {
+  normalizeOpenAiToolCallArgumentsString,
+  sanitizeOpenAiChatToolArgumentsInMessages,
+} from "./rules/openai-tool-call-arguments";
+
+export {
   stripBillingHeaderFromAnthropicBody,
   isBillingHeaderBlock,
 } from "./anthropic-request-sanitize";

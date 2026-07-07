@@ -38,6 +38,8 @@ export interface StreamingConversionState {
   toolCalls: ToolCallState[];
   currentToolIndex: number;
   outputIndex: number;
+  /** Tool calls received finish_reason; close on [DONE] after trailing arg deltas. */
+  toolsPendingClose: boolean;
   /** Original Responses request fields to echo back in response shells */
   echo?: ResponsesRequestEcho;
   usage?: {
@@ -69,6 +71,7 @@ export function createStreamingState(opts?: {
     toolCalls: [],
     currentToolIndex: 0,
     outputIndex: 0,
+    toolsPendingClose: false,
     ...(opts?.echo !== undefined ? { echo: opts.echo } : {}),
   };
 }
@@ -237,12 +240,8 @@ export function processStreamingChunk(state: StreamingConversionState, line: str
       events.push(...emitOutputItemDone(state, "message"));
       state.outputIndex++;
     } else if (state.phase === "tool") {
-      // Close any unclosed tool calls
-      for (let i = 0; i < state.toolCalls.length; i++) {
-        events.push(...emitFunctionCallArgDone(state, i));
-        events.push(...emitOutputItemDone(state, "function_call", i));
-        state.outputIndex++;
-      }
+      // Defer tool close until [DONE] so trailing argument deltas after finish_reason are included.
+      state.toolsPendingClose = true;
     } else if (state.phase === "initial") {
       events.push(...emitResponseCreated(state));
     }
@@ -610,6 +609,16 @@ function emitFunctionCallArgDone(state: StreamingConversionState, toolIndex: num
   ];
 }
 
+function emitPendingToolCallCloseEvents(state: StreamingConversionState): string[] {
+  const events: string[] = [];
+  for (let i = 0; i < state.toolCalls.length; i++) {
+    events.push(...emitFunctionCallArgDone(state, i));
+    events.push(...emitOutputItemDone(state, "function_call", i));
+    state.outputIndex++;
+  }
+  return events;
+}
+
 function emitResponseCompleted(state: StreamingConversionState): string[] {
   const output: unknown[] = [];
 
@@ -675,11 +684,16 @@ function flushCompletion(state: StreamingConversionState): string[] {
     return []; // Already completed — avoid duplicate [DONE]
   }
 
-  // finish_reason already finalized output items — wait for upstream usage, then complete.
+  // finish_reason received; close deferred tool items, then complete.
   if (state.phase === "finished") {
-    const out = [...emitResponseCompleted(state), sseLine("data: [DONE]")];
+    const events: string[] = [];
+    if (state.toolsPendingClose) {
+      events.push(...emitPendingToolCallCloseEvents(state));
+      state.toolsPendingClose = false;
+    }
+    events.push(...emitResponseCompleted(state), sseLine("data: [DONE]"));
     state.phase = "done";
-    return out;
+    return events;
   }
 
   const events: string[] = [];
@@ -700,11 +714,7 @@ function flushCompletion(state: StreamingConversionState): string[] {
     state.outputIndex++;
     events.push(...emitResponseCompleted(state));
   } else if (state.phase === "tool") {
-    for (let i = 0; i < state.toolCalls.length; i++) {
-      events.push(...emitFunctionCallArgDone(state, i));
-      events.push(...emitOutputItemDone(state, "function_call", i));
-      state.outputIndex++;
-    }
+    events.push(...emitPendingToolCallCloseEvents(state));
     events.push(...emitResponseCompleted(state));
   }
 

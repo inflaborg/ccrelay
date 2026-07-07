@@ -12,6 +12,7 @@ import type {
   OpenAIToolChoice,
 } from "./anthropic-to-openai-chat-request";
 import { assignOpenAiChatMaxOutput } from "../rules/openai-chat-model-rules";
+import { normalizeOpenAiToolCallArgumentsString } from "../rules/openai-tool-call-arguments";
 import { isOpenAIChatCompletionsRequest } from "./openai-chat-to-anthropic-request";
 
 /** Collect tools for Responses echo: `function` defs, nested `namespace` bundles (inner tools), and hosted tools (web_search, etc.). */
@@ -398,8 +399,9 @@ function appendInputItemsToMessages(items: unknown[], messages: OpenAIMessage[])
 
     if (typ === "function_call") {
       const name = String((o as { name?: string }).name ?? "");
-      const argStr =
+      const rawArgStr =
         typeof o.arguments === "string" ? o.arguments : JSON.stringify(o.arguments ?? {});
+      const argStr = normalizeOpenAiToolCallArgumentsString(rawArgStr);
       const rawId = o as { call_id?: unknown; id?: unknown };
       const callId =
         typeof rawId.call_id === "string"
