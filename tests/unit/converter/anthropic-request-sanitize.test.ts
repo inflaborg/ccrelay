@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   stripBillingHeaderFromAnthropicBody,
+  sanitizeAnthropicOutboundBody,
   isBillingHeaderBlock,
 } from "@/converter/anthropic-request-sanitize";
 
@@ -145,6 +146,63 @@ describe("converter: anthropic-request-sanitize", () => {
       };
       const body = Buffer.from(JSON.stringify(input), "utf-8");
       expect(stripBillingHeaderFromAnthropicBody(body)).toBe(body);
+    });
+  });
+
+  describe("sanitizeAnthropicOutboundBody", () => {
+    it("strips billing header and unsupported reasoning fields for haiku", () => {
+      const input = {
+        model: "claude-haiku-4-5",
+        max_tokens: 1024,
+        messages: [{ role: "user", content: "hi" }],
+        system: [{ type: "text", text: BILLING_TEXT }],
+        thinking: { type: "enabled", budget_tokens: 1024 },
+        output_config: { effort: "medium" },
+      };
+      const body = Buffer.from(JSON.stringify(input), "utf-8");
+      const out = sanitizeAnthropicOutboundBody(body);
+      const parsed = JSON.parse(out.toString("utf-8")) as Record<string, unknown>;
+
+      expect(parsed.system).toBeUndefined();
+      expect(parsed.thinking).toBeUndefined();
+      expect(parsed.output_config).toBeUndefined();
+    });
+
+    it("preserves reasoning fields for sonnet", () => {
+      const input = {
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1024,
+        messages: [{ role: "user", content: "hi" }],
+        thinking: { type: "adaptive" },
+        output_config: { effort: "medium" },
+      };
+      const body = Buffer.from(JSON.stringify(input), "utf-8");
+      const out = sanitizeAnthropicOutboundBody(body);
+      const parsed = JSON.parse(out.toString("utf-8")) as Record<string, unknown>;
+
+      expect(parsed.thinking).toEqual({ type: "adaptive" });
+      expect(parsed.output_config).toEqual({ effort: "medium" });
+    });
+
+    it("hoists inline system messages for haiku with billing strip", () => {
+      const input = {
+        model: "claude-haiku-4-5",
+        max_tokens: 1024,
+        messages: [
+          { role: "user", content: "hi" },
+          { role: "system", content: "Skills: godot" },
+        ],
+        system: [{ type: "text", text: BILLING_TEXT }],
+      };
+      const body = Buffer.from(JSON.stringify(input), "utf-8");
+      const out = sanitizeAnthropicOutboundBody(body);
+      const parsed = JSON.parse(out.toString("utf-8")) as {
+        system?: { type: string; text: string }[];
+        messages: { role: string }[];
+      };
+
+      expect(parsed.system).toBe("Skills: godot");
+      expect(parsed.messages.every(m => m.role !== "system")).toBe(true);
     });
   });
 });

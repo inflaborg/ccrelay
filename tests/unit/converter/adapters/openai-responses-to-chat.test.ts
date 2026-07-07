@@ -111,6 +111,26 @@ describe("convertResponsesRequestToChatCompletions", () => {
     expect(tools[1].tool_call_id).toBe("call_b");
   });
 
+  it("repairs truncated function_call arguments for upstream prefill", () => {
+    const truncated = '{"target_file":"/Users/dzhsurf/Documents/code';
+    const { request } = convertResponsesRequestToChatCompletions(
+      {
+        model: "gpt-4o",
+        input: [
+          {
+            type: "function_call",
+            name: "Read",
+            arguments: truncated,
+            call_id: "call_x",
+          },
+        ],
+      },
+      "/v1/responses"
+    );
+    const tc = request.messages.find(m => m.role === "assistant")?.tool_calls?.[0];
+    expect(JSON.parse(tc!.function.arguments)).toEqual({ raw: truncated });
+  });
+
   it("does not merge function_call after a tool message (new assistant turn)", () => {
     const { request } = convertResponsesRequestToChatCompletions(
       {

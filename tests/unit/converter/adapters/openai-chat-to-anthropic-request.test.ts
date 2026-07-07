@@ -281,6 +281,20 @@ describe("convertOpenAIRequestToAnthropic", () => {
       expect(request.thinking).toEqual({ type: "adaptive" });
       expect(request.output_config).toEqual({ effort: "high" });
     });
+
+    it("does not inject thinking or output_config for haiku with reasoning_effort", () => {
+      const { request } = convertOpenAIRequestToAnthropic(
+        {
+          model: "claude-haiku-4-5",
+          max_tokens: 1024,
+          messages: [{ role: "user", content: "Hi" }],
+          reasoning_effort: "medium",
+        },
+        "/v1/chat/completions"
+      );
+      expect(request.thinking).toBeUndefined();
+      expect(request.output_config).toBeUndefined();
+    });
   });
 
   it("omits tool_choice when there are no tools (even if tool_choice was set)", () => {

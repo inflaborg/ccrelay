@@ -7,6 +7,7 @@ import {
   helperRowsSeedFromCustomModelsText,
   initSelections,
   parseCustomModelLineForUi,
+  slugifyProviderId,
 } from "../../../web/src/features/providers/wizard/engine";
 import {
   defaultModelIdsAsText,
@@ -354,5 +355,107 @@ describe("generateProviders", () => {
     expect(out[0].useCustomModelsList).toBe(false);
     expect(out[0].customModelsList).toBeUndefined();
     expect(out[0].modelMap).toEqual([]);
+  });
+
+  it("derives provider id from customized display name", () => {
+    const preset = getPresetById("generic-openai-chat");
+    if (!preset) {
+      throw new Error("preset generic-openai-chat");
+    }
+    const out = generateProviders(preset, {
+      selections: {},
+      apiKey: "k",
+      userBaseUrl: "https://gateway.example/v1",
+      nameBase: "Work OpenAI",
+      modelIds: ["gpt-4o"],
+      claudeSupport: true,
+      useCustomModels: true,
+    });
+    expect(out[0].id).toBe("work-openai-upstream");
+    expect(out[0].name).toBe("Work OpenAI");
+  });
+
+  it("keeps preset id when display name matches default", () => {
+    const preset = getPresetById("generic-anthropic");
+    if (!preset) {
+      throw new Error("preset generic-anthropic");
+    }
+    const out = generateProviders(preset, {
+      selections: {},
+      apiKey: "k",
+      userBaseUrl: "https://api.anthropic.com",
+      nameBase: "Anthropic",
+      modelIds: ["claude-sonnet-4-20250514"],
+      claudeSupport: false,
+      useCustomModels: true,
+    });
+    expect(out[0].id).toBe("anthropic-upstream");
+  });
+
+  it("suffixes provider id when it collides with an existing provider", () => {
+    const preset = getPresetById("generic-openai-chat");
+    if (!preset) {
+      throw new Error("preset generic-openai-chat");
+    }
+    const out = generateProviders(preset, {
+      selections: {},
+      apiKey: "k",
+      userBaseUrl: "https://gateway.example/v1",
+      nameBase: "Work OpenAI",
+      modelIds: ["gpt-4o"],
+      claudeSupport: true,
+      useCustomModels: true,
+      existingProviderIds: ["work-openai-upstream"],
+    });
+    expect(out[0].id).toBe("work-openai-upstream-2");
+  });
+
+  it("suffixes default preset id when adding a second provider without renaming", () => {
+    const preset = getPresetById("generic-openai-chat");
+    if (!preset) {
+      throw new Error("preset generic-openai-chat");
+    }
+    const out = generateProviders(preset, {
+      selections: {},
+      apiKey: "k",
+      userBaseUrl: "https://gateway.example/v1",
+      nameBase: "OpenAI-Chat",
+      modelIds: ["gpt-4o"],
+      claudeSupport: true,
+      useCustomModels: true,
+      existingProviderIds: ["openai-chat-upstream"],
+    });
+    expect(out[0].id).toBe("openai-chat-upstream-2");
+  });
+
+  it("keeps distinct ids for multi-variant presets with customized display name", () => {
+    const preset = getPresetById("glm");
+    if (!preset) {
+      throw new Error("preset glm");
+    }
+    const out = generateProviders(preset, {
+      selections: initSelections(preset),
+      apiKey: "k",
+      nameBase: "Company GLM",
+      modelIds: ["glm-5.1"],
+      claudeSupport: true,
+      useCustomModels: true,
+    });
+    expect(out).toHaveLength(2);
+    expect(out[0].id).toBe("company-glm-intl-anthropic");
+    expect(out[1].id).toBe("company-glm-intl-openai");
+    expect(new Set(out.map(p => p.id)).size).toBe(2);
+  });
+});
+
+describe("slugifyProviderId", () => {
+  it("lowercases and hyphenates display names", () => {
+    expect(slugifyProviderId("Work OpenAI")).toBe("work-openai");
+    expect(slugifyProviderId("  My_Company-GLM  ")).toBe("my_company-glm");
+  });
+
+  it("returns empty string for blank input", () => {
+    expect(slugifyProviderId("   ")).toBe("");
+    expect(slugifyProviderId("---")).toBe("");
   });
 });

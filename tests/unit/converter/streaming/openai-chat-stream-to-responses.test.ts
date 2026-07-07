@@ -408,13 +408,16 @@ describe("processStreamingChunk", () => {
     );
     expect(state.toolCalls[0].arguments).toBe('{"query":"test"}');
 
-    // Finish
+    // Finish — tool close events are deferred until [DONE]
     const eFinish = processStreamingChunk(state, chunk({}, "stop"));
     const finishTypes = extractTypes(eFinish);
-    expect(finishTypes).toContain("response.function_call_arguments.done");
-    expect(finishTypes).toContain("response.output_item.done");
+    expect(finishTypes).not.toContain("response.function_call_arguments.done");
+    expect(finishTypes).not.toContain("response.output_item.done");
     expect(finishTypes).not.toContain("response.completed");
-    expect(extractTypes(processStreamingChunk(state, "[DONE]"))).toContain("response.completed");
+    const doneTypes = extractTypes(processStreamingChunk(state, "[DONE]"));
+    expect(doneTypes).toContain("response.function_call_arguments.done");
+    expect(doneTypes).toContain("response.output_item.done");
+    expect(doneTypes).toContain("response.completed");
   });
 
   it("handles multiple tool calls", () => {
@@ -457,14 +460,58 @@ describe("processStreamingChunk", () => {
     expect(state.toolCalls[0].name).toBe("fn_a");
     expect(state.toolCalls[1].name).toBe("fn_b");
 
-    // Finish
+    // Finish — tool close events are deferred until [DONE]
     const eFinish = processStreamingChunk(state, chunk({}, "tool_calls"));
-    // Should close both tool calls
     const finishTypes = extractTypes(eFinish);
-    const doneItems = finishTypes.filter(t => t === "response.output_item.done");
-    expect(doneItems.length).toBe(2);
+    expect(finishTypes).not.toContain("response.output_item.done");
     expect(finishTypes).not.toContain("response.completed");
-    expect(extractTypes(processStreamingChunk(state, "[DONE]"))).toContain("response.completed");
+    const doneTypes = extractTypes(processStreamingChunk(state, "[DONE]"));
+    expect(doneTypes.filter(t => t === "response.output_item.done").length).toBe(2);
+    expect(doneTypes).toContain("response.completed");
+  });
+
+  it("includes argument deltas that arrive after finish_reason before [DONE]", () => {
+    const state = createStreamingState();
+    processStreamingChunk(state, chunk({ role: "assistant", content: "" }));
+    processStreamingChunk(
+      state,
+      chunk({
+        tool_calls: [
+          {
+            index: 0,
+            id: "call_late",
+            type: "function",
+            function: { name: "search", arguments: "" },
+          },
+        ],
+      })
+    );
+    processStreamingChunk(
+      state,
+      chunk({
+        tool_calls: [{ index: 0, function: { arguments: '{"q":"' } }],
+      })
+    );
+
+    processStreamingChunk(state, chunk({}, "tool_calls"));
+    expect(state.toolsPendingClose).toBe(true);
+    expect(state.toolCalls[0].arguments).toBe('{"q":"');
+
+    processStreamingChunk(
+      state,
+      chunk({
+        tool_calls: [{ index: 0, function: { arguments: 'x"}' } }],
+      })
+    );
+    expect(state.toolCalls[0].arguments).toBe('{"q":"x"}');
+
+    const doneEvents = processStreamingChunk(state, "[DONE]");
+    const argDone = doneEvents.find(e => e.includes("response.function_call_arguments.done"));
+    expect(argDone).toContain('"arguments":"{\\"q\\":\\"x\\"}"');
+    const itemDone = doneEvents.find(
+      e => e.includes("response.output_item.done") && e.includes("function_call")
+    );
+    expect(itemDone).toContain('\\"q\\":\\"x\\"');
   });
 
   it("handles [DONE] sentinel", () => {

@@ -43,7 +43,6 @@ import { rebuildCoworkModelMap } from "@ccrelay/shared/coworkModelMap";
 import type { AliasHashProtocol } from "@ccrelay/shared/aliasHash";
 import { api } from "@/api/client";
 import type { AddProviderRequest, Provider, ModelMapEntry } from "@/types/api";
-import { providerVendorSortRank } from "./providerSortOrder";
 import { WizardDialog } from "./wizard/WizardDialog";
 import { CoworkAliasHelper } from "./CoworkAliasHelper";
 
@@ -590,18 +589,9 @@ export default function Providers() {
       }
       return p.enabled ? 1 : 2;
     };
-    const ga = sortGroup(a);
-    const gb = sortGroup(b);
-    if (ga !== gb) {
-      return ga - gb;
-    }
-    const rankDiff = providerVendorSortRank(a) - providerVendorSortRank(b);
-    if (rankDiff !== 0) {
-      return rankDiff;
-    }
-    const byName = a.name.localeCompare(b.name, "en", { sensitivity: "base", numeric: true });
-    if (byName !== 0) {
-      return byName;
+    const groupDiff = sortGroup(a) - sortGroup(b);
+    if (groupDiff !== 0) {
+      return groupDiff;
     }
     return a.id.localeCompare(b.id, "en", { sensitivity: "base", numeric: true });
   });
@@ -984,6 +974,7 @@ export default function Providers() {
         open={showWizard}
         onOpenChange={setShowWizard}
         aliasPrefix={aliasPrefix}
+        existingProviderIds={(providersData?.providers ?? []).map(p => p.id)}
         onCustom={() => {
           setShowWizard(false);
           openLegacyAddModal();

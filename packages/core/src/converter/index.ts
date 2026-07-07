@@ -184,6 +184,23 @@ export {
 } from "./rules/openai-chat-model-rules";
 
 export {
+  normalizeOpenAiToolCallArgumentsString,
+  sanitizeOpenAiChatToolArgumentsInMessages,
+} from "./rules/openai-tool-call-arguments";
+
+export {
   stripBillingHeaderFromAnthropicBody,
+  sanitizeAnthropicOutboundBody,
   isBillingHeaderBlock,
 } from "./anthropic-request-sanitize";
+
+export {
+  resolveModelMeta,
+  listModelFamilies,
+  type ModelMeta,
+  type ModelAnthropicMeta,
+  type ModelVendor,
+  type ResolveModelMetaOptions,
+  sanitizeAnthropicRequestRecord,
+  sanitizeOpenAiChatRequestRecord,
+} from "./model-meta";

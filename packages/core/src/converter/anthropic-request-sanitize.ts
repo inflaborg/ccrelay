@@ -3,6 +3,8 @@
  * These volatile system blocks break prompt caching prefixes when cc_version/cch change.
  */
 
+import { sanitizeAnthropicRequestRecord } from "./model-meta/sanitize-anthropic";
+
 /** Entire block must be a `key=value;` sequence — no trailing real prompt content. */
 const BILLING_HEADER_FULL_RE = /^x-anthropic-billing-header:\s*(?:[a-z0-9_]+\s*=\s*[^;]*;\s*)+$/i;
 
@@ -80,4 +82,36 @@ export function stripBillingHeaderFromAnthropicBody(body: Buffer): Buffer {
   }
 
   return Buffer.from(JSON.stringify(data), "utf-8");
+}
+
+function sanitizeAnthropicRecordInPlace(data: Record<string, unknown>): boolean {
+  const before = JSON.stringify(data);
+  sanitizeAnthropicRequestRecord(data);
+  return JSON.stringify(data) !== before;
+}
+
+/**
+ * Billing-header strip + model-capability sanitize for outbound Anthropic Messages bodies.
+ * Returns the original buffer when nothing changes.
+ */
+export function sanitizeAnthropicOutboundBody(body: Buffer): Buffer {
+  let next = stripBillingHeaderFromAnthropicBody(body);
+  if (!next || next.length === 0) {
+    return next;
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(next.toString("utf-8"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return next;
+    }
+    const data = parsed as Record<string, unknown>;
+    if (sanitizeAnthropicRecordInPlace(data)) {
+      next = Buffer.from(JSON.stringify(data), "utf-8");
+    }
+  } catch {
+    return next;
+  }
+
+  return next;
 }
