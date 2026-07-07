@@ -14,6 +14,7 @@ import {
   mapAnthropicWirePathToOpenAiUpstream,
   mapOpenAiWirePathToAnthropicUpstream,
   stripBillingHeaderFromAnthropicBody,
+  sanitizeAnthropicOutboundBody,
   type ResponsesRequestEcho,
 } from "../../converter";
 import type { OpenAIMessage } from "../../converter/adapters/anthropic-to-openai-chat-request";
@@ -22,6 +23,7 @@ import {
   ensureOpenAiChatStreamUsageIncluded,
 } from "../../converter/rules/openai-chat-model-rules";
 import { sanitizeOpenAiChatToolArgumentsInMessages } from "../../converter/rules/openai-tool-call-arguments";
+import { sanitizeOpenAiChatRequestRecord } from "../../converter/model-meta/sanitize-openai-chat";
 import {
   normalizeToolsForProvider,
   applyPlatformMessageTransforms,
@@ -40,6 +42,24 @@ const log = new ScopedLogger("BodyProcessor");
 /** OpenAI Chat outbound: path after routing targets `/chat/completions`. */
 function isOpenAiChatCompletionsTargetPath(targetPath: string): boolean {
   return targetPath.toLowerCase().includes("chat/completions");
+}
+
+function isAnthropicMessagesTargetPath(targetPath: string, method: string): boolean {
+  return method === "POST" && targetPath === "/v1/messages";
+}
+
+function applyAnthropicOutboundSanitizeIfNeeded(
+  body: Buffer,
+  routing: RoutingContext,
+  upstreamWire: ApiSurface
+): Buffer {
+  if (upstreamWire !== "anthropic") {
+    return body;
+  }
+  if (!isAnthropicMessagesTargetPath(routing.targetPath, routing.method) || !body.length) {
+    return body;
+  }
+  return sanitizeAnthropicOutboundBody(body);
 }
 
 function applyHostedToolsToOpenAiChatRecord(data: Record<string, unknown>, baseUrl: string): void {
@@ -89,6 +109,7 @@ function applyPlatformTransformsToOpenAiChatBody(
     applyPlatformMessagesToOpenAiChatRecord(data, baseUrl);
     applyPlatformRequestSanitize(data, baseUrl);
     sanitizeOpenAiChatToolArgumentsInMessages(data.messages);
+    sanitizeOpenAiChatRequestRecord(data);
     return Buffer.from(JSON.stringify(data), "utf-8");
   } catch {
     return body;
@@ -365,6 +386,8 @@ export class BodyProcessor {
         hasHostedWebSearchFlag = false;
       }
     }
+
+    body = applyAnthropicOutboundSanitizeIfNeeded(body, routing, upstreamWire);
 
     return {
       body,

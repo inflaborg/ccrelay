@@ -190,5 +190,16 @@ export {
 
 export {
   stripBillingHeaderFromAnthropicBody,
+  sanitizeAnthropicOutboundBody,
   isBillingHeaderBlock,
 } from "./anthropic-request-sanitize";
+
+export {
+  resolveModelMeta,
+  listModelFamilies,
+  type ModelMeta,
+  type ModelVendor,
+  type ResolveModelMetaOptions,
+  sanitizeAnthropicRequestRecord,
+  sanitizeOpenAiChatRequestRecord,
+} from "./model-meta";

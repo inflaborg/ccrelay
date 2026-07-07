@@ -5,6 +5,8 @@
 
 /* eslint-disable @typescript-eslint/naming-convention -- OpenAI Chat Completions wire field names */
 
+import { resolveModelMeta } from "../model-meta/registry";
+
 /** Minimal body shape for max output field assignment */
 export interface OpenAiChatMaxOutputTarget {
   model: string;
@@ -16,12 +18,7 @@ export interface OpenAiChatMaxOutputTarget {
  * Models that expect completion budget under `max_completion_tokens` (not `max_tokens`).
  */
 export function openaiChatUsesMaxCompletionTokens(model: string): boolean {
-  const m = model.trim().toLowerCase();
-  if (m.startsWith("gpt-5")) {
-    return true;
-  }
-  // o-series reasoning/chat ids: o1, o3, o4, …
-  return /^o\d/.test(m);
+  return resolveModelMeta(model, { vendor: "openai" }).openaiChat?.usesMaxCompletionTokens === true;
 }
 
 /**

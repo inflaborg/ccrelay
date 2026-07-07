@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+**Protocol/Conversion**
+
+- Strip unsupported reasoning parameters when forwarding to models that do not support them (e.g. effort on Claude Haiku), preventing client-injected fields from causing upstream errors.
+
 ## [0.2.7] - 2026-06-28 (pre-release)
 
 Pre-release line for 0.2.7.

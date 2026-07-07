@@ -4,6 +4,8 @@
  * penalties are ignored upstream; strip them for a smaller payload.
  */
 
+import { resolveModelMeta } from "../../model-meta/registry";
+
 /** Injected on outbound `/v1/chat/completions` bodies when upstream host is `api.deepseek.com`. */
 export function deepseekChatSanitize(body: Record<string, unknown>): void {
   const raw = body.reasoning_effort;
@@ -11,6 +13,13 @@ export function deepseekChatSanitize(body: Record<string, unknown>): void {
     typeof raw === "string" && raw.trim() !== "" ? raw.trim().toLowerCase() : undefined;
 
   if (effort === undefined) {
+    return;
+  }
+
+  const model = typeof body.model === "string" ? body.model : "";
+  const meta = resolveModelMeta(model, { vendor: "deepseek" });
+  if (!meta.reasoning.supportsReasoningEffort) {
+    delete body.reasoning_effort;
     return;
   }
 

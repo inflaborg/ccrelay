@@ -17,6 +17,7 @@ import {
 } from "./anthropic-to-openai-chat-request";
 import { mapOpenAiWirePathToAnthropicUpstream } from "../paths";
 import { openAIHostedToolToAnthropicServerToolDef } from "../tool-schema-conversion";
+import { resolveModelMeta } from "../model-meta/registry";
 
 export interface OpenAIToAnthropicRequestResult {
   request: AnthropicMessageRequest;
@@ -68,15 +69,23 @@ export function convertOpenAIRequestToAnthropic(
     out.stop_sequences = Array.isArray(openai.stop) ? openai.stop : [openai.stop];
   }
   if (openai.reasoning_effort !== undefined) {
-    const effortStr =
-      typeof openai.reasoning_effort === "string" && openai.reasoning_effort.trim() !== ""
-        ? openai.reasoning_effort.toLowerCase()
-        : undefined;
-    if (effortStr === "none") {
-      out.thinking = { type: "disabled" };
-    } else {
-      out.thinking = { type: "adaptive" };
-      out.output_config = { effort: mapOpenAIEffortToAnthropic(effortStr) };
+    const rawEffort = openai.reasoning_effort;
+    let effortStr: string | undefined;
+    if (typeof rawEffort === "string" && rawEffort.trim() !== "") {
+      effortStr = rawEffort.toLowerCase();
+    } else if (typeof rawEffort === "string") {
+      effortStr = "";
+    }
+    const meta = resolveModelMeta(openai.model, { vendor: "anthropic" });
+    if (meta.reasoning.supportsReasoningEffort !== false) {
+      if (effortStr === "none" && meta.reasoning.supportsThinking) {
+        out.thinking = { type: "disabled" };
+      } else if (effortStr !== undefined && meta.reasoning.supportsAdaptiveThinking) {
+        out.thinking = { type: "adaptive" };
+        if (meta.reasoning.supportsEffort) {
+          out.output_config = { effort: mapOpenAIEffortToAnthropic(effortStr) };
+        }
+      }
     }
   }
 

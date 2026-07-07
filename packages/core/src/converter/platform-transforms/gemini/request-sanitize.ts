@@ -4,28 +4,11 @@
 
 /* eslint-disable @typescript-eslint/naming-convention -- Gemini OpenAI-compat wire uses snake_case */
 
+import { canGeminiDisableThinking, isGemini25Model } from "../../model-meta";
+
+export { canGeminiDisableThinking, isGemini25Model };
+
 const GEMINI_VALID_EFFORTS = new Set(["none", "minimal", "low", "medium", "high"]);
-
-/**
- * Whether `reasoning_effort: "none"` is valid for this Gemini model (2.5 Flash family).
- * 2.5 Pro and Gemini 3+ cannot disable thinking per Gemini docs.
- */
-export function canGeminiDisableThinking(model: string): boolean {
-  const m = model.toLowerCase();
-  if (m.includes("2.5-pro")) {
-    return false;
-  }
-  const major = m.match(/gemini-(\d+)/);
-  if (major && parseInt(major[1], 10) >= 3) {
-    return false;
-  }
-  return true;
-}
-
-/** Gemini 2.5 family uses `thinking_budget` in `thinking_config`. */
-export function isGemini25Model(model: string): boolean {
-  return model.toLowerCase().includes("2.5");
-}
 
 /**
  * Map OpenAI-style effort to a 2.5 `thinking_budget` (integers per Gemini docs).
