@@ -29,6 +29,7 @@ export const VENDOR_DEFAULT_META: Readonly<Record<ModelVendor, ModelMeta>> = {
     vendor: "anthropic",
     reasoning: { ...REASONING_CAPABLE },
     vision: { enabled: true },
+    anthropic: { supportsSystemRoleInMessages: true },
   },
   openai: {
     id: "openai-default",
@@ -62,6 +63,7 @@ export function cloneModelMeta(meta: ModelMeta): ModelMeta {
     ...(meta.openaiChat ? { openaiChat: { ...meta.openaiChat } } : {}),
     ...(meta.gemini ? { gemini: { ...meta.gemini } } : {}),
     ...(meta.deepseek ? { deepseek: { ...meta.deepseek } } : {}),
+    ...(meta.anthropic ? { anthropic: { ...meta.anthropic } } : {}),
   };
 }
 

@@ -48,4 +48,39 @@ describe("sanitizeAnthropicRequestByMeta", () => {
 
     expect(data.output_config).toEqual({ format: { type: "text" } });
   });
+
+  it("hoists inline system messages for haiku Cowork-style payload", () => {
+    const data: Record<string, unknown> = {
+      model: "claude-haiku-4-5",
+      max_tokens: 32000,
+      thinking: { type: "adaptive" },
+      output_config: { effort: "xhigh" },
+      system: [
+        {
+          type: "text",
+          text: "You are Claude Code.",
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      messages: [
+        { role: "user", content: "Review the project." },
+        { role: "system", content: "Available skills: godot, pdf" },
+      ],
+    };
+    const meta = resolveModelMeta("claude-haiku-4-5", { vendor: "anthropic" });
+    const changes = sanitizeAnthropicRequestByMeta(data, meta);
+
+    expect(changes).toContain("messages.system->system");
+    expect(changes).toContain("thinking");
+    expect(changes).toContain("output_config.effort");
+    expect(data.messages).toEqual([{ role: "user", content: "Review the project." }]);
+    expect(data.system).toEqual([
+      {
+        type: "text",
+        text: "You are Claude Code.",
+        cache_control: { type: "ephemeral" },
+      },
+      { type: "text", text: "Available skills: godot, pdf" },
+    ]);
+  });
 });

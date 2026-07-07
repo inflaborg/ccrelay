@@ -8,6 +8,7 @@ describe("resolveModelMeta", () => {
     expect(meta.id).toBe("claude-haiku");
     expect(meta.reasoning.supportsEffort).toBe(false);
     expect(meta.reasoning.supportsThinking).toBe(false);
+    expect(meta.anthropic?.supportsSystemRoleInMessages).toBe(false);
     expect(meta.vision.enabled).toBe(true);
   });
 
@@ -16,6 +17,7 @@ describe("resolveModelMeta", () => {
     expect(meta.id).toBe("claude-sonnet");
     expect(meta.reasoning.supportsEffort).toBe(true);
     expect(meta.reasoning.supportsAdaptiveThinking).toBe(true);
+    expect(meta.anthropic?.supportsSystemRoleInMessages).not.toBe(false);
   });
 
   it("matches gpt-5 max_completion_tokens family", () => {
@@ -62,6 +64,7 @@ describe("resolveModelMeta", () => {
     const meta = resolveModelMeta("custom-deployment-name", { vendor: "anthropic" });
     expect(meta.vendor).toBe("anthropic");
     expect(meta.reasoning.supportsEffort).toBe(true);
+    expect(meta.anthropic?.supportsSystemRoleInMessages).toBe(true);
   });
 
   it("lists all registered families", () => {

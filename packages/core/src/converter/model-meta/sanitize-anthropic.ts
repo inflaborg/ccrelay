@@ -1,10 +1,11 @@
 import { ScopedLogger } from "../../utils/logger";
+import { hoistInlineSystemMessagesToAnthropicSystem } from "./normalize-anthropic-system";
 import { resolveModelMeta } from "./registry";
 import type { ModelMeta } from "./types";
 
 const log = new ScopedLogger("ModelMeta");
 
-function deleteOutputConfigEffort(data: Record<string, unknown>, stripped: string[]): void {
+function deleteOutputConfigEffort(data: Record<string, unknown>, changes: string[]): void {
   const oc = data.output_config;
   if (!oc || typeof oc !== "object" || Array.isArray(oc)) {
     return;
@@ -12,11 +13,11 @@ function deleteOutputConfigEffort(data: Record<string, unknown>, stripped: strin
   const out = oc as Record<string, unknown>;
   if ("effort" in out) {
     delete out.effort;
-    stripped.push("output_config.effort");
+    changes.push("output_config.effort");
   }
   if (Object.keys(out).length === 0) {
     delete data.output_config;
-    stripped.push("output_config");
+    changes.push("output_config");
   }
 }
 
@@ -28,11 +29,11 @@ export function sanitizeAnthropicRequestByMeta(
   data: Record<string, unknown>,
   meta: ModelMeta
 ): string[] {
-  const stripped: string[] = [];
+  const changes: string[] = [];
   const reasoning = meta.reasoning;
 
   if (!reasoning.supportsEffort) {
-    deleteOutputConfigEffort(data, stripped);
+    deleteOutputConfigEffort(data, changes);
   }
 
   const thinking = data.thinking;
@@ -42,25 +43,31 @@ export function sanitizeAnthropicRequestByMeta(
 
     if (!reasoning.supportsThinking) {
       delete data.thinking;
-      stripped.push("thinking");
+      changes.push("thinking");
     } else if (!reasoning.supportsAdaptiveThinking && type === "adaptive") {
       delete data.thinking;
-      stripped.push("thinking");
+      changes.push("thinking");
     }
   } else if (!reasoning.supportsThinking && data.thinking !== undefined) {
     delete data.thinking;
-    stripped.push("thinking");
+    changes.push("thinking");
   }
 
-  if (stripped.length > 0) {
+  if (meta.anthropic?.supportsSystemRoleInMessages === false) {
+    if (hoistInlineSystemMessagesToAnthropicSystem(data)) {
+      changes.push("messages.system->system");
+    }
+  }
+
+  if (changes.length > 0) {
     const modelLabel = typeof data.model === "string" ? data.model : "?";
     log.warn(
-      `[model-meta] stripped ${stripped.join(", ")} for ${modelLabel} ` +
+      `[model-meta] sanitized ${changes.join(", ")} for ${modelLabel} ` +
         `(family=${meta.id}, vendor=${meta.vendor})`
     );
   }
 
-  return stripped;
+  return changes;
 }
 
 /** Resolve meta from `data.model` and sanitize in place. */

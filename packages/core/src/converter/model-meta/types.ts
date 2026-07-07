@@ -38,6 +38,11 @@ export interface ModelDeepSeekMeta {
   isReasoner?: boolean;
 }
 
+export interface ModelAnthropicMeta {
+  /** When false, hoist `messages` entries with role system/developer into top-level `system`. */
+  supportsSystemRoleInMessages?: boolean;
+}
+
 export interface ModelMeta {
   id: string;
   vendor: ModelVendor;
@@ -46,6 +51,7 @@ export interface ModelMeta {
   openaiChat?: ModelOpenAiChatMeta;
   gemini?: ModelGeminiMeta;
   deepseek?: ModelDeepSeekMeta;
+  anthropic?: ModelAnthropicMeta;
 }
 
 /** Declarative family row in the static registry. */

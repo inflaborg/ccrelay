@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Protocol/Conversion**
 
 - Strip unsupported reasoning parameters when forwarding to models that do not support them (e.g. effort on Claude Haiku), preventing client-injected fields from causing upstream errors.
+- Strip inline `system` role messages when forwarding to models that reject them (e.g. Claude Haiku), merging content into the top-level `system` field.
 
 ## [0.2.7] - 2026-06-28 (pre-release)
 

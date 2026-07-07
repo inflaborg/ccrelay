@@ -9,6 +9,7 @@ export const ANTHROPIC_MODEL_FAMILIES: readonly ModelFamilyEntry[] = [
     meta: {
       reasoning: { ...NO_REASONING },
       vision: { enabled: true },
+      anthropic: { supportsSystemRoleInMessages: false },
     },
   },
   {

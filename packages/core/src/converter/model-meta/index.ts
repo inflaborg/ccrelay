@@ -1,4 +1,5 @@
 export type {
+  ModelAnthropicMeta,
   ModelDeepSeekMeta,
   ModelFamilyEntry,
   ModelGeminiMeta,

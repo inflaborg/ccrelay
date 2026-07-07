@@ -198,6 +198,7 @@ export {
   resolveModelMeta,
   listModelFamilies,
   type ModelMeta,
+  type ModelAnthropicMeta,
   type ModelVendor,
   type ResolveModelMetaOptions,
   sanitizeAnthropicRequestRecord,

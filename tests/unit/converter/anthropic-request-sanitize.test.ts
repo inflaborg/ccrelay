@@ -183,5 +183,26 @@ describe("converter: anthropic-request-sanitize", () => {
       expect(parsed.thinking).toEqual({ type: "adaptive" });
       expect(parsed.output_config).toEqual({ effort: "medium" });
     });
+
+    it("hoists inline system messages for haiku with billing strip", () => {
+      const input = {
+        model: "claude-haiku-4-5",
+        max_tokens: 1024,
+        messages: [
+          { role: "user", content: "hi" },
+          { role: "system", content: "Skills: godot" },
+        ],
+        system: [{ type: "text", text: BILLING_TEXT }],
+      };
+      const body = Buffer.from(JSON.stringify(input), "utf-8");
+      const out = sanitizeAnthropicOutboundBody(body);
+      const parsed = JSON.parse(out.toString("utf-8")) as {
+        system?: { type: string; text: string }[];
+        messages: { role: string }[];
+      };
+
+      expect(parsed.system).toBe("Skills: godot");
+      expect(parsed.messages.every(m => m.role !== "system")).toBe(true);
+    });
   });
 });

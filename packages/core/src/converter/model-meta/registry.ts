@@ -53,6 +53,9 @@ function mergeMeta(base: ModelMeta, patch: Partial<Omit<ModelMeta, "id" | "vendo
   if (patch.deepseek) {
     out.deepseek = { ...(out.deepseek ?? {}), ...patch.deepseek };
   }
+  if (patch.anthropic) {
+    out.anthropic = { ...(out.anthropic ?? {}), ...patch.anthropic };
+  }
   return out;
 }
 
