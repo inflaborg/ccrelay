@@ -203,6 +203,10 @@ export function dbRowToLogWithoutBody(row: Record<string, unknown>): RequestLog 
     outputTokens: row.output_tokens as number | undefined,
     cacheTokens: row.cache_tokens as number | undefined,
     ttfb: row.ttfb as number | undefined,
+    queueWaitMs: row.queue_wait_ms as number | undefined,
+    upstreamTtfbMs: row.upstream_ttfb_ms as number | undefined,
+    genMs: row.gen_ms as number | undefined,
+    totalMs: row.total_ms as number | undefined,
     ...models,
   };
 
@@ -246,6 +250,10 @@ export function dbRowToLog(row: Record<string, unknown>): RequestLog {
     outputTokens: row.output_tokens as number | undefined,
     cacheTokens: row.cache_tokens as number | undefined,
     ttfb: row.ttfb as number | undefined,
+    queueWaitMs: row.queue_wait_ms as number | undefined,
+    upstreamTtfbMs: row.upstream_ttfb_ms as number | undefined,
+    genMs: row.gen_ms as number | undefined,
+    totalMs: row.total_ms as number | undefined,
     ...models,
   };
 }

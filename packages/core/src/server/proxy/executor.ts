@@ -52,12 +52,14 @@ import {
 import {
   applyPlatformResponseTransforms,
   applyAnthropicSseRowsPlatformTransform,
+  matchAnthropicSseRule,
   parseAnthropicSseRows,
   serializeAnthropicSseRows,
 } from "../../converter/platform-transforms";
 import type { ApiSurface } from "../../types";
 import type { RequestTask, ProxyResult } from "../../types";
 import type { ResponseLogger } from "../responseLogger";
+import type { LogResponseTiming } from "../../database/types";
 import type { ModelCatalog } from "../smartRouting/modelCatalog";
 import {
   synthesizeSmartRoutingModelsListBody,
@@ -161,6 +163,41 @@ function ttfbForStreamLog(ctx: ExecutionContext, isStream: boolean): number | un
     return undefined;
   }
   return ctx.firstByteTime - ctx.startTime;
+}
+
+/** Phase timings for DB persistence (queue wait, upstream TTFB, generation, total). */
+function computeTiming(
+  ctx: ExecutionContext,
+  task: RequestTask,
+  endTime: number = Date.now()
+): LogResponseTiming {
+  const queueWaitMs =
+    task.queuedAt !== undefined && task.startedAt !== undefined
+      ? task.startedAt - task.queuedAt
+      : 0;
+
+  let upstreamTtfbMs: number | undefined;
+  if (ctx.requestSentTime > 0 && ctx.firstByteTime > 0) {
+    const ttfb = ctx.firstByteTime - ctx.requestSentTime;
+    if (ttfb > 0) {
+      upstreamTtfbMs = ttfb;
+    }
+  }
+
+  let genMs: number | undefined;
+  if (ctx.firstByteTime > 0) {
+    const gen = endTime - ctx.firstByteTime;
+    if (gen >= 0) {
+      genMs = gen;
+    }
+  }
+
+  const totalMs =
+    task.requestReceiveStart !== undefined
+      ? endTime - task.requestReceiveStart
+      : endTime - ctx.startTime;
+
+  return { queueWaitMs, upstreamTtfbMs, genMs, totalMs };
 }
 
 /** Cheap regex check for SSE terminal events across the supported protocols. */
@@ -842,6 +879,28 @@ export class ProxyExecutor {
       return;
     }
 
+    const shouldStreamAnthropicSsePlatformTransform =
+      !needsResponseConversion &&
+      upstreamWire === "anthropic" &&
+      clientSurface === "anthropic" &&
+      status === 200 &&
+      isSSEResponse &&
+      clientRes &&
+      matchAnthropicSseRule(provider.baseUrl)?.anthropicSseStream;
+
+    if (shouldStreamAnthropicSsePlatformTransform) {
+      this.handleAnthropicSseStreamingPlatformTransform(
+        proxyRes,
+        task,
+        ctx,
+        onClientDisconnect,
+        status,
+        responseHeaders,
+        resolve
+      );
+      return;
+    }
+
     if (isSSEResponse && clientRes) {
       this.handleSSEResponse(
         proxyRes,
@@ -939,7 +998,8 @@ export class ProxyExecutor {
         this.upstreamLogBody(upstreamLog),
         ttfbForStreamLog(ctx, true),
         undefined,
-        ctx.responseHeadersMasked
+        ctx.responseHeadersMasked,
+        computeTiming(ctx, task)
       );
       resolve({
         statusCode: aborted ? 499 : status,
@@ -1057,7 +1117,8 @@ export class ProxyExecutor {
         this.upstreamLogBody(upstreamLog),
         ttfbForStreamLog(ctx, true),
         undefined,
-        ctx.responseHeadersMasked
+        ctx.responseHeadersMasked,
+        computeTiming(ctx, task)
       );
 
       resolve({
@@ -1180,7 +1241,8 @@ export class ProxyExecutor {
         upstreamBody,
         ttfbForStreamLog(ctx, false),
         undefined,
-        ctx.responseHeadersMasked
+        ctx.responseHeadersMasked,
+        computeTiming(ctx, task)
       );
 
       resolve({
@@ -1259,7 +1321,8 @@ export class ProxyExecutor {
           ctx.originalResponseBody,
           ttfbForStreamLog(ctx, false),
           undefined,
-          ctx.responseHeadersMasked
+          ctx.responseHeadersMasked,
+          computeTiming(ctx, task)
         );
 
         resolve({
@@ -1294,7 +1357,8 @@ export class ProxyExecutor {
           ctx.originalResponseBody,
           ttfbForStreamLog(ctx, false),
           undefined,
-          ctx.responseHeadersMasked
+          ctx.responseHeadersMasked,
+          computeTiming(ctx, task)
         );
 
         resolve({
@@ -1362,7 +1426,8 @@ export class ProxyExecutor {
           ctx.originalResponseBody,
           ttfbForStreamLog(ctx, false),
           undefined,
-          ctx.responseHeadersMasked
+          ctx.responseHeadersMasked,
+          computeTiming(ctx, task)
         );
 
         resolve({
@@ -1397,7 +1462,8 @@ export class ProxyExecutor {
           ctx.originalResponseBody,
           ttfbForStreamLog(ctx, false),
           undefined,
-          ctx.responseHeadersMasked
+          ctx.responseHeadersMasked,
+          computeTiming(ctx, task)
         );
 
         resolve({
@@ -1460,7 +1526,8 @@ export class ProxyExecutor {
             ctx.originalResponseBody,
             ttfbForStreamLog(ctx, false),
             undefined,
-            ctx.responseHeadersMasked
+            ctx.responseHeadersMasked,
+            computeTiming(ctx, task)
           );
           resolve({
             statusCode: status,
@@ -1482,7 +1549,8 @@ export class ProxyExecutor {
             ctx.originalResponseBody,
             ttfbForStreamLog(ctx, false),
             undefined,
-            ctx.responseHeadersMasked
+            ctx.responseHeadersMasked,
+            computeTiming(ctx, task)
           );
           resolve({
             statusCode: status,
@@ -1513,7 +1581,8 @@ export class ProxyExecutor {
           ctx.originalResponseBody,
           ttfbForStreamLog(ctx, false),
           undefined,
-          ctx.responseHeadersMasked
+          ctx.responseHeadersMasked,
+          computeTiming(ctx, task)
         );
         resolve({
           statusCode: 502,
@@ -1592,7 +1661,8 @@ export class ProxyExecutor {
             ctx.originalResponseBody,
             ttfbForStreamLog(ctx, false),
             undefined,
-            ctx.responseHeadersMasked
+            ctx.responseHeadersMasked,
+            computeTiming(ctx, task)
           );
           resolve({
             statusCode: status,
@@ -1614,7 +1684,8 @@ export class ProxyExecutor {
             ctx.originalResponseBody,
             ttfbForStreamLog(ctx, false),
             undefined,
-            ctx.responseHeadersMasked
+            ctx.responseHeadersMasked,
+            computeTiming(ctx, task)
           );
           resolve({
             statusCode: status,
@@ -1641,7 +1712,8 @@ export class ProxyExecutor {
           ctx.originalResponseBody,
           ttfbForStreamLog(ctx, false),
           undefined,
-          ctx.responseHeadersMasked
+          ctx.responseHeadersMasked,
+          computeTiming(ctx, task)
         );
         resolve({
           statusCode: 502,
@@ -1753,7 +1825,8 @@ export class ProxyExecutor {
         this.upstreamLogBody(upstreamLog),
         ttfbForStreamLog(ctx, true),
         undefined,
-        ctx.responseHeadersMasked
+        ctx.responseHeadersMasked,
+        computeTiming(ctx, task)
       );
 
       resolve({
@@ -1832,7 +1905,8 @@ export class ProxyExecutor {
             ctx.originalResponseBody,
             ttfbForStreamLog(ctx, false),
             undefined,
-            ctx.responseHeadersMasked
+            ctx.responseHeadersMasked,
+            computeTiming(ctx, task)
           );
           resolve({
             statusCode: status,
@@ -1854,7 +1928,8 @@ export class ProxyExecutor {
             ctx.originalResponseBody,
             ttfbForStreamLog(ctx, false),
             undefined,
-            ctx.responseHeadersMasked
+            ctx.responseHeadersMasked,
+            computeTiming(ctx, task)
           );
           resolve({
             statusCode: status,
@@ -1881,7 +1956,8 @@ export class ProxyExecutor {
           ctx.originalResponseBody,
           ttfbForStreamLog(ctx, false),
           undefined,
-          ctx.responseHeadersMasked
+          ctx.responseHeadersMasked,
+          computeTiming(ctx, task)
         );
         resolve({
           statusCode: 502,
@@ -1969,7 +2045,8 @@ export class ProxyExecutor {
           undefined,
           ttfbForStreamLog(ctx, false),
           undefined,
-          ctx.responseHeadersMasked
+          ctx.responseHeadersMasked,
+          computeTiming(ctx, task)
         );
         resolve({
           statusCode: 499,
@@ -2024,7 +2101,8 @@ export class ProxyExecutor {
         undefined,
         ttfbForStreamLog(ctx, false),
         undefined,
-        ctx.responseHeadersMasked
+        ctx.responseHeadersMasked,
+        computeTiming(ctx, task)
       );
       resolve({
         statusCode: status,
@@ -2033,6 +2111,119 @@ export class ProxyExecutor {
         responseBodyChunks: ctx.responseChunks,
         streamed: true,
         streamCompleted: true,
+      });
+    });
+  }
+
+  /**
+   * Anthropic same-protocol SSE with per-event platform transforms (e.g. LongCat `message_start` usage).
+   */
+  private handleAnthropicSseStreamingPlatformTransform(
+    proxyRes: http.IncomingMessage,
+    task: RequestTask,
+    ctx: ExecutionContext,
+    onClientDisconnect: () => void,
+    status: number,
+    responseHeaders: Record<string, string | string[]>,
+    resolve: (value: ProxyResult) => void
+  ): void {
+    const { clientId, provider, res: clientRes } = task;
+    if (!clientRes) {
+      resolve({
+        statusCode: 500,
+        headers: {},
+        duration: Date.now() - ctx.startTime,
+        errorMessage: "Missing client response for Anthropic SSE platform transform",
+      });
+      return;
+    }
+
+    log.info(`[A->A SSE stream] Platform Anthropic SSE transform (${provider.id})`);
+    clientRes.writeHead(status, responseHeaders);
+
+    const upstreamLog: Buffer[] = [];
+    const sseBuffer = createAnthropicSseEnvelopeBuffer(envelope => {
+      if (ctx.clientDisconnected) {
+        return;
+      }
+      const rows = applyAnthropicSseRowsPlatformTransform([{ data: envelope }], provider.baseUrl);
+      const outgoing = serializeAnthropicSseRows(rows);
+      if (outgoing.length > 0) {
+        this.writeClientStreamForLog(clientRes, outgoing, ctx);
+      }
+    });
+
+    proxyRes.on("data", (chunk: Buffer) => {
+      ctx.streamChunkCount++;
+      ctx.streamTotalBytes += chunk.length;
+
+      if (!ctx.upstreamTerminalSeen && chunkContainsTerminalMarker(chunk)) {
+        ctx.upstreamTerminalSeen = true;
+      }
+
+      if (!ctx.firstChunkLogged) {
+        ctx.firstChunkLogged = true;
+        const firstChunkDelay = Date.now() - ctx.firstByteTime;
+        log.info(
+          `[Perf:${clientId}] FirstChunk: ${firstChunkDelay}ms after headers, ${chunk.length} bytes`
+        );
+      }
+
+      this.recordUpstreamChunkForLog(chunk, upstreamLog, ctx);
+      sseBuffer.push(chunk);
+    });
+
+    proxyRes.on("error", (err: Error) => {
+      log.error(`[${clientId}] Anthropic SSE platform transform upstream error: ${err.message}`);
+      if (!clientRes.writableEnded) {
+        try {
+          clientRes.end();
+        } catch {
+          // Ignore errors when ending already-closed stream
+        }
+      }
+    });
+
+    clientRes.on("error", (err: Error) => {
+      log.error(
+        `[${clientId}] Client connection error during Anthropic SSE platform transform: ${err.message}`
+      );
+      proxyRes.destroy();
+    });
+
+    proxyRes.on("end", () => {
+      ctx.upstreamEndedNaturally = true;
+      sseBuffer.flush();
+
+      if (!ctx.clientDisconnected) {
+        clientRes.end();
+      }
+
+      clientRes.off("close", onClientDisconnect);
+      const totalDuration = Date.now() - ctx.startTime;
+      const aborted = ctx.clientDisconnected && !ctx.upstreamEndedNaturally;
+
+      task.streamCompleted = !aborted;
+      this.responseLogger.logResponse(
+        clientId,
+        totalDuration,
+        aborted ? 499 : status,
+        ctx.responseChunks,
+        aborted ? "Client disconnected" : undefined,
+        this.upstreamLogBody(upstreamLog),
+        ttfbForStreamLog(ctx, true),
+        undefined,
+        ctx.responseHeadersMasked,
+        computeTiming(ctx, task)
+      );
+      resolve({
+        statusCode: aborted ? 499 : status,
+        headers: responseHeaders,
+        duration: totalDuration,
+        responseBodyChunks: ctx.responseChunks,
+        streamed: true,
+        streamCompleted: task.streamCompleted,
+        errorMessage: aborted ? "Client disconnected" : undefined,
       });
     });
   }
@@ -2142,7 +2333,8 @@ export class ProxyExecutor {
         undefined,
         ttfbForStreamLog(ctx, true),
         undefined,
-        ctx.responseHeadersMasked
+        ctx.responseHeadersMasked,
+        computeTiming(ctx, task)
       );
       if (!aborted) {
         task.streamCompleted = true;
@@ -2346,7 +2538,8 @@ export class ProxyExecutor {
         undefined,
         ttfbForStreamLog(ctx, false),
         undefined,
-        ctx.responseHeadersMasked
+        ctx.responseHeadersMasked,
+        computeTiming(ctx, task)
       );
       resolve({
         statusCode: outStatus,
@@ -2401,7 +2594,8 @@ export class ProxyExecutor {
             undefined,
             ttfbForStreamLog(ctx, true),
             undefined,
-            ctx.responseHeadersMasked
+            ctx.responseHeadersMasked,
+            computeTiming(ctx, task)
           );
           resolve({
             statusCode: 200,
@@ -2424,7 +2618,8 @@ export class ProxyExecutor {
           undefined,
           ttfbForStreamLog(ctx, false),
           undefined,
-          ctx.responseHeadersMasked
+          ctx.responseHeadersMasked,
+          computeTiming(ctx, task)
         );
         resolve({
           statusCode: 499,
@@ -2466,7 +2661,10 @@ export class ProxyExecutor {
         ctx.responseChunks,
         err.message,
         undefined,
-        undefined
+        undefined,
+        undefined,
+        undefined,
+        computeTiming(ctx, task)
       );
       reject(new Error(`Proxy error: ${err.message}`));
     });
@@ -2489,7 +2687,10 @@ export class ProxyExecutor {
         ctx.responseChunks,
         "Timeout",
         undefined,
-        undefined
+        undefined,
+        undefined,
+        undefined,
+        computeTiming(ctx, task)
       );
       reject(new Error("Proxy timeout"));
     });

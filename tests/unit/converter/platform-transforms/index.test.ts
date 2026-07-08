@@ -139,6 +139,13 @@ describe("matchHostedToolRuleForBaseUrl", () => {
     expect(r?.provider).toBe("deepseek");
     expect(r?.requestSanitize).toBe("deepseek-chat-sanitize");
   });
+
+  it("hits LongCat rule for api.longcat.chat", () => {
+    const r = matchHostedToolRuleForBaseUrl("https://api.longcat.chat/anthropic/v1/messages");
+    expect(r?.provider).toBe("longcat");
+    expect(r?.anthropicSse).toBe("longcat-message-start-usage");
+    expect(r?.anthropicSseStream).toBe(true);
+  });
 });
 
 describe("normalizeToolForProvider", () => {

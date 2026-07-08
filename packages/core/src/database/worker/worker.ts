@@ -133,6 +133,7 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
           cacheTokens?: number;
           ttfb?: number;
           responseHeadersMasked?: string;
+          timing?: import("../types").LogResponseTiming;
         };
         driver?.updateLogCompleted(
           p.clientId,
@@ -146,7 +147,8 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
           p.outputTokens,
           p.cacheTokens,
           p.ttfb,
-          p.responseHeadersMasked
+          p.responseHeadersMasked,
+          p.timing
         );
         return { id, success: true };
       }

@@ -41,10 +41,26 @@ export interface RequestLog {
   outputTokens?: number;
   cacheTokens?: number;
   ttfb?: number;
+  /** Queue wait time (enqueue → worker start), ms. */
+  queueWaitMs?: number;
+  /** Upstream TTFB (request sent → first byte), ms. */
+  upstreamTtfbMs?: number;
+  /** Post-header generation time (first byte → end), ms. */
+  genMs?: number;
+  /** End-to-end time (client receive → end), ms. */
+  totalMs?: number;
   /** Masked JSON string of upstream-bound request headers (sensitive values masked). */
   requestHeaders?: string;
   /** Masked JSON string of upstream response headers (sensitive values masked). */
   responseHeaders?: string;
+}
+
+/** Per-request phase timings (milliseconds). */
+export interface LogResponseTiming {
+  queueWaitMs?: number;
+  upstreamTtfbMs?: number;
+  genMs?: number;
+  totalMs?: number;
 }
 
 /**
@@ -108,6 +124,8 @@ export interface DatabaseStats {
   avgTtfb: number;
   outputTps: number;
   outputTpsSampleCount: number;
+  /** Average queue wait across rows with queue_wait_ms recorded. */
+  avgQueueWaitMs: number;
   p50Duration: number;
   p90Duration: number;
   providerBreakdown: ProviderStatRow[];
@@ -191,7 +209,8 @@ export interface DatabaseDriver {
     outputTokens?: number,
     cacheTokens?: number,
     ttfb?: number,
-    responseHeadersMasked?: string
+    responseHeadersMasked?: string,
+    timing?: LogResponseTiming
   ): void;
 
   /**

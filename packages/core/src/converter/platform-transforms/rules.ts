@@ -23,6 +23,11 @@ export interface PlatformTransformRule {
   /** Anthropic Messages SSE buffered rewrite (hosted search normalization). Registry key. */
   anthropicSse?: string;
   /**
+   * When true, same-protocol Anthropic SSE applies `anthropicSse` per event while streaming
+   * (for row-local fixes). When false, transform runs only on the buffered hosted-search path.
+   */
+  anthropicSseStream?: boolean;
+  /**
    * After generic cross-protocol conversion to OpenAI Chat JSON: optional rewrite of body + path
    * (e.g. hosted web_search → Responses API on Azure).
    */
@@ -107,5 +112,11 @@ export const PLATFORM_TRANSFORM_RULES: readonly PlatformTransformRule[] = [
     domains: ["api.deepseek.com"],
     requestSanitize: "deepseek-chat-sanitize",
     strictTools: true,
+  },
+  {
+    provider: "longcat",
+    domains: ["api.longcat.chat"],
+    anthropicSse: "longcat-message-start-usage",
+    anthropicSseStream: true,
   },
 ];

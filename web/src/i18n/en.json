@@ -72,9 +72,11 @@
       "p50Latency": "P50 Latency",
       "p90Latency": "P90 Latency",
       "avgTtfb": "Avg TTFB",
-      "avgTtfbTooltip": "From genuinely streamed SSE requests only",
+      "avgTtfbTooltip": "Upstream request sent → first response byte (rows with phase timing only)",
+      "avgQueueWait": "Avg Queue Wait",
+      "avgQueueWaitTooltip": "Time waiting in queue before upstream execution starts",
       "outputTps": "Output TPS",
-      "outputTpsTooltip": "From genuinely streamed SSE requests only (gen time > 500ms)"
+      "outputTpsTooltip": "Output tokens per second using post-header generation time (gen > 500ms)"
     },
     "tokens": {
       "title": "Token Usage",
@@ -92,7 +94,7 @@
     "resetStats": {
       "action": "Reset stats",
       "title": "Reset dashboard statistics",
-      "description": "Clear all token usage and performance metrics on the Dashboard. Request logs in the Logs tab are not affected.",
+      "description": "Clear all token usage and performance metrics on the Dashboard. Per-request token display in the Logs tab is preserved.",
       "confirm": "Reset statistics",
       "resetting": "Resetting…"
     },
@@ -105,6 +107,7 @@
       "provider": "Provider",
       "requests": "Requests",
       "tokens": "Tokens",
+      "nonCacheInput": "Non-cache Input",
       "cacheHitRate": "Cache Hit Rate"
     },
     "queue": {
@@ -569,8 +572,8 @@
         "ttfb": "TTFB",
         "tps": "TPS"
       },
-      "ttfbTooltip": "Time to first byte — streamed SSE requests only",
-      "tpsTooltip": "Output tokens per second — streamed SSE requests only",
+      "ttfbTooltip": "Upstream TTFB (request sent → first byte)",
+      "tpsTooltip": "Output tokens per second (post-header generation time)",
       "routeType": {
         "block": "Block",
         "pass": "Pass",
@@ -600,6 +603,13 @@
       "tokenIn": "In",
       "tokenOut": "Out",
       "tokenCache": "Cache",
+      "timingPhases": "Timing breakdown",
+      "queueWait": "Queue wait",
+      "upstreamTtfb": "Upstream TTFB",
+      "generation": "Generation",
+      "totalTime": "Total",
+      "ttfb": "TTFB",
+      "outputTps": "Output TPS",
       "error": "Error",
       "statusOk": "OK",
       "statusErr": "Err",

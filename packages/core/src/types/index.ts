@@ -783,6 +783,11 @@ export interface RequestTask {
   priority?: number;
   timeout?: number;
   createdAt: number;
+  /** Client request arrival time (ms epoch); used for total_ms. */
+  requestReceiveStart?: number;
+  /** When the task was enqueued (ms epoch); set by ConcurrencyManager. */
+  queuedAt?: number;
+  /** When queue worker started executing (ms epoch); set by ConcurrencyManager. */
   startedAt?: number;
   /** Client had `stream: true` on POST /v1/responses; response may be synthesized as SSE */
   responsesStreamRequested?: boolean;

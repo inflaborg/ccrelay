@@ -32,6 +32,10 @@ export const SQLITE_CREATE_TABLE_V2 = `
     output_tokens INTEGER,
     cache_tokens INTEGER,
     ttfb INTEGER,
+    queue_wait_ms INTEGER,
+    upstream_ttfb_ms INTEGER,
+    gen_ms INTEGER,
+    total_ms INTEGER,
     request_headers TEXT,
     response_headers TEXT
   )
@@ -46,7 +50,7 @@ export const SQLITE_INDEXES_V2 = [
   `CREATE INDEX IF NOT EXISTS idx_v2_status ON ${TABLE}(status)`,
 ] as const;
 
-/** Final-state v2 DDL (no token columns) for new databases after migration v2. */
+/** Final-state v2 DDL (token columns redundant for per-log display; metrics table drives dashboard). */
 export const SQLITE_CREATE_TABLE_V2_FINAL = `
   CREATE TABLE IF NOT EXISTS ${TABLE} (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,6 +71,14 @@ export const SQLITE_CREATE_TABLE_V2_FINAL = `
     client_id TEXT,
     status TEXT DEFAULT 'completed',
     route_type TEXT,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    cache_tokens INTEGER,
+    ttfb INTEGER,
+    queue_wait_ms INTEGER,
+    upstream_ttfb_ms INTEGER,
+    gen_ms INTEGER,
+    total_ms INTEGER,
     request_headers TEXT,
     response_headers TEXT
   )
@@ -93,6 +105,10 @@ export const SQLITE_CREATE_TABLE_METRICS = `
     cache_tokens INTEGER,
     ttfb INTEGER,
     duration INTEGER,
+    queue_wait_ms INTEGER,
+    upstream_ttfb_ms INTEGER,
+    gen_ms INTEGER,
+    total_ms INTEGER,
     success INTEGER,
     status_code INTEGER
   )
@@ -105,6 +121,20 @@ export const SQLITE_INDEXES_METRICS = [
 ] as const;
 
 export const V2_TOKEN_COLUMNS = ["input_tokens", "output_tokens", "cache_tokens", "ttfb"] as const;
+
+export const V2_TIMING_COLUMNS = [
+  "queue_wait_ms",
+  "upstream_ttfb_ms",
+  "gen_ms",
+  "total_ms",
+] as const;
+
+export const METRICS_TIMING_COLUMNS = [
+  "queue_wait_ms",
+  "upstream_ttfb_ms",
+  "gen_ms",
+  "total_ms",
+] as const;
 
 export const POSTGRES_CREATE_TABLE_V2 = `
   CREATE TABLE IF NOT EXISTS ${TABLE} (
@@ -130,6 +160,10 @@ export const POSTGRES_CREATE_TABLE_V2 = `
     output_tokens INTEGER,
     cache_tokens INTEGER,
     ttfb INTEGER,
+    queue_wait_ms INTEGER,
+    upstream_ttfb_ms INTEGER,
+    gen_ms INTEGER,
+    total_ms INTEGER,
     request_headers TEXT,
     response_headers TEXT
   )
@@ -164,6 +198,14 @@ export const POSTGRES_CREATE_TABLE_V2_FINAL = `
     client_id TEXT,
     status TEXT DEFAULT 'completed',
     route_type TEXT,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    cache_tokens INTEGER,
+    ttfb INTEGER,
+    queue_wait_ms INTEGER,
+    upstream_ttfb_ms INTEGER,
+    gen_ms INTEGER,
+    total_ms INTEGER,
     request_headers TEXT,
     response_headers TEXT
   )
@@ -190,6 +232,10 @@ export const POSTGRES_CREATE_TABLE_METRICS = `
     cache_tokens INTEGER,
     ttfb INTEGER,
     duration INTEGER,
+    queue_wait_ms INTEGER,
+    upstream_ttfb_ms INTEGER,
+    gen_ms INTEGER,
+    total_ms INTEGER,
     success INTEGER,
     status_code INTEGER
   )

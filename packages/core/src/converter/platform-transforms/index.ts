@@ -93,6 +93,7 @@ export {
   transformGlmAnthropicSearchSseRows,
   glmWebSearchServerToolName,
 } from "./glm/anthropic-sse";
+export { transformLongcatAnthropicSseRows } from "./longcat/anthropic-sse";
 
 /** Routing slice used to strip outbound query per platform rule (no server-layer import). */
 export interface PlatformOutboundQueryRouting {

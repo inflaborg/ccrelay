@@ -199,6 +199,7 @@ export class LogDatabase {
         avgTtfb: 0,
         outputTps: 0,
         outputTpsSampleCount: 0,
+        avgQueueWaitMs: 0,
         p50Duration: 0,
         p90Duration: 0,
         providerBreakdown: [],

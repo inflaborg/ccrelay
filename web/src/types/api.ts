@@ -158,6 +158,10 @@ export interface LogEntry {
   outputTokens?: number;
   cacheTokens?: number;
   ttfb?: number;
+  queueWaitMs?: number;
+  upstreamTtfbMs?: number;
+  genMs?: number;
+  totalMs?: number;
 }
 
 export interface LogsQuery {
@@ -199,6 +203,7 @@ export interface LogStats {
   avgTtfb: number;
   outputTps: number;
   outputTpsSampleCount: number;
+  avgQueueWaitMs: number;
   p50Duration: number;
   p90Duration: number;
   providerBreakdown: ProviderBreakdownRow[];

@@ -8,6 +8,7 @@
 import * as zlib from "zlib";
 import { ScopedLogger } from "../utils/logger";
 import type { LogDatabase } from "../database";
+import type { LogResponseTiming } from "../database/types";
 import { isTokenUsageRequestPath } from "../converter/paths";
 
 export interface LogResponseTokenOverrides {
@@ -16,31 +17,47 @@ export interface LogResponseTokenOverrides {
   cacheTokens?: number;
 }
 
+interface UsageRecord {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_read_input_tokens?: number;
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  effectiveCachedTokens?: number;
+  prompt_tokens_details?: { cached_tokens?: number };
+  input_tokens_details?: { cached_tokens?: number };
+  completion_tokens_details?: { reasoning_tokens?: number };
+}
+
 interface UsageFields {
-  usage?: {
-    input_tokens?: number;
-    output_tokens?: number;
-    cache_read_input_tokens?: number;
-    prompt_tokens?: number;
-    completion_tokens?: number;
-    prompt_tokens_details?: { cached_tokens?: number };
-  };
+  usage?: UsageRecord;
   message?: {
-    usage?: {
-      input_tokens?: number;
-      output_tokens?: number;
-      cache_read_input_tokens?: number;
-      prompt_tokens?: number;
-      completion_tokens?: number;
-      prompt_tokens_details?: { cached_tokens?: number };
-    };
+    usage?: UsageRecord;
   };
+}
+
+function firstNonZero(...values: Array<number | undefined>): number | undefined {
+  for (const value of values) {
+    if (typeof value === "number" && value > 0) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function firstDefined(...values: Array<number | undefined>): number | undefined {
+  for (const value of values) {
+    if (typeof value === "number") {
+      return value;
+    }
+  }
+  return undefined;
 }
 
 /**
  * Extract token usage from a response body (handles both JSON and SSE formats).
  */
-function extractTokenUsage(body: string | undefined): LogResponseTokenOverrides {
+export function extractTokenUsage(body: string | undefined): LogResponseTokenOverrides {
   if (!body) {
     return {};
   }
@@ -80,7 +97,8 @@ function extractTokenUsage(body: string | undefined): LogResponseTokenOverrides 
 }
 
 /**
- * Extract usage from a parsed JSON object (Anthropic or OpenAI format).
+ * Extract usage from a parsed JSON object (Anthropic, OpenAI Chat, or Responses format).
+ * Stored input_tokens always means total prompt tokens; cache_tokens is the cached subset.
  */
 function extractUsageFromObj(obj: UsageFields): LogResponseTokenOverrides {
   const usage = obj.usage || obj.message?.usage;
@@ -88,25 +106,54 @@ function extractUsageFromObj(obj: UsageFields): LogResponseTokenOverrides {
     return {};
   }
 
-  // Anthropic format
-  if (typeof usage.input_tokens === "number") {
-    return {
-      inputTokens: usage.input_tokens,
-      outputTokens: usage.output_tokens,
-      cacheTokens: usage.cache_read_input_tokens,
-    };
+  const cacheTokens =
+    firstNonZero(
+      usage.prompt_tokens_details?.cached_tokens,
+      usage.input_tokens_details?.cached_tokens,
+      usage.cache_read_input_tokens,
+      usage.effectiveCachedTokens
+    ) ??
+    firstDefined(
+      usage.prompt_tokens_details?.cached_tokens,
+      usage.input_tokens_details?.cached_tokens,
+      usage.cache_read_input_tokens,
+      usage.effectiveCachedTokens
+    );
+
+  const inputTokens = normalizeTotalInputTokens(usage);
+  const outputTokens =
+    firstNonZero(usage.completion_tokens, usage.output_tokens) ??
+    firstDefined(usage.completion_tokens, usage.output_tokens);
+
+  if (inputTokens === undefined && outputTokens === undefined && cacheTokens === undefined) {
+    return {};
   }
 
-  // OpenAI format
-  if (typeof usage.prompt_tokens === "number") {
-    return {
-      inputTokens: usage.prompt_tokens,
-      outputTokens: usage.completion_tokens,
-      cacheTokens: usage.prompt_tokens_details?.cached_tokens,
-    };
+  return {
+    inputTokens,
+    outputTokens,
+    cacheTokens,
+  };
+}
+
+function normalizeTotalInputTokens(usage: UsageRecord): number | undefined {
+  const promptTotal = firstNonZero(usage.prompt_tokens) ?? firstDefined(usage.prompt_tokens);
+  if (promptTotal !== undefined) {
+    return promptTotal;
   }
 
-  return {};
+  const inputRaw = firstNonZero(usage.input_tokens) ?? firstDefined(usage.input_tokens);
+  if (inputRaw === undefined) {
+    return undefined;
+  }
+
+  // Anthropic: input_tokens excludes cache; total prompt = input + cache_read.
+  if (typeof usage.cache_read_input_tokens === "number") {
+    return inputRaw + usage.cache_read_input_tokens;
+  }
+
+  // Responses and others: input_tokens is already total prompt.
+  return inputRaw;
 }
 
 /**
@@ -156,7 +203,8 @@ export class ResponseLogger {
     originalResponseBody?: string,
     ttfb?: number,
     tokenOverrides?: LogResponseTokenOverrides,
-    responseHeadersMasked?: string
+    responseHeadersMasked?: string,
+    timing?: LogResponseTiming
   ): void {
     if (!this.database.enabled) {
       this.log.info(`logResponse skipped - database not enabled. clientId=${clientId}`);
@@ -224,7 +272,8 @@ export class ResponseLogger {
       tokens.outputTokens,
       tokens.cacheTokens,
       ttfb,
-      responseHeadersMasked
+      responseHeadersMasked,
+      timing
     );
   }
 }

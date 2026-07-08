@@ -25,6 +25,10 @@ function formatTokenCount(n: number): string {
   return n.toLocaleString();
 }
 
+function nonCacheInputTokens(input: number, cache: number): number {
+  return Math.max(0, input - cache);
+}
+
 function formatDuration(ms: number): string {
   if (ms >= 60_000) return `${(ms / 60_000).toFixed(1)}m`;
   if (ms >= 1_000) return `${(ms / 1_000).toFixed(1)}s`;
@@ -319,6 +323,17 @@ export default function Dashboard() {
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
+                      <span
+                        className="text-xs text-muted-foreground"
+                        title={t("dashboard.performance.avgQueueWaitTooltip")}
+                      >
+                        {t("dashboard.performance.avgQueueWait")}
+                      </span>
+                      <span className="text-xs font-medium">
+                        {stats?.avgQueueWaitMs ? formatDuration(stats.avgQueueWaitMs) : "-"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">
                         {t("dashboard.performance.successRate")}
                       </span>
@@ -416,6 +431,9 @@ export default function Dashboard() {
                       {t("dashboard.tokens.input")}
                     </th>
                     <th className="text-right py-1.5 px-2 text-muted-foreground font-medium">
+                      {t("dashboard.providerBreakdown.nonCacheInput")}
+                    </th>
+                    <th className="text-right py-1.5 px-2 text-muted-foreground font-medium">
                       {t("dashboard.tokens.output")}
                     </th>
                     <th className="text-right py-1.5 pl-2 text-muted-foreground font-medium">
@@ -436,6 +454,11 @@ export default function Dashboard() {
                       <td className="text-right py-1.5 px-2 font-mono">{p.count}</td>
                       <td className="text-right py-1.5 px-2 font-mono text-muted-foreground">
                         {formatTokenCount(p.totalInputTokens)}
+                      </td>
+                      <td className="text-right py-1.5 px-2 font-mono">
+                        {formatTokenCount(
+                          nonCacheInputTokens(p.totalInputTokens, p.totalCacheTokens)
+                        )}
                       </td>
                       <td className="text-right py-1.5 px-2 font-mono">
                         {formatTokenCount(p.totalOutputTokens)}
