@@ -10,6 +10,7 @@ import type { AnthropicSseEventRow } from "./glm/anthropic-sse-emitter";
 import { azureWebSearchRequestOverride } from "./azure-openai/request-override";
 import { azureResponsesWebSearchResponseTransform } from "./azure-openai/responses-web-search";
 import { transformGlmAnthropicSearchSseRows } from "./glm/anthropic-sse";
+import { transformLongcatAnthropicSseRows } from "./longcat/anthropic-sse";
 import { glmWebSearchEnvelopeTransform } from "./glm/tools";
 import { glmFlattenContentTransform } from "./glm/messages";
 import { glmWebSearchResponseTransform } from "./glm/responses";
@@ -74,6 +75,7 @@ export const ANTHROPIC_SSE_TRANSFORM_REGISTRY: Readonly<
   Record<string, PlatformAnthropicSseTransform>
 > = {
   "glm-web-search-prime-normalize": transformGlmAnthropicSearchSseRows,
+  "longcat-message-start-usage": transformLongcatAnthropicSseRows,
 };
 
 export const REQUEST_SANITIZE_REGISTRY: Readonly<Record<string, PlatformRequestSanitizeTransform>> =

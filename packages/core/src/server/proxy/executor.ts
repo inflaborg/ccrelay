@@ -52,6 +52,7 @@ import {
 import {
   applyPlatformResponseTransforms,
   applyAnthropicSseRowsPlatformTransform,
+  matchAnthropicSseRule,
   parseAnthropicSseRows,
   serializeAnthropicSseRows,
 } from "../../converter/platform-transforms";
@@ -867,6 +868,28 @@ export class ProxyExecutor {
 
     if (shouldBufferGlmAnthropicHostedSearchSse) {
       this.handleAnthropicSseBufferedWebSearchPassthrough(
+        proxyRes,
+        task,
+        ctx,
+        onClientDisconnect,
+        status,
+        responseHeaders,
+        resolve
+      );
+      return;
+    }
+
+    const shouldStreamAnthropicSsePlatformTransform =
+      !needsResponseConversion &&
+      upstreamWire === "anthropic" &&
+      clientSurface === "anthropic" &&
+      status === 200 &&
+      isSSEResponse &&
+      clientRes &&
+      matchAnthropicSseRule(provider.baseUrl)?.anthropicSseStream;
+
+    if (shouldStreamAnthropicSsePlatformTransform) {
+      this.handleAnthropicSseStreamingPlatformTransform(
         proxyRes,
         task,
         ctx,
@@ -2088,6 +2111,119 @@ export class ProxyExecutor {
         responseBodyChunks: ctx.responseChunks,
         streamed: true,
         streamCompleted: true,
+      });
+    });
+  }
+
+  /**
+   * Anthropic same-protocol SSE with per-event platform transforms (e.g. LongCat `message_start` usage).
+   */
+  private handleAnthropicSseStreamingPlatformTransform(
+    proxyRes: http.IncomingMessage,
+    task: RequestTask,
+    ctx: ExecutionContext,
+    onClientDisconnect: () => void,
+    status: number,
+    responseHeaders: Record<string, string | string[]>,
+    resolve: (value: ProxyResult) => void
+  ): void {
+    const { clientId, provider, res: clientRes } = task;
+    if (!clientRes) {
+      resolve({
+        statusCode: 500,
+        headers: {},
+        duration: Date.now() - ctx.startTime,
+        errorMessage: "Missing client response for Anthropic SSE platform transform",
+      });
+      return;
+    }
+
+    log.info(`[A->A SSE stream] Platform Anthropic SSE transform (${provider.id})`);
+    clientRes.writeHead(status, responseHeaders);
+
+    const upstreamLog: Buffer[] = [];
+    const sseBuffer = createAnthropicSseEnvelopeBuffer(envelope => {
+      if (ctx.clientDisconnected) {
+        return;
+      }
+      const rows = applyAnthropicSseRowsPlatformTransform([{ data: envelope }], provider.baseUrl);
+      const outgoing = serializeAnthropicSseRows(rows);
+      if (outgoing.length > 0) {
+        this.writeClientStreamForLog(clientRes, outgoing, ctx);
+      }
+    });
+
+    proxyRes.on("data", (chunk: Buffer) => {
+      ctx.streamChunkCount++;
+      ctx.streamTotalBytes += chunk.length;
+
+      if (!ctx.upstreamTerminalSeen && chunkContainsTerminalMarker(chunk)) {
+        ctx.upstreamTerminalSeen = true;
+      }
+
+      if (!ctx.firstChunkLogged) {
+        ctx.firstChunkLogged = true;
+        const firstChunkDelay = Date.now() - ctx.firstByteTime;
+        log.info(
+          `[Perf:${clientId}] FirstChunk: ${firstChunkDelay}ms after headers, ${chunk.length} bytes`
+        );
+      }
+
+      this.recordUpstreamChunkForLog(chunk, upstreamLog, ctx);
+      sseBuffer.push(chunk);
+    });
+
+    proxyRes.on("error", (err: Error) => {
+      log.error(`[${clientId}] Anthropic SSE platform transform upstream error: ${err.message}`);
+      if (!clientRes.writableEnded) {
+        try {
+          clientRes.end();
+        } catch {
+          // Ignore errors when ending already-closed stream
+        }
+      }
+    });
+
+    clientRes.on("error", (err: Error) => {
+      log.error(
+        `[${clientId}] Client connection error during Anthropic SSE platform transform: ${err.message}`
+      );
+      proxyRes.destroy();
+    });
+
+    proxyRes.on("end", () => {
+      ctx.upstreamEndedNaturally = true;
+      sseBuffer.flush();
+
+      if (!ctx.clientDisconnected) {
+        clientRes.end();
+      }
+
+      clientRes.off("close", onClientDisconnect);
+      const totalDuration = Date.now() - ctx.startTime;
+      const aborted = ctx.clientDisconnected && !ctx.upstreamEndedNaturally;
+
+      task.streamCompleted = !aborted;
+      this.responseLogger.logResponse(
+        clientId,
+        totalDuration,
+        aborted ? 499 : status,
+        ctx.responseChunks,
+        aborted ? "Client disconnected" : undefined,
+        this.upstreamLogBody(upstreamLog),
+        ttfbForStreamLog(ctx, true),
+        undefined,
+        ctx.responseHeadersMasked,
+        computeTiming(ctx, task)
+      );
+      resolve({
+        statusCode: aborted ? 499 : status,
+        headers: responseHeaders,
+        duration: totalDuration,
+        responseBodyChunks: ctx.responseChunks,
+        streamed: true,
+        streamCompleted: task.streamCompleted,
+        errorMessage: aborted ? "Client disconnected" : undefined,
       });
     });
   }
