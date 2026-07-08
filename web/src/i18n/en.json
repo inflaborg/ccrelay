@@ -107,6 +107,7 @@
       "provider": "Provider",
       "requests": "Requests",
       "tokens": "Tokens",
+      "nonCacheInput": "Non-cache Input",
       "cacheHitRate": "Cache Hit Rate"
     },
     "queue": {

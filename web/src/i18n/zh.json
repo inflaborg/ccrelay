@@ -107,6 +107,7 @@
       "provider": "提供商",
       "requests": "请求数",
       "tokens": "Token",
+      "nonCacheInput": "非缓存输入",
       "cacheHitRate": "缓存命中率"
     },
     "queue": {
