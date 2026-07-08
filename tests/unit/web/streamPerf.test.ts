@@ -1,9 +1,23 @@
 import { describe, expect, it } from "vitest";
 import {
+  effectiveGenMs,
+  effectiveTtfb,
   hasStreamPerfMetrics,
   hasStreamTtfb,
   outputTps,
 } from "../../../web/src/features/logs/streamPerf";
+
+describe("effectiveTtfb", () => {
+  it("prefers upstreamTtfbMs over legacy ttfb", () => {
+    expect(effectiveTtfb({ upstreamTtfbMs: 300, ttfb: 500, duration: 1000 })).toBe(300);
+  });
+});
+
+describe("effectiveGenMs", () => {
+  it("prefers genMs over duration - ttfb", () => {
+    expect(effectiveGenMs({ genMs: 1500, ttfb: 200, duration: 600 })).toBe(1500);
+  });
+});
 
 describe("hasStreamTtfb", () => {
   it("returns false when ttfb is missing", () => {
@@ -43,5 +57,15 @@ describe("outputTps", () => {
   it("uses actual gen time when above 1s", () => {
     const tps = outputTps({ ttfb: 200, duration: 3200, outputTokens: 1000 });
     expect(tps).toBeCloseTo(1000 / 3, 5);
+  });
+
+  it("uses phase timing fields when present", () => {
+    const tps = outputTps({
+      upstreamTtfbMs: 400,
+      genMs: 2000,
+      duration: 2400,
+      outputTokens: 200,
+    });
+    expect(tps).toBe(100);
   });
 });

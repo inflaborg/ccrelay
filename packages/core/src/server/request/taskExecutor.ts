@@ -38,6 +38,7 @@ export class TaskExecutor {
   ): void {
     // Build the task
     const task = this.buildTask(routing, bodyResult, clientId, responseWriter.response);
+    task.requestReceiveStart = requestReceiveStart;
 
     // Check if queue is configured for this path
     const queueInfo = this.queueManager.getQueueForPath(routing.path);

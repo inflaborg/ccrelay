@@ -319,6 +319,17 @@ export default function Dashboard() {
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
+                      <span
+                        className="text-xs text-muted-foreground"
+                        title={t("dashboard.performance.avgQueueWaitTooltip")}
+                      >
+                        {t("dashboard.performance.avgQueueWait")}
+                      </span>
+                      <span className="text-xs font-medium">
+                        {stats?.avgQueueWaitMs ? formatDuration(stats.avgQueueWaitMs) : "-"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">
                         {t("dashboard.performance.successRate")}
                       </span>

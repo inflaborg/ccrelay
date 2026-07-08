@@ -72,9 +72,11 @@
       "p50Latency": "P50 延迟",
       "p90Latency": "P90 延迟",
       "avgTtfb": "平均首字节时间",
-      "avgTtfbTooltip": "仅统计真实 SSE 流式请求",
+      "avgTtfbTooltip": "上游请求发出 → 首字节返回（仅统计有阶段时间的记录）",
+      "avgQueueWait": "平均队列等待",
+      "avgQueueWaitTooltip": "入队后等待开始执行上游请求的时间",
       "outputTps": "输出 TPS",
-      "outputTpsTooltip": "仅统计真实 SSE 流式请求（生成时间 > 500ms）"
+      "outputTpsTooltip": "基于首字节后的生成时间计算（生成时间 > 500ms）"
     },
     "tokens": {
       "title": "Token 用量",
@@ -92,7 +94,7 @@
     "resetStats": {
       "action": "复位统计",
       "title": "复位仪表盘统计",
-      "description": "清空仪表盘上的 Token 用量与性能指标。Logs 页中的请求记录不受影响。",
+      "description": "清空仪表盘上的 Token 用量与性能指标。Logs 页中每条记录的 token 显示会保留。",
       "confirm": "确认复位",
       "resetting": "复位中…"
     },
@@ -568,8 +570,8 @@
         "ttfb": "TTFB",
         "tps": "TPS"
       },
-      "ttfbTooltip": "首字节时间 — 仅流式 SSE 请求",
-      "tpsTooltip": "输出 token 速率 — 仅流式 SSE 请求",
+      "ttfbTooltip": "上游 TTFB（请求发出 → 首字节）",
+      "tpsTooltip": "输出 token 速率（首字节后的生成时间）",
       "routeType": {
         "block": "拦截",
         "pass": "透传",
@@ -599,6 +601,13 @@
       "tokenIn": "输入",
       "tokenOut": "输出",
       "tokenCache": "缓存",
+      "timingPhases": "阶段耗时",
+      "queueWait": "队列等待",
+      "upstreamTtfb": "上游 TTFB",
+      "generation": "生成",
+      "totalTime": "总耗时",
+      "ttfb": "TTFB",
+      "outputTps": "输出 TPS",
       "error": "错误",
       "statusOk": "成功",
       "statusErr": "错误",

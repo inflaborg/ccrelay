@@ -13,6 +13,8 @@ import {
   SQLITE_CREATE_TABLE_METRICS,
   SQLITE_INDEXES_METRICS,
   V2_TOKEN_COLUMNS,
+  V2_TIMING_COLUMNS,
+  METRICS_TIMING_COLUMNS,
   POSTGRES_CREATE_TABLE_V2,
   POSTGRES_INDEXES_V2,
   POSTGRES_CREATE_SCHEMA_MIGRATIONS,
@@ -317,6 +319,91 @@ async function runMigrationV2SplitMetricsPostgres(ctx: PostgresMigrationContext)
   }
 }
 
+function runMigrationV4LogTokenRedundancySqlite(ctx: SqliteMigrationContext): void {
+  for (const col of V2_TOKEN_COLUMNS) {
+    if (!sqliteColumnExists(ctx.queryScalar, TABLE, col)) {
+      ctx.exec(`ALTER TABLE ${TABLE} ADD COLUMN ${col} INTEGER`);
+    }
+  }
+}
+
+async function runMigrationV4LogTokenRedundancySqliteAsync(ctx: {
+  exec: (sql: string) => void | Promise<void>;
+  queryScalar: (sql: string) => number | null | undefined | Promise<number | null | undefined>;
+}): Promise<void> {
+  for (const col of V2_TOKEN_COLUMNS) {
+    const exists =
+      (await Promise.resolve(
+        ctx.queryScalar(
+          `SELECT COUNT(*) as c FROM pragma_table_info('${TABLE}') WHERE name='${col}'`
+        )
+      )) ?? 0;
+    if (exists === 0) {
+      await ctx.exec(`ALTER TABLE ${TABLE} ADD COLUMN ${col} INTEGER`);
+    }
+  }
+}
+
+async function runMigrationV4LogTokenRedundancyPostgres(
+  query: (sql: string, params?: unknown[]) => Promise<unknown>
+): Promise<void> {
+  for (const col of V2_TOKEN_COLUMNS) {
+    await query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS ${col} INTEGER`);
+  }
+}
+
+function runMigrationV5TimingPhasesSqlite(ctx: SqliteMigrationContext): void {
+  for (const col of V2_TIMING_COLUMNS) {
+    if (!sqliteColumnExists(ctx.queryScalar, TABLE, col)) {
+      ctx.exec(`ALTER TABLE ${TABLE} ADD COLUMN ${col} INTEGER`);
+    }
+  }
+  for (const col of METRICS_TIMING_COLUMNS) {
+    if (!sqliteColumnExists(ctx.queryScalar, METRICS_TABLE, col)) {
+      ctx.exec(`ALTER TABLE ${METRICS_TABLE} ADD COLUMN ${col} INTEGER`);
+    }
+  }
+}
+
+async function runMigrationV5TimingPhasesSqliteAsync(ctx: {
+  exec: (sql: string) => void | Promise<void>;
+  queryScalar: (sql: string) => number | null | undefined | Promise<number | null | undefined>;
+}): Promise<void> {
+  for (const col of V2_TIMING_COLUMNS) {
+    const exists =
+      (await Promise.resolve(
+        ctx.queryScalar(
+          `SELECT COUNT(*) as c FROM pragma_table_info('${TABLE}') WHERE name='${col}'`
+        )
+      )) ?? 0;
+    if (exists === 0) {
+      await ctx.exec(`ALTER TABLE ${TABLE} ADD COLUMN ${col} INTEGER`);
+    }
+  }
+  for (const col of METRICS_TIMING_COLUMNS) {
+    const exists =
+      (await Promise.resolve(
+        ctx.queryScalar(
+          `SELECT COUNT(*) as c FROM pragma_table_info('${METRICS_TABLE}') WHERE name='${col}'`
+        )
+      )) ?? 0;
+    if (exists === 0) {
+      await ctx.exec(`ALTER TABLE ${METRICS_TABLE} ADD COLUMN ${col} INTEGER`);
+    }
+  }
+}
+
+async function runMigrationV5TimingPhasesPostgres(
+  query: (sql: string, params?: unknown[]) => Promise<unknown>
+): Promise<void> {
+  for (const col of V2_TIMING_COLUMNS) {
+    await query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS ${col} INTEGER`);
+  }
+  for (const col of METRICS_TIMING_COLUMNS) {
+    await query(`ALTER TABLE ${METRICS_TABLE} ADD COLUMN IF NOT EXISTS ${col} INTEGER`);
+  }
+}
+
 function sqliteRecordMigration(exec: (sql: string) => void, version: number, name: string): void {
   exec(
     `INSERT OR REPLACE INTO ${MIGRATIONS_TABLE} (version, name, applied_at) VALUES (${version}, '${name}', ${Date.now()})`
@@ -482,6 +569,22 @@ export function runSqliteMigrations(ctx: SqliteMigrationContext): void {
     applied = true;
   }
 
+  if (maxVersion < 4) {
+    logMigration(`Applying v4 log_token_redundancy${suffix}`);
+    runMigrationV4LogTokenRedundancySqlite(ctx);
+    sqliteRecordMigration(ctx.exec, 4, "log_token_redundancy");
+    logMigration(`v4 log_token_redundancy applied${suffix}`);
+    applied = true;
+  }
+
+  if (maxVersion < 5) {
+    logMigration(`Applying v5 timing_phases${suffix}`);
+    runMigrationV5TimingPhasesSqlite(ctx);
+    sqliteRecordMigration(ctx.exec, 5, "timing_phases");
+    logMigration(`v5 timing_phases applied${suffix}`);
+    applied = true;
+  }
+
   if (!applied) {
     logMigration(`Schema up to date (version ${maxVersion})${suffix}`);
   } else {
@@ -581,6 +684,26 @@ export async function runSqliteMigrationsAsync(ctx: SqliteMigrationAsyncContext)
       `INSERT OR REPLACE INTO ${MIGRATIONS_TABLE} (version, name, applied_at) VALUES (3, 'add_headers', ${Date.now()})`
     );
     logMigration(`v3 add_headers applied${suffix}`);
+    applied = true;
+  }
+
+  if (maxVersion < 4) {
+    logMigration(`Applying v4 log_token_redundancy${suffix}`);
+    await runMigrationV4LogTokenRedundancySqliteAsync(ctx);
+    await ctx.exec(
+      `INSERT OR REPLACE INTO ${MIGRATIONS_TABLE} (version, name, applied_at) VALUES (4, 'log_token_redundancy', ${Date.now()})`
+    );
+    logMigration(`v4 log_token_redundancy applied${suffix}`);
+    applied = true;
+  }
+
+  if (maxVersion < 5) {
+    logMigration(`Applying v5 timing_phases${suffix}`);
+    await runMigrationV5TimingPhasesSqliteAsync(ctx);
+    await ctx.exec(
+      `INSERT OR REPLACE INTO ${MIGRATIONS_TABLE} (version, name, applied_at) VALUES (5, 'timing_phases', ${Date.now()})`
+    );
+    logMigration(`v5 timing_phases applied${suffix}`);
     applied = true;
   }
 
@@ -707,6 +830,22 @@ export async function runPostgresMigrations(ctx: PostgresMigrationContext): Prom
     }
     await postgresRecordMigration(ctx.query, 3, "add_headers");
     logMigration(`v3 add_headers applied${suffix}`);
+    applied = true;
+  }
+
+  if (maxVersion < 4) {
+    logMigration(`Applying v4 log_token_redundancy${suffix}`);
+    await runMigrationV4LogTokenRedundancyPostgres(ctx.query);
+    await postgresRecordMigration(ctx.query, 4, "log_token_redundancy");
+    logMigration(`v4 log_token_redundancy applied${suffix}`);
+    applied = true;
+  }
+
+  if (maxVersion < 5) {
+    logMigration(`Applying v5 timing_phases${suffix}`);
+    await runMigrationV5TimingPhasesPostgres(ctx.query);
+    await postgresRecordMigration(ctx.query, 5, "timing_phases");
+    logMigration(`v5 timing_phases applied${suffix}`);
     applied = true;
   }
 

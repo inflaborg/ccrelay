@@ -58,6 +58,7 @@ import {
 import type { ApiSurface } from "../../types";
 import type { RequestTask, ProxyResult } from "../../types";
 import type { ResponseLogger } from "../responseLogger";
+import type { LogResponseTiming } from "../../database/types";
 import type { ModelCatalog } from "../smartRouting/modelCatalog";
 import {
   synthesizeSmartRoutingModelsListBody,
@@ -161,6 +162,41 @@ function ttfbForStreamLog(ctx: ExecutionContext, isStream: boolean): number | un
     return undefined;
   }
   return ctx.firstByteTime - ctx.startTime;
+}
+
+/** Phase timings for DB persistence (queue wait, upstream TTFB, generation, total). */
+function computeTiming(
+  ctx: ExecutionContext,
+  task: RequestTask,
+  endTime: number = Date.now()
+): LogResponseTiming {
+  const queueWaitMs =
+    task.queuedAt !== undefined && task.startedAt !== undefined
+      ? task.startedAt - task.queuedAt
+      : 0;
+
+  let upstreamTtfbMs: number | undefined;
+  if (ctx.requestSentTime > 0 && ctx.firstByteTime > 0) {
+    const ttfb = ctx.firstByteTime - ctx.requestSentTime;
+    if (ttfb > 0) {
+      upstreamTtfbMs = ttfb;
+    }
+  }
+
+  let genMs: number | undefined;
+  if (ctx.firstByteTime > 0) {
+    const gen = endTime - ctx.firstByteTime;
+    if (gen >= 0) {
+      genMs = gen;
+    }
+  }
+
+  const totalMs =
+    task.requestReceiveStart !== undefined
+      ? endTime - task.requestReceiveStart
+      : endTime - ctx.startTime;
+
+  return { queueWaitMs, upstreamTtfbMs, genMs, totalMs };
 }
 
 /** Cheap regex check for SSE terminal events across the supported protocols. */
@@ -939,7 +975,8 @@ export class ProxyExecutor {
         this.upstreamLogBody(upstreamLog),
         ttfbForStreamLog(ctx, true),
         undefined,
-        ctx.responseHeadersMasked
+        ctx.responseHeadersMasked,
+        computeTiming(ctx, task)
       );
       resolve({
         statusCode: aborted ? 499 : status,
@@ -1057,7 +1094,8 @@ export class ProxyExecutor {
         this.upstreamLogBody(upstreamLog),
         ttfbForStreamLog(ctx, true),
         undefined,
-        ctx.responseHeadersMasked
+        ctx.responseHeadersMasked,
+        computeTiming(ctx, task)
       );
 
       resolve({
@@ -1180,7 +1218,8 @@ export class ProxyExecutor {
         upstreamBody,
         ttfbForStreamLog(ctx, false),
         undefined,
-        ctx.responseHeadersMasked
+        ctx.responseHeadersMasked,
+        computeTiming(ctx, task)
       );
 
       resolve({
@@ -1259,7 +1298,8 @@ export class ProxyExecutor {
           ctx.originalResponseBody,
           ttfbForStreamLog(ctx, false),
           undefined,
-          ctx.responseHeadersMasked
+          ctx.responseHeadersMasked,
+          computeTiming(ctx, task)
         );
 
         resolve({
@@ -1294,7 +1334,8 @@ export class ProxyExecutor {
           ctx.originalResponseBody,
           ttfbForStreamLog(ctx, false),
           undefined,
-          ctx.responseHeadersMasked
+          ctx.responseHeadersMasked,
+          computeTiming(ctx, task)
         );
 
         resolve({
@@ -1362,7 +1403,8 @@ export class ProxyExecutor {
           ctx.originalResponseBody,
           ttfbForStreamLog(ctx, false),
           undefined,
-          ctx.responseHeadersMasked
+          ctx.responseHeadersMasked,
+          computeTiming(ctx, task)
         );
 
         resolve({
@@ -1397,7 +1439,8 @@ export class ProxyExecutor {
           ctx.originalResponseBody,
           ttfbForStreamLog(ctx, false),
           undefined,
-          ctx.responseHeadersMasked
+          ctx.responseHeadersMasked,
+          computeTiming(ctx, task)
         );
 
         resolve({
@@ -1460,7 +1503,8 @@ export class ProxyExecutor {
             ctx.originalResponseBody,
             ttfbForStreamLog(ctx, false),
             undefined,
-            ctx.responseHeadersMasked
+            ctx.responseHeadersMasked,
+            computeTiming(ctx, task)
           );
           resolve({
             statusCode: status,
@@ -1482,7 +1526,8 @@ export class ProxyExecutor {
             ctx.originalResponseBody,
             ttfbForStreamLog(ctx, false),
             undefined,
-            ctx.responseHeadersMasked
+            ctx.responseHeadersMasked,
+            computeTiming(ctx, task)
           );
           resolve({
             statusCode: status,
@@ -1513,7 +1558,8 @@ export class ProxyExecutor {
           ctx.originalResponseBody,
           ttfbForStreamLog(ctx, false),
           undefined,
-          ctx.responseHeadersMasked
+          ctx.responseHeadersMasked,
+          computeTiming(ctx, task)
         );
         resolve({
           statusCode: 502,
@@ -1592,7 +1638,8 @@ export class ProxyExecutor {
             ctx.originalResponseBody,
             ttfbForStreamLog(ctx, false),
             undefined,
-            ctx.responseHeadersMasked
+            ctx.responseHeadersMasked,
+            computeTiming(ctx, task)
           );
           resolve({
             statusCode: status,
@@ -1614,7 +1661,8 @@ export class ProxyExecutor {
             ctx.originalResponseBody,
             ttfbForStreamLog(ctx, false),
             undefined,
-            ctx.responseHeadersMasked
+            ctx.responseHeadersMasked,
+            computeTiming(ctx, task)
           );
           resolve({
             statusCode: status,
@@ -1641,7 +1689,8 @@ export class ProxyExecutor {
           ctx.originalResponseBody,
           ttfbForStreamLog(ctx, false),
           undefined,
-          ctx.responseHeadersMasked
+          ctx.responseHeadersMasked,
+          computeTiming(ctx, task)
         );
         resolve({
           statusCode: 502,
@@ -1753,7 +1802,8 @@ export class ProxyExecutor {
         this.upstreamLogBody(upstreamLog),
         ttfbForStreamLog(ctx, true),
         undefined,
-        ctx.responseHeadersMasked
+        ctx.responseHeadersMasked,
+        computeTiming(ctx, task)
       );
 
       resolve({
@@ -1832,7 +1882,8 @@ export class ProxyExecutor {
             ctx.originalResponseBody,
             ttfbForStreamLog(ctx, false),
             undefined,
-            ctx.responseHeadersMasked
+            ctx.responseHeadersMasked,
+            computeTiming(ctx, task)
           );
           resolve({
             statusCode: status,
@@ -1854,7 +1905,8 @@ export class ProxyExecutor {
             ctx.originalResponseBody,
             ttfbForStreamLog(ctx, false),
             undefined,
-            ctx.responseHeadersMasked
+            ctx.responseHeadersMasked,
+            computeTiming(ctx, task)
           );
           resolve({
             statusCode: status,
@@ -1881,7 +1933,8 @@ export class ProxyExecutor {
           ctx.originalResponseBody,
           ttfbForStreamLog(ctx, false),
           undefined,
-          ctx.responseHeadersMasked
+          ctx.responseHeadersMasked,
+          computeTiming(ctx, task)
         );
         resolve({
           statusCode: 502,
@@ -1969,7 +2022,8 @@ export class ProxyExecutor {
           undefined,
           ttfbForStreamLog(ctx, false),
           undefined,
-          ctx.responseHeadersMasked
+          ctx.responseHeadersMasked,
+          computeTiming(ctx, task)
         );
         resolve({
           statusCode: 499,
@@ -2024,7 +2078,8 @@ export class ProxyExecutor {
         undefined,
         ttfbForStreamLog(ctx, false),
         undefined,
-        ctx.responseHeadersMasked
+        ctx.responseHeadersMasked,
+        computeTiming(ctx, task)
       );
       resolve({
         statusCode: status,
@@ -2142,7 +2197,8 @@ export class ProxyExecutor {
         undefined,
         ttfbForStreamLog(ctx, true),
         undefined,
-        ctx.responseHeadersMasked
+        ctx.responseHeadersMasked,
+        computeTiming(ctx, task)
       );
       if (!aborted) {
         task.streamCompleted = true;
@@ -2346,7 +2402,8 @@ export class ProxyExecutor {
         undefined,
         ttfbForStreamLog(ctx, false),
         undefined,
-        ctx.responseHeadersMasked
+        ctx.responseHeadersMasked,
+        computeTiming(ctx, task)
       );
       resolve({
         statusCode: outStatus,
@@ -2401,7 +2458,8 @@ export class ProxyExecutor {
             undefined,
             ttfbForStreamLog(ctx, true),
             undefined,
-            ctx.responseHeadersMasked
+            ctx.responseHeadersMasked,
+            computeTiming(ctx, task)
           );
           resolve({
             statusCode: 200,
@@ -2424,7 +2482,8 @@ export class ProxyExecutor {
           undefined,
           ttfbForStreamLog(ctx, false),
           undefined,
-          ctx.responseHeadersMasked
+          ctx.responseHeadersMasked,
+          computeTiming(ctx, task)
         );
         resolve({
           statusCode: 499,
@@ -2466,7 +2525,10 @@ export class ProxyExecutor {
         ctx.responseChunks,
         err.message,
         undefined,
-        undefined
+        undefined,
+        undefined,
+        undefined,
+        computeTiming(ctx, task)
       );
       reject(new Error(`Proxy error: ${err.message}`));
     });
@@ -2489,7 +2551,10 @@ export class ProxyExecutor {
         ctx.responseChunks,
         "Timeout",
         undefined,
-        undefined
+        undefined,
+        undefined,
+        undefined,
+        computeTiming(ctx, task)
       );
       reject(new Error("Proxy timeout"));
     });

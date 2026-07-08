@@ -12,7 +12,11 @@ import {
   shouldTrackMetrics,
   POSTGRES_UPDATE_METRICS_COMPLETED,
   POSTGRES_UPDATE_METRICS_STATUS,
+  STREAM_GEN_SQL_COND,
+  UPSTREAM_TTFB_SQL_COND,
+  TOTAL_MS_SQL_COND,
 } from "../../metrics-sql";
+import { POSTGRES_UPDATE_LOG_COMPLETED } from "../../logs-sql";
 import type {
   DatabaseDriver,
   PostgresDriverConfig,
@@ -20,6 +24,7 @@ import type {
   LogFilter,
   LogQueryResult,
   DatabaseStats,
+  LogResponseTiming,
   ProviderStatRow,
   RequestStatus,
   StatsQuery,
@@ -31,7 +36,6 @@ import {
   dbRowToLogWithoutBody,
   filterProviderBreakdownByTokenUsage,
 } from "../../shared-utils";
-import { STREAM_PERF_SQL_COND } from "../../stream-metrics";
 
 /**
  * PostgreSQL driver implementation
@@ -130,8 +134,9 @@ export class PostgresDriver implements DatabaseDriver {
         timestamp, provider_id, provider_name, method, path, target_url,
         request_body, response_body, original_request_body, original_response_body,
         status_code, duration, success, error_message, client_id, status, route_type,
+        input_tokens, output_tokens, cache_tokens, ttfb,
         request_headers, response_headers
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)`,
         [
           log.timestamp,
           log.providerId,
@@ -150,6 +155,10 @@ export class PostgresDriver implements DatabaseDriver {
           log.clientId ?? null,
           "completed",
           log.routeType ?? null,
+          log.inputTokens ?? null,
+          log.outputTokens ?? null,
+          log.cacheTokens ?? null,
+          log.ttfb ?? null,
           log.requestHeaders ?? null,
           null,
         ]
@@ -276,7 +285,8 @@ export class PostgresDriver implements DatabaseDriver {
     outputTokens?: number,
     cacheTokens?: number,
     ttfb?: number,
-    responseHeadersMasked?: string
+    responseHeadersMasked?: string,
+    timing?: LogResponseTiming
   ): void {
     if (!this.isEnabled) {
       return;
@@ -285,28 +295,24 @@ export class PostgresDriver implements DatabaseDriver {
     Promise.all([
       ...(this._logsEnabled
         ? [
-            this.pool!.query(
-              `UPDATE ${TABLE}
-         SET status_code = $1,
-             response_body = $2,
-             original_response_body = $3,
-             duration = $4,
-             success = $5,
-             error_message = $6,
-             response_headers = $7,
-             status = 'completed'
-         WHERE client_id = $8`,
-              [
-                statusCode,
-                utf8StringToBlob(responseBody),
-                utf8StringToBlob(originalResponseBody),
-                duration,
-                success,
-                utf8StringToBlob(errorMessage),
-                responseHeadersMasked ?? null,
-                clientId,
-              ]
-            ),
+            this.pool!.query(POSTGRES_UPDATE_LOG_COMPLETED, [
+              statusCode,
+              utf8StringToBlob(responseBody),
+              utf8StringToBlob(originalResponseBody),
+              duration,
+              success,
+              utf8StringToBlob(errorMessage),
+              responseHeadersMasked ?? null,
+              inputTokens ?? null,
+              outputTokens ?? null,
+              cacheTokens ?? null,
+              ttfb ?? null,
+              timing?.queueWaitMs ?? null,
+              timing?.upstreamTtfbMs ?? null,
+              timing?.genMs ?? null,
+              timing?.totalMs ?? null,
+              clientId,
+            ]),
           ]
         : []),
       this.pool!.query(POSTGRES_UPDATE_METRICS_COMPLETED, [
@@ -315,6 +321,10 @@ export class PostgresDriver implements DatabaseDriver {
         cacheTokens ?? null,
         ttfb ?? null,
         duration,
+        timing?.queueWaitMs ?? null,
+        timing?.upstreamTtfbMs ?? null,
+        timing?.genMs ?? null,
+        timing?.totalMs ?? null,
         success,
         statusCode,
         clientId,
@@ -378,8 +388,9 @@ export class PostgresDriver implements DatabaseDriver {
             timestamp, provider_id, provider_name, method, path, target_url,
             request_body, response_body, original_request_body, original_response_body,
             status_code, duration, success, error_message, client_id, status, route_type,
+            input_tokens, output_tokens, cache_tokens, ttfb,
             request_headers, response_headers
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)`,
             [
               log.timestamp,
               log.providerId,
@@ -398,6 +409,10 @@ export class PostgresDriver implements DatabaseDriver {
               log.clientId ?? null,
               "completed",
               log.routeType ?? null,
+              log.inputTokens ?? null,
+              log.outputTokens ?? null,
+              log.cacheTokens ?? null,
+              log.ttfb ?? null,
               log.requestHeaders ?? null,
               null,
             ]
@@ -481,7 +496,12 @@ export class PostgresDriver implements DatabaseDriver {
     const offset = filter.offset || 0;
 
     const rowsResult = await this.pool.query(
-      `SELECT v.*, m.input_tokens, m.output_tokens, m.cache_tokens, m.ttfb, m.model as metrics_model
+      `SELECT v.id, v.timestamp, v.provider_id, v.provider_name, v.method, v.path,
+              v.status_code, v.duration, v.success, v.error_message, v.client_id,
+              v.status, v.route_type,
+              v.input_tokens, v.output_tokens, v.cache_tokens, v.ttfb,
+              v.queue_wait_ms, v.upstream_ttfb_ms, v.gen_ms, v.total_ms,
+              m.model as metrics_model
        FROM ${TABLE} v
        LEFT JOIN ${METRICS_TABLE} m ON m.client_id = v.client_id
        ${whereClause} ORDER BY v.timestamp DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
@@ -502,7 +522,13 @@ export class PostgresDriver implements DatabaseDriver {
     }
 
     const result = await this.pool.query(
-      `SELECT v.*, m.input_tokens, m.output_tokens, m.cache_tokens, m.ttfb
+      `SELECT v.id, v.timestamp, v.provider_id, v.provider_name, v.method, v.path, v.target_url,
+              v.request_body, v.response_body, v.original_request_body, v.original_response_body,
+              v.request_headers, v.response_headers,
+              v.status_code, v.duration, v.success, v.error_message, v.client_id, v.status, v.route_type,
+              v.input_tokens, v.output_tokens, v.cache_tokens, v.ttfb,
+              v.queue_wait_ms, v.upstream_ttfb_ms, v.gen_ms, v.total_ms,
+              m.model as metrics_model
        FROM ${TABLE} v
        LEFT JOIN ${METRICS_TABLE} m ON m.client_id = v.client_id
        WHERE v.id = $1`,
@@ -578,6 +604,7 @@ export class PostgresDriver implements DatabaseDriver {
       avgTtfb: 0,
       outputTps: 0,
       outputTpsSampleCount: 0,
+      avgQueueWaitMs: 0,
       p50Duration: 0,
       p90Duration: 0,
       providerBreakdown: [],
@@ -600,9 +627,12 @@ export class PostgresDriver implements DatabaseDriver {
               COALESCE(SUM(input_tokens), 0) as "totalInputTokens",
               COALESCE(SUM(output_tokens), 0) as "totalOutputTokens",
               COALESCE(SUM(cache_tokens), 0) as "totalCacheTokens",
-              AVG(CASE WHEN ${STREAM_PERF_SQL_COND} THEN ttfb END) as "avgTtfb",
-              percentile_cont(0.5) WITHIN GROUP (ORDER BY duration) as "p50Duration",
-              percentile_cont(0.9) WITHIN GROUP (ORDER BY duration) as "p90Duration"
+              AVG(upstream_ttfb_ms) FILTER (WHERE ${UPSTREAM_TTFB_SQL_COND}) as "avgTtfb",
+              AVG(queue_wait_ms) FILTER (WHERE queue_wait_ms IS NOT NULL) as "avgQueueWaitMs",
+              percentile_cont(0.5) WITHIN GROUP (ORDER BY total_ms)
+                FILTER (WHERE ${TOTAL_MS_SQL_COND}) as "p50Duration",
+              percentile_cont(0.9) WITHIN GROUP (ORDER BY total_ms)
+                FILTER (WHERE ${TOTAL_MS_SQL_COND}) as "p90Duration"
        FROM ${METRICS_TABLE}
        WHERE ${timeFilter}`,
       timeParams
@@ -615,17 +645,16 @@ export class PostgresDriver implements DatabaseDriver {
     const totalInput = num(base.totalInputTokens);
     const totalOutput = num(base.totalOutputTokens);
     const totalCache = num(base.totalCacheTokens);
-    const denominator = totalInput + totalCache;
     const totalLogs = num(base.totalLogs);
 
     // 2. Filtered TPS
     const tpsResult = await this.pool.query(
       `SELECT COALESCE(SUM(output_tokens), 0) as "filteredTokens",
-              COALESCE(SUM(duration - ttfb), 0) as "filteredGenTime",
+              COALESCE(SUM(gen_ms), 0) as "filteredGenTime",
               COUNT(*) as "filteredCount"
        FROM ${METRICS_TABLE}
        WHERE ${timeFilter}
-         AND ${STREAM_PERF_SQL_COND}
+         AND ${STREAM_GEN_SQL_COND}
          AND output_tokens IS NOT NULL
          AND output_tokens > 0`,
       timeParams
@@ -657,7 +686,6 @@ export class PostgresDriver implements DatabaseDriver {
       byProvider[pid] = count;
       const inputTokens = num(row.totalInputTokens);
       const cacheTokens = num(row.totalCacheTokens);
-      const denom = inputTokens + cacheTokens;
       providerBreakdown.push({
         providerId: pid,
         providerName: String(row.provider_name ?? pid),
@@ -665,7 +693,7 @@ export class PostgresDriver implements DatabaseDriver {
         totalInputTokens: inputTokens,
         totalOutputTokens: num(row.totalOutputTokens),
         totalCacheTokens: cacheTokens,
-        cacheHitRate: denom > 0 ? Math.round((cacheTokens / denom) * 100) : 0,
+        cacheHitRate: inputTokens > 0 ? Math.round((cacheTokens / inputTokens) * 100) : 0,
       });
     }
 
@@ -678,10 +706,11 @@ export class PostgresDriver implements DatabaseDriver {
       totalInputTokens: totalInput,
       totalOutputTokens: totalOutput,
       totalCacheTokens: totalCache,
-      cacheHitRate: denominator > 0 ? Math.round((totalCache / denominator) * 100) : 0,
+      cacheHitRate: totalInput > 0 ? Math.round((totalCache / totalInput) * 100) : 0,
       avgTtfb: Math.round(fnum(base.avgTtfb)),
       outputTps: Math.round(outputTps * 10) / 10,
       outputTpsSampleCount: filteredCount,
+      avgQueueWaitMs: Math.round(fnum(base.avgQueueWaitMs)),
       p50Duration: Math.round(fnum(base.p50Duration)),
       p90Duration: Math.round(fnum(base.p90Duration)),
       providerBreakdown: filterProviderBreakdownByTokenUsage(providerBreakdown),

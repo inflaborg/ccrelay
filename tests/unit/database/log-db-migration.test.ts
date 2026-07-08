@@ -130,7 +130,7 @@ describe.skipIf(!nativeForNode)("log-db-migration", () => {
     db.close();
   });
 
-  it("split_metrics migration creates metrics table and drops v2 token columns", () => {
+  it("split_metrics migration creates metrics table; v4 restores log token columns", () => {
     createLegacyWithRows();
     const db = openDb();
     runSqliteStartupMigration(
@@ -161,12 +161,29 @@ describe.skipIf(!nativeForNode)("log-db-migration", () => {
     const tokenCol = db
       .prepare(`SELECT COUNT(*) as c FROM pragma_table_info('${TABLE}') WHERE name='input_tokens'`)
       .get() as { c: number };
-    expect(tokenCol.c).toBe(0);
+    expect(tokenCol.c).toBe(1);
 
     const metricsCount = db.prepare(`SELECT COUNT(*) as c FROM ${METRICS_TABLE}`).get() as {
       c: number;
     };
     expect(metricsCount.c).toBe(1);
+
+    const migrationVersion = db
+      .prepare(`SELECT MAX(version) as v FROM schema_migrations`)
+      .get() as { v: number };
+    expect(migrationVersion.v).toBeGreaterThanOrEqual(5);
+
+    const timingCols = ["queue_wait_ms", "upstream_ttfb_ms", "gen_ms", "total_ms"];
+    for (const col of timingCols) {
+      const onLogs = db
+        .prepare(`SELECT COUNT(*) as c FROM pragma_table_info('${TABLE}') WHERE name=?`)
+        .get(col) as { c: number };
+      expect(onLogs.c).toBe(1);
+      const onMetrics = db
+        .prepare(`SELECT COUNT(*) as c FROM pragma_table_info('${METRICS_TABLE}') WHERE name=?`)
+        .get(col) as { c: number };
+      expect(onMetrics.c).toBe(1);
+    }
 
     db.close();
   });

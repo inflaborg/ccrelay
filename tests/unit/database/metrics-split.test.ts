@@ -121,6 +121,99 @@ describe.skipIf(!nativeForNode)("metrics split (native driver)", () => {
     await driver.close();
   });
 
+  it("phase timing is stored on logs and used for dashboard stats", async () => {
+    const driver = new SqliteNativeDriver({ type: "sqlite", path: dbPath });
+    await driver.initialize({ logsEnabled: true });
+
+    const clientId = "c-timing";
+    driver.insertLogPending({
+      timestamp: Date.now(),
+      providerId: "p1",
+      providerName: "P",
+      method: "POST",
+      path: "/chat/completions",
+      duration: 0,
+      success: false,
+      clientId,
+      model: "gpt-4",
+    });
+
+    driver.updateLogCompleted(
+      clientId,
+      200,
+      "{}",
+      120,
+      true,
+      undefined,
+      undefined,
+      100,
+      200,
+      0,
+      50,
+      undefined,
+      {
+        queueWaitMs: 80,
+        upstreamTtfbMs: 400,
+        genMs: 2000,
+        totalMs: 2600,
+      }
+    );
+
+    const { logs } = await driver.queryLogs({ limit: 10 });
+    const row = logs.find(l => l.clientId === clientId);
+    expect(row?.queueWaitMs).toBe(80);
+    expect(row?.upstreamTtfbMs).toBe(400);
+    expect(row?.genMs).toBe(2000);
+    expect(row?.totalMs).toBe(2600);
+
+    const stats = await driver.getStats();
+    expect(stats.avgTtfb).toBe(400);
+    expect(stats.avgQueueWaitMs).toBe(80);
+    expect(stats.p50Duration).toBe(2600);
+    expect(stats.outputTps).toBe(100);
+
+    await driver.clearAllMetrics();
+    const afterClear = await driver.queryLogs({ limit: 10 });
+    const rowAfter = afterClear.logs.find(l => l.clientId === clientId);
+    expect(rowAfter?.upstreamTtfbMs).toBe(400);
+    expect(rowAfter?.genMs).toBe(2000);
+
+    await driver.close();
+  });
+
+  it("clearAllMetrics clears dashboard stats but keeps redundant tokens on log rows", async () => {
+    const driver = new SqliteNativeDriver({ type: "sqlite", path: dbPath });
+    await driver.initialize({ logsEnabled: true });
+
+    const clientId = "c-redundant-tokens";
+    driver.insertLogPending({
+      timestamp: Date.now(),
+      providerId: "p1",
+      providerName: "P",
+      method: "POST",
+      path: "/chat/completions",
+      duration: 0,
+      success: false,
+      clientId,
+      model: "gpt-4",
+    });
+
+    driver.updateLogCompleted(clientId, 200, "{}", 120, true, undefined, undefined, 42, 24, 8, 50);
+
+    await driver.clearAllMetrics();
+
+    const stats = await driver.getStats();
+    expect(stats.totalInputTokens).toBe(0);
+
+    const { logs } = await driver.queryLogs({ limit: 10 });
+    const row = logs.find(l => l.clientId === clientId);
+    expect(row?.inputTokens).toBe(42);
+    expect(row?.outputTokens).toBe(24);
+    expect(row?.cacheTokens).toBe(8);
+
+    await driver.close();
+  });
+
   it("logsEnabled false writes metrics only (no request_logs_v2 rows)", async () => {
     const driver = new SqliteNativeDriver({ type: "sqlite", path: dbPath });
     await driver.initialize({ logsEnabled: false });

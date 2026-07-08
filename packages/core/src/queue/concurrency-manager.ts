@@ -259,6 +259,8 @@ export class ConcurrencyManager {
     const { task, resolve, reject, queuedAt } = queuedTask;
     const startedAt = Date.now();
     const waitTime = startedAt - queuedAt;
+    task.queuedAt = queuedAt;
+    task.startedAt = startedAt;
 
     // Track the task
     const processingTask: ProcessingTask = {

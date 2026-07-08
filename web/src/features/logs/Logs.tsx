@@ -35,7 +35,13 @@ import { api, type LogEntry } from "@/api/client";
 import { isSseLogBody, reconstructMessageFromSseLogBody } from "./reconstructAnthropicSseMessage";
 import { reconstructOpenAIChatFromSseLogBody } from "./reconstructOpenAIChatSseMessage";
 import { reconstructOpenAIResponsesFromSseLogBody } from "./reconstructOpenAIResponsesSseMessage";
-import { hasStreamPerfMetrics, outputTps } from "./streamPerf";
+import {
+  effectiveGenMs,
+  effectiveTtfb,
+  formatMs,
+  hasStreamPerfMetrics,
+  outputTps,
+} from "./streamPerf";
 
 const PAGE_SIZE = 50;
 
@@ -684,12 +690,9 @@ export default function Logs() {
       header: t("logs.table.header.ttfb"),
       headerTitle: t("logs.table.ttfbTooltip"),
       cell: log => {
-        if (!hasStreamPerfMetrics(log)) return <span className="text-[11px]">-</span>;
-        return (
-          <span className="text-[11px]">
-            {log.ttfb! >= 1000 ? `${(log.ttfb! / 1000).toFixed(1)}s` : `${log.ttfb}ms`}
-          </span>
-        );
+        const ttfb = effectiveTtfb(log);
+        if (ttfb == null) return <span className="text-[11px]">-</span>;
+        return <span className="text-[11px]">{formatMs(ttfb)}</span>;
       },
       className: "hidden md:table-cell",
       headerClassName: "hidden md:table-cell",
@@ -702,7 +705,7 @@ export default function Logs() {
       cell: log => {
         const tps = outputTps(log);
         if (tps == null) return <span className="text-[11px]">-</span>;
-        const genTime = log.duration - log.ttfb!;
+        const genTime = effectiveGenMs(log)!;
         return (
           <span
             className="font-mono text-[11px]"
@@ -896,7 +899,9 @@ export default function Logs() {
                     </div>
                     <div className="flex items-center gap-1.5">
                       <span className="text-muted-foreground">{t("logs.detail.duration")}</span>
-                      <span className="font-medium font-mono">{selectedLog.duration}ms</span>
+                      <span className="font-medium font-mono">
+                        {(selectedLog.totalMs ?? selectedLog.duration).toLocaleString()}ms
+                      </span>
                     </div>
                     <div className="flex items-center gap-1.5 min-w-[120px]">
                       <span className="text-muted-foreground">{t("logs.detail.time")}</span>
@@ -966,13 +971,42 @@ export default function Logs() {
                     </div>
                   )}
 
+                  {(selectedLog.queueWaitMs != null ||
+                    selectedLog.upstreamTtfbMs != null ||
+                    selectedLog.genMs != null ||
+                    selectedLog.totalMs != null) && (
+                    <div className="text-xs space-y-1">
+                      <span className="text-muted-foreground">{t("logs.detail.timingPhases")}</span>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[11px] mt-0.5">
+                        {selectedLog.queueWaitMs != null && (
+                          <span>
+                            {t("logs.detail.queueWait")}: {formatMs(selectedLog.queueWaitMs)}
+                          </span>
+                        )}
+                        {selectedLog.upstreamTtfbMs != null && (
+                          <span>
+                            {t("logs.detail.upstreamTtfb")}: {formatMs(selectedLog.upstreamTtfbMs)}
+                          </span>
+                        )}
+                        {selectedLog.genMs != null && (
+                          <span>
+                            {t("logs.detail.generation")}: {formatMs(selectedLog.genMs)}
+                          </span>
+                        )}
+                        {selectedLog.totalMs != null && (
+                          <span>
+                            {t("logs.detail.totalTime")}: {formatMs(selectedLog.totalMs)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {hasStreamPerfMetrics(selectedLog) && (
                     <div className="text-xs">
-                      <span className="text-muted-foreground">TTFB</span>
+                      <span className="text-muted-foreground">{t("logs.detail.ttfb")}</span>
                       <p className="font-mono text-[11px] mt-0.5">
-                        {selectedLog.ttfb! >= 1000
-                          ? `${(selectedLog.ttfb! / 1000).toFixed(2)}s`
-                          : `${selectedLog.ttfb}ms`}
+                        {formatMs(effectiveTtfb(selectedLog)!)}
                       </p>
                     </div>
                   )}
@@ -980,10 +1014,10 @@ export default function Logs() {
                   {(() => {
                     const tps = outputTps(selectedLog);
                     if (tps == null) return null;
-                    const genTime = selectedLog.duration - selectedLog.ttfb!;
+                    const genTime = effectiveGenMs(selectedLog)!;
                     return (
                       <div className="text-xs">
-                        <span className="text-muted-foreground">Output TPS</span>
+                        <span className="text-muted-foreground">{t("logs.detail.outputTps")}</span>
                         <p className="font-mono text-[11px] mt-0.5">
                           {tps.toFixed(1)} t/s
                           <span className="text-muted-foreground ml-2">

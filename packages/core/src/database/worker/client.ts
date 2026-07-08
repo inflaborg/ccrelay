@@ -14,6 +14,7 @@ import type {
   LogFilter,
   LogQueryResult,
   DatabaseStats,
+  LogResponseTiming,
   RequestStatus,
   DatabaseDriverConfig,
   StatsQuery,
@@ -311,7 +312,8 @@ export class DatabaseWorkerClient implements DatabaseDriver {
     outputTokens?: number,
     cacheTokens?: number,
     ttfb?: number,
-    responseHeadersMasked?: string
+    responseHeadersMasked?: string,
+    timing?: LogResponseTiming
   ): void {
     void this.send("updateLogCompleted", {
       clientId,
@@ -326,6 +328,7 @@ export class DatabaseWorkerClient implements DatabaseDriver {
       cacheTokens,
       ttfb,
       responseHeadersMasked,
+      timing,
     }).catch(err => {
       this.log.error("[DatabaseWorker] updateLogCompleted error:", err);
     });
@@ -431,6 +434,7 @@ export class DatabaseWorkerClient implements DatabaseDriver {
         avgTtfb: 0,
         outputTps: 0,
         outputTpsSampleCount: 0,
+        avgQueueWaitMs: 0,
         p50Duration: 0,
         p90Duration: 0,
         providerBreakdown: [],

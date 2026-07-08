@@ -17,7 +17,11 @@ import {
   buildMetricsCompletedInsertSql,
   SQLITE_UPDATE_METRICS_COMPLETED,
   SQLITE_UPDATE_METRICS_STATUS,
+  STREAM_GEN_SQL_COND,
+  UPSTREAM_TTFB_SQL_COND,
+  TOTAL_MS_SQL_COND,
 } from "../../metrics-sql";
+import { SQLITE_UPDATE_LOG_COMPLETED } from "../../logs-sql";
 import { SQLITE_MIN_VERSION, isSqliteVersionAtLeast } from "../../sqlite-version";
 import type {
   DatabaseDriver,
@@ -26,6 +30,7 @@ import type {
   LogFilter,
   LogQueryResult,
   DatabaseStats,
+  LogResponseTiming,
   ProviderStatRow,
   RequestStatus,
   StatsQuery,
@@ -47,7 +52,6 @@ import {
   type SqlInsertParam,
 } from "./utils";
 import { sqlLiteralForBlob } from "./cli-wire";
-import { STREAM_PERF_SQL_COND } from "../../stream-metrics";
 
 /** Thrown when the `sqlite3` executable is absent; callers may degrade to disabled log storage. */
 export const SQLITE_CLI_NOT_FOUND_MESSAGE = "sqlite3 CLI not found. Please install SQLite3.";
@@ -1088,7 +1092,8 @@ export class SqliteCliDriver implements DatabaseDriver {
     outputTokens?: number,
     cacheTokens?: number,
     ttfb?: number,
-    responseHeadersMasked?: string
+    responseHeadersMasked?: string,
+    timing?: LogResponseTiming
   ): void {
     if (!this.isEnabled || !this.writeConn?.started) {
       return;
@@ -1097,28 +1102,24 @@ export class SqliteCliDriver implements DatabaseDriver {
     const updates: Promise<void>[] = [];
     if (this._logsEnabled) {
       updates.push(
-        this.writeConn.exec(
-          `UPDATE ${TABLE}
-       SET status_code = ?,
-           response_body = ?,
-           original_response_body = ?,
-           duration = ?,
-           success = ?,
-           error_message = ?,
-           response_headers = ?,
-           status = 'completed'
-       WHERE client_id = ?`,
-          [
-            statusCode,
-            utf8StringToBlob(responseBody),
-            utf8StringToBlob(originalResponseBody),
-            duration,
-            success ? 1 : 0,
-            errorMessage ?? null,
-            responseHeadersMasked ?? null,
-            clientId,
-          ]
-        )
+        this.writeConn.exec(SQLITE_UPDATE_LOG_COMPLETED, [
+          statusCode,
+          utf8StringToBlob(responseBody),
+          utf8StringToBlob(originalResponseBody),
+          duration,
+          success ? 1 : 0,
+          errorMessage ?? null,
+          responseHeadersMasked ?? null,
+          inputTokens ?? null,
+          outputTokens ?? null,
+          cacheTokens ?? null,
+          ttfb ?? null,
+          timing?.queueWaitMs ?? null,
+          timing?.upstreamTtfbMs ?? null,
+          timing?.genMs ?? null,
+          timing?.totalMs ?? null,
+          clientId,
+        ])
       );
     }
     updates.push(
@@ -1128,6 +1129,10 @@ export class SqliteCliDriver implements DatabaseDriver {
         cacheTokens ?? null,
         ttfb ?? null,
         duration,
+        timing?.queueWaitMs ?? null,
+        timing?.upstreamTtfbMs ?? null,
+        timing?.genMs ?? null,
+        timing?.totalMs ?? null,
         success ? 1 : 0,
         statusCode,
         clientId,
@@ -1299,7 +1304,8 @@ export class SqliteCliDriver implements DatabaseDriver {
       `SELECT v.id, v.timestamp, v.provider_id, v.provider_name, v.method, v.path,
               v.status_code, v.duration, v.success, v.error_message, v.client_id,
               v.status, v.route_type,
-              m.input_tokens, m.output_tokens, m.cache_tokens, m.ttfb,
+              v.input_tokens, v.output_tokens, v.cache_tokens, v.ttfb,
+              v.queue_wait_ms, v.upstream_ttfb_ms, v.gen_ms, v.total_ms,
               m.model as metrics_model,
               ${CLI_BODY_PREVIEW_HEX}
        FROM ${TABLE} v
@@ -1326,7 +1332,9 @@ export class SqliteCliDriver implements DatabaseDriver {
               hex(v.original_response_body) as original_response_body,
               v.request_headers, v.response_headers,
               v.status_code, v.duration, v.success, v.error_message, v.client_id, v.status, v.route_type,
-              m.input_tokens, m.output_tokens, m.cache_tokens, m.ttfb
+              v.input_tokens, v.output_tokens, v.cache_tokens, v.ttfb,
+              v.queue_wait_ms, v.upstream_ttfb_ms, v.gen_ms, v.total_ms,
+              m.model as metrics_model
        FROM ${TABLE} v
        LEFT JOIN ${METRICS_TABLE} m ON m.client_id = v.client_id
        WHERE v.id = ?`,
@@ -1354,6 +1362,7 @@ export class SqliteCliDriver implements DatabaseDriver {
       avgTtfb: 0,
       outputTps: 0,
       outputTpsSampleCount: 0,
+      avgQueueWaitMs: 0,
       p50Duration: 0,
       p90Duration: 0,
       providerBreakdown: [],
@@ -1377,7 +1386,8 @@ export class SqliteCliDriver implements DatabaseDriver {
               COALESCE(SUM(input_tokens), 0) as totalInputTokens,
               COALESCE(SUM(output_tokens), 0) as totalOutputTokens,
               COALESCE(SUM(cache_tokens), 0) as totalCacheTokens,
-              AVG(CASE WHEN ${STREAM_PERF_SQL_COND} THEN ttfb END) as avgTtfb
+              AVG(CASE WHEN ${UPSTREAM_TTFB_SQL_COND} THEN upstream_ttfb_ms END) as avgTtfb,
+              AVG(CASE WHEN queue_wait_ms IS NOT NULL THEN queue_wait_ms END) as avgQueueWaitMs
        FROM ${METRICS_TABLE}
        WHERE ${timeFilter}`,
       timeParams
@@ -1386,16 +1396,15 @@ export class SqliteCliDriver implements DatabaseDriver {
     const totalInput = (base.totalInputTokens as number) ?? 0;
     const totalOutput = (base.totalOutputTokens as number) ?? 0;
     const totalCache = (base.totalCacheTokens as number) ?? 0;
-    const denominator = totalInput + totalCache;
 
-    // 2. Filtered TPS (only genuinely streamed: genTime > 500ms)
+    // 2. Filtered TPS (only genuinely streamed: gen_ms > 500ms)
     const tpsRows = await this.readConn.query(
       `SELECT COALESCE(SUM(output_tokens), 0) as filteredTokens,
-              COALESCE(SUM(duration - ttfb), 0) as filteredGenTime,
+              COALESCE(SUM(gen_ms), 0) as filteredGenTime,
               COUNT(*) as filteredCount
        FROM ${METRICS_TABLE}
        WHERE ${timeFilter}
-         AND ${STREAM_PERF_SQL_COND}
+         AND ${STREAM_GEN_SQL_COND}
          AND output_tokens IS NOT NULL
          AND output_tokens > 0`,
       timeParams
@@ -1406,25 +1415,29 @@ export class SqliteCliDriver implements DatabaseDriver {
     const filteredCount = (tps.filteredCount as number) ?? 0;
     const outputTps = filteredGenTime > 0 ? (filteredTokens / filteredGenTime) * 1000 : 0;
 
-    // 3. Percentiles via LIMIT/OFFSET
+    // 3. Percentiles via LIMIT/OFFSET on total_ms
     let p50Duration = 0;
     let p90Duration = 0;
-    const totalLogs = (base.totalLogs as number) ?? 0;
-    if (totalLogs > 0) {
-      const p50Offset = Math.floor(0.5 * (totalLogs - 1));
-      const p90Offset = Math.floor(0.9 * (totalLogs - 1));
+    const totalMsCountRows = await this.readConn.query(
+      `SELECT COUNT(*) as c FROM ${METRICS_TABLE} WHERE ${timeFilter} AND ${TOTAL_MS_SQL_COND}`,
+      timeParams
+    );
+    const totalMsRows = (totalMsCountRows[0]?.c as number) ?? 0;
+    if (totalMsRows > 0) {
+      const p50Offset = Math.floor(0.5 * (totalMsRows - 1));
+      const p90Offset = Math.floor(0.9 * (totalMsRows - 1));
       const [p50Rows, p90Rows] = await Promise.all([
         this.readConn.query(
-          `SELECT duration FROM ${METRICS_TABLE} WHERE ${timeFilter} ORDER BY duration ASC LIMIT 1 OFFSET ?`,
+          `SELECT total_ms FROM ${METRICS_TABLE} WHERE ${timeFilter} AND ${TOTAL_MS_SQL_COND} ORDER BY total_ms ASC LIMIT 1 OFFSET ?`,
           [...timeParams, p50Offset]
         ),
         this.readConn.query(
-          `SELECT duration FROM ${METRICS_TABLE} WHERE ${timeFilter} ORDER BY duration ASC LIMIT 1 OFFSET ?`,
+          `SELECT total_ms FROM ${METRICS_TABLE} WHERE ${timeFilter} AND ${TOTAL_MS_SQL_COND} ORDER BY total_ms ASC LIMIT 1 OFFSET ?`,
           [...timeParams, p90Offset]
         ),
       ]);
-      p50Duration = Math.round((p50Rows[0]?.duration as number) ?? 0);
-      p90Duration = Math.round((p90Rows[0]?.duration as number) ?? 0);
+      p50Duration = Math.round((p50Rows[0]?.total_ms as number) ?? 0);
+      p90Duration = Math.round((p90Rows[0]?.total_ms as number) ?? 0);
     }
 
     // 4. Provider breakdown
@@ -1445,7 +1458,6 @@ export class SqliteCliDriver implements DatabaseDriver {
       byProvider[r.provider_id as string] = r.count as number;
       const inputTokens = (r.totalInputTokens as number) ?? 0;
       const cacheTokens = (r.totalCacheTokens as number) ?? 0;
-      const denom = inputTokens + cacheTokens;
       providerBreakdown.push({
         providerId: r.provider_id as string,
         providerName: (r.provider_name as string) || (r.provider_id as string),
@@ -1453,12 +1465,12 @@ export class SqliteCliDriver implements DatabaseDriver {
         totalInputTokens: inputTokens,
         totalOutputTokens: (r.totalOutputTokens as number) ?? 0,
         totalCacheTokens: cacheTokens,
-        cacheHitRate: denom > 0 ? Math.round((cacheTokens / denom) * 100) : 0,
+        cacheHitRate: inputTokens > 0 ? Math.round((cacheTokens / inputTokens) * 100) : 0,
       });
     }
 
     return {
-      totalLogs,
+      totalLogs: (base.totalLogs as number) ?? 0,
       successCount: (base.successCount as number) ?? 0,
       errorCount: (base.errorCount as number) ?? 0,
       avgDuration: Math.round((base.avgDuration as number) ?? 0),
@@ -1466,10 +1478,11 @@ export class SqliteCliDriver implements DatabaseDriver {
       totalInputTokens: totalInput,
       totalOutputTokens: totalOutput,
       totalCacheTokens: totalCache,
-      cacheHitRate: denominator > 0 ? Math.round((totalCache / denominator) * 100) : 0,
+      cacheHitRate: totalInput > 0 ? Math.round((totalCache / totalInput) * 100) : 0,
       avgTtfb: Math.round((base.avgTtfb as number) ?? 0),
       outputTps: Math.round(outputTps * 10) / 10,
       outputTpsSampleCount: filteredCount,
+      avgQueueWaitMs: Math.round((base.avgQueueWaitMs as number) ?? 0),
       p50Duration,
       p90Duration,
       providerBreakdown: filterProviderBreakdownByTokenUsage(providerBreakdown),
