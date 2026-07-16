@@ -385,7 +385,7 @@ export class SqliteNativeDriver implements DatabaseDriver {
       .prepare(
         `SELECT v.id, v.timestamp, v.provider_id, v.provider_name, v.method, v.path,
                 v.status_code, v.duration, v.success, v.error_message, v.client_id,
-                v.status, v.route_type,
+                v.status, v.route_type, v.service_handler, v.service_meta,
                 v.input_tokens, v.output_tokens, v.cache_tokens, v.ttfb,
                 v.queue_wait_ms, v.upstream_ttfb_ms, v.gen_ms, v.total_ms,
                 m.model as metrics_model,

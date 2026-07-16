@@ -37,6 +37,10 @@ export interface RequestLog {
   clientId?: string;
   status?: RequestStatus;
   routeType?: RouteType;
+  /** When routeType is service: which interceptor handled the request (e.g. web-search). */
+  serviceHandler?: string;
+  /** JSON string with handler-specific metadata; NULL when none. */
+  serviceMeta?: string;
   inputTokens?: number;
   outputTokens?: number;
   cacheTokens?: number;

@@ -597,6 +597,8 @@
       "duration": "Duration",
       "time": "Time",
       "path": "Request Path",
+      "serviceHandler": "Service handler",
+      "serviceMeta": "Service metadata",
       "targetUrl": "Upstream URL",
       "model": "Model",
       "tokens": "Tokens",

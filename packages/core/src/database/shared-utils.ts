@@ -12,6 +12,30 @@ export const LIST_LOG_MODEL_BODY_HEAD_BYTES = 32_768;
 /** List-view suffix when the body exceeds the head prefix (late `model` field). */
 export const LIST_LOG_MODEL_BODY_TAIL_BYTES = 8_192;
 
+/** Serialize handler metadata for DB storage; empty object → NULL. */
+export function serializeServiceMeta(meta?: Record<string, unknown>): string | undefined {
+  if (!meta) {
+    return undefined;
+  }
+  const keys = Object.keys(meta);
+  if (keys.length === 0) {
+    return undefined;
+  }
+  return JSON.stringify(meta);
+}
+
+/** Parse service_meta column from DB. */
+export function parseServiceMetaColumn(value: unknown): string | undefined {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 /** SQLite SELECT fragments for list-view model extraction from BLOB bodies. */
 export function sqliteListBodyPreviewColumns(tableAlias = "v"): string {
   const head = LIST_LOG_MODEL_BODY_HEAD_BYTES;
@@ -199,6 +223,8 @@ export function dbRowToLogWithoutBody(row: Record<string, unknown>): RequestLog 
     clientId: row.client_id as string | undefined,
     status: row.status as RequestLog["status"],
     routeType: row.route_type as RequestLog["routeType"],
+    serviceHandler: (row.service_handler as string | undefined) ?? undefined,
+    serviceMeta: parseServiceMetaColumn(row.service_meta),
     inputTokens: row.input_tokens as number | undefined,
     outputTokens: row.output_tokens as number | undefined,
     cacheTokens: row.cache_tokens as number | undefined,
@@ -246,6 +272,8 @@ export function dbRowToLog(row: Record<string, unknown>): RequestLog {
     clientId: row.client_id as string | undefined,
     status: row.status as RequestLog["status"],
     routeType: row.route_type as RequestLog["routeType"],
+    serviceHandler: (row.service_handler as string | undefined) ?? undefined,
+    serviceMeta: parseServiceMetaColumn(row.service_meta),
     inputTokens: row.input_tokens as number | undefined,
     outputTokens: row.output_tokens as number | undefined,
     cacheTokens: row.cache_tokens as number | undefined,

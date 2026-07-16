@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Web search configuration applies only when you click **Save**; switching backends no longer discards unsaved edits, and an unsaved-changes hint appears next to the save button.
 - Search backend order in the dropdown is Tavily, then Parallel, then GLM (Zhipu).
 
+**Logging**
+
+- Request logs for locally handled **service** routes now record `service_handler` and optional JSON `service_meta` (e.g. web search records the search backend in metadata).
+
 ### Fixed
 
 **Config**

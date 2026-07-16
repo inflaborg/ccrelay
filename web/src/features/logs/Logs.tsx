@@ -42,6 +42,11 @@ import {
   hasStreamPerfMetrics,
   outputTps,
 } from "./streamPerf";
+import {
+  formatServiceLogSubtitle,
+  formatServiceMetaForDetail,
+  formatServiceMetaSummary,
+} from "./service-log-display";
 
 const PAGE_SIZE = 50;
 
@@ -539,12 +544,23 @@ export default function Logs() {
         // Legacy DB rows used `web-search`; treat as `service` for display.
         const raw = log.routeType as string;
         const rt = raw === "web-search" ? "service" : raw;
+        const serviceSubtitle = formatServiceLogSubtitle(log);
         const serviceBadge = (
           <span
-            className="text-[11px] px-1.5 py-0 rounded bg-violet-500/10 text-violet-600 dark:text-violet-400"
-            title={t("logs.table.routeType.serviceHint")}
+            className="text-[11px] px-1.5 py-0 rounded bg-violet-500/10 text-violet-600 dark:text-violet-400 block truncate max-w-[8rem]"
+            title={
+              serviceSubtitle
+                ? `${t("logs.table.routeType.service")} · ${serviceSubtitle}`
+                : t("logs.table.routeType.serviceHint")
+            }
           >
             {t("logs.table.routeType.service")}
+            {serviceSubtitle ? (
+              <span className="text-violet-500/80 dark:text-violet-300/80">
+                {" "}
+                · {serviceSubtitle}
+              </span>
+            ) : null}
           </span>
         );
         const typeMap: Record<string, React.ReactNode> = {
@@ -567,7 +583,7 @@ export default function Logs() {
         };
         return typeMap[rt] || <span className="text-[11px]">{log.routeType}</span>;
       },
-      width: 70,
+      width: 110,
     },
     {
       id: "model",
@@ -916,6 +932,35 @@ export default function Logs() {
                     <span className="text-muted-foreground">{t("logs.detail.path")}</span>
                     <p className="font-mono text-[11px] break-all mt-0.5">{selectedLog.path}</p>
                   </div>
+
+                  {selectedLog.routeType === "service" && selectedLog.serviceHandler ? (
+                    <div className="text-xs">
+                      <span className="text-muted-foreground">
+                        {t("logs.detail.serviceHandler")}
+                      </span>
+                      <p className="font-mono text-[11px] mt-0.5">{selectedLog.serviceHandler}</p>
+                      {formatServiceMetaSummary(
+                        selectedLog.serviceHandler,
+                        selectedLog.serviceMeta
+                      ).map(line => (
+                        <p
+                          key={line}
+                          className="font-mono text-[11px] mt-0.5 text-muted-foreground"
+                        >
+                          {line}
+                        </p>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {selectedLog.routeType === "service" && selectedLog.serviceMeta ? (
+                    <div className="text-xs">
+                      <span className="text-muted-foreground">{t("logs.detail.serviceMeta")}</span>
+                      <pre className="font-mono text-[11px] mt-0.5 whitespace-pre-wrap break-all bg-muted/40 rounded p-2">
+                        {formatServiceMetaForDetail(selectedLog.serviceMeta)}
+                      </pre>
+                    </div>
+                  ) : null}
 
                   {selectedLog.targetUrl && (
                     <div className="text-xs">

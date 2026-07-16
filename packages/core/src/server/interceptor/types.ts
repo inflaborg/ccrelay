@@ -4,7 +4,6 @@
  */
 
 import type { ApiSurface } from "../../types";
-import type { RouteType } from "../../database";
 
 /** Successful interception: caller writes HTTP response and completes logging. */
 export interface InterceptHandled {
@@ -12,7 +11,11 @@ export interface InterceptHandled {
   statusCode: number;
   headers: Record<string, string>;
   body: string;
-  routeType: RouteType;
+  routeType: "service";
+  /** Stable handler id (e.g. web-search, availability-probe). */
+  serviceHandler: string;
+  /** Handler-specific JSON-serializable metadata; omit when none. */
+  serviceMeta?: Record<string, unknown>;
   /** Optional token counts (merged over body extraction in ResponseLogger). */
   tokens?: {
     inputTokens?: number;

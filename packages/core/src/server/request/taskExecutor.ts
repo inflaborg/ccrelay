@@ -10,7 +10,7 @@ import type { LogDatabase, RequestStatus, RouteType } from "../../database";
 import type { QueueManager } from "../queueManager";
 import type { ProxyExecutor } from "../proxy/executor";
 import { ScopedLogger } from "../../utils/logger";
-import { extractModelFromPartialJson } from "../../database/shared-utils";
+import { extractModelFromPartialJson, serializeServiceMeta } from "../../database/shared-utils";
 import { maskHeadersForLog } from "../headerMask";
 
 const log = new ScopedLogger("TaskExecutor");
@@ -107,6 +107,8 @@ export class TaskExecutor {
     options?: {
       routeType?: RouteType;
       targetUrl?: string;
+      serviceHandler?: string;
+      serviceMeta?: Record<string, unknown>;
       /** Upstream-bound request headers (sensitive values masked before storage). */
       requestHeaders?: Record<string, string>;
     }
@@ -143,6 +145,8 @@ export class TaskExecutor {
       clientId,
       status: "pending",
       routeType,
+      serviceHandler: options?.serviceHandler,
+      serviceMeta: serializeServiceMeta(options?.serviceMeta),
       model: upstreamModel,
     });
   }

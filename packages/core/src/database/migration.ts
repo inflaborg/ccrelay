@@ -15,6 +15,7 @@ import {
   V2_TOKEN_COLUMNS,
   V2_TIMING_COLUMNS,
   METRICS_TIMING_COLUMNS,
+  V2_SERVICE_COLUMNS,
   POSTGRES_CREATE_TABLE_V2,
   POSTGRES_INDEXES_V2,
   POSTGRES_CREATE_SCHEMA_MIGRATIONS,
@@ -404,6 +405,39 @@ async function runMigrationV5TimingPhasesPostgres(
   }
 }
 
+function runMigrationV6ServiceMetaSqlite(ctx: SqliteMigrationContext): void {
+  for (const col of V2_SERVICE_COLUMNS) {
+    if (!sqliteColumnExists(ctx.queryScalar, TABLE, col)) {
+      ctx.exec(`ALTER TABLE ${TABLE} ADD COLUMN ${col} TEXT`);
+    }
+  }
+}
+
+async function runMigrationV6ServiceMetaSqliteAsync(ctx: {
+  exec: (sql: string) => void | Promise<void>;
+  queryScalar: (sql: string) => number | null | undefined | Promise<number | null | undefined>;
+}): Promise<void> {
+  for (const col of V2_SERVICE_COLUMNS) {
+    const exists =
+      (await Promise.resolve(
+        ctx.queryScalar(
+          `SELECT COUNT(*) as c FROM pragma_table_info('${TABLE}') WHERE name='${col}'`
+        )
+      )) ?? 0;
+    if (exists === 0) {
+      await ctx.exec(`ALTER TABLE ${TABLE} ADD COLUMN ${col} TEXT`);
+    }
+  }
+}
+
+async function runMigrationV6ServiceMetaPostgres(
+  query: (sql: string, params?: unknown[]) => Promise<unknown>
+): Promise<void> {
+  for (const col of V2_SERVICE_COLUMNS) {
+    await query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS ${col} TEXT`);
+  }
+}
+
 function sqliteRecordMigration(exec: (sql: string) => void, version: number, name: string): void {
   exec(
     `INSERT OR REPLACE INTO ${MIGRATIONS_TABLE} (version, name, applied_at) VALUES (${version}, '${name}', ${Date.now()})`
@@ -585,6 +619,14 @@ export function runSqliteMigrations(ctx: SqliteMigrationContext): void {
     applied = true;
   }
 
+  if (maxVersion < 6) {
+    logMigration(`Applying v6 service_meta${suffix}`);
+    runMigrationV6ServiceMetaSqlite(ctx);
+    sqliteRecordMigration(ctx.exec, 6, "service_meta");
+    logMigration(`v6 service_meta applied${suffix}`);
+    applied = true;
+  }
+
   if (!applied) {
     logMigration(`Schema up to date (version ${maxVersion})${suffix}`);
   } else {
@@ -704,6 +746,16 @@ export async function runSqliteMigrationsAsync(ctx: SqliteMigrationAsyncContext)
       `INSERT OR REPLACE INTO ${MIGRATIONS_TABLE} (version, name, applied_at) VALUES (5, 'timing_phases', ${Date.now()})`
     );
     logMigration(`v5 timing_phases applied${suffix}`);
+    applied = true;
+  }
+
+  if (maxVersion < 6) {
+    logMigration(`Applying v6 service_meta${suffix}`);
+    await runMigrationV6ServiceMetaSqliteAsync(ctx);
+    await ctx.exec(
+      `INSERT OR REPLACE INTO ${MIGRATIONS_TABLE} (version, name, applied_at) VALUES (6, 'service_meta', ${Date.now()})`
+    );
+    logMigration(`v6 service_meta applied${suffix}`);
     applied = true;
   }
 
@@ -846,6 +898,14 @@ export async function runPostgresMigrations(ctx: PostgresMigrationContext): Prom
     await runMigrationV5TimingPhasesPostgres(ctx.query);
     await postgresRecordMigration(ctx.query, 5, "timing_phases");
     logMigration(`v5 timing_phases applied${suffix}`);
+    applied = true;
+  }
+
+  if (maxVersion < 6) {
+    logMigration(`Applying v6 service_meta${suffix}`);
+    await runMigrationV6ServiceMetaPostgres(ctx.query);
+    await postgresRecordMigration(ctx.query, 6, "service_meta");
+    logMigration(`v6 service_meta applied${suffix}`);
     applied = true;
   }
 

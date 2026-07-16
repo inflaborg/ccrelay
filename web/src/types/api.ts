@@ -154,6 +154,8 @@ export interface LogEntry {
   clientId?: string;
   status?: RequestStatus;
   routeType?: RouteType;
+  serviceHandler?: string;
+  serviceMeta?: string;
   inputTokens?: number;
   outputTokens?: number;
   cacheTokens?: number;

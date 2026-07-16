@@ -39,6 +39,7 @@ export class AvailabilityProbeInterceptor implements ServiceInterceptor {
       headers: out.headers,
       body: out.body,
       routeType: "service",
+      serviceHandler: this.name,
       tokens: out.tokens,
     });
   }

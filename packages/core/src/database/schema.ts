@@ -28,6 +28,8 @@ export const SQLITE_CREATE_TABLE_V2 = `
     client_id TEXT,
     status TEXT DEFAULT 'completed',
     route_type TEXT,
+    service_handler TEXT,
+    service_meta TEXT,
     input_tokens INTEGER,
     output_tokens INTEGER,
     cache_tokens INTEGER,
@@ -71,6 +73,8 @@ export const SQLITE_CREATE_TABLE_V2_FINAL = `
     client_id TEXT,
     status TEXT DEFAULT 'completed',
     route_type TEXT,
+    service_handler TEXT,
+    service_meta TEXT,
     input_tokens INTEGER,
     output_tokens INTEGER,
     cache_tokens INTEGER,
@@ -129,6 +133,8 @@ export const V2_TIMING_COLUMNS = [
   "total_ms",
 ] as const;
 
+export const V2_SERVICE_COLUMNS = ["service_handler", "service_meta"] as const;
+
 export const METRICS_TIMING_COLUMNS = [
   "queue_wait_ms",
   "upstream_ttfb_ms",
@@ -156,6 +162,8 @@ export const POSTGRES_CREATE_TABLE_V2 = `
     client_id TEXT,
     status TEXT DEFAULT 'completed',
     route_type TEXT,
+    service_handler TEXT,
+    service_meta TEXT,
     input_tokens INTEGER,
     output_tokens INTEGER,
     cache_tokens INTEGER,
@@ -198,6 +206,8 @@ export const POSTGRES_CREATE_TABLE_V2_FINAL = `
     client_id TEXT,
     status TEXT DEFAULT 'completed',
     route_type TEXT,
+    service_handler TEXT,
+    service_meta TEXT,
     input_tokens INTEGER,
     output_tokens INTEGER,
     cache_tokens INTEGER,

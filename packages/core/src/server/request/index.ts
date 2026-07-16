@@ -206,7 +206,8 @@ export class RequestHandler {
 
     this.taskExecutor.insertPendingLog(routing, bodyResult, clientId, {
       routeType: intercepted.routeType,
-      targetUrl: "service",
+      serviceHandler: intercepted.serviceHandler,
+      serviceMeta: intercepted.serviceMeta,
       requestHeaders: routing.headers,
     });
 
