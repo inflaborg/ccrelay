@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useId } from "react";
+import { useState, useEffect, useMemo, useRef, useId, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Eye, EyeOff } from "lucide-react";
@@ -10,6 +10,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { SelectField } from "@/components/select-field";
 import { api } from "@/api/client";
 import type { WebSearchSettings } from "@/types/api";
+import ParallelAdvancedOptions from "./ParallelAdvancedOptions";
+import {
+  formatOptionalPositiveInt,
+  formatParallelDomainList,
+  parseOptionalPositiveInt,
+  parseParallelDomainList,
+} from "./parallel-domains";
 
 /** Legacy YAML without `enabled` treats a non-empty providers list as on. */
 function resolveWebSearchEnabled(ws: WebSearchSettings | undefined): boolean {
@@ -20,6 +27,42 @@ function resolveWebSearchEnabled(ws: WebSearchSettings | undefined): boolean {
     return ws.enabled;
   }
   return (ws.providers?.length ?? 0) > 0;
+}
+
+/** Stable snapshot of server webSearch config to detect external updates. */
+function webSearchServerSnapshot(ws: WebSearchSettings | undefined): string {
+  if (!ws) {
+    return "";
+  }
+  const parallel = ws.parallel;
+  return JSON.stringify({
+    enabled: resolveWebSearchEnabled(ws),
+    defaultSearchBackend: ws.defaultSearchBackend ?? "tavily",
+    providers: [...(ws.providers ?? [])].sort(),
+    tavily: {
+      maxResults: ws.tavily?.maxResults ?? 5,
+      searchDepth: ws.tavily?.searchDepth ?? "basic",
+      apiKey: ws.tavily?.apiKey ?? "",
+    },
+    glm: {
+      protocol: ws.glm?.protocol ?? "openai",
+      region: ws.glm?.region ?? "intl",
+      coding: ws.glm?.coding ?? true,
+      model: ws.glm?.model ?? "",
+      apiKey: ws.glm?.apiKey ?? "",
+    },
+    parallel: {
+      mode: parallel?.mode ?? "basic",
+      maxResults: parallel?.maxResults ?? 5,
+      publishedAfter: parallel?.publishedAfter ?? "",
+      location: parallel?.location ?? "auto",
+      includeDomains: parallel?.includeDomains ?? [],
+      excludeDomains: parallel?.excludeDomains ?? [],
+      liveFetch: parallel?.liveFetch === true,
+      maxCharsPerResult: parallel?.maxCharsPerResult ?? null,
+      apiKey: parallel?.apiKey ?? "",
+    },
+  });
 }
 
 function EnableRow({
@@ -74,34 +117,136 @@ export default function WebSearchGroup() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [glmApiKeyDirty, setGlmApiKeyDirty] = useState(false);
   const [showGlmApiKey, setShowGlmApiKey] = useState(false);
+  const [parallelApiKey, setParallelApiKey] = useState("");
+  const [parallelMode, setParallelMode] = useState<"turbo" | "basic" | "advanced">("basic");
+  const [parallelMaxResults, setParallelMaxResults] = useState(5);
+  const [parallelPublishedAfter, setParallelPublishedAfter] = useState("");
+  const [parallelLocation, setParallelLocation] = useState("auto");
+  const [parallelIncludeDomains, setParallelIncludeDomains] = useState("");
+  const [parallelExcludeDomains, setParallelExcludeDomains] = useState("");
+  const [parallelLiveFetch, setParallelLiveFetch] = useState(false);
+  const [parallelMaxCharsPerResult, setParallelMaxCharsPerResult] = useState("");
+  const [parallelApiKeyDirty, setParallelApiKeyDirty] = useState(false);
+  const [showParallelApiKey, setShowParallelApiKey] = useState(false);
   const providersInitDone = useRef(false);
+  const serverSnapshotRef = useRef<string | null>(null);
 
-  // Sync form state from server data
+  const hydrateFromServer = useCallback(
+    (ws: WebSearchSettings) => {
+      setEnabled(resolveWebSearchEnabled(ws));
+      setSearchBackend(ws.defaultSearchBackend ?? "tavily");
+      if (ws.tavily) {
+        if (!apiKeyDirty) {
+          setApiKey(ws.tavily.apiKey ?? "");
+        }
+        setMaxResults(ws.tavily.maxResults ?? 5);
+        setSearchDepth(ws.tavily.searchDepth ?? "basic");
+      }
+      if (ws.glm) {
+        if (!glmApiKeyDirty) {
+          setGlmApiKey(ws.glm.apiKey ?? "");
+        }
+        setGlmProtocol(ws.glm.protocol ?? "openai");
+        setGlmRegion(ws.glm.region ?? "intl");
+        setGlmCoding(ws.glm.coding ?? true);
+        setGlmModel(ws.glm.model ?? "");
+      }
+      if (ws.parallel) {
+        if (!parallelApiKeyDirty) {
+          setParallelApiKey(ws.parallel.apiKey ?? "");
+        }
+        setParallelMode(ws.parallel.mode ?? "basic");
+        setParallelMaxResults(ws.parallel.maxResults ?? 5);
+        setParallelPublishedAfter(ws.parallel.publishedAfter ?? "");
+        setParallelLocation(ws.parallel.location ?? "auto");
+        setParallelIncludeDomains(formatParallelDomainList(ws.parallel.includeDomains));
+        setParallelExcludeDomains(formatParallelDomainList(ws.parallel.excludeDomains));
+        setParallelLiveFetch(ws.parallel.liveFetch === true);
+        setParallelMaxCharsPerResult(formatOptionalPositiveInt(ws.parallel.maxCharsPerResult));
+      }
+      if (ws.providers) {
+        setSelectedProviders(new Set(ws.providers));
+      }
+    },
+    [apiKeyDirty, glmApiKeyDirty, parallelApiKeyDirty]
+  );
+
+  const hasUnsavedChanges = useMemo(() => {
+    const origWs = configQuery.data?.webSearch;
+    const origProviders = origWs?.providers ?? [];
+    const origTavily = origWs?.tavily;
+    const origGlm = origWs?.glm;
+    const origParallel = origWs?.parallel;
+    const origBackend = origWs?.defaultSearchBackend ?? "tavily";
+
+    if (enabled !== resolveWebSearchEnabled(origWs)) return true;
+    if (Array.from(selectedProviders).sort().join(",") !== [...origProviders].sort().join(","))
+      return true;
+    if (searchBackend !== origBackend) return true;
+    if (maxResults !== (origTavily?.maxResults ?? 5)) return true;
+    if (searchDepth !== (origTavily?.searchDepth ?? "basic")) return true;
+    if (apiKeyDirty) return true;
+    if (glmProtocol !== (origGlm?.protocol ?? "openai")) return true;
+    if (glmRegion !== (origGlm?.region ?? "intl")) return true;
+    if (glmCoding !== (origGlm?.coding ?? true)) return true;
+    if (glmModel !== (origGlm?.model ?? "")) return true;
+    if (glmApiKeyDirty) return true;
+    if (parallelMode !== (origParallel?.mode ?? "basic")) return true;
+    if (parallelMaxResults !== (origParallel?.maxResults ?? 5)) return true;
+    if (parallelPublishedAfter !== (origParallel?.publishedAfter ?? "")) return true;
+    if (parallelLocation !== (origParallel?.location ?? "auto")) return true;
+    if (parallelIncludeDomains !== formatParallelDomainList(origParallel?.includeDomains)) {
+      return true;
+    }
+    if (parallelExcludeDomains !== formatParallelDomainList(origParallel?.excludeDomains)) {
+      return true;
+    }
+    if (parallelLiveFetch !== (origParallel?.liveFetch === true)) return true;
+    if (parallelMaxCharsPerResult !== formatOptionalPositiveInt(origParallel?.maxCharsPerResult)) {
+      return true;
+    }
+    if (parallelApiKeyDirty) return true;
+    return false;
+  }, [
+    enabled,
+    selectedProviders,
+    searchBackend,
+    maxResults,
+    searchDepth,
+    apiKeyDirty,
+    glmProtocol,
+    glmRegion,
+    glmCoding,
+    glmModel,
+    glmApiKeyDirty,
+    parallelMode,
+    parallelMaxResults,
+    parallelPublishedAfter,
+    parallelLocation,
+    parallelIncludeDomains,
+    parallelExcludeDomains,
+    parallelLiveFetch,
+    parallelMaxCharsPerResult,
+    parallelApiKeyDirty,
+    configQuery.data,
+  ]);
+
+  // Sync form from server only on first load or after save — never while the user has local edits.
   useEffect(() => {
-    if (!configQuery.data || !configQuery.data.webSearch) return;
+    if (!configQuery.data?.webSearch) {
+      return;
+    }
     const ws = configQuery.data.webSearch;
-    setEnabled(resolveWebSearchEnabled(ws));
-    setSearchBackend(ws.defaultSearchBackend ?? "tavily");
-    if (ws.tavily) {
-      if (!apiKeyDirty) {
-        setApiKey(ws.tavily.apiKey ?? "");
-      }
-      setMaxResults(ws.tavily.maxResults ?? 5);
-      setSearchDepth(ws.tavily.searchDepth ?? "basic");
+    const snapshot = webSearchServerSnapshot(ws);
+    if (snapshot === serverSnapshotRef.current) {
+      return;
     }
-    if (ws.glm) {
-      if (!glmApiKeyDirty) {
-        setGlmApiKey(ws.glm.apiKey ?? "");
-      }
-      setGlmProtocol(ws.glm.protocol ?? "openai");
-      setGlmRegion(ws.glm.region ?? "intl");
-      setGlmCoding(ws.glm.coding ?? true);
-      setGlmModel(ws.glm.model ?? "");
+    if (serverSnapshotRef.current !== null && hasUnsavedChanges) {
+      return;
     }
-    if (ws.providers) {
-      setSelectedProviders(new Set(ws.providers));
-    }
-  }, [configQuery.data, apiKeyDirty, glmApiKeyDirty]);
+    hydrateFromServer(ws);
+    serverSnapshotRef.current = snapshot;
+  }, [configQuery.data, hasUnsavedChanges, hydrateFromServer]);
 
   function maskKey(key: string): string {
     if (!key) return "";
@@ -125,46 +270,12 @@ export default function WebSearchGroup() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [providersQuery.data]);
 
-  const hasUnsavedChanges = useMemo(() => {
-    const origWs = configQuery.data?.webSearch;
-    const origProviders = origWs?.providers ?? [];
-    const origTavily = origWs?.tavily;
-    const origGlm = origWs?.glm;
-    const origBackend = origWs?.defaultSearchBackend ?? "tavily";
-
-    if (enabled !== resolveWebSearchEnabled(origWs)) return true;
-    if (Array.from(selectedProviders).sort().join(",") !== [...origProviders].sort().join(","))
-      return true;
-    if (searchBackend !== origBackend) return true;
-    if (maxResults !== (origTavily?.maxResults ?? 5)) return true;
-    if (searchDepth !== (origTavily?.searchDepth ?? "basic")) return true;
-    if (apiKeyDirty) return true;
-    if (glmProtocol !== (origGlm?.protocol ?? "openai")) return true;
-    if (glmRegion !== (origGlm?.region ?? "intl")) return true;
-    if (glmCoding !== (origGlm?.coding ?? true)) return true;
-    if (glmModel !== (origGlm?.model ?? "")) return true;
-    if (glmApiKeyDirty) return true;
-    return false;
-  }, [
-    enabled,
-    selectedProviders,
-    searchBackend,
-    maxResults,
-    searchDepth,
-    apiKeyDirty,
-    glmProtocol,
-    glmRegion,
-    glmCoding,
-    glmModel,
-    glmApiKeyDirty,
-    configQuery.data,
-  ]);
-
   const mutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => api.patchConfig({ section: "webSearch", data }),
     onSuccess: () => {
       setApiKeyDirty(false);
       setGlmApiKeyDirty(false);
+      setParallelApiKeyDirty(false);
       api.reloadConfig().then(() => {
         queryClient.invalidateQueries({ queryKey: ["config"] });
         queryClient.invalidateQueries({ queryKey: ["providers"] });
@@ -189,11 +300,28 @@ export default function WebSearchGroup() {
     if (glmApiKeyDirty) {
       glmData.apiKey = glmApiKey;
     }
+    const includeDomains = parseParallelDomainList(parallelIncludeDomains);
+    const excludeDomains = parseParallelDomainList(parallelExcludeDomains);
+    const maxCharsPerResult = parseOptionalPositiveInt(parallelMaxCharsPerResult);
+    const parallelData: Record<string, unknown> = {
+      mode: parallelMode,
+      maxResults: parallelMaxResults,
+      publishedAfter: parallelPublishedAfter,
+      location: parallelLocation === "auto" ? "" : parallelLocation,
+      includeDomains,
+      excludeDomains,
+      liveFetch: parallelLiveFetch,
+      ...(maxCharsPerResult !== undefined ? { maxCharsPerResult } : { maxCharsPerResult: null }),
+    };
+    if (parallelApiKeyDirty) {
+      parallelData.apiKey = parallelApiKey;
+    }
     const data: Record<string, unknown> = {
       enabled,
       defaultSearchBackend: searchBackend,
       tavily: tavilyData,
       glm: glmData,
+      parallel: parallelData,
       providers: Array.from(selectedProviders),
     };
     mutation.mutate(data);
@@ -272,6 +400,7 @@ export default function WebSearchGroup() {
               onChange={setSearchBackend}
               options={[
                 { value: "tavily", label: "Tavily" },
+                { value: "parallel", label: "Parallel" },
                 { value: "glm", label: "GLM (Zhipu)" },
               ]}
             />
@@ -449,6 +578,126 @@ export default function WebSearchGroup() {
               </div>
             </>
           )}
+
+          {searchBackend === "parallel" && (
+            <>
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">
+                  {t("capabilities.webSearch.parallelApiKey")}
+                </Label>
+                <div className="relative">
+                  {showParallelApiKey ? (
+                    <Input
+                      type="text"
+                      className="h-8 pr-8 text-xs font-mono"
+                      value={parallelApiKey}
+                      placeholder={t("capabilities.webSearch.parallelApiKeyPlaceholder")}
+                      onChange={e => {
+                        setParallelApiKey(e.target.value);
+                        setParallelApiKeyDirty(true);
+                      }}
+                    />
+                  ) : (
+                    <div
+                      className="w-full h-8 px-2 pr-8 text-xs border rounded-md bg-background font-mono flex items-center cursor-pointer"
+                      onClick={() => setShowParallelApiKey(true)}
+                    >
+                      {parallelApiKey ? (
+                        <span className="text-muted-foreground">{maskKey(parallelApiKey)}</span>
+                      ) : (
+                        <span className="text-muted-foreground/50">
+                          {t("capabilities.webSearch.parallelApiKeyPlaceholder")}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowParallelApiKey(v => !v)}
+                  >
+                    {showParallelApiKey ? (
+                      <EyeOff className="h-3.5 w-3.5" />
+                    ) : (
+                      <Eye className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">
+                    {t("capabilities.webSearch.parallelMode")}
+                  </Label>
+                  <SelectField
+                    value={parallelMode}
+                    onChange={v => setParallelMode(v as "turbo" | "basic" | "advanced")}
+                    options={[
+                      { value: "turbo", label: t("capabilities.webSearch.parallelModeTurbo") },
+                      { value: "basic", label: t("capabilities.webSearch.parallelModeBasic") },
+                      {
+                        value: "advanced",
+                        label: t("capabilities.webSearch.parallelModeAdvanced"),
+                      },
+                    ]}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">
+                    {t("capabilities.webSearch.maxResults")}
+                  </Label>
+                  <Input
+                    type="number"
+                    className="h-8 text-xs font-mono"
+                    value={parallelMaxResults}
+                    min={1}
+                    max={10}
+                    onChange={e => setParallelMaxResults(Number(e.target.value))}
+                  />
+                </div>
+              </div>
+
+              {parallelMode === "advanced" ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {t("capabilities.webSearch.parallelAdvanced")}
+                  </p>
+                  <ParallelAdvancedOptions
+                    value={{
+                      publishedAfter: parallelPublishedAfter,
+                      location: parallelLocation,
+                      includeDomains: parallelIncludeDomains,
+                      excludeDomains: parallelExcludeDomains,
+                      liveFetch: parallelLiveFetch,
+                      maxCharsPerResult: parallelMaxCharsPerResult,
+                    }}
+                    onChange={patch => {
+                      if (patch.publishedAfter !== undefined) {
+                        setParallelPublishedAfter(patch.publishedAfter);
+                      }
+                      if (patch.location !== undefined) {
+                        setParallelLocation(patch.location);
+                      }
+                      if (patch.includeDomains !== undefined) {
+                        setParallelIncludeDomains(patch.includeDomains);
+                      }
+                      if (patch.excludeDomains !== undefined) {
+                        setParallelExcludeDomains(patch.excludeDomains);
+                      }
+                      if (patch.liveFetch !== undefined) {
+                        setParallelLiveFetch(patch.liveFetch);
+                      }
+                      if (patch.maxCharsPerResult !== undefined) {
+                        setParallelMaxCharsPerResult(patch.maxCharsPerResult);
+                      }
+                    }}
+                  />
+                </div>
+              ) : null}
+            </>
+          )}
         </div>
 
         {/* Provider assignment */}
@@ -521,19 +770,29 @@ export default function WebSearchGroup() {
         <div className="border-t pt-3 space-y-2">
           <div className="flex items-center justify-end gap-2">
             <div className="flex-1 min-w-0 min-h-[1.25rem] flex items-center justify-end text-right">
-              {mutation.isSuccess && !hasUnsavedChanges && (
+              {hasUnsavedChanges ? (
+                <span className="text-[10px] text-amber-600 dark:text-amber-500">
+                  {t("capabilities.webSearch.unsavedChanges")}
+                </span>
+              ) : mutation.isSuccess ? (
                 <span className="text-[10px] text-green-600 dark:text-green-500">
                   {t("capabilities.webSearch.savedAndReloaded")}
                 </span>
-              )}
+              ) : null}
             </div>
             <Button
               size="sm"
-              className="h-7 shrink-0 text-xs"
+              className="h-7 shrink-0 text-xs min-w-[7rem]"
               disabled={!hasUnsavedChanges || mutation.isPending}
               onClick={handleSave}
             >
-              {mutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : t("common.save")}
+              {mutation.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : hasUnsavedChanges ? (
+                t("common.save")
+              ) : (
+                t("common.upToDate")
+              )}
             </Button>
           </div>
           {mutation.isError && (

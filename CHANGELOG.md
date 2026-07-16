@@ -7,16 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-07-16
+
+External web search adds **Parallel** as a backend with configurable search modes and source policy. Web search settings now save explicitly instead of on backend switch, and request logs record metadata for locally handled service routes. Forwarding to upstream models is more reliable when clients send hashed model aliases, unsupported reasoning fields, or inline system messages.
+
+### Added
+
+**Config**
+
+- External web search supports **Parallel** as a search backend (`webSearch.parallel`, `defaultSearchBackend: parallel`), with configurable mode (`turbo` / `basic` / `advanced`), result limit, source policy (freshness, location, domain allow/block lists), live fetch, and excerpt sizing.
+
+**UI**
+
+- Web Search settings include a **Parallel** backend with API key, search mode, and result limit; choosing **Advanced** mode reveals source policy, fetch policy, and excerpt options.
+- Parallel location picker lists ISO country/region codes with localized labels.
+
+### Changed
+
+**UI**
+
+- Web search configuration applies only when you click **Save**; switching backends no longer discards unsaved edits, and an unsaved-changes hint appears next to the save button.
+- Search backend order in the dropdown is Tavily, then Parallel, then GLM (Zhipu).
+
+**Logging**
+
+- Request logs for locally handled service routes (such as web search) now record which handler served the request and optional metadata (e.g. the search backend used).
+
 ### Fixed
+
+**Config**
+
+- Saving Parallel web search settings with an empty excerpt limit no longer writes invalid `null` values that caused config reload failures.
 
 **Protocol/Conversion**
 
+- When a hashed model alias (e.g. `claude-93e5ab20`) is mapped to an upstream model, matching model mentions in the Anthropic system prompt are rewritten to the mapped model so upstream identity stays consistent.
 - Strip unsupported reasoning parameters when forwarding to models that do not support them (e.g. effort on Claude Haiku), preventing client-injected fields from causing upstream errors.
 - Strip inline `system` role messages when forwarding to models that reject them (e.g. Claude Haiku), merging content into the top-level `system` field.
-
-## [0.2.7] - 2026-06-28 (pre-release)
-
-Pre-release line for 0.2.7.
 
 ## [0.2.6] - 2026-06-26
 

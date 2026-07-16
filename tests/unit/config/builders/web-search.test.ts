@@ -88,5 +88,49 @@ describe("buildWebSearchConfig", () => {
     expect(buildWebSearchConfig({ providers: ["x"] })?.enabled).toBe(true);
     expect(buildWebSearchConfig({ providers: [] })?.enabled).toBe(false);
   });
+
+  it("normalizes parallel snake_case", () => {
+    const c = buildWebSearchConfig({
+      parallel: { api_key: "pk_test", mode: "turbo", max_results: 3 },
+    });
+    expect(c?.parallel).toEqual({
+      apiKey: "pk_test",
+      mode: "turbo",
+      maxResults: 3,
+    });
+    expect(c?.enabled).toBe(false);
+  });
+
+  it("accepts defaultSearchBackend parallel", () => {
+    const c = buildWebSearchConfig({
+      parallel: { apiKey: "pk_test" },
+      defaultSearchBackend: "parallel",
+    });
+    expect(c?.defaultSearchBackend).toBe("parallel");
+    expect(c?.parallel?.apiKey).toBe("pk_test");
+  });
+
+  it("normalizes parallel advanced fields and clears empty strings", () => {
+    const c = buildWebSearchConfig({
+      parallel: {
+        api_key: "pk_test",
+        published_after: "2024-01-01",
+        include_domains: ["arxiv.org"],
+        exclude_domains: [],
+        live_fetch: true,
+        max_chars_per_result: 8000,
+        location: "",
+      },
+    });
+    expect(c?.parallel).toEqual({
+      apiKey: "pk_test",
+      publishedAfter: "2024-01-01",
+      includeDomains: ["arxiv.org"],
+      excludeDomains: [],
+      liveFetch: true,
+      maxCharsPerResult: 8000,
+    });
+    expect(c?.parallel?.location).toBeUndefined();
+  });
 });
 /* eslint-enable @typescript-eslint/naming-convention */

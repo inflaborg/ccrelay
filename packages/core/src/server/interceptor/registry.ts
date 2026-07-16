@@ -21,7 +21,11 @@ export class InterceptorRegistry {
     const ctx: ServiceInterceptorContext = { rawBody, clientSurface, providerId, method, path };
     for (const interceptor of this.interceptors) {
       if (interceptor.shouldIntercept(ctx)) {
-        return await interceptor.execute(ctx);
+        const result = await interceptor.execute(ctx);
+        return {
+          ...result,
+          serviceHandler: result.serviceHandler || interceptor.name,
+        };
       }
     }
     return null;

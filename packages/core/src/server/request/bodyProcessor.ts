@@ -15,8 +15,10 @@ import {
   mapOpenAiWirePathToAnthropicUpstream,
   stripBillingHeaderFromAnthropicBody,
   sanitizeAnthropicOutboundBody,
+  rewriteEmbeddedModelAliasInAnthropicBody,
   type ResponsesRequestEcho,
 } from "../../converter";
+import { looksLikeAliasWireId } from "../../shared/aliasHash";
 import type { OpenAIMessage } from "../../converter/adapters/anthropic-to-openai-chat-request";
 import {
   normalizeOpenAiChatMaxOutputFields,
@@ -233,7 +235,11 @@ export class BodyProcessor {
     const clientWireModel = extractClientWireModel(rawBody);
     let body = applyModelMapping(rawBody, routing.provider);
 
-    if (clientSurface === "anthropic") {
+    if (clientSurface === "anthropic" && clientWireModel) {
+      const mappedModel = extractClientWireModel(body);
+      if (mappedModel && mappedModel !== clientWireModel && looksLikeAliasWireId(clientWireModel)) {
+        body = rewriteEmbeddedModelAliasInAnthropicBody(body, clientWireModel, mappedModel);
+      }
       body = stripBillingHeaderFromAnthropicBody(body);
     }
 

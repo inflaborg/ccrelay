@@ -45,6 +45,8 @@ export class WebSearchInterceptor implements ServiceInterceptor {
       headers: out.headers,
       body: out.body,
       routeType: "service",
+      serviceHandler: this.name,
+      serviceMeta: { searchBackend: detection.searchBackend },
     };
   }
 }

@@ -38,6 +38,20 @@ export function deepMerge<T extends Record<string, unknown>>(target: T, source: 
   return result;
 }
 
+/** Recursively drop keys whose value is `null` (used before writing YAML patches). */
+export function omitNullDeep<T extends Record<string, unknown>>(obj: T): T {
+  const result = { ...obj };
+  for (const key of Object.keys(result) as (keyof T)[]) {
+    const value = result[key];
+    if (value === null) {
+      delete result[key];
+    } else if (typeof value === "object" && !Array.isArray(value) && value !== null) {
+      result[key] = omitNullDeep(value as Record<string, unknown>) as T[keyof T];
+    }
+  }
+  return result;
+}
+
 function stableJsonForMergeKey(obj: unknown): string {
   if (obj === null || obj === undefined) {
     return "null";

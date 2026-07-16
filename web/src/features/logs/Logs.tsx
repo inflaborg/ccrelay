@@ -42,6 +42,7 @@ import {
   hasStreamPerfMetrics,
   outputTps,
 } from "./streamPerf";
+import { formatServiceMetaForDetail, formatServiceMetaSummary } from "./service-log-display";
 
 const PAGE_SIZE = 50;
 
@@ -916,6 +917,35 @@ export default function Logs() {
                     <span className="text-muted-foreground">{t("logs.detail.path")}</span>
                     <p className="font-mono text-[11px] break-all mt-0.5">{selectedLog.path}</p>
                   </div>
+
+                  {selectedLog.routeType === "service" && selectedLog.serviceHandler ? (
+                    <div className="text-xs">
+                      <span className="text-muted-foreground">
+                        {t("logs.detail.serviceHandler")}
+                      </span>
+                      <p className="font-mono text-[11px] mt-0.5">{selectedLog.serviceHandler}</p>
+                      {formatServiceMetaSummary(
+                        selectedLog.serviceHandler,
+                        selectedLog.serviceMeta
+                      ).map(line => (
+                        <p
+                          key={line}
+                          className="font-mono text-[11px] mt-0.5 text-muted-foreground"
+                        >
+                          {line}
+                        </p>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {selectedLog.routeType === "service" && selectedLog.serviceMeta ? (
+                    <div className="text-xs">
+                      <span className="text-muted-foreground">{t("logs.detail.serviceMeta")}</span>
+                      <pre className="font-mono text-[11px] mt-0.5 whitespace-pre-wrap break-all bg-muted/40 rounded p-2">
+                        {formatServiceMetaForDetail(selectedLog.serviceMeta)}
+                      </pre>
+                    </div>
+                  ) : null}
 
                   {selectedLog.targetUrl && (
                     <div className="text-xs">

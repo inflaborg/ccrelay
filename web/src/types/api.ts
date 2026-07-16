@@ -154,6 +154,8 @@ export interface LogEntry {
   clientId?: string;
   status?: RequestStatus;
   routeType?: RouteType;
+  serviceHandler?: string;
+  serviceMeta?: string;
   inputTokens?: number;
   outputTokens?: number;
   cacheTokens?: number;
@@ -452,6 +454,17 @@ export interface WebSearchSettings {
     region?: "intl" | "cn";
     coding?: boolean;
     model?: string;
+  };
+  parallel?: {
+    apiKey?: string;
+    mode?: "turbo" | "basic" | "advanced";
+    maxResults?: number;
+    publishedAfter?: string;
+    location?: string;
+    includeDomains?: string[];
+    excludeDomains?: string[];
+    liveFetch?: boolean;
+    maxCharsPerResult?: number;
   };
   providers?: string[];
   defaultSearchBackend?: string;

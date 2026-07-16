@@ -134,9 +134,10 @@ export class PostgresDriver implements DatabaseDriver {
         timestamp, provider_id, provider_name, method, path, target_url,
         request_body, response_body, original_request_body, original_response_body,
         status_code, duration, success, error_message, client_id, status, route_type,
+        service_handler, service_meta,
         input_tokens, output_tokens, cache_tokens, ttfb,
         request_headers, response_headers
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)`,
         [
           log.timestamp,
           log.providerId,
@@ -155,6 +156,8 @@ export class PostgresDriver implements DatabaseDriver {
           log.clientId ?? null,
           "completed",
           log.routeType ?? null,
+          log.serviceHandler ?? null,
+          log.serviceMeta ?? null,
           log.inputTokens ?? null,
           log.outputTokens ?? null,
           log.cacheTokens ?? null,
@@ -240,8 +243,9 @@ export class PostgresDriver implements DatabaseDriver {
         timestamp, provider_id, provider_name, method, path, target_url,
         request_body, response_body, original_request_body, original_response_body,
         status_code, duration, success, error_message, client_id, status, route_type,
+        service_handler, service_meta,
         request_headers, response_headers
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
         [
           log.timestamp,
           log.providerId,
@@ -260,6 +264,8 @@ export class PostgresDriver implements DatabaseDriver {
           log.clientId ?? null,
           "pending",
           log.routeType ?? null,
+          log.serviceHandler ?? null,
+          log.serviceMeta ?? null,
           log.requestHeaders ?? null,
           null,
         ]
@@ -388,9 +394,10 @@ export class PostgresDriver implements DatabaseDriver {
             timestamp, provider_id, provider_name, method, path, target_url,
             request_body, response_body, original_request_body, original_response_body,
             status_code, duration, success, error_message, client_id, status, route_type,
+            service_handler, service_meta,
             input_tokens, output_tokens, cache_tokens, ttfb,
             request_headers, response_headers
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)`,
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)`,
             [
               log.timestamp,
               log.providerId,
@@ -409,6 +416,8 @@ export class PostgresDriver implements DatabaseDriver {
               log.clientId ?? null,
               "completed",
               log.routeType ?? null,
+              log.serviceHandler ?? null,
+              log.serviceMeta ?? null,
               log.inputTokens ?? null,
               log.outputTokens ?? null,
               log.cacheTokens ?? null,
@@ -498,7 +507,7 @@ export class PostgresDriver implements DatabaseDriver {
     const rowsResult = await this.pool.query(
       `SELECT v.id, v.timestamp, v.provider_id, v.provider_name, v.method, v.path,
               v.status_code, v.duration, v.success, v.error_message, v.client_id,
-              v.status, v.route_type,
+              v.status, v.route_type, v.service_handler, v.service_meta,
               v.input_tokens, v.output_tokens, v.cache_tokens, v.ttfb,
               v.queue_wait_ms, v.upstream_ttfb_ms, v.gen_ms, v.total_ms,
               m.model as metrics_model
@@ -526,6 +535,7 @@ export class PostgresDriver implements DatabaseDriver {
               v.request_body, v.response_body, v.original_request_body, v.original_response_body,
               v.request_headers, v.response_headers,
               v.status_code, v.duration, v.success, v.error_message, v.client_id, v.status, v.route_type,
+              v.service_handler, v.service_meta,
               v.input_tokens, v.output_tokens, v.cache_tokens, v.ttfb,
               v.queue_wait_ms, v.upstream_ttfb_ms, v.gen_ms, v.total_ms,
               m.model as metrics_model
