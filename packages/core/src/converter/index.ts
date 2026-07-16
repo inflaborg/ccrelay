@@ -194,6 +194,8 @@ export {
   isBillingHeaderBlock,
 } from "./anthropic-request-sanitize";
 
+export { rewriteEmbeddedModelAliasInAnthropicBody } from "./anthropic-embedded-model-rewrite";
+
 export {
   resolveModelMeta,
   listModelFamilies,

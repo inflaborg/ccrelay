@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Protocol/Conversion**
 
+- When a hashed model alias (e.g. `claude-93e5ab20`) is mapped to an upstream model, matching model mentions in the Anthropic system prompt are rewritten to the mapped model so upstream identity stays consistent.
 - Strip unsupported reasoning parameters when forwarding to models that do not support them (e.g. effort on Claude Haiku), preventing client-injected fields from causing upstream errors.
 - Strip inline `system` role messages when forwarding to models that reject them (e.g. Claude Haiku), merging content into the top-level `system` field.
 
