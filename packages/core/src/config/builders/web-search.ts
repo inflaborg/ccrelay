@@ -22,6 +22,7 @@ export function buildWebSearchConfig(
   }
   const t = raw.tavily;
   const g = raw.glm;
+  const p = raw.parallel;
   const providers = Array.isArray(raw.providers) ? raw.providers : undefined;
   const defaultSearchBackend =
     typeof raw.defaultSearchBackend === "string" ? raw.defaultSearchBackend : undefined;
@@ -30,6 +31,7 @@ export function buildWebSearchConfig(
   const hasContent =
     Boolean(t) ||
     Boolean(g) ||
+    Boolean(p) ||
     providers !== undefined ||
     defaultSearchBackend !== undefined ||
     hasExplicitEnabled;
@@ -65,6 +67,15 @@ export function buildWebSearchConfig(
         }
       : {}),
     ...(glmConfig ? { glm: glmConfig } : {}),
+    ...(p
+      ? {
+          parallel: {
+            apiKey: p.apiKey ?? p.api_key,
+            mode: p.mode,
+            maxResults: p.maxResults ?? p.max_results,
+          },
+        }
+      : {}),
     ...(providers !== undefined ? { providers } : {}),
     ...(defaultSearchBackend ? { defaultSearchBackend } : {}),
     enabled,

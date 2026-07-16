@@ -88,5 +88,26 @@ describe("buildWebSearchConfig", () => {
     expect(buildWebSearchConfig({ providers: ["x"] })?.enabled).toBe(true);
     expect(buildWebSearchConfig({ providers: [] })?.enabled).toBe(false);
   });
+
+  it("normalizes parallel snake_case", () => {
+    const c = buildWebSearchConfig({
+      parallel: { api_key: "pk_test", mode: "turbo", max_results: 3 },
+    });
+    expect(c?.parallel).toEqual({
+      apiKey: "pk_test",
+      mode: "turbo",
+      maxResults: 3,
+    });
+    expect(c?.enabled).toBe(false);
+  });
+
+  it("accepts defaultSearchBackend parallel", () => {
+    const c = buildWebSearchConfig({
+      parallel: { apiKey: "pk_test" },
+      defaultSearchBackend: "parallel",
+    });
+    expect(c?.defaultSearchBackend).toBe("parallel");
+    expect(c?.parallel?.apiKey).toBe("pk_test");
+  });
 });
 /* eslint-enable @typescript-eslint/naming-convention */

@@ -1,5 +1,6 @@
 import type { WebSearchGlobalConfig } from "../../../types";
 import { GlmSearchProvider } from "./glm";
+import { ParallelSearchProvider } from "./parallel";
 import { TavilySearchProvider } from "./tavily";
 import type { SearchProvider } from "./types";
 
@@ -40,6 +41,17 @@ export function createSearchProvider(
       glmConfig.model || undefined,
       glmConfig.protocol ?? "openai"
     );
+  }
+
+  if (name === "parallel") {
+    const parallelConfig = config.parallel;
+    if (!parallelConfig?.apiKey) {
+      return null;
+    }
+    return new ParallelSearchProvider(parallelConfig.apiKey, {
+      mode: parallelConfig.mode,
+      maxResults: parallelConfig.maxResults,
+    });
   }
 
   return null;

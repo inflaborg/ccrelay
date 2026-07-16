@@ -244,6 +244,15 @@ export const WebSearchConfigSchema = z.object({
       model: z.string().optional(),
     })
     .optional(),
+  parallel: z
+    .object({
+      apiKey: z.string().optional(),
+      api_key: z.string().optional(),
+      mode: z.enum(["turbo", "basic", "advanced"]).optional(),
+      maxResults: z.number().int().min(1).max(10).optional(),
+      max_results: z.number().int().min(1).max(10).optional(),
+    })
+    .optional(),
   providers: z.array(z.string()).optional(),
   defaultSearchBackend: z.string().optional(),
   /** When false, web search is off but `providers` may still list preset assignments. */
@@ -445,9 +454,14 @@ export interface WebSearchGlobalConfig {
     coding?: boolean;
     model?: string;
   };
+  parallel?: {
+    apiKey?: string;
+    mode?: "turbo" | "basic" | "advanced";
+    maxResults?: number;
+  };
   /** Provider IDs assigned to web search (preset list; may be inactive when `enabled` is false). */
   providers?: string[];
-  /** Which search backend to use ("tavily" | "glm"). Defaults to "tavily". */
+  /** Which search backend to use ("tavily" | "glm" | "parallel"). Defaults to "tavily". */
   defaultSearchBackend?: string;
   /**
    * Master switch for web search interception.

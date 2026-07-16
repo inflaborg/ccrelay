@@ -453,6 +453,11 @@ export interface WebSearchSettings {
     coding?: boolean;
     model?: string;
   };
+  parallel?: {
+    apiKey?: string;
+    mode?: "turbo" | "basic" | "advanced";
+    maxResults?: number;
+  };
   providers?: string[];
   defaultSearchBackend?: string;
 }

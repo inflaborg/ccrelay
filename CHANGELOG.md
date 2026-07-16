@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**Config**
+
+- External web search supports **Parallel** as a search backend (`webSearch.parallel`, `defaultSearchBackend: parallel`), with configurable mode (`turbo` / `basic` / `advanced`) and result limit.
+
 ### Fixed
 
 **Protocol/Conversion**

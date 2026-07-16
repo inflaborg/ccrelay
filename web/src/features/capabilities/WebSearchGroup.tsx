@@ -74,6 +74,11 @@ export default function WebSearchGroup() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [glmApiKeyDirty, setGlmApiKeyDirty] = useState(false);
   const [showGlmApiKey, setShowGlmApiKey] = useState(false);
+  const [parallelApiKey, setParallelApiKey] = useState("");
+  const [parallelMode, setParallelMode] = useState<"turbo" | "basic" | "advanced">("basic");
+  const [parallelMaxResults, setParallelMaxResults] = useState(5);
+  const [parallelApiKeyDirty, setParallelApiKeyDirty] = useState(false);
+  const [showParallelApiKey, setShowParallelApiKey] = useState(false);
   const providersInitDone = useRef(false);
 
   // Sync form state from server data
@@ -98,10 +103,17 @@ export default function WebSearchGroup() {
       setGlmCoding(ws.glm.coding ?? true);
       setGlmModel(ws.glm.model ?? "");
     }
+    if (ws.parallel) {
+      if (!parallelApiKeyDirty) {
+        setParallelApiKey(ws.parallel.apiKey ?? "");
+      }
+      setParallelMode(ws.parallel.mode ?? "basic");
+      setParallelMaxResults(ws.parallel.maxResults ?? 5);
+    }
     if (ws.providers) {
       setSelectedProviders(new Set(ws.providers));
     }
-  }, [configQuery.data, apiKeyDirty, glmApiKeyDirty]);
+  }, [configQuery.data, apiKeyDirty, glmApiKeyDirty, parallelApiKeyDirty]);
 
   function maskKey(key: string): string {
     if (!key) return "";
@@ -130,6 +142,7 @@ export default function WebSearchGroup() {
     const origProviders = origWs?.providers ?? [];
     const origTavily = origWs?.tavily;
     const origGlm = origWs?.glm;
+    const origParallel = origWs?.parallel;
     const origBackend = origWs?.defaultSearchBackend ?? "tavily";
 
     if (enabled !== resolveWebSearchEnabled(origWs)) return true;
@@ -144,6 +157,9 @@ export default function WebSearchGroup() {
     if (glmCoding !== (origGlm?.coding ?? true)) return true;
     if (glmModel !== (origGlm?.model ?? "")) return true;
     if (glmApiKeyDirty) return true;
+    if (parallelMode !== (origParallel?.mode ?? "basic")) return true;
+    if (parallelMaxResults !== (origParallel?.maxResults ?? 5)) return true;
+    if (parallelApiKeyDirty) return true;
     return false;
   }, [
     enabled,
@@ -157,6 +173,9 @@ export default function WebSearchGroup() {
     glmCoding,
     glmModel,
     glmApiKeyDirty,
+    parallelMode,
+    parallelMaxResults,
+    parallelApiKeyDirty,
     configQuery.data,
   ]);
 
@@ -165,6 +184,7 @@ export default function WebSearchGroup() {
     onSuccess: () => {
       setApiKeyDirty(false);
       setGlmApiKeyDirty(false);
+      setParallelApiKeyDirty(false);
       api.reloadConfig().then(() => {
         queryClient.invalidateQueries({ queryKey: ["config"] });
         queryClient.invalidateQueries({ queryKey: ["providers"] });
@@ -189,11 +209,19 @@ export default function WebSearchGroup() {
     if (glmApiKeyDirty) {
       glmData.apiKey = glmApiKey;
     }
+    const parallelData: Record<string, unknown> = {
+      mode: parallelMode,
+      maxResults: parallelMaxResults,
+    };
+    if (parallelApiKeyDirty) {
+      parallelData.apiKey = parallelApiKey;
+    }
     const data: Record<string, unknown> = {
       enabled,
       defaultSearchBackend: searchBackend,
       tavily: tavilyData,
       glm: glmData,
+      parallel: parallelData,
       providers: Array.from(selectedProviders),
     };
     mutation.mutate(data);
@@ -273,6 +301,7 @@ export default function WebSearchGroup() {
               options={[
                 { value: "tavily", label: "Tavily" },
                 { value: "glm", label: "GLM (Zhipu)" },
+                { value: "parallel", label: "Parallel" },
               ]}
             />
           </div>
@@ -446,6 +475,88 @@ export default function WebSearchGroup() {
                   placeholder={t("capabilities.webSearch.glmModelPlaceholder")}
                   onChange={e => setGlmModel(e.target.value)}
                 />
+              </div>
+            </>
+          )}
+
+          {searchBackend === "parallel" && (
+            <>
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">
+                  {t("capabilities.webSearch.parallelApiKey")}
+                </Label>
+                <div className="relative">
+                  {showParallelApiKey ? (
+                    <Input
+                      type="text"
+                      className="h-8 pr-8 text-xs font-mono"
+                      value={parallelApiKey}
+                      placeholder={t("capabilities.webSearch.parallelApiKeyPlaceholder")}
+                      onChange={e => {
+                        setParallelApiKey(e.target.value);
+                        setParallelApiKeyDirty(true);
+                      }}
+                    />
+                  ) : (
+                    <div
+                      className="w-full h-8 px-2 pr-8 text-xs border rounded-md bg-background font-mono flex items-center cursor-pointer"
+                      onClick={() => setShowParallelApiKey(true)}
+                    >
+                      {parallelApiKey ? (
+                        <span className="text-muted-foreground">{maskKey(parallelApiKey)}</span>
+                      ) : (
+                        <span className="text-muted-foreground/50">
+                          {t("capabilities.webSearch.parallelApiKeyPlaceholder")}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowParallelApiKey(v => !v)}
+                  >
+                    {showParallelApiKey ? (
+                      <EyeOff className="h-3.5 w-3.5" />
+                    ) : (
+                      <Eye className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">
+                    {t("capabilities.webSearch.parallelMode")}
+                  </Label>
+                  <SelectField
+                    value={parallelMode}
+                    onChange={v => setParallelMode(v as "turbo" | "basic" | "advanced")}
+                    options={[
+                      { value: "turbo", label: t("capabilities.webSearch.parallelModeTurbo") },
+                      { value: "basic", label: t("capabilities.webSearch.parallelModeBasic") },
+                      {
+                        value: "advanced",
+                        label: t("capabilities.webSearch.parallelModeAdvanced"),
+                      },
+                    ]}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">
+                    {t("capabilities.webSearch.maxResults")}
+                  </Label>
+                  <Input
+                    type="number"
+                    className="h-8 text-xs font-mono"
+                    value={parallelMaxResults}
+                    min={1}
+                    max={10}
+                    onChange={e => setParallelMaxResults(Number(e.target.value))}
+                  />
+                </div>
               </div>
             </>
           )}

@@ -548,13 +548,13 @@ If `sqlite3` cannot be resolved, the proxy runs without log persistence (warning
 
 ### External web search
 
-Optional **local handling** of Anthropic-style **web search** (server tool) requests for selected providers. CCRelay can run live retrieval through **[Tavily](https://tavily.com/)** or through a **GLM (Z.ai)** search-capable model endpoint, then return a synthesized assistant response for that turn so the upstream chat model does not need to implement the tool itself.
+Optional **local handling** of Anthropic-style **web search** (server tool) requests for selected providers. CCRelay can run live retrieval through **[Tavily](https://tavily.com/)**, **[Parallel](https://parallel.ai/)**, or through a **GLM (Z.ai)** search-capable model endpoint, then return a synthesized assistant response for that turn so the upstream chat model does not need to implement the tool itself.
 
 | Setting                         | Description                                                                 |
 | ------------------------------- | ----------------------------------------------------------------------------- |
 | `webSearch.enabled`             | Master switch (`true` / `false`). When omitted, non-empty `providers` means on. |
 | `webSearch.providers`           | Provider IDs (keys under `providers:`) assigned to web search (kept when disabled). |
-| `webSearch.defaultSearchBackend` | Optional: `tavily` or `glm` (defaults when not inferred per request).        |
+| `webSearch.defaultSearchBackend` | Optional: `tavily`, `glm`, or `parallel` (defaults when not inferred per request). |
 
 #### Tavily
 
@@ -574,6 +574,14 @@ Optional **local handling** of Anthropic-style **web search** (server tool) requ
 | `webSearch.glm.region`     | `intl` or `cn`.                                                               |
 | `webSearch.glm.coding`     | Optional: prefer coding-oriented GLM host when the default endpoint is used. |
 | `webSearch.glm.model`      | Optional model id (defaults apply when omitted).                            |
+
+#### Parallel
+
+| Setting                         | Description                                                   |
+| ------------------------------- | ------------------------------------------------------------- |
+| `webSearch.parallel.apiKey`     | Parallel API key. Supports `${ENV_VAR}`.                      |
+| `webSearch.parallel.mode`       | `turbo`, `basic`, or `advanced` (optional; default `basic`).  |
+| `webSearch.parallel.maxResults` | Number of results, 1–10 (optional).                           |
 
 You may use the top-level key `web_search` instead of `webSearch` (same nested shape).
 
