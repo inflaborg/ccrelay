@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### CI/CD
 
 - Prod releases automatically publish the VSIX to Open VSX after GitHub Release creation; a manual **Publish Open VSX** workflow can republish from an existing release.
+- CI no longer runs lint/tests in GitHub Actions; validate locally before merging.
+- **Build Dev (Auto)** on `main` builds only targets whose source paths changed (shared `core`/`web`/`scripts` changes still build all); workflow-only pushes are ignored.
 
 ## [0.2.7] - 2026-07-16
 

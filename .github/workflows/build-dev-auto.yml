@@ -8,10 +8,11 @@ on:
       - '**.md'
       - 'docs/**'
       - '.gitignore'
+      - '.github/**'
   workflow_dispatch:
     inputs:
       build_targets:
-        description: 'Which artifacts to build (default on push / workflow_dispatch omission: all)'
+        description: 'Which artifacts to build (push auto-detects; manual default: all)'
         required: false
         type: choice
         options:
@@ -45,12 +46,80 @@ jobs:
       suffix: ${{ steps.meta.outputs.suffix }}
       tag_name: ${{ steps.meta.outputs.tag_name }}
       release_name: ${{ steps.meta.outputs.release_name }}
+      build_targets: ${{ steps.targets.outputs.build_targets }}
+      should_build: ${{ steps.targets.outputs.should_build }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Detect changed paths
+        if: github.event_name == 'push'
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            shared:
+              - 'packages/core/**'
+              - 'web/**'
+              - 'scripts/**'
+              - 'package.json'
+              - 'package-lock.json'
+            vscode:
+              - 'packages/vscode/**'
+            desktop:
+              - 'packages/desktop/**'
+            tauri:
+              - 'packages/desktop-tauri/**'
+
+      - name: Resolve build targets
+        id: targets
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_TARGET: ${{ inputs.build_targets }}
+          SHARED: ${{ steps.filter.outputs.shared }}
+          VSCODE: ${{ steps.filter.outputs.vscode }}
+          DESKTOP: ${{ steps.filter.outputs.desktop }}
+          TAURI: ${{ steps.filter.outputs.tauri }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "build_targets=${MANUAL_TARGET:-all}" >> "$GITHUB_OUTPUT"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "Manual build targets: ${MANUAL_TARGET:-all}"
+            exit 0
+          fi
+
+          if [ "$SHARED" = "true" ]; then
+            echo "build_targets=all" >> "$GITHUB_OUTPUT"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "Shared code changed — building all targets"
+            exit 0
+          fi
+
+          TARGETS=""
+          if [ "$VSCODE" = "true" ]; then
+            TARGETS="vscode"
+          fi
+          if [ "$DESKTOP" = "true" ]; then
+            TARGETS="${TARGETS:+$TARGETS,}desktop"
+          fi
+          if [ "$TAURI" = "true" ]; then
+            TARGETS="${TARGETS:+$TARGETS,}tauri"
+          fi
+
+          if [ -z "$TARGETS" ]; then
+            echo "build_targets=none" >> "$GITHUB_OUTPUT"
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            echo "No buildable paths changed — skipping build"
+          else
+            echo "build_targets=$TARGETS" >> "$GITHUB_OUTPUT"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "Changed paths map to: $TARGETS"
+          fi
+
       - name: Resolve version, suffix & release metadata
         id: meta
+        if: steps.targets.outputs.should_build == 'true'
         run: |
           VERSION=$(node -p "require('./packages/vscode/package.json').version")
           DATE=$(date +%Y%m%d)
@@ -61,9 +130,10 @@ jobs:
 
   build:
     needs: prepare
+    if: needs.prepare.outputs.should_build == 'true'
     uses: ./.github/workflows/_build.yml
     with:
-      build_targets: ${{ inputs.build_targets || 'all' }}
+      build_targets: ${{ needs.prepare.outputs.build_targets }}
       suffix: ${{ needs.prepare.outputs.suffix }}
       create_release: true
       prerelease: true

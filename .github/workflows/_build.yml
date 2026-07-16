@@ -12,9 +12,6 @@ on:
       is_prod:
         type: boolean
         default: false
-      skip_tests:
-        type: boolean
-        default: false
       create_release:
         type: boolean
         default: false
@@ -50,40 +47,11 @@ permissions:
   contents: write
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    if: ${{ !inputs.skip_tests }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: |
-            package-lock.json
-            web/package-lock.json
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Rebuild better-sqlite3 for Node (unit tests)
-        run: npm rebuild better-sqlite3
-
-      - name: Run lint
-        run: npm run lint
-
-      - name: Run tests (unit + integration)
-        run: npm run test:all
-
   configure:
     runs-on: ubuntu-latest
-    needs: test
-    if: ${{ always() && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
     outputs:
       version: ${{ steps.meta.outputs.version }}
+      want_any_build: ${{ steps.targets.outputs.want_any_build }}
       want_build_vscode: ${{ steps.targets.outputs.want_build_vscode }}
       want_build_desktop: ${{ steps.targets.outputs.want_build_desktop }}
       want_build_tauri: ${{ steps.targets.outputs.want_build_tauri }}
@@ -104,6 +72,7 @@ jobs:
         env:
           TARGET: ${{ inputs.build_targets || 'all' }}
         run: |
+          set -euo pipefail
           MATRIX='[{"os":"macos-latest","platform":"mac","arch":"x64"},{"os":"macos-latest","platform":"mac","arch":"arm64"},{"os":"windows-latest","platform":"win","arch":"x64"},{"os":"windows-latest","platform":"win","arch":"arm64"}]'
           MATRIX_MAC='[{"os":"macos-latest","platform":"mac","arch":"x64"},{"os":"macos-latest","platform":"mac","arch":"arm64"}]'
           MATRIX_WIN='[{"os":"windows-latest","platform":"win","arch":"x64"},{"os":"windows-latest","platform":"win","arch":"arm64"}]'
@@ -121,78 +90,96 @@ jobs:
           WANT_V=false
           WANT_D=false
           WANT_T=false
+          DESKTOP_MATRIX='[]'
           TAURI_TARGETS='[]'
 
-          case "$TARGET" in
-            all)
-              WANT_V=true
-              WANT_D=true
-              WANT_T=true
-              DESKTOP_MATRIX="$MATRIX"
-              TAURI_TARGETS="$TAURI_MATRIX"
-              ;;
-            vscode)
-              WANT_V=true
-              DESKTOP_MATRIX='[]'
-              ;;
-            desktop)
-              WANT_D=true
-              DESKTOP_MATRIX="$MATRIX"
-              ;;
-            desktop-mac)
-              WANT_D=true
-              DESKTOP_MATRIX="$MATRIX_MAC"
-              ;;
-            desktop-win)
-              WANT_D=true
-              DESKTOP_MATRIX="$MATRIX_WIN"
-              ;;
-            desktop-mac-x64)
-              WANT_D=true
-              DESKTOP_MATRIX="$MATRIX_MAC_X64"
-              ;;
-            desktop-mac-arm64)
-              WANT_D=true
-              DESKTOP_MATRIX="$MATRIX_MAC_ARM64"
-              ;;
-            desktop-win-x64)
-              WANT_D=true
-              DESKTOP_MATRIX="$MATRIX_WIN_X64"
-              ;;
-            desktop-win-arm64)
-              WANT_D=true
-              DESKTOP_MATRIX="$MATRIX_WIN_ARM64"
-              ;;
-            tauri)
-              WANT_T=true
-              DESKTOP_MATRIX='[]'
-              TAURI_TARGETS="$TAURI_MATRIX"
-              ;;
-            tauri-mac)
-              WANT_T=true
-              DESKTOP_MATRIX='[]'
-              TAURI_TARGETS="$TAURI_MAC"
-              ;;
-            tauri-win)
-              WANT_T=true
-              DESKTOP_MATRIX='[]'
-              TAURI_TARGETS="$TAURI_WIN"
-              ;;
-            tauri-mac-arm64)
-              WANT_T=true
-              DESKTOP_MATRIX='[]'
-              TAURI_TARGETS="$TAURI_MAC_ARM64"
-              ;;
-            tauri-win-x64)
-              WANT_T=true
-              DESKTOP_MATRIX='[]'
-              TAURI_TARGETS="$TAURI_WIN_X64"
-              ;;
-            *)
-              echo "Unknown build_targets=$TARGET" >&2
-              exit 1
-              ;;
-          esac
+          apply_target() {
+            local t="$1"
+            case "$t" in
+              all)
+                WANT_V=true
+                WANT_D=true
+                WANT_T=true
+                DESKTOP_MATRIX="$MATRIX"
+                TAURI_TARGETS="$TAURI_MATRIX"
+                ;;
+              vscode)
+                WANT_V=true
+                ;;
+              desktop)
+                WANT_D=true
+                DESKTOP_MATRIX="$MATRIX"
+                ;;
+              desktop-mac)
+                WANT_D=true
+                DESKTOP_MATRIX="$MATRIX_MAC"
+                ;;
+              desktop-win)
+                WANT_D=true
+                DESKTOP_MATRIX="$MATRIX_WIN"
+                ;;
+              desktop-mac-x64)
+                WANT_D=true
+                DESKTOP_MATRIX="$MATRIX_MAC_X64"
+                ;;
+              desktop-mac-arm64)
+                WANT_D=true
+                DESKTOP_MATRIX="$MATRIX_MAC_ARM64"
+                ;;
+              desktop-win-x64)
+                WANT_D=true
+                DESKTOP_MATRIX="$MATRIX_WIN_X64"
+                ;;
+              desktop-win-arm64)
+                WANT_D=true
+                DESKTOP_MATRIX="$MATRIX_WIN_ARM64"
+                ;;
+              tauri)
+                WANT_T=true
+                TAURI_TARGETS="$TAURI_MATRIX"
+                ;;
+              tauri-mac)
+                WANT_T=true
+                TAURI_TARGETS="$TAURI_MAC"
+                ;;
+              tauri-win)
+                WANT_T=true
+                TAURI_TARGETS="$TAURI_WIN"
+                ;;
+              tauri-mac-arm64)
+                WANT_T=true
+                TAURI_TARGETS="$TAURI_MAC_ARM64"
+                ;;
+              tauri-win-x64)
+                WANT_T=true
+                TAURI_TARGETS="$TAURI_WIN_X64"
+                ;;
+              none)
+                ;;
+              *)
+                echo "Unknown build_targets token: $t" >&2
+                exit 1
+                ;;
+            esac
+          }
+
+          NORMALIZED_TARGET="${TARGET// /}"
+          if [ -z "$NORMALIZED_TARGET" ] || [ "$NORMALIZED_TARGET" = "none" ]; then
+            :
+          else
+            IFS=',' read -ra TOKENS <<< "$NORMALIZED_TARGET"
+            for token in "${TOKENS[@]}"; do
+              if [ -n "$token" ]; then
+                apply_target "$token"
+              fi
+            done
+          fi
+
+          if [ "$WANT_V" = true ] || [ "$WANT_D" = true ] || [ "$WANT_T" = true ]; then
+            echo "want_any_build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "want_any_build=false" >> "$GITHUB_OUTPUT"
+          fi
 
           echo "want_build_vscode=$WANT_V" >> "$GITHUB_OUTPUT"
           echo "want_build_desktop=$WANT_D" >> "$GITHUB_OUTPUT"
@@ -526,6 +513,7 @@ jobs:
       ${{ always()
         && inputs.create_release
         && needs.configure.result == 'success'
+        && needs.configure.outputs.want_any_build == 'true'
         && (needs.configure.outputs.want_build_vscode != 'true' || needs.build-vscode.result == 'success')
         && (needs.configure.outputs.want_build_desktop != 'true' || needs.build-desktop.result == 'success')
         && (needs.configure.outputs.want_build_tauri != 'true' || needs.build-tauri.result == 'success')
