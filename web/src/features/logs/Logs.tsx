@@ -42,11 +42,7 @@ import {
   hasStreamPerfMetrics,
   outputTps,
 } from "./streamPerf";
-import {
-  formatServiceLogSubtitle,
-  formatServiceMetaForDetail,
-  formatServiceMetaSummary,
-} from "./service-log-display";
+import { formatServiceMetaForDetail, formatServiceMetaSummary } from "./service-log-display";
 
 const PAGE_SIZE = 50;
 
@@ -544,23 +540,12 @@ export default function Logs() {
         // Legacy DB rows used `web-search`; treat as `service` for display.
         const raw = log.routeType as string;
         const rt = raw === "web-search" ? "service" : raw;
-        const serviceSubtitle = formatServiceLogSubtitle(log);
         const serviceBadge = (
           <span
-            className="text-[11px] px-1.5 py-0 rounded bg-violet-500/10 text-violet-600 dark:text-violet-400 block truncate max-w-[8rem]"
-            title={
-              serviceSubtitle
-                ? `${t("logs.table.routeType.service")} · ${serviceSubtitle}`
-                : t("logs.table.routeType.serviceHint")
-            }
+            className="text-[11px] px-1.5 py-0 rounded bg-violet-500/10 text-violet-600 dark:text-violet-400"
+            title={t("logs.table.routeType.serviceHint")}
           >
             {t("logs.table.routeType.service")}
-            {serviceSubtitle ? (
-              <span className="text-violet-500/80 dark:text-violet-300/80">
-                {" "}
-                · {serviceSubtitle}
-              </span>
-            ) : null}
           </span>
         );
         const typeMap: Record<string, React.ReactNode> = {
@@ -583,7 +568,7 @@ export default function Logs() {
         };
         return typeMap[rt] || <span className="text-[11px]">{log.routeType}</span>;
       },
-      width: 110,
+      width: 70,
     },
     {
       id: "model",

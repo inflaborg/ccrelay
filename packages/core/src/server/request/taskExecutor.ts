@@ -134,7 +134,7 @@ export class TaskExecutor {
       providerId: routing.provider.id,
       providerName: routing.provider.name,
       method: routing.method,
-      path: routing.path,
+      path: routing.targetPath || routing.path,
       targetUrl: options?.targetUrl ?? routing.targetUrl,
       requestBody: bodyResult.requestBodyLog,
       originalRequestBody: bodyResult.originalRequestBody,

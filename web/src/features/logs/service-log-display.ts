@@ -1,5 +1,3 @@
-import type { LogEntry } from "../../types/api";
-
 const SEARCH_BACKEND_LABELS: Record<string, string> = {
   tavily: "Tavily",
   parallel: "Parallel",
@@ -20,20 +18,6 @@ export function parseLogServiceMeta(meta?: string): Record<string, unknown> | un
     return undefined;
   }
   return undefined;
-}
-
-/** Human-readable suffix for service log type column (handler + optional meta hint). */
-export function formatServiceLogSubtitle(log: LogEntry): string | undefined {
-  const parts: string[] = [];
-  if (log.serviceHandler) {
-    parts.push(log.serviceHandler);
-  }
-  const meta = parseLogServiceMeta(log.serviceMeta);
-  if (log.serviceHandler === "web-search" && typeof meta?.searchBackend === "string") {
-    const label = SEARCH_BACKEND_LABELS[meta.searchBackend] ?? meta.searchBackend;
-    parts.push(label);
-  }
-  return parts.length > 0 ? parts.join(" · ") : undefined;
 }
 
 /** Pretty-print service_meta for the detail panel. */
