@@ -25,7 +25,7 @@ import {
 } from "../types";
 import { CONFIG_VERSION, DEFAULT_CONFIG_YAML, getDefaultConfig } from "./defaults";
 import { expandEnvVarsInObject } from "./env";
-import { deepMerge, mergeFileConfigWithDefaults } from "./merge";
+import { deepMerge, mergeFileConfigWithDefaults, omitNullDeep } from "./merge";
 import { parseProvider, sortProviderMapKeys, resolveProviderKeyInMap } from "./provider-utils";
 import { ConfigState, STATE_FILENAME } from "./state";
 import {
@@ -934,7 +934,7 @@ export class ConfigManager {
 
       const merge = options?.merge !== false;
       const existing = (rawConfig[section] as Record<string, unknown>) ?? {};
-      rawConfig[section] = merge ? deepMerge(existing, data) : data;
+      rawConfig[section] = omitNullDeep(merge ? deepMerge(existing, data) : data);
 
       const yamlContent = yaml.dump(rawConfig, {
         indent: 2,

@@ -457,6 +457,12 @@ export interface WebSearchSettings {
     apiKey?: string;
     mode?: "turbo" | "basic" | "advanced";
     maxResults?: number;
+    publishedAfter?: string;
+    location?: string;
+    includeDomains?: string[];
+    excludeDomains?: string[];
+    liveFetch?: boolean;
+    maxCharsPerResult?: number;
   };
   providers?: string[];
   defaultSearchBackend?: string;

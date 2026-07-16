@@ -51,6 +51,12 @@ export function createSearchProvider(
     return new ParallelSearchProvider(parallelConfig.apiKey, {
       mode: parallelConfig.mode,
       maxResults: parallelConfig.maxResults,
+      publishedAfter: parallelConfig.publishedAfter,
+      location: parallelConfig.location,
+      includeDomains: parallelConfig.includeDomains,
+      excludeDomains: parallelConfig.excludeDomains,
+      liveFetch: parallelConfig.liveFetch,
+      maxCharsPerResult: parallelConfig.maxCharsPerResult,
     });
   }
 

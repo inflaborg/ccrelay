@@ -11,9 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Config**
 
-- External web search supports **Parallel** as a search backend (`webSearch.parallel`, `defaultSearchBackend: parallel`), with configurable mode (`turbo` / `basic` / `advanced`) and result limit.
+- External web search supports **Parallel** as a search backend (`webSearch.parallel`, `defaultSearchBackend: parallel`), with configurable mode (`turbo` / `basic` / `advanced`), result limit, source policy (freshness, location, domain allow/block lists), live fetch, and excerpt sizing.
+
+**UI**
+
+- Web Search settings include a **Parallel** backend with API key, search mode, and result limit; choosing **Advanced** mode reveals source policy, fetch policy, and excerpt options.
+- Parallel location picker lists ISO country/region codes with localized labels.
+
+### Changed
+
+**UI**
+
+- Web search configuration applies only when you click **Save**; switching backends no longer discards unsaved edits, and an unsaved-changes hint appears next to the save button.
+- Search backend order in the dropdown is Tavily, then Parallel, then GLM (Zhipu).
 
 ### Fixed
+
+**Config**
+
+- Saving Parallel web search settings with an empty excerpt limit no longer writes invalid `null` values that caused config reload failures.
 
 **Protocol/Conversion**
 

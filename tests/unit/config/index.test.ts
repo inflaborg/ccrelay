@@ -376,6 +376,22 @@ describe("config: schema validation", () => {
         expect(result.data.routing?.passthrough).toEqual(["/v1/users/*", "/v1/orgs/*"]);
       }
     });
+
+    it("should accept null parallel.maxCharsPerResult from legacy YAML", () => {
+      const result = FileConfigSchema.safeParse({
+        webSearch: {
+          parallel: {
+            mode: "basic",
+            maxCharsPerResult: null,
+          },
+        },
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.webSearch?.parallel?.maxCharsPerResult).toBeUndefined();
+      }
+    });
   });
 });
 

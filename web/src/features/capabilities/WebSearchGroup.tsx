@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useId } from "react";
+import { useState, useEffect, useMemo, useRef, useId, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Eye, EyeOff } from "lucide-react";
@@ -10,6 +10,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { SelectField } from "@/components/select-field";
 import { api } from "@/api/client";
 import type { WebSearchSettings } from "@/types/api";
+import ParallelAdvancedOptions from "./ParallelAdvancedOptions";
+import {
+  formatOptionalPositiveInt,
+  formatParallelDomainList,
+  parseOptionalPositiveInt,
+  parseParallelDomainList,
+} from "./parallel-domains";
 
 /** Legacy YAML without `enabled` treats a non-empty providers list as on. */
 function resolveWebSearchEnabled(ws: WebSearchSettings | undefined): boolean {
@@ -20,6 +27,42 @@ function resolveWebSearchEnabled(ws: WebSearchSettings | undefined): boolean {
     return ws.enabled;
   }
   return (ws.providers?.length ?? 0) > 0;
+}
+
+/** Stable snapshot of server webSearch config to detect external updates. */
+function webSearchServerSnapshot(ws: WebSearchSettings | undefined): string {
+  if (!ws) {
+    return "";
+  }
+  const parallel = ws.parallel;
+  return JSON.stringify({
+    enabled: resolveWebSearchEnabled(ws),
+    defaultSearchBackend: ws.defaultSearchBackend ?? "tavily",
+    providers: [...(ws.providers ?? [])].sort(),
+    tavily: {
+      maxResults: ws.tavily?.maxResults ?? 5,
+      searchDepth: ws.tavily?.searchDepth ?? "basic",
+      apiKey: ws.tavily?.apiKey ?? "",
+    },
+    glm: {
+      protocol: ws.glm?.protocol ?? "openai",
+      region: ws.glm?.region ?? "intl",
+      coding: ws.glm?.coding ?? true,
+      model: ws.glm?.model ?? "",
+      apiKey: ws.glm?.apiKey ?? "",
+    },
+    parallel: {
+      mode: parallel?.mode ?? "basic",
+      maxResults: parallel?.maxResults ?? 5,
+      publishedAfter: parallel?.publishedAfter ?? "",
+      location: parallel?.location ?? "auto",
+      includeDomains: parallel?.includeDomains ?? [],
+      excludeDomains: parallel?.excludeDomains ?? [],
+      liveFetch: parallel?.liveFetch === true,
+      maxCharsPerResult: parallel?.maxCharsPerResult ?? null,
+      apiKey: parallel?.apiKey ?? "",
+    },
+  });
 }
 
 function EnableRow({
@@ -77,65 +120,56 @@ export default function WebSearchGroup() {
   const [parallelApiKey, setParallelApiKey] = useState("");
   const [parallelMode, setParallelMode] = useState<"turbo" | "basic" | "advanced">("basic");
   const [parallelMaxResults, setParallelMaxResults] = useState(5);
+  const [parallelPublishedAfter, setParallelPublishedAfter] = useState("");
+  const [parallelLocation, setParallelLocation] = useState("auto");
+  const [parallelIncludeDomains, setParallelIncludeDomains] = useState("");
+  const [parallelExcludeDomains, setParallelExcludeDomains] = useState("");
+  const [parallelLiveFetch, setParallelLiveFetch] = useState(false);
+  const [parallelMaxCharsPerResult, setParallelMaxCharsPerResult] = useState("");
   const [parallelApiKeyDirty, setParallelApiKeyDirty] = useState(false);
   const [showParallelApiKey, setShowParallelApiKey] = useState(false);
   const providersInitDone = useRef(false);
+  const serverSnapshotRef = useRef<string | null>(null);
 
-  // Sync form state from server data
-  useEffect(() => {
-    if (!configQuery.data || !configQuery.data.webSearch) return;
-    const ws = configQuery.data.webSearch;
-    setEnabled(resolveWebSearchEnabled(ws));
-    setSearchBackend(ws.defaultSearchBackend ?? "tavily");
-    if (ws.tavily) {
-      if (!apiKeyDirty) {
-        setApiKey(ws.tavily.apiKey ?? "");
+  const hydrateFromServer = useCallback(
+    (ws: WebSearchSettings) => {
+      setEnabled(resolveWebSearchEnabled(ws));
+      setSearchBackend(ws.defaultSearchBackend ?? "tavily");
+      if (ws.tavily) {
+        if (!apiKeyDirty) {
+          setApiKey(ws.tavily.apiKey ?? "");
+        }
+        setMaxResults(ws.tavily.maxResults ?? 5);
+        setSearchDepth(ws.tavily.searchDepth ?? "basic");
       }
-      setMaxResults(ws.tavily.maxResults ?? 5);
-      setSearchDepth(ws.tavily.searchDepth ?? "basic");
-    }
-    if (ws.glm) {
-      if (!glmApiKeyDirty) {
-        setGlmApiKey(ws.glm.apiKey ?? "");
+      if (ws.glm) {
+        if (!glmApiKeyDirty) {
+          setGlmApiKey(ws.glm.apiKey ?? "");
+        }
+        setGlmProtocol(ws.glm.protocol ?? "openai");
+        setGlmRegion(ws.glm.region ?? "intl");
+        setGlmCoding(ws.glm.coding ?? true);
+        setGlmModel(ws.glm.model ?? "");
       }
-      setGlmProtocol(ws.glm.protocol ?? "openai");
-      setGlmRegion(ws.glm.region ?? "intl");
-      setGlmCoding(ws.glm.coding ?? true);
-      setGlmModel(ws.glm.model ?? "");
-    }
-    if (ws.parallel) {
-      if (!parallelApiKeyDirty) {
-        setParallelApiKey(ws.parallel.apiKey ?? "");
+      if (ws.parallel) {
+        if (!parallelApiKeyDirty) {
+          setParallelApiKey(ws.parallel.apiKey ?? "");
+        }
+        setParallelMode(ws.parallel.mode ?? "basic");
+        setParallelMaxResults(ws.parallel.maxResults ?? 5);
+        setParallelPublishedAfter(ws.parallel.publishedAfter ?? "");
+        setParallelLocation(ws.parallel.location ?? "auto");
+        setParallelIncludeDomains(formatParallelDomainList(ws.parallel.includeDomains));
+        setParallelExcludeDomains(formatParallelDomainList(ws.parallel.excludeDomains));
+        setParallelLiveFetch(ws.parallel.liveFetch === true);
+        setParallelMaxCharsPerResult(formatOptionalPositiveInt(ws.parallel.maxCharsPerResult));
       }
-      setParallelMode(ws.parallel.mode ?? "basic");
-      setParallelMaxResults(ws.parallel.maxResults ?? 5);
-    }
-    if (ws.providers) {
-      setSelectedProviders(new Set(ws.providers));
-    }
-  }, [configQuery.data, apiKeyDirty, glmApiKeyDirty, parallelApiKeyDirty]);
-
-  function maskKey(key: string): string {
-    if (!key) return "";
-    if (key.length <= 8) return "*".repeat(key.length);
-    const head = key.slice(0, 4);
-    const tail = key.slice(-4);
-    const maskedLen = key.length - head.length - tail.length;
-    return head + "*".repeat(maskedLen) + tail;
-  }
-
-  // Initialize selectedProviders from provider webSearchEnabled flags on first load only.
-  // Uses a ref guard so that a stale cached providersQuery (before refetch after save)
-  // cannot re-enable providers that the user just disabled.
-  useEffect(() => {
-    if (!providersQuery.data || providersInitDone.current) return;
-    providersInitDone.current = true;
-    const enabledIds = providersQuery.data.providers.filter(p => p.webSearchEnabled).map(p => p.id);
-    if (enabledIds.length > 0 && selectedProviders.size === 0) {
-      setSelectedProviders(new Set(enabledIds));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [providersQuery.data]);
+      if (ws.providers) {
+        setSelectedProviders(new Set(ws.providers));
+      }
+    },
+    [apiKeyDirty, glmApiKeyDirty, parallelApiKeyDirty]
+  );
 
   const hasUnsavedChanges = useMemo(() => {
     const origWs = configQuery.data?.webSearch;
@@ -159,6 +193,18 @@ export default function WebSearchGroup() {
     if (glmApiKeyDirty) return true;
     if (parallelMode !== (origParallel?.mode ?? "basic")) return true;
     if (parallelMaxResults !== (origParallel?.maxResults ?? 5)) return true;
+    if (parallelPublishedAfter !== (origParallel?.publishedAfter ?? "")) return true;
+    if (parallelLocation !== (origParallel?.location ?? "auto")) return true;
+    if (parallelIncludeDomains !== formatParallelDomainList(origParallel?.includeDomains)) {
+      return true;
+    }
+    if (parallelExcludeDomains !== formatParallelDomainList(origParallel?.excludeDomains)) {
+      return true;
+    }
+    if (parallelLiveFetch !== (origParallel?.liveFetch === true)) return true;
+    if (parallelMaxCharsPerResult !== formatOptionalPositiveInt(origParallel?.maxCharsPerResult)) {
+      return true;
+    }
     if (parallelApiKeyDirty) return true;
     return false;
   }, [
@@ -175,9 +221,54 @@ export default function WebSearchGroup() {
     glmApiKeyDirty,
     parallelMode,
     parallelMaxResults,
+    parallelPublishedAfter,
+    parallelLocation,
+    parallelIncludeDomains,
+    parallelExcludeDomains,
+    parallelLiveFetch,
+    parallelMaxCharsPerResult,
     parallelApiKeyDirty,
     configQuery.data,
   ]);
+
+  // Sync form from server only on first load or after save — never while the user has local edits.
+  useEffect(() => {
+    if (!configQuery.data?.webSearch) {
+      return;
+    }
+    const ws = configQuery.data.webSearch;
+    const snapshot = webSearchServerSnapshot(ws);
+    if (snapshot === serverSnapshotRef.current) {
+      return;
+    }
+    if (serverSnapshotRef.current !== null && hasUnsavedChanges) {
+      return;
+    }
+    hydrateFromServer(ws);
+    serverSnapshotRef.current = snapshot;
+  }, [configQuery.data, hasUnsavedChanges, hydrateFromServer]);
+
+  function maskKey(key: string): string {
+    if (!key) return "";
+    if (key.length <= 8) return "*".repeat(key.length);
+    const head = key.slice(0, 4);
+    const tail = key.slice(-4);
+    const maskedLen = key.length - head.length - tail.length;
+    return head + "*".repeat(maskedLen) + tail;
+  }
+
+  // Initialize selectedProviders from provider webSearchEnabled flags on first load only.
+  // Uses a ref guard so that a stale cached providersQuery (before refetch after save)
+  // cannot re-enable providers that the user just disabled.
+  useEffect(() => {
+    if (!providersQuery.data || providersInitDone.current) return;
+    providersInitDone.current = true;
+    const enabledIds = providersQuery.data.providers.filter(p => p.webSearchEnabled).map(p => p.id);
+    if (enabledIds.length > 0 && selectedProviders.size === 0) {
+      setSelectedProviders(new Set(enabledIds));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providersQuery.data]);
 
   const mutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => api.patchConfig({ section: "webSearch", data }),
@@ -209,9 +300,18 @@ export default function WebSearchGroup() {
     if (glmApiKeyDirty) {
       glmData.apiKey = glmApiKey;
     }
+    const includeDomains = parseParallelDomainList(parallelIncludeDomains);
+    const excludeDomains = parseParallelDomainList(parallelExcludeDomains);
+    const maxCharsPerResult = parseOptionalPositiveInt(parallelMaxCharsPerResult);
     const parallelData: Record<string, unknown> = {
       mode: parallelMode,
       maxResults: parallelMaxResults,
+      publishedAfter: parallelPublishedAfter,
+      location: parallelLocation === "auto" ? "" : parallelLocation,
+      includeDomains,
+      excludeDomains,
+      liveFetch: parallelLiveFetch,
+      ...(maxCharsPerResult !== undefined ? { maxCharsPerResult } : { maxCharsPerResult: null }),
     };
     if (parallelApiKeyDirty) {
       parallelData.apiKey = parallelApiKey;
@@ -300,8 +400,8 @@ export default function WebSearchGroup() {
               onChange={setSearchBackend}
               options={[
                 { value: "tavily", label: "Tavily" },
-                { value: "glm", label: "GLM (Zhipu)" },
                 { value: "parallel", label: "Parallel" },
+                { value: "glm", label: "GLM (Zhipu)" },
               ]}
             />
           </div>
@@ -558,6 +658,44 @@ export default function WebSearchGroup() {
                   />
                 </div>
               </div>
+
+              {parallelMode === "advanced" ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {t("capabilities.webSearch.parallelAdvanced")}
+                  </p>
+                  <ParallelAdvancedOptions
+                    value={{
+                      publishedAfter: parallelPublishedAfter,
+                      location: parallelLocation,
+                      includeDomains: parallelIncludeDomains,
+                      excludeDomains: parallelExcludeDomains,
+                      liveFetch: parallelLiveFetch,
+                      maxCharsPerResult: parallelMaxCharsPerResult,
+                    }}
+                    onChange={patch => {
+                      if (patch.publishedAfter !== undefined) {
+                        setParallelPublishedAfter(patch.publishedAfter);
+                      }
+                      if (patch.location !== undefined) {
+                        setParallelLocation(patch.location);
+                      }
+                      if (patch.includeDomains !== undefined) {
+                        setParallelIncludeDomains(patch.includeDomains);
+                      }
+                      if (patch.excludeDomains !== undefined) {
+                        setParallelExcludeDomains(patch.excludeDomains);
+                      }
+                      if (patch.liveFetch !== undefined) {
+                        setParallelLiveFetch(patch.liveFetch);
+                      }
+                      if (patch.maxCharsPerResult !== undefined) {
+                        setParallelMaxCharsPerResult(patch.maxCharsPerResult);
+                      }
+                    }}
+                  />
+                </div>
+              ) : null}
             </>
           )}
         </div>
@@ -632,19 +770,29 @@ export default function WebSearchGroup() {
         <div className="border-t pt-3 space-y-2">
           <div className="flex items-center justify-end gap-2">
             <div className="flex-1 min-w-0 min-h-[1.25rem] flex items-center justify-end text-right">
-              {mutation.isSuccess && !hasUnsavedChanges && (
+              {hasUnsavedChanges ? (
+                <span className="text-[10px] text-amber-600 dark:text-amber-500">
+                  {t("capabilities.webSearch.unsavedChanges")}
+                </span>
+              ) : mutation.isSuccess ? (
                 <span className="text-[10px] text-green-600 dark:text-green-500">
                   {t("capabilities.webSearch.savedAndReloaded")}
                 </span>
-              )}
+              ) : null}
             </div>
             <Button
               size="sm"
-              className="h-7 shrink-0 text-xs"
+              className="h-7 shrink-0 text-xs min-w-[7rem]"
               disabled={!hasUnsavedChanges || mutation.isPending}
               onClick={handleSave}
             >
-              {mutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : t("common.save")}
+              {mutation.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : hasUnsavedChanges ? (
+                t("common.save")
+              ) : (
+                t("common.upToDate")
+              )}
             </Button>
           </div>
           {mutation.isError && (

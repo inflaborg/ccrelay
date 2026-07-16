@@ -251,6 +251,23 @@ export const WebSearchConfigSchema = z.object({
       mode: z.enum(["turbo", "basic", "advanced"]).optional(),
       maxResults: z.number().int().min(1).max(10).optional(),
       max_results: z.number().int().min(1).max(10).optional(),
+      publishedAfter: z.string().optional(),
+      published_after: z.string().optional(),
+      location: z.string().optional(),
+      includeDomains: z.array(z.string()).optional(),
+      include_domains: z.array(z.string()).optional(),
+      excludeDomains: z.array(z.string()).optional(),
+      exclude_domains: z.array(z.string()).optional(),
+      liveFetch: z.boolean().optional(),
+      live_fetch: z.boolean().optional(),
+      maxCharsPerResult: z.preprocess(
+        val => (val === null ? undefined : val),
+        z.number().int().positive().optional()
+      ),
+      max_chars_per_result: z.preprocess(
+        val => (val === null ? undefined : val),
+        z.number().int().positive().optional()
+      ),
     })
     .optional(),
   providers: z.array(z.string()).optional(),
@@ -458,6 +475,12 @@ export interface WebSearchGlobalConfig {
     apiKey?: string;
     mode?: "turbo" | "basic" | "advanced";
     maxResults?: number;
+    publishedAfter?: string;
+    location?: string;
+    includeDomains?: string[];
+    excludeDomains?: string[];
+    liveFetch?: boolean;
+    maxCharsPerResult?: number;
   };
   /** Provider IDs assigned to web search (preset list; may be inactive when `enabled` is false). */
   providers?: string[];

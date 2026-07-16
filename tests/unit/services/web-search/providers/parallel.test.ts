@@ -115,6 +115,41 @@ describe("ParallelSearchProvider", () => {
     expect(body.mode).toBe("basic");
     expect(body.advanced_settings).toEqual({ max_results: 5 });
   });
+
+  it("sends advanced_settings from provider defaults", async () => {
+    const advancedProvider = new ParallelSearchProvider("key-advanced", {
+      mode: "advanced",
+      maxResults: 4,
+      publishedAfter: "2024-05-01",
+      location: "gb",
+      includeDomains: ["gov.uk"],
+      excludeDomains: ["reddit.com"],
+      liveFetch: true,
+      maxCharsPerResult: 15000,
+    });
+    const fetchMock = mockFetch({
+      search_id: "search_adv",
+      results: [],
+      session_id: "session_adv",
+    });
+
+    await advancedProvider.search("UK policy updates");
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body.advanced_settings).toEqual({
+      max_results: 4,
+      source_policy: {
+        after_date: "2024-05-01",
+        include_domains: ["gov.uk"],
+        exclude_domains: ["reddit.com"],
+      },
+      location: "gb",
+      fetch_policy: { max_age_seconds: 600 },
+      excerpt_settings: { max_chars_per_result: 15000 },
+    });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
 });
 
 describe("createSearchProvider (parallel)", () => {

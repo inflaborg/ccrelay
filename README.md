@@ -582,6 +582,12 @@ Optional **local handling** of Anthropic-style **web search** (server tool) requ
 | `webSearch.parallel.apiKey`     | Parallel API key. Supports `${ENV_VAR}`.                      |
 | `webSearch.parallel.mode`       | `turbo`, `basic`, or `advanced` (optional; default `basic`).  |
 | `webSearch.parallel.maxResults` | Number of results, 1–10 (optional).                           |
+| `webSearch.parallel.publishedAfter` | Optional RFC 3339 date (`YYYY-MM-DD`) for freshness filter. |
+| `webSearch.parallel.location`   | Geo target: any ISO 3166-1 alpha-2 code (e.g. `us`, `cn`, `gb`); omit for auto. Unsupported codes may be ignored by Parallel. |
+| `webSearch.parallel.includeDomains` | Optional allow-list of domains (YAML array).                |
+| `webSearch.parallel.excludeDomains` | Optional block-list of domains (YAML array).                |
+| `webSearch.parallel.liveFetch`  | Optional: enable live fetch when cache is stale (higher latency). |
+| `webSearch.parallel.maxCharsPerResult` | Optional excerpt size limit per result URL.              |
 
 You may use the top-level key `web_search` instead of `webSearch` (same nested shape).
 

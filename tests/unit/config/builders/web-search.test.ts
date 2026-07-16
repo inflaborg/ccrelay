@@ -109,5 +109,28 @@ describe("buildWebSearchConfig", () => {
     expect(c?.defaultSearchBackend).toBe("parallel");
     expect(c?.parallel?.apiKey).toBe("pk_test");
   });
+
+  it("normalizes parallel advanced fields and clears empty strings", () => {
+    const c = buildWebSearchConfig({
+      parallel: {
+        api_key: "pk_test",
+        published_after: "2024-01-01",
+        include_domains: ["arxiv.org"],
+        exclude_domains: [],
+        live_fetch: true,
+        max_chars_per_result: 8000,
+        location: "",
+      },
+    });
+    expect(c?.parallel).toEqual({
+      apiKey: "pk_test",
+      publishedAfter: "2024-01-01",
+      includeDomains: ["arxiv.org"],
+      excludeDomains: [],
+      liveFetch: true,
+      maxCharsPerResult: 8000,
+    });
+    expect(c?.parallel?.location).toBeUndefined();
+  });
 });
 /* eslint-enable @typescript-eslint/naming-convention */

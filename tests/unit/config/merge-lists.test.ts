@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeForwardRuleLists, mergeBlockRuleLists } from "@/config/merge";
+import { mergeForwardRuleLists, mergeBlockRuleLists, omitNullDeep } from "@/config/merge";
 import type { BlockRule, ForwardRule } from "@/types";
 
 describe("mergeForwardRuleLists", () => {
@@ -30,5 +30,19 @@ describe("mergeBlockRuleLists", () => {
       { path: "/y", response: "{}", code: 200 },
       { path: "/x", response: "", code: 200 },
     ]);
+  });
+});
+
+describe("omitNullDeep", () => {
+  it("removes null keys at all nesting levels", () => {
+    expect(
+      omitNullDeep({
+        parallel: { mode: "basic", maxCharsPerResult: null },
+        enabled: true,
+      })
+    ).toEqual({
+      parallel: { mode: "basic" },
+      enabled: true,
+    });
   });
 });

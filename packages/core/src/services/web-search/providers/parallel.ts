@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/naming-convention -- External API wire fields */
 
 import { Logger } from "../../../utils/logger";
+import type { ParallelAdvancedConfig } from "./parallel-advanced";
+import { buildParallelAdvancedSettings } from "./parallel-advanced";
 import type { SearchOptions, SearchProvider, SearchProviderResponse } from "./types";
 
 const log = Logger.getInstance();
@@ -9,7 +11,7 @@ const PARALLEL_API_URL = "https://api.parallel.ai/v1/search";
 
 export type ParallelSearchMode = "turbo" | "basic" | "advanced";
 
-export interface ParallelSearchOptions extends SearchOptions {
+export interface ParallelSearchOptions extends SearchOptions, ParallelAdvancedConfig {
   mode?: ParallelSearchMode;
 }
 
@@ -45,13 +47,21 @@ export class ParallelSearchProvider implements SearchProvider {
     const mode = opts.mode ?? "basic";
     const maxResults = opts.maxResults ?? 5;
 
+    const advancedSettings = buildParallelAdvancedSettings({
+      maxResults,
+      publishedAfter: opts.publishedAfter,
+      location: opts.location,
+      includeDomains: opts.includeDomains,
+      excludeDomains: opts.excludeDomains,
+      liveFetch: opts.liveFetch,
+      maxCharsPerResult: opts.maxCharsPerResult,
+    });
+
     const body: Record<string, unknown> = {
       objective: query,
       search_queries: [query],
       mode,
-      advanced_settings: {
-        max_results: maxResults,
-      },
+      ...(advancedSettings ? { advanced_settings: advancedSettings } : {}),
     };
 
     log.info(`[web-search/parallel] Searching: "${query}" mode=${mode}`);
