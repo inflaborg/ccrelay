@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### CI/CD
+
+- Prod releases automatically publish the VSIX to Open VSX after GitHub Release creation; a manual **Publish Open VSX** workflow can republish from an existing release.
+
 ## [0.2.7] - 2026-07-16
 
 External web search adds **Parallel** as a backend with configurable search modes and source policy. Web search settings now save explicitly instead of on backend switch, and request logs record metadata for locally handled service routes. Forwarding to upstream models is more reliable when clients send hashed model aliases, unsupported reasoning fields, or inline system messages.
