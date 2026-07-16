@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-07-16 (pre-release)
+
+Pre-release line for 0.2.8.
+
 ### CI/CD
 
 - Prod releases automatically publish the VSIX to Open VSX after GitHub Release creation; a manual **Publish Open VSX** workflow can republish from an existing release.
