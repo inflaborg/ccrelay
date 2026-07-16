@@ -27,11 +27,6 @@ on:
         description: 'Optional suffix for artifact name (e.g., test, debug)'
         required: false
         type: string
-      skip_tests:
-        description: 'Skip tests (use with caution)'
-        required: false
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -62,5 +57,4 @@ jobs:
     with:
       build_targets: ${{ inputs.build_targets || 'all' }}
       suffix: ${{ needs.prepare.outputs.suffix }}
-      skip_tests: ${{ inputs.skip_tests }}
     secrets: inherit
