@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-07-16
+
+External web search adds **Parallel** as a backend with configurable search modes and source policy. Web search settings now save explicitly instead of on backend switch, and request logs record metadata for locally handled service routes. Forwarding to upstream models is more reliable when clients send hashed model aliases, unsupported reasoning fields, or inline system messages.
+
 ### Added
 
 **Config**
@@ -27,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Logging**
 
-- Request logs for locally handled **service** routes now record `service_handler` and optional JSON `service_meta` (e.g. web search records the search backend in metadata).
+- Request logs for locally handled service routes (such as web search) now record which handler served the request and optional metadata (e.g. the search backend used).
 
 ### Fixed
 
@@ -40,10 +44,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - When a hashed model alias (e.g. `claude-93e5ab20`) is mapped to an upstream model, matching model mentions in the Anthropic system prompt are rewritten to the mapped model so upstream identity stays consistent.
 - Strip unsupported reasoning parameters when forwarding to models that do not support them (e.g. effort on Claude Haiku), preventing client-injected fields from causing upstream errors.
 - Strip inline `system` role messages when forwarding to models that reject them (e.g. Claude Haiku), merging content into the top-level `system` field.
-
-## [0.2.7] - 2026-06-28 (pre-release)
-
-Pre-release line for 0.2.7.
 
 ## [0.2.6] - 2026-06-26
 
