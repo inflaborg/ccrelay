@@ -67,7 +67,7 @@
 
 **External web search**
 
-- Optional local handling of Anthropic-style **web search** tool traffic for provider IDs you allowlist, using **Tavily** or **GLM (Z.ai)** as the retrieval backend; configure in `config.yaml` or the dashboard **Capabilities** tab
+- Optional local handling of Anthropic-style **web search** tool traffic for provider IDs you allowlist, using **Tavily** or **Parallel** as the retrieval backend; configure in `config.yaml` or the dashboard **Capabilities** tab
 
 ### Verified upstreams (by host)
 
@@ -79,7 +79,7 @@ Relaying uses the **provider `baseUrl` hostname**. The rows below are **upstream
 
 | Provider (target host)                                                     | Anthropic `/v1/messages` | OpenAI `/chat/completions` | OpenAI `/v1/responses` | Web Search Server Tools |
 | -------------------------------------------------------------------------- | ------------------------ | -------------------------- | ---------------------- | ----------------------- |
-| **Z.ai GLM** (`api.z.ai`, `open.bigmodel.cn`)                              | Supported                | Supported                  | Not supported          | Supported               |
+| **Z.ai GLM** (`api.z.ai`, `open.bigmodel.cn`)                              | Supported                | Supported                  | Not supported          | Anthropic endpoint only |
 | **Xiaomi MiMo** (`api.xiaomimimo.com`)                                     | Supported                | Supported                  | Not supported          | Chat only               |
 | **MiniMax** (`api.minimax.io`, `api.minimaxi.com`)                         | Supported                | Supported                  | Not supported          | Not supported           |
 | **Google Gemini** (OpenAI-compatible, `generativelanguage.googleapis.com`) | Not supported            | Supported                  | Not supported          | Not supported           |
@@ -421,7 +421,7 @@ Built-in web dashboard accessible via Command Palette → `CCRelay: Open Dashboa
 - **Dashboard** — server status, current provider, token usage, performance metrics (TTFB, P50/P90 latency, output TPS) with time range selector
 - **Smart Routing** — aggregate all provider model lists; unified `/v1/models` with `<providerId>:<modelId>` ids; route each request to the matching provider by model (no provider switch / client restart when changing models)
 - **Providers** — configure upstream connections; duplicate, import/export providers
-- **Capabilities** — optional web search backends (**Tavily** and/or **GLM (Z.ai)**): API keys, GLM endpoint and protocol, default backend, and which providers answer web search locally
+- **Capabilities** — optional web search backends (**Tavily** and/or **Parallel**): API keys, default backend, and which providers answer web search locally
 - **Logs** — request/response log viewer with token columns, TTFB, output TPS, and model mapping display (hidden when logging is disabled)
 - **Settings** — manage YAML config in the UI; routing and concurrency hot-reload on save, server and logging changes require a restart
 - **Client configuration** — write Claude Code env vars and Codex config from the UI; shows installed Claude Desktop claude-code bundle versions and Claude Code CLI version (`claude --version`, can be disabled on the page)
@@ -548,13 +548,13 @@ If `sqlite3` cannot be resolved, the proxy runs without log persistence (warning
 
 ### External web search
 
-Optional **local handling** of Anthropic-style **web search** (server tool) requests for selected providers. CCRelay can run live retrieval through **[Tavily](https://tavily.com/)**, **[Parallel](https://parallel.ai/)**, or through a **GLM (Z.ai)** search-capable model endpoint, then return a synthesized assistant response for that turn so the upstream chat model does not need to implement the tool itself.
+Optional **local handling** of Anthropic-style **web search** (server tool) requests for selected providers. CCRelay can run live retrieval through **[Tavily](https://tavily.com/)** or **[Parallel](https://parallel.ai/)**, then return a synthesized assistant response for that turn so the upstream chat model does not need to implement the tool itself.
 
 | Setting                         | Description                                                                 |
 | ------------------------------- | ----------------------------------------------------------------------------- |
 | `webSearch.enabled`             | Master switch (`true` / `false`). When omitted, non-empty `providers` means on. |
 | `webSearch.providers`           | Provider IDs (keys under `providers:`) assigned to web search (kept when disabled). |
-| `webSearch.defaultSearchBackend` | Optional: `tavily`, `glm`, or `parallel` (defaults when not inferred per request). |
+| `webSearch.defaultSearchBackend` | Optional: `tavily` or `parallel` (defaults when not inferred per request). |
 
 #### Tavily
 
@@ -563,17 +563,6 @@ Optional **local handling** of Anthropic-style **web search** (server tool) requ
 | `webSearch.tavily.apiKey`       | Tavily API key. Supports `${ENV_VAR}`.                        |
 | `webSearch.tavily.searchDepth` | `basic` or `advanced` (optional).                             |
 | `webSearch.tavily.maxResults`  | Number of results, 1–10 (optional).                           |
-
-#### GLM (Z.ai)
-
-| Setting                      | Description                                                                 |
-| ---------------------------- | ----------------------------------------------------------------------------- |
-| `webSearch.glm.apiKey`       | Z.ai API key. Supports `${ENV_VAR}`.                                         |
-| `webSearch.glm.endpoint`     | Optional override; otherwise derived from `protocol`, `region`, and `coding`. |
-| `webSearch.glm.protocol`     | `openai` (Chat Completions) or `anthropic` (Messages).                       |
-| `webSearch.glm.region`     | `intl` or `cn`.                                                               |
-| `webSearch.glm.coding`     | Optional: prefer coding-oriented GLM host when the default endpoint is used. |
-| `webSearch.glm.model`      | Optional model id (defaults apply when omitted).                            |
 
 #### Parallel
 
@@ -597,14 +586,10 @@ webSearch:
     apiKey: "${TAVILY_API_KEY}"
     searchDepth: basic
     maxResults: 5
-  glm:
-    apiKey: "${GLM_API_KEY}"
-    protocol: openai
-    region: intl
   defaultSearchBackend: tavily
   enabled: true
   providers:
-    - glm
+    - my-provider
 ```
 
 Set `enabled: false` to turn off web search without clearing the `providers` preset list.

@@ -44,13 +44,6 @@ function webSearchServerSnapshot(ws: WebSearchSettings | undefined): string {
       searchDepth: ws.tavily?.searchDepth ?? "basic",
       apiKey: ws.tavily?.apiKey ?? "",
     },
-    glm: {
-      protocol: ws.glm?.protocol ?? "openai",
-      region: ws.glm?.region ?? "intl",
-      coding: ws.glm?.coding ?? true,
-      model: ws.glm?.model ?? "",
-      apiKey: ws.glm?.apiKey ?? "",
-    },
     parallel: {
       mode: parallel?.mode ?? "basic",
       maxResults: parallel?.maxResults ?? 5,
@@ -107,16 +100,9 @@ export default function WebSearchGroup() {
   const [apiKey, setApiKey] = useState("");
   const [maxResults, setMaxResults] = useState(5);
   const [searchDepth, setSearchDepth] = useState<"basic" | "advanced">("basic");
-  const [glmApiKey, setGlmApiKey] = useState("");
-  const [glmProtocol, setGlmProtocol] = useState<"anthropic" | "openai">("openai");
-  const [glmRegion, setGlmRegion] = useState<"intl" | "cn">("intl");
-  const [glmCoding, setGlmCoding] = useState(true);
-  const [glmModel, setGlmModel] = useState("");
   const [selectedProviders, setSelectedProviders] = useState<Set<string>>(new Set());
   const [apiKeyDirty, setApiKeyDirty] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
-  const [glmApiKeyDirty, setGlmApiKeyDirty] = useState(false);
-  const [showGlmApiKey, setShowGlmApiKey] = useState(false);
   const [parallelApiKey, setParallelApiKey] = useState("");
   const [parallelMode, setParallelMode] = useState<"turbo" | "basic" | "advanced">("basic");
   const [parallelMaxResults, setParallelMaxResults] = useState(5);
@@ -142,15 +128,6 @@ export default function WebSearchGroup() {
         setMaxResults(ws.tavily.maxResults ?? 5);
         setSearchDepth(ws.tavily.searchDepth ?? "basic");
       }
-      if (ws.glm) {
-        if (!glmApiKeyDirty) {
-          setGlmApiKey(ws.glm.apiKey ?? "");
-        }
-        setGlmProtocol(ws.glm.protocol ?? "openai");
-        setGlmRegion(ws.glm.region ?? "intl");
-        setGlmCoding(ws.glm.coding ?? true);
-        setGlmModel(ws.glm.model ?? "");
-      }
       if (ws.parallel) {
         if (!parallelApiKeyDirty) {
           setParallelApiKey(ws.parallel.apiKey ?? "");
@@ -168,14 +145,13 @@ export default function WebSearchGroup() {
         setSelectedProviders(new Set(ws.providers));
       }
     },
-    [apiKeyDirty, glmApiKeyDirty, parallelApiKeyDirty]
+    [apiKeyDirty, parallelApiKeyDirty]
   );
 
   const hasUnsavedChanges = useMemo(() => {
     const origWs = configQuery.data?.webSearch;
     const origProviders = origWs?.providers ?? [];
     const origTavily = origWs?.tavily;
-    const origGlm = origWs?.glm;
     const origParallel = origWs?.parallel;
     const origBackend = origWs?.defaultSearchBackend ?? "tavily";
 
@@ -186,11 +162,6 @@ export default function WebSearchGroup() {
     if (maxResults !== (origTavily?.maxResults ?? 5)) return true;
     if (searchDepth !== (origTavily?.searchDepth ?? "basic")) return true;
     if (apiKeyDirty) return true;
-    if (glmProtocol !== (origGlm?.protocol ?? "openai")) return true;
-    if (glmRegion !== (origGlm?.region ?? "intl")) return true;
-    if (glmCoding !== (origGlm?.coding ?? true)) return true;
-    if (glmModel !== (origGlm?.model ?? "")) return true;
-    if (glmApiKeyDirty) return true;
     if (parallelMode !== (origParallel?.mode ?? "basic")) return true;
     if (parallelMaxResults !== (origParallel?.maxResults ?? 5)) return true;
     if (parallelPublishedAfter !== (origParallel?.publishedAfter ?? "")) return true;
@@ -214,11 +185,6 @@ export default function WebSearchGroup() {
     maxResults,
     searchDepth,
     apiKeyDirty,
-    glmProtocol,
-    glmRegion,
-    glmCoding,
-    glmModel,
-    glmApiKeyDirty,
     parallelMode,
     parallelMaxResults,
     parallelPublishedAfter,
@@ -274,7 +240,6 @@ export default function WebSearchGroup() {
     mutationFn: (data: Record<string, unknown>) => api.patchConfig({ section: "webSearch", data }),
     onSuccess: () => {
       setApiKeyDirty(false);
-      setGlmApiKeyDirty(false);
       setParallelApiKeyDirty(false);
       api.reloadConfig().then(() => {
         queryClient.invalidateQueries({ queryKey: ["config"] });
@@ -290,15 +255,6 @@ export default function WebSearchGroup() {
     };
     if (apiKeyDirty) {
       tavilyData.apiKey = apiKey;
-    }
-    const glmData: Record<string, unknown> = {
-      protocol: glmProtocol,
-      region: glmRegion,
-      coding: glmCoding,
-      model: glmModel,
-    };
-    if (glmApiKeyDirty) {
-      glmData.apiKey = glmApiKey;
     }
     const includeDomains = parseParallelDomainList(parallelIncludeDomains);
     const excludeDomains = parseParallelDomainList(parallelExcludeDomains);
@@ -320,7 +276,6 @@ export default function WebSearchGroup() {
       enabled,
       defaultSearchBackend: searchBackend,
       tavily: tavilyData,
-      glm: glmData,
       parallel: parallelData,
       providers: Array.from(selectedProviders),
     };
@@ -401,7 +356,6 @@ export default function WebSearchGroup() {
               options={[
                 { value: "tavily", label: "Tavily" },
                 { value: "parallel", label: "Parallel" },
-                { value: "glm", label: "GLM (Zhipu)" },
               ]}
             />
           </div>
@@ -478,103 +432,6 @@ export default function WebSearchGroup() {
                     ]}
                   />
                 </div>
-              </div>
-            </>
-          )}
-
-          {searchBackend === "glm" && (
-            <>
-              <div className="space-y-1">
-                <Label className="text-xs font-medium">
-                  {t("capabilities.webSearch.glmApiKey")}
-                </Label>
-                <div className="relative">
-                  {showGlmApiKey ? (
-                    <Input
-                      type="text"
-                      className="h-8 pr-8 text-xs font-mono"
-                      value={glmApiKey}
-                      placeholder={t("capabilities.webSearch.glmApiKeyPlaceholder")}
-                      onChange={e => {
-                        setGlmApiKey(e.target.value);
-                        setGlmApiKeyDirty(true);
-                      }}
-                    />
-                  ) : (
-                    <div
-                      className="w-full h-8 px-2 pr-8 text-xs border rounded-md bg-background font-mono flex items-center cursor-pointer"
-                      onClick={() => setShowGlmApiKey(true)}
-                    >
-                      {glmApiKey ? (
-                        <span className="text-muted-foreground">{maskKey(glmApiKey)}</span>
-                      ) : (
-                        <span className="text-muted-foreground/50">
-                          {t("capabilities.webSearch.glmApiKeyPlaceholder")}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    onClick={() => setShowGlmApiKey(v => !v)}
-                  >
-                    {showGlmApiKey ? (
-                      <EyeOff className="h-3.5 w-3.5" />
-                    ) : (
-                      <Eye className="h-3.5 w-3.5" />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs font-medium">
-                    {t("capabilities.webSearch.glmProtocol")}
-                  </Label>
-                  <SelectField
-                    value={glmProtocol}
-                    onChange={v => setGlmProtocol(v as "anthropic" | "openai")}
-                    options={[
-                      { value: "openai", label: "OpenAI Chat" },
-                      { value: "anthropic", label: "Anthropic" },
-                    ]}
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-xs font-medium">
-                    {t("capabilities.webSearch.glmRegion")}
-                  </Label>
-                  <SelectField
-                    value={glmRegion}
-                    onChange={v => setGlmRegion(v as "intl" | "cn")}
-                    options={[
-                      { value: "intl", label: t("capabilities.webSearch.glmRegionIntl") },
-                      { value: "cn", label: t("capabilities.webSearch.glmRegionCn") },
-                    ]}
-                  />
-                </div>
-              </div>
-
-              <EnableRow
-                checked={glmCoding}
-                onCheckedChange={setGlmCoding}
-                label={t("capabilities.webSearch.glmCoding")}
-              />
-
-              <div className="space-y-1">
-                <Label className="text-xs font-medium">
-                  {t("capabilities.webSearch.glmModel")}
-                </Label>
-                <Input
-                  type="text"
-                  className="h-8 text-xs font-mono"
-                  value={glmModel}
-                  placeholder={t("capabilities.webSearch.glmModelPlaceholder")}
-                  onChange={e => setGlmModel(e.target.value)}
-                />
               </div>
             </>
           )}

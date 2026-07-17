@@ -119,7 +119,6 @@ export type {
 } from "./platform-transforms";
 
 export {
-  glmWebSearchEnvelopeTransform,
   mimoWebSearchTransform,
   passthroughTransform,
   TRANSFORM_REGISTRY,
@@ -132,7 +131,6 @@ export {
   applyPlatformToolTransforms,
   applyAnthropicSseRowsPlatformTransform,
   glmFlattenContentTransform,
-  glmWebSearchResponseTransform,
   mimoAnnotationsWebSearchResponseTransform,
   isPlainObject,
   matchAnthropicSseRule,

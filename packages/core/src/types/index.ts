@@ -233,17 +233,6 @@ export const WebSearchConfigSchema = z.object({
       max_results: z.number().int().min(1).max(10).optional(),
     })
     .optional(),
-  glm: z
-    .object({
-      apiKey: z.string().optional(),
-      api_key: z.string().optional(),
-      endpoint: z.string().optional(),
-      protocol: z.enum(["anthropic", "openai"]).optional(),
-      region: z.enum(["intl", "cn"]).optional(),
-      coding: z.boolean().optional(),
-      model: z.string().optional(),
-    })
-    .optional(),
   parallel: z
     .object({
       apiKey: z.string().optional(),
@@ -463,14 +452,6 @@ export interface WebSearchGlobalConfig {
     searchDepth?: "basic" | "advanced";
     maxResults?: number;
   };
-  glm?: {
-    apiKey?: string;
-    endpoint?: string;
-    protocol?: "anthropic" | "openai";
-    region?: "intl" | "cn";
-    coding?: boolean;
-    model?: string;
-  };
   parallel?: {
     apiKey?: string;
     mode?: "turbo" | "basic" | "advanced";
@@ -484,7 +465,7 @@ export interface WebSearchGlobalConfig {
   };
   /** Provider IDs assigned to web search (preset list; may be inactive when `enabled` is false). */
   providers?: string[];
-  /** Which search backend to use ("tavily" | "glm" | "parallel"). Defaults to "tavily". */
+  /** Which search backend to use ("tavily" | "parallel"). Defaults to "tavily". */
   defaultSearchBackend?: string;
   /**
    * Master switch for web search interception.

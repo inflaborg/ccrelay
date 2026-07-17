@@ -16,7 +16,10 @@ import {
   convertRequestToOpenAI,
   type AnthropicMessageRequest,
 } from "@/converter/adapters/anthropic-to-openai-chat-request";
-import { normalizeToolsForProvider } from "@/converter/platform-transforms";
+import {
+  normalizeToolsForProvider,
+  openaiChatStrictToolsSanitize,
+} from "@/converter/platform-transforms";
 
 /* eslint-disable @typescript-eslint/naming-convention -- Testing API formats with snake_case */
 
@@ -579,7 +582,7 @@ describe("converter: anthropic-to-openai-chat-request", () => {
       ]);
     });
 
-    it("GLM provider baseUrl nests web_search envelope for Anthropic→Chat", () => {
+    it("GLM provider baseUrl passthrough for Anthropic→Chat hosted web_search", () => {
       const request: AnthropicMessageRequest = {
         model: "claude-3-5-sonnet-20241022",
         max_tokens: 4096,
@@ -605,13 +608,45 @@ describe("converter: anthropic-to-openai-chat-request", () => {
       expect(result.request.tools).toEqual([
         {
           type: "web_search",
-          web_search: {
-            enable: true,
-            max_uses: 5,
-            search_engine: "search-prime",
-            search_result: true,
+          max_uses: 5,
+        },
+        {
+          type: "function",
+          function: {
+            name: "client_fn",
+            description: "client",
+            parameters: { type: "object", properties: {} },
           },
         },
+      ]);
+    });
+
+    it("GLM strictTools drops hosted web_search after Anthropic→Chat conversion", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 4096,
+        tools: [
+          {
+            type: "web_search_20250305",
+            name: "web_search",
+            max_uses: 5,
+          },
+          {
+            name: "client_fn",
+            description: "client",
+            input_schema: { type: "object", properties: {} },
+          },
+        ],
+        messages: [],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath, {
+        providerBaseUrl: "https://api.z.ai/",
+      });
+      const body = { ...result.request } as Record<string, unknown>;
+      openaiChatStrictToolsSanitize(body, "https://api.z.ai/");
+
+      expect(body.tools).toEqual([
         {
           type: "function",
           function: {
