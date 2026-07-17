@@ -11,9 +11,7 @@ import { azureWebSearchRequestOverride } from "./azure-openai/request-override";
 import { azureResponsesWebSearchResponseTransform } from "./azure-openai/responses-web-search";
 import { transformGlmAnthropicSearchSseRows } from "./glm/anthropic-sse";
 import { transformLongcatAnthropicSseRows } from "./longcat/anthropic-sse";
-import { glmWebSearchEnvelopeTransform } from "./glm/tools";
 import { glmFlattenContentTransform } from "./glm/messages";
-import { glmWebSearchResponseTransform } from "./glm/responses";
 import { mimoWebSearchTransform } from "./xiaomimimo/tools";
 import { mimoAnnotationsWebSearchResponseTransform } from "./xiaomimimo/responses";
 import type { PlatformRequestOverrideTransform } from "./rules";
@@ -54,7 +52,6 @@ export const REQUEST_OVERRIDE_REGISTRY: Readonly<Record<string, PlatformRequestO
   };
 
 export const TOOL_TRANSFORM_REGISTRY: Readonly<Record<string, PlatformToolTransform>> = {
-  "glm-web-search-envelope": glmWebSearchEnvelopeTransform,
   "mimo-web-search": mimoWebSearchTransform,
   passthrough: passthroughTransform,
 };
@@ -64,7 +61,6 @@ export const MESSAGE_TRANSFORM_REGISTRY: Readonly<Record<string, PlatformMessage
 };
 
 export const RESPONSE_TRANSFORM_REGISTRY: Readonly<Record<string, PlatformResponseTransform>> = {
-  "glm-web-search-response": glmWebSearchResponseTransform,
   "mimo-annotations-web-search": mimoAnnotationsWebSearchResponseTransform,
   "minimax-reasoning-details": minimaxReasoningDetailsResponseTransform,
   "azure-responses-web-search": azureResponsesWebSearchResponseTransform,
@@ -88,9 +84,7 @@ export const REQUEST_SANITIZE_REGISTRY: Readonly<Record<string, PlatformRequestS
   };
 
 export { passthroughTransform, isPlainObject } from "./passthrough";
-export { glmWebSearchEnvelopeTransform } from "./glm/tools";
 export { glmFlattenContentTransform } from "./glm/messages";
-export { glmWebSearchResponseTransform } from "./glm/responses";
 export { mimoAnnotationsWebSearchResponseTransform } from "./xiaomimimo/responses";
 export { mimoWebSearchTransform } from "./xiaomimimo/tools";
 export { azureWebSearchRequestOverride } from "./azure-openai/request-override";

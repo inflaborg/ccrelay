@@ -195,7 +195,7 @@ describe("convertResponsesRequestToChatCompletions", () => {
     expect(request.tools).toEqual([{ type: "web_search", search_context_size: "medium" }]);
   });
 
-  it("platform-transforms inject adds GLM web_search envelope for Responses-hosted tools", () => {
+  it("platform-transforms passthrough for GLM Responses-hosted web_search", () => {
     const { request } = convertResponsesRequestToChatCompletions(
       {
         model: "m",
@@ -209,13 +209,7 @@ describe("convertResponsesRequestToChatCompletions", () => {
       "https://api.z.ai/v1",
       request.tool_choice
     );
-    expect(tools).toEqual([
-      {
-        type: "web_search",
-        search_context_size: "medium",
-        web_search: { enable: true, search_engine: "search-prime", search_result: true },
-      },
-    ]);
+    expect(tools).toEqual([{ type: "web_search", search_context_size: "medium" }]);
   });
 
   it("copies nested hosted tools from namespace bundles", () => {

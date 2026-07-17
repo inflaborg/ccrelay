@@ -7,9 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+**Protocol/Conversion**
+
+- GLM on the OpenAI Chat protocol no longer receives special hosted web search handling: outbound `web_search` tools are dropped (upstream no longer returns structured search results on that path). GLM Anthropic endpoint hosted search (`web_search_prime` SSE normalization) is unchanged.
+
+### Removed
+
+**Config**
+
+- Built-in web search backend **GLM (Z.ai)** removed; **Tavily** and **Parallel** remain. Legacy `webSearch.glm` and `defaultSearchBackend: glm` in YAML are ignored.
+
 ## [0.2.8] - 2026-07-16 (pre-release)
 
 Pre-release line for 0.2.8.
+
+### Fixed
+
+**Protocol/Conversion**
+
+- Forwarding Claude Desktop / Cowork agent traffic to GLM via the Anthropic-compatible API no longer fails with parameter errors: adaptive thinking is mapped to a supported mode, and Claude-only fields (deferred tool loading, tool schema references, extended prompt-cache TTL, inline system messages) are stripped or normalized before the request reaches GLM.
 
 ### CI/CD
 

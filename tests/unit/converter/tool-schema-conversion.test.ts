@@ -19,56 +19,19 @@ describe("normalizeToolForProvider (re-export)", () => {
     );
   });
 
-  it("GLM upstream injects web_search envelope", () => {
+  it("GLM upstream passthrough for web_search (no envelope)", () => {
     expect(normalizeToolForProvider({ type: "web_search", max_uses: 2 }, GLM_BASE)).toEqual({
       type: "web_search",
-      web_search: {
-        enable: true,
-        max_uses: 2,
-        search_engine: "search-prime",
-        search_result: true,
-      },
+      max_uses: 2,
     });
   });
 
-  it("GLM upstream fixes web_search: null", () => {
+  it("GLM upstream passthrough when web_search is null", () => {
     expect(
       normalizeToolForProvider({ type: "web_search", web_search: null, foo: 1 }, GLM_BASE)
     ).toEqual({
       type: "web_search",
       foo: 1,
-      web_search: { enable: true, search_engine: "search-prime", search_result: true },
-    });
-  });
-
-  it("GLM merges Chat web-search defaults into an existing envelope", () => {
-    const input = { type: "web_search", web_search: { enable: "True" } };
-    expect(normalizeToolForProvider(input, GLM_BASE)).toEqual({
-      type: "web_search",
-      web_search: { enable: true, search_engine: "search-prime", search_result: true },
-    });
-  });
-
-  it("GLM hoists flat Z.ai-style keys into nested web_search", () => {
-    expect(
-      normalizeToolForProvider(
-        {
-          type: "web_search",
-          search_engine: "search_pro",
-          count: "5",
-          search_prompt: "Summarize: {{search_result}}",
-        },
-        GLM_BASE
-      )
-    ).toEqual({
-      type: "web_search",
-      web_search: {
-        enable: true,
-        search_engine: "search_pro",
-        search_result: true,
-        count: "5",
-        search_prompt: "Summarize: {{search_result}}",
-      },
     });
   });
 });
@@ -87,15 +50,10 @@ describe("anthropicServerToolDefToOpenAIHosted", () => {
     });
   });
 
-  it("GLM upstream nests web_search envelope", () => {
+  it("GLM upstream passthrough for hosted web_search", () => {
     expect(anthropicServerToolDefToOpenAIHosted(tool, GLM_BASE)).toEqual({
       type: "web_search",
-      web_search: {
-        enable: true,
-        max_uses: 9,
-        search_engine: "search-prime",
-        search_result: true,
-      },
+      max_uses: 9,
     });
   });
 });

@@ -50,7 +50,7 @@ export {
   isDuplicateStyleProviderId,
   resolveProviderKeyInMap,
 } from "./provider-utils";
-export { computeGlmEndpoint, buildWebSearchConfig } from "./builders/web-search";
+export { buildWebSearchConfig } from "./builders/web-search";
 
 function expandPath(filepath: string): string {
   if (filepath.startsWith("~")) {

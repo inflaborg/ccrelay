@@ -7,8 +7,6 @@ import {
   applyPlatformMessageTransforms,
   applyPlatformResponseTransforms,
   glmFlattenContentTransform,
-  glmWebSearchEnvelopeTransform,
-  glmWebSearchResponseTransform,
   mimoAnnotationsWebSearchResponseTransform,
   hostnameMatchesDomain,
   matchHostedToolRuleForBaseUrl,
@@ -72,7 +70,9 @@ describe("matchHostedToolRuleForBaseUrl", () => {
   it("hits GLM rule for api.z.ai", () => {
     const r = matchHostedToolRuleForBaseUrl(GLM_BASE);
     expect(r?.provider).toBe("glm");
-    expect(r?.tools?.web_search).toBe("glm-web-search-envelope");
+    expect(r?.tools).toBeUndefined();
+    expect(r?.responses).toBeUndefined();
+    expect(r?.anthropicSse).toBe("glm-web-search-prime-normalize");
   });
 
   it("hits GLM rule for open.bigmodel.cn", () => {
@@ -80,7 +80,8 @@ describe("matchHostedToolRuleForBaseUrl", () => {
       "https://open.bigmodel.cn/api/paas/v4/chat/completions"
     );
     expect(r?.provider).toBe("glm");
-    expect(r?.tools?.web_search).toBe("glm-web-search-envelope");
+    expect(r?.tools).toBeUndefined();
+    expect(r?.responses).toBeUndefined();
   });
 
   it("returns undefined for unrelated providers", () => {
@@ -149,15 +150,10 @@ describe("matchHostedToolRuleForBaseUrl", () => {
 });
 
 describe("normalizeToolForProvider", () => {
-  it("nested web_search envelope for GLM upstream", () => {
+  it("passthrough web_search for GLM upstream (no envelope)", () => {
     expect(normalizeToolForProvider({ type: "web_search", max_uses: 2 }, GLM_BASE)).toEqual({
       type: "web_search",
-      web_search: {
-        enable: true,
-        max_uses: 2,
-        search_engine: "search-prime",
-        search_result: true,
-      },
+      max_uses: 2,
     });
   });
 
@@ -309,48 +305,14 @@ describe("transforms", () => {
       name: "x",
     });
   });
-
-  it("glmWebSearchEnvelope wraps web_search only", () => {
-    expect(glmWebSearchEnvelopeTransform({ type: "web_search", max_uses: 7 })).toEqual({
-      type: "web_search",
-      web_search: {
-        enable: true,
-        max_uses: 7,
-        search_engine: "search-prime",
-        search_result: true,
-      },
-    });
-    expect(glmWebSearchEnvelopeTransform({ type: "other" })).toEqual({ type: "other" });
-  });
-
-  it("glmWebSearchEnvelope preserves unknown top-level keys beside nested envelope", () => {
-    expect(
-      glmWebSearchEnvelopeTransform({
-        type: "web_search",
-        max_uses: 2,
-        foo: "bar",
-        web_search: { search_engine: "search_pro" },
-      })
-    ).toEqual({
-      type: "web_search",
-      foo: "bar",
-      web_search: {
-        enable: true,
-        max_uses: 2,
-        search_engine: "search_pro",
-        search_result: true,
-      },
-    });
-  });
 });
 
 describe("provider baseUrl drives dispatch", () => {
-  it("glm base implies nested envelope", () => {
+  it("glm base passthrough for web_search (no envelope)", () => {
     expect(
       normalizeToolForProvider({ type: "web_search" }, mockProvider("https://api.z.ai").baseUrl)
     ).toEqual({
       type: "web_search",
-      web_search: { enable: true, search_engine: "search-prime", search_result: true },
     });
   });
 
@@ -485,69 +447,24 @@ describe("applyPlatformMessageTransforms", () => {
   });
 });
 
-describe("glmWebSearchResponseTransform", () => {
-  it("returns blocks unchanged when web_search missing or empty", () => {
-    const blocks: AnthropicContentBlock[] = [{ type: "text", text: "x" }];
-    expect(glmWebSearchResponseTransform({}, blocks)).toBe(blocks);
-    expect(glmWebSearchResponseTransform({ web_search: [] }, blocks)).toBe(blocks);
-  });
-
-  it("prepends server_tool_use and web_search_tool_result from top-level web_search", () => {
-    const body = {
-      web_search: [
-        { title: "t1", link: "https://a.example", content: "snippet" },
-        { title: "t2", link: "https://b.example" },
-      ],
-    };
-    const blocks: AnthropicContentBlock[] = [{ type: "text", text: "answer" }];
-    const out = glmWebSearchResponseTransform(body, blocks);
-    expect(out).toHaveLength(3);
-    expect(out[0]).toMatchObject({ type: "server_tool_use", name: "web_search" });
-    expect(out[0]).toHaveProperty("id");
-    expect(String((out[0] as { id: string }).id)).toMatch(/^srvtoolu_/);
-    expect(out[1]).toMatchObject({ type: "web_search_tool_result" });
-    const tr = out[1] as { tool_use_id: string; content: unknown[] };
-    expect(tr.tool_use_id).toBe((out[0] as { id: string }).id);
-    expect(tr.content).toEqual([
-      {
-        type: "web_search_result",
-        url: "https://a.example",
-        title: "t1",
-        encrypted_content: "snippet",
-      },
-      {
-        type: "web_search_result",
-        url: "https://b.example",
-        title: "t2",
-      },
-    ]);
-    expect(out[2]).toEqual({ type: "text", text: "answer" });
-  });
-});
-
 describe("applyPlatformResponseTransforms", () => {
-  it("injects GLM web search blocks for api.z.ai", () => {
+  it("GLM api.z.ai is no-op for top-level web_search (OpenAI protocol unsupported)", () => {
     const blocks: AnthropicContentBlock[] = [{ type: "text", text: "hi" }];
     const body = {
       web_search: [{ title: "x", link: "https://x", content: "c" }],
     };
-    const out = applyPlatformResponseTransforms(body, blocks, "https://api.z.ai/v1/");
-    expect(out[0]?.type).toBe("server_tool_use");
-    expect(out[1]?.type).toBe("web_search_tool_result");
-    expect(out[2]).toEqual({ type: "text", text: "hi" });
+    expect(applyPlatformResponseTransforms(body, blocks, "https://api.z.ai/v1/")).toBe(blocks);
   });
 
-  it("injects GLM web search blocks for open.bigmodel.cn", () => {
+  it("GLM open.bigmodel.cn is no-op for top-level web_search", () => {
     const blocks: AnthropicContentBlock[] = [{ type: "text", text: "hi" }];
     const body = {
       web_search: [{ title: "x", link: "https://x" }],
     };
-    expect(
-      applyPlatformResponseTransforms(body, blocks, "https://OPEN.BIGMODEL.CN/").length
-    ).toBeGreaterThan(blocks.length);
+    expect(applyPlatformResponseTransforms(body, blocks, "https://OPEN.BIGMODEL.CN/")).toBe(blocks);
   });
 
-  it("MiMo: no-op without message.annotations (GLM top-level web_search is ignored)", () => {
+  it("MiMo: no-op without message.annotations", () => {
     const blocks: AnthropicContentBlock[] = [{ type: "text", text: "hi" }];
     const body = { web_search: [{ title: "x", link: "https://x" }] };
     expect(applyPlatformResponseTransforms(body, blocks, MIMO_BASE)).toBe(blocks);

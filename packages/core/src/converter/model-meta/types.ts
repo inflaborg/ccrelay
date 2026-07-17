@@ -13,6 +13,11 @@ export interface ModelReasoningMeta {
   supportsThinking?: boolean;
   /** Anthropic `thinking.type = adaptive`. */
   supportsAdaptiveThinking?: boolean;
+  /**
+   * When adaptive thinking is unsupported, rewrite `thinking.type` to `enabled`
+   * instead of removing the field (e.g. GLM Anthropic-compatible API).
+   */
+  mapAdaptiveThinkingToEnabled?: boolean;
   /** OpenAI Chat `reasoning_effort`. */
   supportsReasoningEffort?: boolean;
 }
@@ -41,6 +46,14 @@ export interface ModelDeepSeekMeta {
 export interface ModelAnthropicMeta {
   /** When false, hoist `messages` entries with role system/developer into top-level `system`. */
   supportsSystemRoleInMessages?: boolean;
+  /** When false, strip top-level `context_management`. */
+  supportsContextManagement?: boolean;
+  /** When false, strip `defer_loading` from tools and drop deferred placeholder tools. */
+  supportsDeferLoading?: boolean;
+  /** When false, rewrite `tool_reference` blocks in tool results to plain text. */
+  supportsToolReferenceBlocks?: boolean;
+  /** When false, strip `cache_control.ttl` (keep ephemeral without extended TTL). */
+  supportsExtendedCacheTtl?: boolean;
 }
 
 export interface ModelMeta {

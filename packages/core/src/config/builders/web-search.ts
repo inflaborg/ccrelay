@@ -1,19 +1,5 @@
 import type { WebSearchConfigInput, WebSearchGlobalConfig } from "../../types";
 
-/** Compute GLM endpoint URL from protocol/region/coding. */
-export function computeGlmEndpoint(
-  protocol: "anthropic" | "openai",
-  region: "intl" | "cn",
-  coding: boolean
-): string {
-  const host = region === "cn" ? "https://open.bigmodel.cn" : "https://api.z.ai";
-  if (protocol === "anthropic") {
-    return `${host}/api/anthropic`;
-  }
-  const planPath = coding ? "/api/coding/paas/v4" : "/api/paas/v4";
-  return `${host}${planPath}/chat/completions`;
-}
-
 function emptyParallelString(value: string | undefined | null): string | undefined {
   if (typeof value !== "string") {
     return undefined;
@@ -36,7 +22,6 @@ export function buildWebSearchConfig(
     return undefined;
   }
   const t = raw.tavily;
-  const g = raw.glm;
   const p = raw.parallel;
   const providers = Array.isArray(raw.providers) ? raw.providers : undefined;
   const defaultSearchBackend =
@@ -45,30 +30,12 @@ export function buildWebSearchConfig(
   const enabled = hasExplicitEnabled ? raw.enabled === true : (providers?.length ?? 0) > 0;
   const hasContent =
     Boolean(t) ||
-    Boolean(g) ||
     Boolean(p) ||
     providers !== undefined ||
     defaultSearchBackend !== undefined ||
     hasExplicitEnabled;
   if (!hasContent) {
     return undefined;
-  }
-
-  let glmConfig: WebSearchGlobalConfig["glm"] | undefined;
-  if (g) {
-    const protocol = g.protocol === "anthropic" ? "anthropic" : "openai";
-    const region = g.region === "cn" ? "cn" : "intl";
-    const coding = g.coding === true;
-    const computedEndpoint = computeGlmEndpoint(protocol, region, coding);
-    glmConfig = {
-      apiKey: g.apiKey ?? g.api_key,
-      endpoint:
-        typeof g.endpoint === "string" && g.endpoint.length > 0 ? g.endpoint : computedEndpoint,
-      protocol,
-      region,
-      coding,
-      model: g.model,
-    };
   }
 
   return {
@@ -81,7 +48,6 @@ export function buildWebSearchConfig(
           },
         }
       : {}),
-    ...(glmConfig ? { glm: glmConfig } : {}),
     ...(p
       ? {
           parallel: {

@@ -53,6 +53,15 @@ describe("resolveModelMeta", () => {
     expect(meta.deepseek?.isReasoner).toBe(true);
   });
 
+  it("matches glm family for Anthropic-compatible upstream", () => {
+    const meta = resolveModelMeta("glm-4.7");
+    expect(meta.id).toBe("glm");
+    expect(meta.reasoning.supportsAdaptiveThinking).toBe(false);
+    expect(meta.reasoning.mapAdaptiveThinkingToEnabled).toBe(true);
+    expect(meta.anthropic?.supportsSystemRoleInMessages).toBe(false);
+    expect(meta.anthropic?.supportsDeferLoading).toBe(false);
+  });
+
   it("uses conservative unknown fallback for unrecognized ids", () => {
     const meta = resolveModelMeta("totally-unknown-model-xyz");
     expect(meta.id).toBe(GLOBAL_UNKNOWN_MODEL_META.id);

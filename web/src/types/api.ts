@@ -447,14 +447,6 @@ export interface WebSearchSettings {
     searchDepth?: "basic" | "advanced";
     maxResults?: number;
   };
-  glm?: {
-    apiKey?: string;
-    endpoint?: string;
-    protocol?: "anthropic" | "openai";
-    region?: "intl" | "cn";
-    coding?: boolean;
-    model?: string;
-  };
   parallel?: {
     apiKey?: string;
     mode?: "turbo" | "basic" | "advanced";

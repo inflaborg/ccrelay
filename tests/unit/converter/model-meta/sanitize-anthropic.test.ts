@@ -83,4 +83,102 @@ describe("sanitizeAnthropicRequestByMeta", () => {
       { type: "text", text: "Available skills: godot, pdf" },
     ]);
   });
+
+  it("maps adaptive thinking to enabled and strips beta fields for glm-4.7", () => {
+    const data: Record<string, unknown> = {
+      model: "glm-4.7",
+      max_tokens: 32000,
+      thinking: { type: "adaptive" },
+      output_config: { effort: "medium" },
+      context_management: {
+        edits: [{ type: "clear_thinking_20251015", keep: "all" }],
+      },
+      tools: [
+        { name: "ToolSearch", input_schema: { type: "object" } },
+        {
+          name: "WebSearch",
+          input_schema: { type: "object" },
+          defer_loading: true,
+        },
+        {
+          name: "DeferredToolPlaceholder",
+          description: "placeholder",
+          input_schema: { type: "object" },
+          defer_loading: true,
+        },
+      ],
+      system: [
+        {
+          type: "text",
+          text: "You are a Claude agent.",
+          cache_control: { type: "ephemeral", ttl: "1h" },
+        },
+      ],
+      messages: [
+        { role: "user", content: "search ghost in the shell" },
+        { role: "system", content: "Deferred tools list" },
+        {
+          role: "assistant",
+          content: [
+            { type: "thinking", thinking: "plan", signature: "" },
+            { type: "text", text: "Searching." },
+            {
+              type: "tool_use",
+              id: "call_1",
+              name: "ToolSearch",
+              input: { query: "select:WebSearch", max_results: 5 },
+            },
+          ],
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "call_1",
+              content: [{ type: "tool_reference", tool_name: "WebSearch" }],
+            },
+            {
+              type: "text",
+              text: "Tool loaded.",
+              cache_control: { type: "ephemeral", ttl: "1h" },
+            },
+          ],
+        },
+      ],
+    };
+    const meta = resolveModelMeta("glm-4.7");
+    const changes = sanitizeAnthropicRequestByMeta(data, meta);
+
+    expect(meta.id).toBe("glm");
+    expect(changes).toContain("thinking.adaptive->enabled");
+    expect(changes).toContain("output_config.effort");
+    expect(changes).toContain("context_management");
+    expect(changes).toContain("tools.defer_loading");
+    expect(changes).toContain("messages.system->system");
+    expect(changes).toContain("tool_reference");
+    expect(changes).toContain("cache_control.ttl");
+    expect(data.thinking).toEqual({ type: "enabled" });
+    expect(data.output_config).toBeUndefined();
+    expect(data.context_management).toBeUndefined();
+    expect(data.tools).toHaveLength(2);
+    expect(
+      (data.tools as { name?: string; defer_loading?: boolean }[]).every(
+        t => t.defer_loading === undefined && t.name !== "DeferredToolPlaceholder"
+      )
+    ).toBe(true);
+    expect(data.messages).toHaveLength(3);
+    expect((data.system as { cache_control?: { ttl?: string } }[])[0].cache_control).toEqual({
+      type: "ephemeral",
+    });
+    const userContent = (data.messages as { role: string; content: unknown[] }[])[2].content;
+    expect(userContent[0]).toEqual({
+      type: "tool_result",
+      tool_use_id: "call_1",
+      content: [{ type: "text", text: "Tool loaded: WebSearch." }],
+    });
+    expect((userContent[1] as { cache_control?: { ttl?: string } }).cache_control).toEqual({
+      type: "ephemeral",
+    });
+  });
 });

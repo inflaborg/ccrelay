@@ -66,9 +66,7 @@ export const PLATFORM_TRANSFORM_RULES: readonly PlatformTransformRule[] = [
   {
     provider: "glm",
     domains: ["api.z.ai", "open.bigmodel.cn"],
-    tools: { web_search: "glm-web-search-envelope" },
     messages: "glm-flatten-content",
-    responses: "glm-web-search-response",
     anthropicSse: "glm-web-search-prime-normalize",
     requestSanitize: "glm-chat-sanitize",
     strictTools: true,
