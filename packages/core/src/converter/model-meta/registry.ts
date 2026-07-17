@@ -4,12 +4,14 @@ import { cloneModelMeta, GLOBAL_UNKNOWN_MODEL_META, VENDOR_DEFAULT_META } from "
 import { ANTHROPIC_MODEL_FAMILIES } from "./families.anthropic";
 import { DEEPSEEK_MODEL_FAMILIES } from "./families.deepseek";
 import { GEMINI_MODEL_FAMILIES } from "./families.gemini";
+import { GLM_MODEL_FAMILIES } from "./families.glm";
 import { OPENAI_MODEL_FAMILIES } from "./families.openai";
 import type { ModelFamilyEntry, ModelMeta, ModelVendor, ResolveModelMetaOptions } from "./types";
 
 const log = new ScopedLogger("ModelMeta");
 
 const ALL_FAMILIES: readonly ModelFamilyEntry[] = [
+  ...GLM_MODEL_FAMILIES,
   ...ANTHROPIC_MODEL_FAMILIES,
   ...OPENAI_MODEL_FAMILIES,
   ...GEMINI_MODEL_FAMILIES,

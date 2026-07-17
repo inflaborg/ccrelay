@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Pre-release line for 0.2.8.
 
+### Fixed
+
+**Protocol/Conversion**
+
+- Forwarding Claude Desktop / Cowork agent traffic to GLM via the Anthropic-compatible API no longer fails with parameter errors: adaptive thinking is mapped to a supported mode, and Claude-only fields (deferred tool loading, tool schema references, extended prompt-cache TTL, inline system messages) are stripped or normalized before the request reaches GLM.
+
 ### CI/CD
 
 - Prod releases automatically publish the VSIX to Open VSX after GitHub Release creation; a manual **Publish Open VSX** workflow can republish from an existing release.
