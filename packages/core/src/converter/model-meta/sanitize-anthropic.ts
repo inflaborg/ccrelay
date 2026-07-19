@@ -60,6 +60,50 @@ function stripContextManagement(data: Record<string, unknown>, changes: string[]
   }
 }
 
+function isEmptyThinkingBlock(block: Record<string, unknown>): boolean {
+  if (block.type !== "thinking") {
+    return false;
+  }
+  const thinking = block.thinking;
+  if (typeof thinking !== "string") {
+    return true;
+  }
+  return thinking.trim().length === 0;
+}
+
+/** Drop empty/whitespace-only `thinking` blocks (API rejects them). */
+function stripEmptyThinkingBlocks(data: Record<string, unknown>, changes: string[]): void {
+  const messages = data.messages;
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return;
+  }
+
+  let changed = false;
+  for (const msg of messages) {
+    if (!msg || typeof msg !== "object" || Array.isArray(msg)) {
+      continue;
+    }
+    const m = msg as Record<string, unknown>;
+    if (!Array.isArray(m.content)) {
+      continue;
+    }
+    const next = m.content.filter(part => {
+      if (!part || typeof part !== "object" || Array.isArray(part)) {
+        return true;
+      }
+      return !isEmptyThinkingBlock(part as Record<string, unknown>);
+    });
+    if (next.length !== m.content.length) {
+      m.content = next;
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    changes.push("messages.empty_thinking");
+  }
+}
+
 function stripDeferLoadingFromTools(data: Record<string, unknown>, changes: string[]): void {
   const tools = data.tools;
   if (!Array.isArray(tools) || tools.length === 0) {
@@ -278,6 +322,9 @@ export function sanitizeAnthropicRequestByMeta(
   if (anthropic?.supportsExtendedCacheTtl === false) {
     stripExtendedCacheTtl(data, changes);
   }
+
+  // Always drop empty thinking shells — independent of model meta / beta flags.
+  stripEmptyThinkingBlocks(data, changes);
 
   if (changes.length > 0) {
     const modelLabel = typeof data.model === "string" ? data.model : "?";

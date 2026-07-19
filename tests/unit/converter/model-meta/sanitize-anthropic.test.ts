@@ -37,6 +37,50 @@ describe("sanitizeAnthropicRequestByMeta", () => {
     expect(data.thinking).toEqual({ type: "adaptive" });
   });
 
+  it("strips context_management for claude-opus by default", () => {
+    const data: Record<string, unknown> = {
+      model: "claude-opus-4-8",
+      thinking: { type: "adaptive" },
+      context_management: {
+        edits: [{ type: "clear_thinking_20251015", keep: "all" }],
+      },
+      messages: [{ role: "user", content: "hi" }],
+    };
+    const meta = resolveModelMeta("claude-opus-4-8", { vendor: "anthropic" });
+    const changes = sanitizeAnthropicRequestByMeta(data, meta);
+
+    expect(changes).toContain("context_management");
+    expect(data.context_management).toBeUndefined();
+    expect(data.thinking).toEqual({ type: "adaptive" });
+  });
+
+  it("drops empty and whitespace-only thinking blocks from messages", () => {
+    const data: Record<string, unknown> = {
+      model: "claude-opus-4-8",
+      messages: [
+        { role: "user", content: "hi" },
+        {
+          role: "assistant",
+          content: [
+            { type: "thinking", thinking: "   \n" },
+            { type: "thinking", thinking: "" },
+            { type: "thinking", signature: "sig_only" },
+            { type: "thinking", thinking: "real plan" },
+            { type: "text", text: "answer" },
+          ],
+        },
+      ],
+    };
+    const meta = resolveModelMeta("claude-opus-4-8", { vendor: "anthropic" });
+    const changes = sanitizeAnthropicRequestByMeta(data, meta);
+
+    expect(changes).toContain("messages.empty_thinking");
+    expect((data.messages as { content: unknown[] }[])[1].content).toEqual([
+      { type: "thinking", thinking: "real plan" },
+      { type: "text", text: "answer" },
+    ]);
+  });
+
   it("removes only effort when output_config has other keys", () => {
     const data: Record<string, unknown> = {
       model: "claude-haiku-4-5",
