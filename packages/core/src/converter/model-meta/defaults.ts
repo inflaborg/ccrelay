@@ -29,7 +29,11 @@ export const VENDOR_DEFAULT_META: Readonly<Record<ModelVendor, ModelMeta>> = {
     vendor: "anthropic",
     reasoning: { ...REASONING_CAPABLE },
     vision: { enabled: true },
-    anthropic: { supportsSystemRoleInMessages: true },
+    anthropic: {
+      supportsSystemRoleInMessages: true,
+      // Drop by default — Azure and most gateways reject this beta field.
+      supportsContextManagement: false,
+    },
   },
   openai: {
     id: "openai-default",

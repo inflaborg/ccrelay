@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+**Protocol/Conversion**
+
+- Claude models routed through Azure or other Anthropic-compatible gateways no longer fail when the client sends `context_management`; that beta field is stripped by default before the request reaches upstream.
+- Long Claude Code sessions no longer get stuck on empty thinking blocks in message history; whitespace-only shells are removed before forwarding.
+
 ### Changed
 
 **Protocol/Conversion**

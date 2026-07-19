@@ -18,6 +18,7 @@ describe("resolveModelMeta", () => {
     expect(meta.reasoning.supportsEffort).toBe(true);
     expect(meta.reasoning.supportsAdaptiveThinking).toBe(true);
     expect(meta.anthropic?.supportsSystemRoleInMessages).not.toBe(false);
+    expect(meta.anthropic?.supportsContextManagement).toBe(false);
   });
 
   it("matches gpt-5 max_completion_tokens family", () => {
@@ -74,6 +75,7 @@ describe("resolveModelMeta", () => {
     expect(meta.vendor).toBe("anthropic");
     expect(meta.reasoning.supportsEffort).toBe(true);
     expect(meta.anthropic?.supportsSystemRoleInMessages).toBe(true);
+    expect(meta.anthropic?.supportsContextManagement).toBe(false);
   });
 
   it("lists all registered families", () => {
