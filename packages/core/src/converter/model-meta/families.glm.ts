@@ -18,6 +18,7 @@ export const GLM_MODEL_FAMILIES: readonly ModelFamilyEntry[] = [
       anthropic: {
         supportsSystemRoleInMessages: false,
         supportsContextManagement: false,
+        supportsStructuredOutputs: false,
         supportsDeferLoading: false,
         supportsToolReferenceBlocks: false,
         supportsExtendedCacheTtl: false,

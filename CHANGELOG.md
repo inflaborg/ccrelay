@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Protocol/Conversion**
 
 - Claude models routed through Azure or other Anthropic-compatible gateways no longer fail when the client sends `context_management`; that beta field is stripped by default before the request reaches upstream.
+- Claude Code Stop hooks and other clients that request structured outputs (`output_config.format` / `json_schema`) no longer get a hard 400 from Azure Hosted-on-Azure or similar gateways; that field is stripped by default while effort/thinking are preserved when supported.
 - Long Claude Code sessions no longer get stuck on empty thinking blocks in message history; whitespace-only shells are removed before forwarding.
 
 ### Changed
