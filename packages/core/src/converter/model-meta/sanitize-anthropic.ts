@@ -7,15 +7,23 @@ const log = new ScopedLogger("ModelMeta");
 
 const DEFERRED_TOOL_PLACEHOLDER = "DeferredToolPlaceholder";
 
-function deleteOutputConfigEffort(data: Record<string, unknown>, changes: string[]): void {
+function sanitizeOutputConfig(
+  data: Record<string, unknown>,
+  options: { stripEffort: boolean; stripFormat: boolean },
+  changes: string[]
+): void {
   const oc = data.output_config;
   if (!oc || typeof oc !== "object" || Array.isArray(oc)) {
     return;
   }
   const out = oc as Record<string, unknown>;
-  if ("effort" in out) {
+  if (options.stripEffort && "effort" in out) {
     delete out.effort;
     changes.push("output_config.effort");
+  }
+  if (options.stripFormat && "format" in out) {
+    delete out.format;
+    changes.push("output_config.format");
   }
   if (Object.keys(out).length === 0) {
     delete data.output_config;
@@ -295,8 +303,15 @@ export function sanitizeAnthropicRequestByMeta(
   const reasoning = meta.reasoning;
   const anthropic = meta.anthropic;
 
-  if (!reasoning.supportsEffort) {
-    deleteOutputConfigEffort(data, changes);
+  if (!reasoning.supportsEffort || anthropic?.supportsStructuredOutputs === false) {
+    sanitizeOutputConfig(
+      data,
+      {
+        stripEffort: !reasoning.supportsEffort,
+        stripFormat: anthropic?.supportsStructuredOutputs === false,
+      },
+      changes
+    );
   }
 
   normalizeThinkingForMeta(data, meta, changes);

@@ -81,16 +81,94 @@ describe("sanitizeAnthropicRequestByMeta", () => {
     ]);
   });
 
-  it("removes only effort when output_config has other keys", () => {
+  it("removes only effort when output_config has other keys and structured outputs allowed", () => {
     const data: Record<string, unknown> = {
       model: "claude-haiku-4-5",
       output_config: { effort: "medium", format: { type: "text" } },
       messages: [],
     };
     const meta = resolveModelMeta("claude-haiku-4-5", { vendor: "anthropic" });
+    meta.anthropic = { ...meta.anthropic, supportsStructuredOutputs: true };
     sanitizeAnthropicRequestByMeta(data, meta);
 
     expect(data.output_config).toEqual({ format: { type: "text" } });
+  });
+
+  it("strips output_config.format for Claude families by default (Azure/gateway compat)", () => {
+    const data: Record<string, unknown> = {
+      model: "claude-opus-4-8",
+      thinking: { type: "adaptive" },
+      output_config: {
+        effort: "xhigh",
+        format: {
+          type: "json_schema",
+          schema: {
+            type: "object",
+            properties: { ok: { type: "boolean" }, reason: { type: "string" } },
+            required: ["ok", "reason"],
+            additionalProperties: false,
+          },
+        },
+      },
+      messages: [{ role: "user", content: "evaluate stop condition" }],
+    };
+    const meta = resolveModelMeta("claude-opus-4-8", { vendor: "anthropic" });
+    const changes = sanitizeAnthropicRequestByMeta(data, meta);
+
+    expect(meta.anthropic?.supportsStructuredOutputs).toBe(false);
+    expect(changes).toContain("output_config.format");
+    expect(data.output_config).toEqual({ effort: "xhigh" });
+    expect(data.thinking).toEqual({ type: "adaptive" });
+  });
+
+  it("strips entire output_config when format is the only key and unsupported", () => {
+    const data: Record<string, unknown> = {
+      model: "claude-sonnet-4-20250514",
+      output_config: {
+        format: { type: "json_schema", schema: { type: "object", properties: {} } },
+      },
+      messages: [],
+    };
+    const meta = resolveModelMeta("claude-sonnet-4-20250514", { vendor: "anthropic" });
+    const changes = sanitizeAnthropicRequestByMeta(data, meta);
+
+    expect(changes).toContain("output_config.format");
+    expect(changes).toContain("output_config");
+    expect(data.output_config).toBeUndefined();
+  });
+
+  it("preserves structured outputs when meta opts in", () => {
+    const format = {
+      type: "json_schema",
+      schema: { type: "object", properties: { ok: { type: "boolean" } } },
+    };
+    const data: Record<string, unknown> = {
+      model: "claude-opus-4-8",
+      output_config: { effort: "high", format },
+      messages: [],
+    };
+    const meta = resolveModelMeta("claude-opus-4-8", { vendor: "anthropic" });
+    meta.anthropic = { ...meta.anthropic, supportsStructuredOutputs: true };
+    const changes = sanitizeAnthropicRequestByMeta(data, meta);
+
+    expect(changes).not.toContain("output_config.format");
+    expect(data.output_config).toEqual({ effort: "high", format });
+  });
+
+  it("strips structured outputs for glm family", () => {
+    const data: Record<string, unknown> = {
+      model: "glm-4.7",
+      thinking: { type: "enabled" },
+      output_config: {
+        format: { type: "json_schema", schema: { type: "object" } },
+      },
+      messages: [],
+    };
+    const meta = resolveModelMeta("glm-4.7");
+    const changes = sanitizeAnthropicRequestByMeta(data, meta);
+
+    expect(changes).toContain("output_config.format");
+    expect(data.output_config).toBeUndefined();
   });
 
   it("hoists inline system messages for haiku Cowork-style payload", () => {

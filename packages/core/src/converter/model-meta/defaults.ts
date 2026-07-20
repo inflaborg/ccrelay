@@ -31,8 +31,9 @@ export const VENDOR_DEFAULT_META: Readonly<Record<ModelVendor, ModelMeta>> = {
     vision: { enabled: true },
     anthropic: {
       supportsSystemRoleInMessages: true,
-      // Drop by default — Azure and most gateways reject this beta field.
+      // Drop by default — Azure Hosted-on-Azure and most gateways reject these.
       supportsContextManagement: false,
+      supportsStructuredOutputs: false,
     },
   },
   openai: {

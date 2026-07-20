@@ -48,6 +48,11 @@ export interface ModelAnthropicMeta {
   supportsSystemRoleInMessages?: boolean;
   /** When false, strip top-level `context_management`. */
   supportsContextManagement?: boolean;
+  /**
+   * When false, strip `output_config.format` (structured outputs / json_schema).
+   * Azure Hosted-on-Azure and many gateways reject this; official Anthropic supports it.
+   */
+  supportsStructuredOutputs?: boolean;
   /** When false, strip `defer_loading` from tools and drop deferred placeholder tools. */
   supportsDeferLoading?: boolean;
   /** When false, rewrite `tool_reference` blocks in tool results to plain text. */

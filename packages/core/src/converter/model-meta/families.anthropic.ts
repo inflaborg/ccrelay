@@ -1,9 +1,14 @@
 import { NO_REASONING, REASONING_CAPABLE } from "./defaults";
 import type { ModelFamilyEntry } from "./types";
 
-/** Beta fields many gateways (Azure, etc.) reject; opt in only for first-party Anthropic. */
+/**
+ * Fields many gateways (Azure Hosted-on-Azure, etc.) reject.
+ * Opt in only when the upstream is known to support them (first-party Anthropic /
+ * Foundry Hosted-on-Anthropic).
+ */
 const ANTHROPIC_COMPAT_DEFAULTS = {
   supportsContextManagement: false,
+  supportsStructuredOutputs: false,
 } as const;
 
 export const ANTHROPIC_MODEL_FAMILIES: readonly ModelFamilyEntry[] = [
