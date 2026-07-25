@@ -64,7 +64,8 @@
     ],
     "publish": {
       "provider": "generic",
-      "url": "https://github.com/inflaborg/ccrelay/releases/download/channel-prod"
+      "url": "https://github.com/inflaborg/ccrelay/releases/download/channel-prod",
+      "channel": "latest"
     },
     "mac": {
       "extendInfo": {

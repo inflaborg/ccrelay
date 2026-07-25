@@ -1,7 +1,9 @@
 /**
  * Packaged-build auto-update via electron-updater (generic provider).
  * Feed URL is baked at pack time from electron-builder `publish.url`
- * (channel-prod / channel-dev → latest-mac.yml / latest.yml).
+ * (channel-prod / channel-dev). Manifest filenames are always
+ * latest-mac.yml / latest.yml (`publish.channel: latest`) so prerelease
+ * app versions like 0.2.9-dev.N do not request missing dev-mac.yml files.
  */
 
 import { BrowserWindow, app, dialog } from "electron";
