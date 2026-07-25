@@ -3,6 +3,8 @@ export type {
   ModelDeepSeekMeta,
   ModelFamilyEntry,
   ModelGeminiMeta,
+  ModelInputMeta,
+  ModelInputModality,
   ModelMeta,
   ModelOpenAiChatMeta,
   ModelReasoningMeta,
@@ -11,8 +13,14 @@ export type {
   ResolveModelMetaOptions,
 } from "./types";
 
-export { GLOBAL_UNKNOWN_MODEL_META, VENDOR_DEFAULT_META } from "./defaults";
-export { listModelFamilies, resolveModelMeta } from "./registry";
+export {
+  GLOBAL_UNKNOWN_MODEL_META,
+  TEXT_IMAGE_INPUT,
+  TEXT_ONLY_INPUT,
+  VENDOR_DEFAULT_META,
+  inputMetaFromModalities,
+} from "./defaults";
+export { listModelFamilies, modelSupportsImageInput, resolveModelMeta } from "./registry";
 export {
   sanitizeAnthropicRequestByMeta,
   sanitizeAnthropicRequestRecord,

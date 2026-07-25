@@ -1,6 +1,8 @@
+import { inputMetaFromModalities } from "./defaults";
 import type { ModelFamilyEntry } from "./types";
 
 const OPENAI_REASONING_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh"] as const;
+const MULTIMODAL = inputMetaFromModalities(["text", "image"]);
 
 export const OPENAI_MODEL_FAMILIES: readonly ModelFamilyEntry[] = [
   {
@@ -8,8 +10,8 @@ export const OPENAI_MODEL_FAMILIES: readonly ModelFamilyEntry[] = [
     vendor: "openai",
     match: "gpt-5*",
     meta: {
+      ...MULTIMODAL,
       reasoning: { enabled: true, supportsReasoningEffort: true },
-      vision: { enabled: true },
       openaiChat: {
         usesMaxCompletionTokens: true,
         validReasoningEfforts: OPENAI_REASONING_EFFORTS,
@@ -23,8 +25,8 @@ export const OPENAI_MODEL_FAMILIES: readonly ModelFamilyEntry[] = [
     match: [],
     matchRegex: /^o\d/,
     meta: {
+      ...MULTIMODAL,
       reasoning: { enabled: true, supportsReasoningEffort: true },
-      vision: { enabled: true },
       openaiChat: {
         usesMaxCompletionTokens: true,
         validReasoningEfforts: OPENAI_REASONING_EFFORTS,
@@ -37,8 +39,38 @@ export const OPENAI_MODEL_FAMILIES: readonly ModelFamilyEntry[] = [
     vendor: "openai",
     match: "gpt-4o*",
     meta: {
+      ...MULTIMODAL,
       reasoning: { enabled: false, supportsReasoningEffort: false },
-      vision: { enabled: true },
+      openaiChat: { usesMaxCompletionTokens: false },
+    },
+  },
+  {
+    id: "gpt-4",
+    vendor: "openai",
+    match: ["gpt-4*", "gpt-4.1*", "chatgpt-4o*"],
+    meta: {
+      ...MULTIMODAL,
+      reasoning: { enabled: false, supportsReasoningEffort: false },
+      openaiChat: { usesMaxCompletionTokens: false },
+    },
+  },
+  {
+    id: "gpt-3.5",
+    vendor: "openai",
+    match: "gpt-3.5*",
+    meta: {
+      ...inputMetaFromModalities(["text"]),
+      reasoning: { enabled: false, supportsReasoningEffort: false },
+      openaiChat: { usesMaxCompletionTokens: false },
+    },
+  },
+  {
+    id: "gpt-generic",
+    vendor: "openai",
+    match: "gpt-*",
+    meta: {
+      ...MULTIMODAL,
+      reasoning: { enabled: false, supportsReasoningEffort: false },
       openaiChat: { usesMaxCompletionTokens: false },
     },
   },

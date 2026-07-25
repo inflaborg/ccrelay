@@ -4,6 +4,17 @@
 
 export type ModelVendor = "anthropic" | "openai" | "gemini" | "deepseek" | "generic";
 
+/** Request content modalities the model accepts. */
+export type ModelInputModality = "text" | "image";
+
+export interface ModelInputMeta {
+  /**
+   * Supported input modalities for user content.
+   * Default / unknown fallback: `["text"]` only.
+   */
+  modalities: readonly ModelInputModality[];
+}
+
 export interface ModelReasoningMeta {
   /** Whether the model family supports extended / adaptive reasoning. */
   enabled: boolean;
@@ -22,6 +33,11 @@ export interface ModelReasoningMeta {
   supportsReasoningEffort?: boolean;
 }
 
+/**
+ * Vision / image input capability.
+ * Prefer {@link ModelInputMeta.modalities}; `enabled` stays for older call sites
+ * and must stay in sync with `input.modalities.includes("image")`.
+ */
 export interface ModelVisionMeta {
   enabled: boolean;
 }
@@ -70,6 +86,8 @@ export interface ModelAnthropicMeta {
 export interface ModelMeta {
   id: string;
   vendor: ModelVendor;
+  /** Input modalities (text / image). Unknown models default to text-only. */
+  input: ModelInputMeta;
   reasoning: ModelReasoningMeta;
   vision: ModelVisionMeta;
   openaiChat?: ModelOpenAiChatMeta;

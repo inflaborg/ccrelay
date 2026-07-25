@@ -1,7 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, MessageSquare, Plus, Send, Square, Trash2, Eraser } from "lucide-react";
+import {
+  Eraser,
+  ImagePlus,
+  Loader2,
+  MessageSquare,
+  Plus,
+  Send,
+  Square,
+  Trash2,
+  X,
+} from "lucide-react";
+import { modelSupportsImageInput } from "@ccrelay/model-meta";
 import { api } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/select-field";
@@ -18,17 +29,28 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import {
+  clearPersistedChatStore,
   createSession,
   loadChatStore,
   newMessageId,
   saveChatStore,
+  stripImagePayloadsFromStore,
   titleFromFirstUserMessage,
 } from "./chatStorage";
 import { defaultProtocolForProvider, fetchProxyModels, streamChat } from "./chatProxy";
 import { modelsFromProvider } from "./models";
-import type { ChatMessage, ChatProtocol, ChatSession, ChatStoreV1 } from "./types";
+import type {
+  ChatImageAttachment,
+  ChatMessage,
+  ChatProtocol,
+  ChatSession,
+  ChatStoreV1,
+} from "./types";
 
 const PROTOCOLS: ChatProtocol[] = ["openai_chat", "openai_responses", "anthropic"];
+const MAX_PENDING_IMAGES = 4;
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+const IMAGE_MIME = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"]);
 
 function protocolLabelKey(p: ChatProtocol): string {
   switch (p) {
@@ -41,16 +63,33 @@ function protocolLabelKey(p: ChatProtocol): string {
   }
 }
 
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+      } else {
+        reject(new Error("Failed to read image"));
+      }
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read image"));
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function Chat() {
   const { t } = useTranslation();
   const [store, setStore] = useState<ChatStoreV1>(() => loadChatStore());
   const [input, setInput] = useState("");
+  const [pendingImages, setPendingImages] = useState<ChatImageAttachment[]>([]);
   const [sending, setSending] = useState(false);
   const [clearAllOpen, setClearAllOpen] = useState(false);
   const [clearSessionOpen, setClearSessionOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   /** True while IME (e.g. Chinese Pinyin) has an open candidate window. */
   const imeComposingRef = useRef(false);
 
@@ -80,6 +119,11 @@ export default function Chat() {
     [store]
   );
 
+  const supportsImageInput = useMemo(
+    () => Boolean(activeSession?.model && modelSupportsImageInput(activeSession.model)),
+    [activeSession?.model]
+  );
+
   const activeProtocol =
     activeSession?.protocol ?? defaultProtocolForProvider(activeProvider?.providerType);
 
@@ -98,10 +142,14 @@ export default function Chat() {
     return (upstreamModels ?? []).map(id => ({ id, label: id }));
   }, [configModels, upstreamModels]);
 
-  // Persist
+  // Persist when idle. Skip mid-stream writes so a failed quota write cannot
+  // leave "user + empty assistant" as the last successful snapshot.
   useEffect(() => {
+    if (sending) {
+      return;
+    }
     saveChatStore(store);
-  }, [store]);
+  }, [store, sending]);
 
   // Ensure there is an active session when provider is ready
   useEffect(() => {
@@ -146,6 +194,47 @@ export default function Chat() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeSession?.messages, sending]);
 
+  // Drop pending images when switching to a text-only model.
+  useEffect(() => {
+    if (!supportsImageInput && pendingImages.length > 0) {
+      setPendingImages([]);
+    }
+  }, [supportsImageInput, pendingImages.length]);
+
+  const addImageFiles = useCallback(
+    async (files: FileList | File[]) => {
+      if (!supportsImageInput) {
+        return;
+      }
+      const list = Array.from(files);
+      const next: ChatImageAttachment[] = [];
+      for (const file of list) {
+        const mime = (file.type || "").toLowerCase();
+        if (!IMAGE_MIME.has(mime) && !mime.startsWith("image/")) {
+          continue;
+        }
+        if (file.size > MAX_IMAGE_BYTES) {
+          continue;
+        }
+        try {
+          const dataUrl = await readFileAsDataUrl(file);
+          next.push({
+            id: newMessageId(),
+            mimeType: mime === "image/jpg" ? "image/jpeg" : mime || "image/png",
+            dataUrl,
+          });
+        } catch {
+          // skip unreadable file
+        }
+      }
+      if (next.length === 0) {
+        return;
+      }
+      setPendingImages(prev => [...prev, ...next].slice(0, MAX_PENDING_IMAGES));
+    },
+    [supportsImageInput]
+  );
+
   const updateSession = useCallback((sessionId: string, patch: Partial<ChatSession>) => {
     setStore(prev => ({
       ...prev,
@@ -186,6 +275,9 @@ export default function Chat() {
   };
 
   const handleClearAll = () => {
+    clearPersistedChatStore();
+    setPendingImages([]);
+    setInput("");
     if (!activeProvider) {
       setStore({ version: 1, sessions: [], activeSessionId: null });
       setClearAllOpen(false);
@@ -196,13 +288,13 @@ export default function Chat() {
     const session = createSession(protocol, model);
     setStore({ version: 1, sessions: [session], activeSessionId: session.id });
     setClearAllOpen(false);
-    setInput("");
   };
 
   const handleClearSessionMessages = () => {
     if (!activeSession) {
       return;
     }
+    setPendingImages([]);
     updateSession(activeSession.id, { messages: [], title: "New chat" });
     setClearSessionOpen(false);
   };
@@ -219,7 +311,8 @@ export default function Chat() {
       return;
     }
     const text = input.trim();
-    if (!text) {
+    const images = supportsImageInput ? pendingImages : [];
+    if (!text && images.length === 0) {
       return;
     }
     if (!activeSession.model.trim()) {
@@ -230,6 +323,7 @@ export default function Chat() {
       id: newMessageId(),
       role: "user",
       content: text,
+      ...(images.length > 0 ? { images } : {}),
     };
     const assistantId = newMessageId();
     const assistantMsg: ChatMessage = {
@@ -240,9 +334,12 @@ export default function Chat() {
 
     const nextMessages = [...activeSession.messages, userMsg];
     const title =
-      activeSession.messages.length === 0 ? titleFromFirstUserMessage(text) : activeSession.title;
+      activeSession.messages.length === 0
+        ? titleFromFirstUserMessage(text || t("chat.imageMessageTitle"))
+        : activeSession.title;
 
     setInput("");
+    setPendingImages([]);
     setStore(prev => ({
       ...prev,
       sessions: prev.sessions.map(s =>
@@ -323,6 +420,12 @@ export default function Chat() {
       }
     } finally {
       abortRef.current = null;
+      // Drop image binaries from memory and flush the completed turn (incl. assistant text).
+      setStore(prev => {
+        const next = stripImagePayloadsFromStore(prev);
+        saveChatStore(next);
+        return next;
+      });
       setSending(false);
       focusInput();
     }
@@ -537,7 +640,30 @@ export default function Chat() {
                       </>
                     )
                   ) : (
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                    <div className="space-y-1.5">
+                      {msg.images && msg.images.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {msg.images.map(img =>
+                            img.dataUrl ? (
+                              <img
+                                key={img.id}
+                                src={img.dataUrl}
+                                alt=""
+                                className="max-h-28 max-w-full rounded border border-primary-foreground/20 object-contain"
+                              />
+                            ) : (
+                              <div
+                                key={img.id}
+                                className="flex h-14 min-w-[3.5rem] items-center justify-center rounded border border-primary-foreground/20 px-2 text-[10px] opacity-80"
+                              >
+                                {t("chat.imageOmitted")}
+                              </div>
+                            )
+                          )}
+                        </div>
+                      ) : null}
+                      {msg.content ? <p className="whitespace-pre-wrap">{msg.content}</p> : null}
+                    </div>
                   )}
                 </div>
               </div>
@@ -547,6 +673,27 @@ export default function Chat() {
         </div>
 
         <div className="border-t border-border p-2 space-y-1.5">
+          {supportsImageInput && pendingImages.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {pendingImages.map(img => (
+                <div key={img.id} className="relative group">
+                  <img
+                    src={img.dataUrl}
+                    alt=""
+                    className="h-14 w-14 rounded border border-border object-cover"
+                  />
+                  <button
+                    type="button"
+                    className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-background border border-border text-muted-foreground hover:text-destructive"
+                    title={t("chat.removeImage")}
+                    onClick={() => setPendingImages(prev => prev.filter(p => p.id !== img.id))}
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
           <textarea
             ref={textareaRef}
             value={input}
@@ -554,15 +701,78 @@ export default function Chat() {
             onKeyDown={onKeyDown}
             onCompositionStart={onCompositionStart}
             onCompositionEnd={onCompositionEnd}
+            onPaste={e => {
+              if (!supportsImageInput) {
+                return;
+              }
+              const items = e.clipboardData?.items;
+              if (!items) {
+                return;
+              }
+              const files: File[] = [];
+              for (const item of Array.from(items)) {
+                if (item.kind === "file" && item.type.startsWith("image/")) {
+                  const file = item.getAsFile();
+                  if (file) {
+                    files.push(file);
+                  }
+                }
+              }
+              if (files.length === 0) {
+                return;
+              }
+              e.preventDefault();
+              void addImageFiles(files);
+            }}
             rows={2}
-            placeholder={t("chat.inputPlaceholder")}
+            placeholder={
+              supportsImageInput ? t("chat.inputPlaceholderWithImage") : t("chat.inputPlaceholder")
+            }
             disabled={!activeSession?.model}
             className="w-full resize-none rounded-md border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
           />
           <div className="flex items-center justify-end gap-2">
             <div className="flex-1 min-w-0 text-[10px] text-muted-foreground">
-              {t("chat.enterHint")}
+              {supportsImageInput ? (
+                <span>
+                  {t("chat.enterHintWithImage")}
+                  <span className="block sm:inline sm:before:content-['·_'] text-amber-600/90 dark:text-amber-500/90">
+                    {t("chat.imageHistoryHint")}
+                  </span>
+                </span>
+              ) : (
+                t("chat.enterHint")
+              )}
             </div>
+            {supportsImageInput ? (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  multiple
+                  className="hidden"
+                  onChange={e => {
+                    if (e.target.files?.length) {
+                      void addImageFiles(e.target.files);
+                    }
+                    e.target.value = "";
+                  }}
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 w-7 shrink-0 p-0"
+                  title={t("chat.addImage")}
+                  disabled={
+                    sending || !activeSession?.model || pendingImages.length >= MAX_PENDING_IMAGES
+                  }
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <ImagePlus className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            ) : null}
             {sending ? (
               <Button
                 size="sm"
@@ -577,7 +787,7 @@ export default function Chat() {
               <Button
                 size="sm"
                 className="h-7 text-xs gap-1 min-w-[5.5rem]"
-                disabled={!input.trim() || !activeSession?.model}
+                disabled={(!input.trim() && pendingImages.length === 0) || !activeSession?.model}
                 onClick={() => void handleSend()}
               >
                 <Send className="h-3 w-3" />

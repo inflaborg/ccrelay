@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **UI**
 
 - New Chat tab (left of Client Config) for a simple multi-session test chat against the current provider, with OpenAI Chat / Responses / Anthropic protocol switch, model picker, local history, and clear actions.
+- Chat image input for multimodal models (attach or Ctrl+V paste), gated by model-meta input modalities.
 
 **Config**
 
@@ -25,9 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Desktop Chat can call Anthropic endpoints: CORS now allows the `anthropic-version` request header (preflight was blocking cross-origin requests from the dashboard).
 - Chat Anthropic protocol now shows replies correctly when the active provider is OpenAI-compatible (cross-protocol returned JSON while the UI expected SSE).
 - Chat renders real SSE deltas as they arrive; when the proxy returns non-streaming JSON, the full reply is shown at once (no simulated typewriter).
+- Chat history no longer persists image binaries (quota), and assistant reply text is saved after the turn finishes instead of mid-stream.
 
 **Protocol/Conversion**
 
+- Model metadata now includes `input.modalities` (default text-only; Claude / GPT / Gemini / Kimi / GLM families include image).
 - Anthropic clients that request `stream: true` against an OpenAI-compatible upstream now receive synthesized Anthropic SSE instead of a plain JSON message.
 - When Codex Responses traffic is converted to Chat Completions for OpenAI gpt-5 / o-series models, `reasoning_effort` is dropped if the request also has function tools (upstream Chat Completions rejects that combination).
 

@@ -55,13 +55,127 @@ export interface StreamChatParams {
   onDelta: (text: string) => void;
 }
 
-function toOpenAiChatMessages(
-  messages: ChatMessage[]
-): Array<{ role: "user" | "assistant"; content: string }> {
+function usableMessages(messages: ChatMessage[]): ChatMessage[] {
   return messages
     .filter(m => m.role === "user" || m.role === "assistant")
-    .filter(m => !(m.role === "assistant" && m.error))
-    .map(m => ({ role: m.role, content: m.content }));
+    .filter(m => !(m.role === "assistant" && m.error));
+}
+
+function parseDataUrl(dataUrl: string): { mediaType: string; base64: string } | null {
+  const m = /^data:([^;]+);base64,(.+)$/i.exec(dataUrl.trim());
+  if (!m) {
+    return null;
+  }
+  return { mediaType: m[1]!.trim(), base64: m[2]! };
+}
+
+type OpenAiChatContent =
+  | string
+  | Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }>;
+
+function toOpenAiChatMessages(
+  messages: ChatMessage[]
+): Array<{ role: "user" | "assistant"; content: OpenAiChatContent }> {
+  return usableMessages(messages).map(m => {
+    const images = m.images?.filter(img => img.dataUrl) ?? [];
+    if (m.role === "assistant" || images.length === 0) {
+      return { role: m.role, content: m.content };
+    }
+    const parts: Array<
+      { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }
+    > = [];
+    if (m.content.trim()) {
+      parts.push({ type: "text", text: m.content });
+    }
+    for (const img of images) {
+      parts.push({ type: "image_url", image_url: { url: img.dataUrl } });
+    }
+    if (parts.length === 0) {
+      return { role: m.role, content: "" };
+    }
+    return { role: m.role, content: parts };
+  });
+}
+
+type ResponsesInputContent =
+  | string
+  | Array<
+      | { type: "input_text"; text: string }
+      | { type: "input_image"; image_url: string }
+      | { type: "output_text"; text: string }
+    >;
+
+function toOpenAiResponsesInput(
+  messages: ChatMessage[]
+): Array<{ role: "user" | "assistant"; content: ResponsesInputContent }> {
+  return usableMessages(messages).map(m => {
+    const images = m.images?.filter(img => img.dataUrl) ?? [];
+    if (m.role === "assistant") {
+      return {
+        role: "assistant",
+        content: m.content.trim() ? [{ type: "output_text", text: m.content }] : m.content,
+      };
+    }
+    if (images.length === 0) {
+      return { role: "user", content: m.content };
+    }
+    const parts: Array<
+      { type: "input_text"; text: string } | { type: "input_image"; image_url: string }
+    > = [];
+    if (m.content.trim()) {
+      parts.push({ type: "input_text", text: m.content });
+    }
+    for (const img of images) {
+      parts.push({ type: "input_image", image_url: img.dataUrl });
+    }
+    return { role: "user", content: parts.length > 0 ? parts : m.content };
+  });
+}
+
+type AnthropicContent =
+  | string
+  | Array<
+      | { type: "text"; text: string }
+      | {
+          type: "image";
+          source: { type: "base64"; media_type: string; data: string };
+        }
+    >;
+
+function toAnthropicMessages(
+  messages: ChatMessage[]
+): Array<{ role: "user" | "assistant"; content: AnthropicContent }> {
+  return usableMessages(messages).map(m => {
+    const images = m.images?.filter(img => img.dataUrl) ?? [];
+    if (m.role === "assistant" || images.length === 0) {
+      return { role: m.role, content: m.content };
+    }
+    const parts: Array<
+      | { type: "text"; text: string }
+      | {
+          type: "image";
+          source: { type: "base64"; media_type: string; data: string };
+        }
+    > = [];
+    for (const img of images) {
+      const parsed = parseDataUrl(img.dataUrl);
+      if (!parsed) {
+        continue;
+      }
+      parts.push({
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: img.mimeType || parsed.mediaType,
+          data: parsed.base64,
+        },
+      });
+    }
+    if (m.content.trim()) {
+      parts.push({ type: "text", text: m.content });
+    }
+    return { role: "user", content: parts.length > 0 ? parts : m.content };
+  });
 }
 
 async function* iterateSse(
@@ -188,7 +302,7 @@ function applyOpenAiChatJsonBody(body: string, onDelta: (text: string) => void):
 
 async function streamOpenAiResponses(params: StreamChatParams): Promise<void> {
   const origin = getProxyOrigin();
-  const history = toOpenAiChatMessages(params.messages);
+  const history = toOpenAiResponsesInput(params.messages);
   const res = await fetch(`${origin}/openai/responses`, {
     method: "POST",
     headers: proxyHeaders("openai_responses"),
@@ -276,7 +390,7 @@ function applyOpenAiResponsesJsonBody(body: string, onDelta: (text: string) => v
 
 async function streamAnthropic(params: StreamChatParams): Promise<void> {
   const origin = getProxyOrigin();
-  const history = toOpenAiChatMessages(params.messages);
+  const history = toAnthropicMessages(params.messages);
   const res = await fetch(`${origin}/anthropic/v1/messages`, {
     method: "POST",
     headers: proxyHeaders("anthropic"),

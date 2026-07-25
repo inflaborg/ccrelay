@@ -199,7 +199,9 @@ export { rewriteEmbeddedModelAliasInAnthropicBody } from "./anthropic-embedded-m
 export {
   resolveModelMeta,
   listModelFamilies,
+  modelSupportsImageInput,
   type ModelMeta,
+  type ModelInputModality,
   type ModelAnthropicMeta,
   type ModelVendor,
   type ResolveModelMetaOptions,

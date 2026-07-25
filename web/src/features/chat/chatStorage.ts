@@ -1,4 +1,10 @@
-import type { ChatProtocol, ChatSession, ChatStoreV1 } from "./types";
+import type {
+  ChatImageAttachment,
+  ChatMessage,
+  ChatProtocol,
+  ChatSession,
+  ChatStoreV1,
+} from "./types";
 
 const STORAGE_KEY = "ccrelay-chat-sessions-v1";
 
@@ -31,6 +37,66 @@ export function createSession(protocol: ChatProtocol, model: string, title?: str
   };
 }
 
+function stripImagePayload(img: ChatImageAttachment): ChatImageAttachment {
+  if (!img.dataUrl) {
+    return img.omitted ? img : { ...img, omitted: true };
+  }
+  return {
+    id: img.id,
+    mimeType: img.mimeType,
+    dataUrl: "",
+    omitted: true,
+  };
+}
+
+function stripMessageImagePayloads(message: ChatMessage): ChatMessage {
+  if (!message.images?.length) {
+    return message;
+  }
+  return {
+    ...message,
+    images: message.images.map(stripImagePayload),
+  };
+}
+
+/** Drop base64 image bodies so localStorage stays under quota. */
+export function stripImagePayloadsFromStore(store: ChatStoreV1): ChatStoreV1 {
+  return {
+    ...store,
+    sessions: store.sessions.map(session => ({
+      ...session,
+      messages: session.messages.map(stripMessageImagePayloads),
+    })),
+  };
+}
+
+function storeHasImagePayloads(store: ChatStoreV1): boolean {
+  for (const session of store.sessions) {
+    for (const message of session.messages) {
+      if (message.images?.some(img => Boolean(img.dataUrl))) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function writePersistedStore(store: ChatStoreV1): void {
+  const persisted = stripImagePayloadsFromStore(store);
+  const raw = JSON.stringify(persisted);
+  try {
+    localStorage.setItem(STORAGE_KEY, raw);
+  } catch {
+    // Quota may still be full from a previous bloated write — clear then retry.
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.setItem(STORAGE_KEY, raw);
+    } catch {
+      // Private mode / hard quota — in-memory UI still works.
+    }
+  }
+}
+
 export function loadChatStore(): ChatStoreV1 {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -41,21 +107,38 @@ export function loadChatStore(): ChatStoreV1 {
     if (parsed?.version !== 1 || !Array.isArray(parsed.sessions)) {
       return { version: 1, sessions: [], activeSessionId: null };
     }
-    return {
+    const store: ChatStoreV1 = {
       version: 1,
       sessions: parsed.sessions,
       activeSessionId: parsed.activeSessionId ?? null,
     };
+    // Migrate legacy sessions that stored full data-URLs (often breaks later writes/clears).
+    if (storeHasImagePayloads(store)) {
+      const cleaned = stripImagePayloadsFromStore(store);
+      writePersistedStore(cleaned);
+      return cleaned;
+    }
+    return store;
   } catch {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // ignore
+    }
     return { version: 1, sessions: [], activeSessionId: null };
   }
 }
 
 export function saveChatStore(store: ChatStoreV1): void {
+  writePersistedStore(store);
+}
+
+/** Force-remove persisted chat history (used by clear-all). */
+export function clearPersistedChatStore(): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+    localStorage.removeItem(STORAGE_KEY);
   } catch {
-    // Quota or private mode — ignore
+    // ignore
   }
 }
 

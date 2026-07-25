@@ -20,7 +20,9 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@ccrelay/shared/*": ["../packages/core/src/shared/*"]
+      "@ccrelay/shared/*": ["../packages/core/src/shared/*"],
+      "@ccrelay/model-meta": ["../packages/core/src/converter/model-meta/browser.ts"],
+      "@ccrelay/model-meta/*": ["../packages/core/src/converter/model-meta/*"]
     },
 
     /* Linting */

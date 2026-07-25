@@ -13,6 +13,10 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
       "@ccrelay/shared": path.resolve(__dirname, "../packages/core/src/shared"),
+      "@ccrelay/model-meta": path.resolve(
+        __dirname,
+        "../packages/core/src/converter/model-meta/browser.ts"
+      ),
     },
   },
   base: "/ccrelay/",

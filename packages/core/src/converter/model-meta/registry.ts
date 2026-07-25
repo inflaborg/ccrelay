@@ -1,17 +1,28 @@
 import { minimatch } from "../../utils/helpers";
-import { ScopedLogger } from "../../utils/logger";
 import { cloneModelMeta, GLOBAL_UNKNOWN_MODEL_META, VENDOR_DEFAULT_META } from "./defaults";
 import { ANTHROPIC_MODEL_FAMILIES } from "./families.anthropic";
 import { DEEPSEEK_MODEL_FAMILIES } from "./families.deepseek";
 import { GEMINI_MODEL_FAMILIES } from "./families.gemini";
 import { GLM_MODEL_FAMILIES } from "./families.glm";
+import { GROK_MODEL_FAMILIES } from "./families.grok";
+import { KIMI_MODEL_FAMILIES } from "./families.kimi";
+import { LONGCAT_MODEL_FAMILIES } from "./families.longcat";
+import { MIMO_MODEL_FAMILIES } from "./families.mimo";
 import { OPENAI_MODEL_FAMILIES } from "./families.openai";
-import type { ModelFamilyEntry, ModelMeta, ModelVendor, ResolveModelMetaOptions } from "./types";
-
-const log = new ScopedLogger("ModelMeta");
+import type {
+  ModelFamilyEntry,
+  ModelInputModality,
+  ModelMeta,
+  ModelVendor,
+  ResolveModelMetaOptions,
+} from "./types";
 
 const ALL_FAMILIES: readonly ModelFamilyEntry[] = [
+  ...MIMO_MODEL_FAMILIES,
+  ...LONGCAT_MODEL_FAMILIES,
+  ...GROK_MODEL_FAMILIES,
   ...GLM_MODEL_FAMILIES,
+  ...KIMI_MODEL_FAMILIES,
   ...ANTHROPIC_MODEL_FAMILIES,
   ...OPENAI_MODEL_FAMILIES,
   ...GEMINI_MODEL_FAMILIES,
@@ -38,13 +49,37 @@ function entryMatchesModel(entry: ModelFamilyEntry, modelId: string): boolean {
   return false;
 }
 
+function syncVisionFromInput(meta: ModelMeta): ModelMeta {
+  const wantsImage = meta.input.modalities.includes("image");
+  if (meta.vision.enabled === wantsImage) {
+    return meta;
+  }
+  return { ...meta, vision: { enabled: wantsImage } };
+}
+
 function mergeMeta(base: ModelMeta, patch: Partial<Omit<ModelMeta, "id" | "vendor">>): ModelMeta {
   const out = cloneModelMeta(base);
+  if (patch.input?.modalities) {
+    const modalities: ModelInputModality[] = [...patch.input.modalities];
+    if (!modalities.includes("text")) {
+      modalities.unshift("text");
+    }
+    out.input = { modalities };
+    out.vision = { enabled: modalities.includes("image") };
+  }
   if (patch.reasoning) {
     out.reasoning = { ...out.reasoning, ...patch.reasoning };
   }
-  if (patch.vision) {
+  if (patch.vision && !patch.input?.modalities) {
     out.vision = { ...out.vision, ...patch.vision };
+    const mods = new Set<ModelInputModality>(out.input.modalities);
+    if (out.vision.enabled) {
+      mods.add("image");
+    } else {
+      mods.delete("image");
+    }
+    mods.add("text");
+    out.input = { modalities: [...mods] };
   }
   if (patch.openaiChat) {
     out.openaiChat = { ...(out.openaiChat ?? {}), ...patch.openaiChat };
@@ -58,15 +93,17 @@ function mergeMeta(base: ModelMeta, patch: Partial<Omit<ModelMeta, "id" | "vendo
   if (patch.anthropic) {
     out.anthropic = { ...(out.anthropic ?? {}), ...patch.anthropic };
   }
-  return out;
+  return syncVisionFromInput(out);
 }
 
 function familyToMeta(entry: ModelFamilyEntry, modelId: string): ModelMeta {
-  let meta = cloneModelMeta({
-    id: entry.id,
-    vendor: entry.vendor,
-    ...entry.meta,
-  });
+  let meta = syncVisionFromInput(
+    cloneModelMeta({
+      id: entry.id,
+      vendor: entry.vendor,
+      ...entry.meta,
+    })
+  );
 
   if (entry.overrides) {
     for (const override of entry.overrides) {
@@ -93,11 +130,11 @@ function resolveFromFamilies(modelId: string, vendor?: ModelVendor): ModelMeta |
 
 /**
  * Resolve static capability metadata for a wire model id (after provider model mapping).
+ * Safe for browser bundles (no Node logger dependency).
  */
 export function resolveModelMeta(modelId: string, options?: ResolveModelMetaOptions): ModelMeta {
   const normalized = modelId.trim().toLowerCase();
   if (!normalized) {
-    log.warn("[model-meta] empty model id; using unknown fallback");
     return cloneModelMeta(GLOBAL_UNKNOWN_MODEL_META);
   }
 
@@ -113,8 +150,15 @@ export function resolveModelMeta(modelId: string, options?: ResolveModelMetaOpti
     }
   }
 
-  log.warn(`[model-meta] no family match for "${normalized}"; using conservative unknown fallback`);
   return cloneModelMeta(GLOBAL_UNKNOWN_MODEL_META);
+}
+
+/** Whether the model accepts image input (multimodal). */
+export function modelSupportsImageInput(
+  modelId: string,
+  options?: ResolveModelMetaOptions
+): boolean {
+  return resolveModelMeta(modelId, options).input.modalities.includes("image");
 }
 
 /** @internal Tests and registry introspection. */

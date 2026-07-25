@@ -1,4 +1,4 @@
-import { NO_REASONING, REASONING_CAPABLE } from "./defaults";
+import { NO_REASONING, REASONING_CAPABLE, inputMetaFromModalities } from "./defaults";
 import type { ModelFamilyEntry } from "./types";
 
 /**
@@ -11,14 +11,16 @@ const ANTHROPIC_COMPAT_DEFAULTS = {
   supportsStructuredOutputs: false,
 } as const;
 
+const MULTIMODAL = inputMetaFromModalities(["text", "image"]);
+
 export const ANTHROPIC_MODEL_FAMILIES: readonly ModelFamilyEntry[] = [
   {
     id: "claude-haiku",
     vendor: "anthropic",
     match: "claude-haiku-*",
     meta: {
+      ...MULTIMODAL,
       reasoning: { ...NO_REASONING },
-      vision: { enabled: true },
       anthropic: { ...ANTHROPIC_COMPAT_DEFAULTS, supportsSystemRoleInMessages: false },
     },
   },
@@ -27,8 +29,8 @@ export const ANTHROPIC_MODEL_FAMILIES: readonly ModelFamilyEntry[] = [
     vendor: "anthropic",
     match: "claude-sonnet-*",
     meta: {
+      ...MULTIMODAL,
       reasoning: { ...REASONING_CAPABLE },
-      vision: { enabled: true },
       anthropic: { ...ANTHROPIC_COMPAT_DEFAULTS },
     },
   },
@@ -37,8 +39,8 @@ export const ANTHROPIC_MODEL_FAMILIES: readonly ModelFamilyEntry[] = [
     vendor: "anthropic",
     match: "claude-opus-*",
     meta: {
+      ...MULTIMODAL,
       reasoning: { ...REASONING_CAPABLE },
-      vision: { enabled: true },
       anthropic: { ...ANTHROPIC_COMPAT_DEFAULTS },
     },
   },
