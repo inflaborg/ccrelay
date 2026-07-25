@@ -8,6 +8,7 @@ export const PARTNER_PRESET_DISPLAY_ORDER = [
   "xiaomi",
   "deepseek",
   "minimax",
+  "longcat",
   "azure-openai",
   "gemini-openai",
   "astraflow",

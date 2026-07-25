@@ -18,6 +18,8 @@ export interface WizardEndpointTestProps {
   wizardOpen?: boolean;
   variants: TestVariantInput[] | null;
   apiKey: string;
+  /** When apiKey is missing/masked, server resolves the stored secret. */
+  providerId?: string;
   useCustomModels: boolean;
   /** First non-empty model line when custom list is on */
   customFirstModelId: string | null;
@@ -61,6 +63,7 @@ export function WizardEndpointTest({
   wizardOpen = true,
   variants,
   apiKey,
+  providerId,
   useCustomModels,
   customFirstModelId,
   probeModels,
@@ -98,9 +101,11 @@ export function WizardEndpointTest({
     setPrevWizardOpen(wizardOpen);
   }
 
+  const hasAuth = Boolean(apiKey.trim()) || Boolean(providerId?.trim());
+
   const canClickTest =
     Boolean(variants?.length) &&
-    Boolean(apiKey.trim()) &&
+    hasAuth &&
     !disabled &&
     state.phase !== "testing" &&
     (useCustomModels
@@ -127,14 +132,15 @@ export function WizardEndpointTest({
       runTest({
         variants,
         apiKey,
+        providerId,
         modelId: modelId.trim(),
       });
     },
-    [variants, apiKey, runTest]
+    [variants, apiKey, providerId, runTest]
   );
 
   const handleTestClick = useCallback(() => {
-    if (!variants?.length || !apiKey.trim()) {
+    if (!variants?.length || !hasAuth) {
       return;
     }
     if (useCustomModels) {
@@ -157,7 +163,7 @@ export function WizardEndpointTest({
     setModelPickerOpen(true);
   }, [
     variants,
-    apiKey,
+    hasAuth,
     useCustomModels,
     customFirstModelId,
     probeModels,

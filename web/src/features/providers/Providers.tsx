@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Check,
@@ -44,8 +44,14 @@ import type { AliasHashProtocol } from "@ccrelay/shared/aliasHash";
 import { api } from "@/api/client";
 import type { AddProviderRequest, Provider, ModelMapEntry } from "@/types/api";
 import { WizardDialog } from "./wizard/WizardDialog";
+import { WizardEndpointTest } from "./wizard/WizardEndpointTest";
+import { useUpstreamModels } from "./wizard/useUpstreamModels";
+import type { TestVariantInput } from "./wizard/useEndpointTest";
 import { CoworkAliasHelper } from "./CoworkAliasHelper";
 
+function looksLikeMaskedApiKey(apiKey: string | undefined): boolean {
+  return typeof apiKey === "string" && apiKey.includes("************");
+}
 const PROVIDER_PROTOCOL_LABEL: Record<string, { label: string; className: string }> = {
   anthropic: { label: "providers.protocol.anthropic", className: "bg-indigo-500 text-white" },
   openai: { label: "providers.protocol.openai", className: "bg-emerald-600 text-white" },
@@ -155,6 +161,88 @@ export default function Providers() {
   const srEnabled = config?.smartRouting?.enabled === true;
   const aliasPrefix = config?.smartRouting?.aliasPrefix ?? "claude-";
   const coworkHelperReady = formData.id.trim().length > 0 && Boolean(formData.providerType);
+
+  const endpointTestApiKey = useMemo(() => {
+    const key = formData.apiKey ?? "";
+    return looksLikeMaskedApiKey(key) ? "" : key;
+  }, [formData.apiKey]);
+
+  const endpointTestProviderId = useMemo(() => {
+    if (!editingProvider) {
+      return undefined;
+    }
+    if (endpointTestApiKey.trim()) {
+      return undefined;
+    }
+    return editingProvider.id;
+  }, [editingProvider, endpointTestApiKey]);
+
+  const probeProviderType = useMemo(() => {
+    const pt = formData.providerType;
+    if (pt === "anthropic" || pt === "openai" || pt === "openai_chat") {
+      return pt;
+    }
+    return "openai" as const;
+  }, [formData.providerType]);
+
+  const upstreamProbeEnabled =
+    showAddModal &&
+    formData.useCustomModelsList !== true &&
+    Boolean(formData.baseUrl.trim()) &&
+    (Boolean(endpointTestApiKey.trim()) || Boolean(endpointTestProviderId));
+
+  const upstreamModels = useUpstreamModels(
+    formData.baseUrl,
+    endpointTestApiKey,
+    probeProviderType,
+    upstreamProbeEnabled,
+    endpointTestProviderId
+  );
+
+  const customFirstModelId = useMemo(() => {
+    const first = customModelsText
+      .split("\n")
+      .map(l => l.trim())
+      .find(l => l.length > 0);
+    if (!first) {
+      return null;
+    }
+    const i = first.indexOf(";");
+    if (i === -1) {
+      return first;
+    }
+    const id = first.slice(0, i).trim();
+    return id.length > 0 ? id : null;
+  }, [customModelsText]);
+
+  const testVariants: TestVariantInput[] | null = useMemo(() => {
+    if (!showAddModal) {
+      return null;
+    }
+    const pt = formData.providerType;
+    if (pt !== "anthropic" && pt !== "openai" && pt !== "openai_chat") {
+      return null;
+    }
+    if (!formData.baseUrl.trim() || !formData.id.trim()) {
+      return null;
+    }
+    return [
+      {
+        id: formData.id.trim(),
+        name: formData.name.trim() || formData.id.trim(),
+        baseUrl: formData.baseUrl.trim(),
+        providerType: pt,
+        authHeader: formData.authHeader,
+      },
+    ];
+  }, [
+    showAddModal,
+    formData.id,
+    formData.name,
+    formData.baseUrl,
+    formData.providerType,
+    formData.authHeader,
+  ]);
 
   const { data: catalog, isLoading: catalogLoading } = useQuery({
     queryKey: ["smartRoutingCatalog"],
@@ -1305,30 +1393,42 @@ export default function Providers() {
             </CardContent>
 
             {/* Modal Footer */}
-            <div className="border-t px-4 pt-4 pb-5 flex-shrink-0 flex justify-end gap-2">
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={closeModal}>
-                {t("common.cancel")}
-              </Button>
-              <Button
-                size="sm"
-                className="h-7 text-xs"
-                onClick={handleAddSubmit}
-                disabled={
-                  saveProviderMutation.isPending ||
-                  !formData.id ||
-                  !formData.name ||
-                  !formData.baseUrl ||
-                  (formData.modelMappingEnabled !== false && !!modelMapError)
-                }
-              >
-                {saveProviderMutation.isPending ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : editingProvider ? (
-                  t("common.save")
-                ) : (
-                  t("providers.modal.submitAdd")
-                )}
-              </Button>
+            <div className="border-t px-4 pt-4 pb-5 flex-shrink-0 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <WizardEndpointTest
+                wizardOpen={showAddModal}
+                variants={testVariants}
+                apiKey={endpointTestApiKey}
+                providerId={endpointTestProviderId}
+                useCustomModels={formData.useCustomModelsList === true}
+                customFirstModelId={customFirstModelId}
+                probeModels={formData.useCustomModelsList === true ? null : upstreamModels.models}
+                disabled={saveProviderMutation.isPending}
+              />
+              <div className="flex w-full shrink-0 flex-wrap justify-end gap-2 sm:w-auto">
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={closeModal}>
+                  {t("common.cancel")}
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={handleAddSubmit}
+                  disabled={
+                    saveProviderMutation.isPending ||
+                    !formData.id ||
+                    !formData.name ||
+                    !formData.baseUrl ||
+                    (formData.modelMappingEnabled !== false && !!modelMapError)
+                  }
+                >
+                  {saveProviderMutation.isPending ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : editingProvider ? (
+                    t("common.save")
+                  ) : (
+                    t("providers.modal.submitAdd")
+                  )}
+                </Button>
+              </div>
             </div>
           </Card>
         </div>

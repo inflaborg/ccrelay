@@ -49,6 +49,33 @@ export function extractFunctionToolsForEcho(tools: unknown): unknown[] {
   return out;
 }
 
+/**
+ * Merge top-level `tools` with tools nested under `input[]` items of type `additional_tools`
+ * (Codex / desktop clients often declare tools this way instead of the top-level field).
+ */
+export function collectResponsesToolsRaw(raw: Record<string, unknown>): unknown[] {
+  const merged: unknown[] = [];
+  if (Array.isArray(raw.tools)) {
+    for (const t of raw.tools as unknown[]) {
+      merged.push(t);
+    }
+  }
+  if (Array.isArray(raw.input)) {
+    for (const item of raw.input as unknown[]) {
+      if (!item || typeof item !== "object") {
+        continue;
+      }
+      const o = item as Record<string, unknown>;
+      if (o.type === "additional_tools" && Array.isArray(o.tools)) {
+        for (const t of o.tools as unknown[]) {
+          merged.push(t);
+        }
+      }
+    }
+  }
+  return merged;
+}
+
 function asRecord(val: unknown): Record<string, unknown> | undefined {
   if (!val || typeof val !== "object" || Array.isArray(val)) {
     return undefined;
@@ -60,7 +87,7 @@ function asRecord(val: unknown): Record<string, unknown> | undefined {
  * Pull echo fields from parsed OpenAI Responses request JSON (`raw`).
  */
 export function extractResponsesEcho(raw: Record<string, unknown>): ResponsesRequestEcho {
-  const tools = extractFunctionToolsForEcho(raw.tools);
+  const tools = extractFunctionToolsForEcho(collectResponsesToolsRaw(raw));
   const parallel =
     typeof raw.parallel_tool_calls === "boolean" ? raw.parallel_tool_calls : undefined;
   const store = typeof raw.store === "boolean" ? raw.store : undefined;
@@ -236,7 +263,7 @@ export function convertResponsesRequestToChatCompletions(
     }
   }
 
-  const tools = mapResponsesTools(raw.tools);
+  const tools = mapResponsesTools(collectResponsesToolsRaw(raw));
   if (tools.length) {
     out.tools = tools;
   }
@@ -342,9 +369,10 @@ function mapEasyMessageContentToText(content: unknown): string | undefined {
       continue;
     }
     const b = block as { type?: string; text?: string };
-    if (b.type === "input_text" && typeof b.text === "string") {
-      parts.push(b.text);
-    } else if (b.type === "text" && typeof b.text === "string") {
+    if (
+      (b.type === "input_text" || b.type === "output_text" || b.type === "text") &&
+      typeof b.text === "string"
+    ) {
       parts.push(b.text);
     }
   }
@@ -374,6 +402,11 @@ function appendInputItemsToMessages(items: unknown[], messages: OpenAIMessage[])
     const o = item as Record<string, unknown>;
     const typ = o.type;
 
+    // Codex embeds tool defs in input; collected via collectResponsesToolsRaw — never as messages.
+    if (typ === "additional_tools") {
+      continue;
+    }
+
     if (typ === "message" || o.role !== undefined) {
       const role = o.role;
       const r = typeof role === "string" ? role : "user";
@@ -389,7 +422,8 @@ function appendInputItemsToMessages(items: unknown[], messages: OpenAIMessage[])
               : r === "assistant"
                 ? "assistant"
                 : "user";
-        if (oaiRole === "assistant" && !text && !Array.isArray(o.content)) {
+        // Skip empty assistant/developer/system placeholders (e.g. unmapped content types).
+        if (!text && oaiRole !== "user") {
           continue;
         }
         messages.push({ role: oaiRole, content: text });

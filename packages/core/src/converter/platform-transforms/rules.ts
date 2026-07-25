@@ -41,6 +41,11 @@ export interface PlatformTransformRule {
   strictTools?: boolean;
   /** Outbound Chat Completions JSON sanitize registry key (runs after tools/messages transforms). */
   requestSanitize?: string;
+  /**
+   * Inbound OpenAI Chat Completions JSON sanitize registry key (before Chat→Responses / Chat→Anthropic).
+   * e.g. LongCat XML `<longcat_tool_call>` → `message.tool_calls`.
+   */
+  chatResponseSanitize?: string;
 }
 
 /** Legacy name for tooling that matched hosted-tool-only rules (same payload). */
@@ -116,5 +121,7 @@ export const PLATFORM_TRANSFORM_RULES: readonly PlatformTransformRule[] = [
     domains: ["api.longcat.chat"],
     anthropicSse: "longcat-message-start-usage",
     anthropicSseStream: true,
+    chatResponseSanitize: "longcat-xml-tool-calls",
+    strictTools: true,
   },
 ];

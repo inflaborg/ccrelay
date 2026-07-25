@@ -522,8 +522,10 @@ export type WizardProviderType = "anthropic" | "openai" | "openai_chat";
 
 export interface WizardProbeModelsRequest {
   baseUrl: string;
-  apiKey: string;
+  apiKey?: string;
   providerType: WizardProviderType;
+  /** When apiKey is missing/masked, resolve the stored secret for this provider. */
+  providerId?: string;
 }
 
 export type WizardProbeModelsResponse =
@@ -539,7 +541,9 @@ export interface WizardEndpointVariantInput {
 }
 
 export interface WizardEndpointTestRequest {
-  apiKey: string;
+  apiKey?: string;
+  /** When apiKey is missing/masked, resolve the stored secret for this provider. */
+  providerId?: string;
   modelId: string;
   variants: WizardEndpointVariantInput[];
 }

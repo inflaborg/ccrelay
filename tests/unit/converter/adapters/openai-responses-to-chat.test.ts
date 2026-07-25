@@ -5,8 +5,12 @@ import {
   isOpenAIResponsesRequest,
   extractResponsesEcho,
   extractFunctionToolsForEcho,
+  collectResponsesToolsRaw,
 } from "@/converter/adapters/openai-responses-to-chat";
-import { normalizeToolsForProvider } from "@/converter/platform-transforms";
+import {
+  normalizeToolsForProvider,
+  openaiChatStrictToolsSanitize,
+} from "@/converter/platform-transforms";
 
 describe("isOpenAIResponsesRequest", () => {
   it("is true for input string", () => {
@@ -252,6 +256,205 @@ describe("convertResponsesRequestToChatCompletions", () => {
     expect(request.reasoning_effort).toBe("medium");
     expect("reasoning" in request).toBe(false);
   });
+
+  it("collects tools from input additional_tools (Codex) and does not emit empty developer", () => {
+    const { request } = convertResponsesRequestToChatCompletions(
+      {
+        model: "m",
+        input: [
+          {
+            type: "additional_tools",
+            role: "developer",
+            tools: [
+              {
+                type: "custom",
+                name: "exec",
+                description: "Run JS",
+                format: { type: "grammar", syntax: "lark", definition: "start: SOURCE" },
+              },
+              {
+                type: "function",
+                name: "wait",
+                description: "Wait on exec cell",
+                parameters: {
+                  type: "object",
+                  properties: { cell_id: { type: "string" } },
+                  required: ["cell_id"],
+                },
+              },
+              {
+                type: "namespace",
+                name: "collaboration",
+                tools: [
+                  {
+                    type: "function",
+                    name: "spawn_agent",
+                    description: "Spawn agent",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        task_name: { type: "string" },
+                        message: { type: "string" },
+                      },
+                      required: ["task_name", "message"],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            type: "message",
+            role: "user",
+            content: [{ type: "input_text", text: "list dirs" }],
+          },
+        ],
+      },
+      "/v1/responses"
+    );
+
+    expect(request.messages.every(m => m.content !== "")).toBe(true);
+    expect(request.messages.find(m => m.role === "developer")).toBeUndefined();
+    expect(request.messages).toEqual([{ role: "user", content: "list dirs" }]);
+
+    expect(request.tools).toHaveLength(3);
+    expect(request.tools?.[0]).toMatchObject({ type: "custom", name: "exec" });
+    expect(request.tools?.[1]).toMatchObject({
+      type: "function",
+      function: { name: "wait" },
+    });
+    expect(request.tools?.[2]).toMatchObject({
+      type: "function",
+      function: { name: "spawn_agent" },
+    });
+  });
+
+  it("merges top-level tools with additional_tools from input", () => {
+    const { request } = convertResponsesRequestToChatCompletions(
+      {
+        model: "m",
+        tools: [
+          {
+            type: "function",
+            name: "top_fn",
+            parameters: { type: "object", properties: {} },
+          },
+        ],
+        input: [
+          {
+            type: "additional_tools",
+            role: "developer",
+            tools: [
+              {
+                type: "function",
+                name: "extra_fn",
+                parameters: { type: "object", properties: {} },
+              },
+            ],
+          },
+          { type: "message", role: "user", content: "hi" },
+        ],
+      },
+      "/v1/responses"
+    );
+    expect(request.tools?.map(t => (t as { function?: { name?: string } }).function?.name)).toEqual(
+      ["top_fn", "extra_fn"]
+    );
+  });
+
+  it("maps assistant output_text history into chat message content", () => {
+    const { request } = convertResponsesRequestToChatCompletions(
+      {
+        model: "m",
+        input: [
+          {
+            type: "message",
+            role: "user",
+            content: [{ type: "input_text", text: "hi" }],
+          },
+          {
+            type: "message",
+            role: "assistant",
+            content: [{ type: "output_text", text: "hello from history" }],
+          },
+          {
+            type: "message",
+            role: "user",
+            content: [{ type: "input_text", text: "again" }],
+          },
+        ],
+      },
+      "/v1/responses"
+    );
+    expect(request.messages).toEqual([
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "hello from history" },
+      { role: "user", content: "again" },
+    ]);
+  });
+
+  it("shims additional_tools custom entries for GLM strictTools", () => {
+    const { request } = convertResponsesRequestToChatCompletions(
+      {
+        model: "glm-5.2",
+        input: [
+          {
+            type: "additional_tools",
+            role: "developer",
+            tools: [
+              {
+                type: "custom",
+                name: "exec",
+                description: "Run JS",
+                format: { type: "grammar", syntax: "lark", definition: "start: SOURCE" },
+              },
+            ],
+          },
+          { type: "message", role: "user", content: "run" },
+        ],
+      },
+      "/v1/responses"
+    );
+    const body = { ...request } as unknown as Record<string, unknown>;
+    openaiChatStrictToolsSanitize(body, "https://api.z.ai/v1");
+    const tools = body.tools as Record<string, unknown>[];
+    expect(tools).toHaveLength(1);
+    expect(tools[0]).toMatchObject({
+      type: "function",
+      function: {
+        name: "exec",
+        parameters: {
+          type: "object",
+          properties: {
+            input: {
+              type: "string",
+              description: "Freeform tool input.",
+            },
+          },
+          required: ["input"],
+        },
+      },
+    });
+    const fn = tools[0].function as { description?: string };
+    expect(fn.description).toContain("Run JS");
+  });
+});
+
+describe("collectResponsesToolsRaw", () => {
+  it("merges top-level and additional_tools", () => {
+    const got = collectResponsesToolsRaw({
+      tools: [{ type: "function", name: "a" }],
+      input: [
+        {
+          type: "additional_tools",
+          tools: [{ type: "function", name: "b" }],
+        },
+      ],
+    });
+    expect(got).toHaveLength(2);
+    expect((got[0] as { name?: string }).name).toBe("a");
+    expect((got[1] as { name?: string }).name).toBe("b");
+  });
 });
 
 describe("extractFunctionToolsForEcho", () => {
@@ -306,5 +509,30 @@ describe("extractResponsesEcho", () => {
     expect(echo.truncation).toBe("auto");
     expect(echo.store).toBe(false);
     expect(echo.tool_choice).toEqual({ type: "auto" });
+  });
+
+  it("echoes tools from input additional_tools when top-level tools are absent", () => {
+    const echo = extractResponsesEcho({
+      model: "m",
+      input: [
+        {
+          type: "additional_tools",
+          role: "developer",
+          tools: [
+            { type: "function", name: "wait", parameters: {} },
+            {
+              type: "namespace",
+              name: "collaboration",
+              tools: [{ type: "function", name: "spawn_agent", parameters: {} }],
+            },
+            { type: "custom", name: "exec" },
+          ],
+        },
+      ],
+    });
+    expect(echo.tools).toHaveLength(3);
+    expect((echo.tools[0] as { name?: string }).name).toBe("wait");
+    expect((echo.tools[1] as { name?: string }).name).toBe("spawn_agent");
+    expect((echo.tools[2] as { type?: string; name?: string }).name).toBe("exec");
   });
 });

@@ -5,12 +5,46 @@
 /* eslint-disable @typescript-eslint/naming-convention -- upstream JSON bodies and HTTP header names */
 
 import * as http from "http";
+import type { ProxyServer } from "../server/handler";
 import { Logger } from "../utils/logger";
 import { parseJsonBody, sendJson } from "./httpJson";
 
 const log = Logger.getInstance();
 
 const REQUEST_TIMEOUT_MS = 30_000;
+
+let serverInstance: ProxyServer | null = null;
+
+/** Wire ProxyServer so endpoint tests can resolve stored provider API keys. */
+export function setServer(server: ProxyServer | null): void {
+  serverInstance = server;
+}
+
+/** True when the value looks like a UI-masked key (`****…****`), not a real secret. */
+export function looksLikeMaskedApiKey(apiKey: string | undefined): boolean {
+  return typeof apiKey === "string" && apiKey.includes("************");
+}
+
+/**
+ * Prefer a non-masked `apiKey`; otherwise look up the stored key for `providerId`.
+ */
+export function resolveWizardApiKey(
+  apiKey: string | undefined,
+  providerId: string | undefined
+): string | undefined {
+  const trimmed = typeof apiKey === "string" ? apiKey.trim() : "";
+  if (trimmed && !looksLikeMaskedApiKey(trimmed)) {
+    return trimmed;
+  }
+  const id = typeof providerId === "string" ? providerId.trim() : "";
+  if (id && serverInstance) {
+    const stored = serverInstance.getConfig().providers[id]?.apiKey?.trim();
+    if (stored) {
+      return stored;
+    }
+  }
+  return undefined;
+}
 
 export type WizardProviderType = "anthropic" | "openai" | "openai_chat";
 
@@ -67,8 +101,10 @@ export function parseModelsResponseBody(data: unknown): string[] | null {
 
 export interface WizardProbeModelsBody {
   baseUrl: string;
-  apiKey: string;
+  apiKey?: string;
   providerType: WizardProviderType;
+  /** When set (and apiKey is missing/masked), use the stored provider secret. */
+  providerId?: string;
 }
 
 export type WizardProbeModelsResponse =
@@ -78,8 +114,9 @@ export type WizardProbeModelsResponse =
 export async function executeWizardProbeModels(
   body: WizardProbeModelsBody
 ): Promise<WizardProbeModelsResponse> {
-  const { baseUrl, apiKey, providerType } = body;
-  if (!baseUrl?.trim() || !apiKey?.trim()) {
+  const { baseUrl, providerType } = body;
+  const apiKey = resolveWizardApiKey(body.apiKey, body.providerId);
+  if (!baseUrl?.trim() || !apiKey) {
     return { ok: false, errorCode: "format" };
   }
   if (!validateHttpsUrl(baseUrl)) {
@@ -91,10 +128,10 @@ export async function executeWizardProbeModels(
     accept: "application/json",
   };
   if (providerType === "anthropic") {
-    headers["x-api-key"] = apiKey.trim();
+    headers["x-api-key"] = apiKey;
     headers["anthropic-version"] = "2023-06-01";
   } else {
-    headers.authorization = `Bearer ${apiKey.trim()}`;
+    headers.authorization = `Bearer ${apiKey}`;
   }
 
   log.info(`[wizard/models] Probing ${providerType} GET ${url}`);
@@ -144,9 +181,10 @@ export async function handleWizardProbeModels(
 ): Promise<void> {
   try {
     const body = await parseJsonBody<WizardProbeModelsBody>(req);
+    const resolvedKey = resolveWizardApiKey(body.apiKey, body.providerId);
     if (
       !body.baseUrl ||
-      !body.apiKey ||
+      !resolvedKey ||
       (body.providerType !== "anthropic" &&
         body.providerType !== "openai" &&
         body.providerType !== "openai_chat")
@@ -154,7 +192,10 @@ export async function handleWizardProbeModels(
       sendJson(res, 400, { error: "Missing or invalid baseUrl, apiKey, or providerType" });
       return;
     }
-    const result = await executeWizardProbeModels(body);
+    const result = await executeWizardProbeModels({
+      ...body,
+      apiKey: resolvedKey,
+    });
     sendJson(res, 200, result);
   } catch (err) {
     sendJson(res, 500, {
@@ -245,7 +286,9 @@ export interface WizardEndpointVariantInput {
 }
 
 export interface WizardEndpointTestBody {
-  apiKey: string;
+  apiKey?: string;
+  /** When set (and apiKey is missing/masked), use the stored provider secret. */
+  providerId?: string;
   modelId: string;
   variants: WizardEndpointVariantInput[];
 }
@@ -349,9 +392,10 @@ async function runSingleVariantTest(
 export async function executeWizardEndpointTest(
   body: WizardEndpointTestBody
 ): Promise<WizardEndpointTestResponse> {
-  const { apiKey, modelId, variants } = body;
+  const { modelId, variants } = body;
+  const apiKey = resolveWizardApiKey(body.apiKey, body.providerId);
   const trimmedModel = modelId.trim();
-  if (!trimmedModel || !apiKey?.trim() || !Array.isArray(variants) || variants.length === 0) {
+  if (!trimmedModel || !apiKey || !Array.isArray(variants) || variants.length === 0) {
     return { ok: true, results: [] };
   }
 
@@ -387,8 +431,9 @@ export async function handleWizardEndpointTest(
 ): Promise<void> {
   try {
     const body = await parseJsonBody<WizardEndpointTestBody>(req);
+    const resolvedKey = resolveWizardApiKey(body.apiKey, body.providerId);
     if (
-      !body.apiKey ||
+      !resolvedKey ||
       !body.modelId ||
       !Array.isArray(body.variants) ||
       body.variants.length === 0
@@ -408,7 +453,10 @@ export async function handleWizardEndpointTest(
         return;
       }
     }
-    const result = await executeWizardEndpointTest(body);
+    const result = await executeWizardEndpointTest({
+      ...body,
+      apiKey: resolvedKey,
+    });
     sendJson(res, 200, result);
   } catch (err) {
     sendJson(res, 500, {

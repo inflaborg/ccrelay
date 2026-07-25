@@ -146,6 +146,8 @@ describe("matchHostedToolRuleForBaseUrl", () => {
     expect(r?.provider).toBe("longcat");
     expect(r?.anthropicSse).toBe("longcat-message-start-usage");
     expect(r?.anthropicSseStream).toBe(true);
+    expect(r?.chatResponseSanitize).toBe("longcat-xml-tool-calls");
+    expect(r?.strictTools).toBe(true);
   });
 });
 

@@ -11,6 +11,7 @@ import { azureWebSearchRequestOverride } from "./azure-openai/request-override";
 import { azureResponsesWebSearchResponseTransform } from "./azure-openai/responses-web-search";
 import { transformGlmAnthropicSearchSseRows } from "./glm/anthropic-sse";
 import { transformLongcatAnthropicSseRows } from "./longcat/anthropic-sse";
+import { sanitizeLongcatChatCompletion } from "./longcat/chat-tool-calls";
 import { glmFlattenContentTransform } from "./glm/messages";
 import { mimoWebSearchTransform } from "./xiaomimimo/tools";
 import { mimoAnnotationsWebSearchResponseTransform } from "./xiaomimimo/responses";
@@ -45,6 +46,9 @@ export type PlatformAnthropicSseTransform = (
 
 /** Outbound Chat Completions JSON body sanitize (provider-specific). */
 export type PlatformRequestSanitizeTransform = (body: Record<string, unknown>) => void;
+
+/** Inbound OpenAI Chat Completions JSON sanitize (before cross-protocol conversion). */
+export type PlatformChatResponseSanitizeTransform = (body: Record<string, unknown>) => void;
 
 export const REQUEST_OVERRIDE_REGISTRY: Readonly<Record<string, PlatformRequestOverrideTransform>> =
   {
@@ -83,6 +87,12 @@ export const REQUEST_SANITIZE_REGISTRY: Readonly<Record<string, PlatformRequestS
     "minimax-chat-sanitize": minimaxChatSanitize,
   };
 
+export const CHAT_RESPONSE_SANITIZE_REGISTRY: Readonly<
+  Record<string, PlatformChatResponseSanitizeTransform>
+> = {
+  "longcat-xml-tool-calls": sanitizeLongcatChatCompletion,
+};
+
 export { passthroughTransform, isPlainObject } from "./passthrough";
 export { glmFlattenContentTransform } from "./glm/messages";
 export { mimoAnnotationsWebSearchResponseTransform } from "./xiaomimimo/responses";
@@ -105,6 +115,11 @@ export { geminiThoughtTagsResponseTransform } from "./gemini/response-thoughts";
 export { minimaxChatSanitize } from "./minimax/request-sanitize";
 export { minimaxReasoningDetailsResponseTransform } from "./minimax/response-reasoning";
 export { customToFunctionShim, openaiChatStrictToolsSanitize } from "./openai-chat-strict-tools";
+export {
+  extractLongcatToolCalls,
+  parseLongcatArgValue,
+  sanitizeLongcatChatCompletion,
+} from "./longcat/chat-tool-calls";
 
 /** @deprecated Prefer `TOOL_TRANSFORM_REGISTRY`. */
 export const TRANSFORM_REGISTRY = TOOL_TRANSFORM_REGISTRY;
