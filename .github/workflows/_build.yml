@@ -333,14 +333,23 @@ jobs:
           APPLE_TEAM_ID: ${{ matrix.platform == 'mac' && secrets.APPLE_TEAM_ID || '' }}
         run: |
           set -euo pipefail
+          # Pin channel to "latest" so app-update.yml requests latest-mac.yml /
+          # latest.yml. Without this, electron-builder derives the channel from
+          # the version prerelease (e.g. 0.2.9-dev.N → "dev") and the client
+          # looks for missing files like dev-mac.yml. Feed separation is already
+          # handled by distinct channel-* publish URLs.
           node -e "
             const fs = require('fs');
             const p = 'package.json';
             const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
             pkg.build = pkg.build || {};
-            pkg.build.publish = { provider: 'generic', url: process.env.PUBLISH_URL };
+            pkg.build.publish = {
+              provider: 'generic',
+              url: process.env.PUBLISH_URL,
+              channel: 'latest',
+            };
             fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n');
-            console.log('publish.url =', pkg.build.publish.url);
+            console.log('publish.url =', pkg.build.publish.url, 'channel =', pkg.build.publish.channel);
           "
           npx electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never
 
@@ -630,6 +639,19 @@ jobs:
               --notes "Rolling auto-update manifests for the ${CHANNEL} channel. Not a downloadable build."
           fi
           gh release upload "$TAG" release-metadata/* --clobber
+          # Older/dev builds whose version prerelease is "dev" (e.g. 0.2.9-dev.N)
+          # still request ${CHANNEL}-mac.yml / ${CHANNEL}.yml. Mirror latest-* so
+          # those clients keep updating until they pick up channel: latest builds.
+          if [[ "$CHANNEL" != "prod" && "$CHANNEL" != "latest" ]]; then
+            mkdir -p release-metadata-aliases
+            [[ -f release-metadata/latest-mac.yml ]] && cp release-metadata/latest-mac.yml "release-metadata-aliases/${CHANNEL}-mac.yml"
+            [[ -f release-metadata/latest.yml ]] && cp release-metadata/latest.yml "release-metadata-aliases/${CHANNEL}.yml"
+            shopt -s nullglob
+            aliases=(release-metadata-aliases/*)
+            if [[ ${#aliases[@]} -gt 0 ]]; then
+              gh release upload "$TAG" "${aliases[@]}" --clobber
+            fi
+          fi
 
   publish-openvsx:
     runs-on: ubuntu-latest

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-25 (pre-release)
+
+Pre-release line for 0.3.0.
+
+### Fixed
+
+**Desktop**
+
+- Dev Electron builds can check for updates again: the updater feed always uses `latest-*.yml` (and channel-dev also mirrors `dev-*.yml` for older installs), so prerelease versions no longer 404 on `dev-mac.yml`.
+
 ## [0.2.9] - 2026-07-25
 
 Chat testing lands in the dashboard with multimodal image input. Electron packaged builds can auto-update from the tray. Codex Client Config writes a model catalog and warns when the selected model is stale. Azure Chat conversion and Anthropic streaming through OpenAI-compatible upstreams are more reliable.
