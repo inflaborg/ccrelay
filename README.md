@@ -478,6 +478,7 @@ Each provider supports:
 | `baseUrl`      | —                 | API base URL                                                                             |
 | `mode`         | `"passthrough"`   | `passthrough` (keep auth) or `inject` (replace auth)                                     |
 | `providerType` | `"anthropic"`     | `"anthropic"`, `"openai"` (full passthrough), or `"openai_chat"` (Chat Completions only) |
+| `openaiCompat` | —                 | Optional. Set `azure_openai` for Azure Chat shaping on custom domains (official `*.cognitiveservices.azure.com` is auto-detected) |
 | `apiKey`       | —                 | API key for inject mode. Supports `${ENV_VAR}`.                                          |
 | `authHeader`   | `"authorization"` | Auth header name                                                                         |
 | `modelMap`     | —                 | Model name mappings (`[{pattern, model}]`, wildcards supported)                          |

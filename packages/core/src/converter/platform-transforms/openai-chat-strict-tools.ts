@@ -4,23 +4,8 @@
  */
 
 import { ScopedLogger } from "../../utils/logger";
-import { normalizedHostnameFromBaseUrl } from "./hostname";
 import { isPlainObject } from "./passthrough";
-import { ruleHostnameMatches } from "./ruleHostname";
-import { PLATFORM_TRANSFORM_RULES, type HostedToolRule } from "./rules";
-
-function matchRuleForBaseUrl(baseUrl: string): HostedToolRule | undefined {
-  const hostname = normalizedHostnameFromBaseUrl(baseUrl);
-  if (!hostname) {
-    return undefined;
-  }
-  for (const rule of PLATFORM_TRANSFORM_RULES) {
-    if (ruleHostnameMatches(hostname, rule)) {
-      return rule;
-    }
-  }
-  return undefined;
-}
+import { matchHostedToolRuleForBaseUrl, type PlatformMatchOptions } from "./matchRule";
 
 const log = new ScopedLogger("PlatformStrictTools");
 
@@ -123,9 +108,10 @@ function normalizeToolChoiceAfterDrop(
  */
 export function openaiChatStrictToolsSanitize(
   body: Record<string, unknown>,
-  baseUrl: string
+  baseUrl: string,
+  options?: PlatformMatchOptions
 ): void {
-  const rule = matchRuleForBaseUrl(baseUrl);
+  const rule = matchHostedToolRuleForBaseUrl(baseUrl, options);
   if (!rule?.strictTools) {
     return;
   }

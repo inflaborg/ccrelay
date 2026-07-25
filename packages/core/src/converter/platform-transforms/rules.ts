@@ -101,6 +101,8 @@ export const PLATFORM_TRANSFORM_RULES: readonly PlatformTransformRule[] = [
     requestOverride: "azure-web-search-to-responses",
     responses: "azure-responses-web-search",
     requestSanitize: "azure-chat-sanitize",
+    // Chat Completions schema rejects Responses `custom` tools and non-function types.
+    strictTools: true,
   },
   {
     provider: "gemini",

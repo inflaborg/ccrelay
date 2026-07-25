@@ -383,6 +383,8 @@
       "type": "Type",
       "typeOpenaiFull": "OpenAI (Full)",
       "typeOpenaiChatOnly": "OpenAI (Chat Only)",
+      "azureChatCompat": "Azure Chat compatibility",
+      "azureChatCompatHelp": "Enable for Azure OpenAI or Azure-compatible routers on custom domains (maps developer→system, shims custom tools). Official *.cognitiveservices.azure.com hosts are detected automatically.",
       "modePassthrough": "Passthrough",
       "modeInject": "Inject",
       "apiKey": "API Key",

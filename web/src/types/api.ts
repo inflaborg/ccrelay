@@ -23,6 +23,8 @@ export interface Provider {
   customModelsList?: string[];
   /** Read-only: true when this provider ID is in the global webSearch.providers list. */
   webSearchEnabled?: boolean;
+  /** When `azure_openai`, apply Azure Chat Completions sanitization (custom domains). */
+  openaiCompat?: "default" | "azure_openai";
 }
 
 export interface ProvidersResponse {
@@ -71,6 +73,8 @@ export interface AddProviderRequest {
   useCustomModelsList?: boolean;
   /** Each entry: `realId`, `realId;displayName`, or `realId;displayName;alias` (see Provider.customModelsList). */
   customModelsList?: string[];
+  /** When `azure_openai`, apply Azure Chat Completions sanitization (custom domains). */
+  openaiCompat?: "default" | "azure_openai";
 }
 
 export interface AddProviderResponse {

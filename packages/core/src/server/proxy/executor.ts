@@ -1304,7 +1304,8 @@ export class ProxyExecutor {
         const openaiResponse = JSON.parse(responseBody) as OpenAIChatCompletionResponse;
         applyPlatformChatResponseSanitize(
           openaiResponse as unknown as Record<string, unknown>,
-          provider.baseUrl
+          provider.baseUrl,
+          { openaiCompat: provider.openaiCompat }
         );
         const anthropicResponse = convertResponseToAnthropic(
           openaiResponse,
@@ -1313,7 +1314,8 @@ export class ProxyExecutor {
         anthropicResponse.content = applyPlatformResponseTransforms(
           openaiResponse as unknown as Record<string, unknown>,
           anthropicResponse.content,
-          provider.baseUrl
+          provider.baseUrl,
+          { openaiCompat: provider.openaiCompat }
         );
 
         ctx.responseChunks.push(Buffer.from(JSON.stringify(anthropicResponse), "utf-8"));
@@ -1418,7 +1420,8 @@ export class ProxyExecutor {
         anthropicResponse.content = applyPlatformResponseTransforms(
           parsed,
           anthropicResponse.content,
-          provider.baseUrl
+          provider.baseUrl,
+          { openaiCompat: provider.openaiCompat }
         );
 
         ctx.responseChunks.push(Buffer.from(JSON.stringify(anthropicResponse), "utf-8"));
@@ -1649,7 +1652,8 @@ export class ProxyExecutor {
         const openaiResponse = JSON.parse(jsonBody) as OpenAIChatCompletionResponse;
         applyPlatformChatResponseSanitize(
           openaiResponse as unknown as Record<string, unknown>,
-          provider.baseUrl
+          provider.baseUrl,
+          { openaiCompat: provider.openaiCompat }
         );
         const out = convertChatCompletionToResponses(
           openaiResponse,
@@ -1765,7 +1769,9 @@ export class ProxyExecutor {
 
     const state = createStreamingState({
       echo: task.originalResponsesEcho,
-      bufferContentForToolParse: platformBuffersChatContentForToolParse(provider.baseUrl),
+      bufferContentForToolParse: platformBuffersChatContentForToolParse(provider.baseUrl, {
+        openaiCompat: provider.openaiCompat,
+      }),
     });
     const upstreamLog: Buffer[] = [];
 

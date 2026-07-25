@@ -6,13 +6,8 @@ import type { AnthropicSseEventRow } from "./glm/anthropic-sse-emitter";
 
 import type { OpenAIMessage } from "../adapters/anthropic-to-openai-chat-request";
 import type { AnthropicContentBlock } from "../adapters/openai-chat-to-anthropic-response";
-import { normalizedHostnameFromBaseUrl } from "./hostname";
-import { ruleHostnameMatches } from "./ruleHostname";
-import {
-  PLATFORM_TRANSFORM_RULES,
-  type HostedToolRule,
-  type PlatformRequestOverrideResult,
-} from "./rules";
+import { matchHostedToolRuleForBaseUrl, type PlatformMatchOptions } from "./matchRule";
+import { type HostedToolRule, type PlatformRequestOverrideResult } from "./rules";
 import {
   MESSAGE_TRANSFORM_REGISTRY,
   REQUEST_OVERRIDE_REGISTRY,
@@ -31,6 +26,9 @@ export type {
   PlatformRequestOverrideResult,
   PlatformRequestOverrideTransform,
 } from "./rules";
+
+export type { PlatformMatchOptions } from "./matchRule";
+export { matchHostedToolRuleForBaseUrl } from "./matchRule";
 
 export type {
   HostedToolTransform,
@@ -104,21 +102,7 @@ export interface PlatformOutboundQueryRouting {
   targetUrl: string;
   targetQuery: string;
   targetPath: string;
-  provider: { baseUrl: string };
-}
-
-/** First matching provider rule wins (preserve `PLATFORM_TRANSFORM_RULES` order). */
-export function matchHostedToolRuleForBaseUrl(baseUrl: string): HostedToolRule | undefined {
-  const hostname = normalizedHostnameFromBaseUrl(baseUrl);
-  if (!hostname) {
-    return undefined;
-  }
-  for (const rule of PLATFORM_TRANSFORM_RULES) {
-    if (ruleHostnameMatches(hostname, rule)) {
-      return rule;
-    }
-  }
-  return undefined;
+  provider: { baseUrl: string; openaiCompat?: PlatformMatchOptions["openaiCompat"] };
 }
 
 /**
@@ -126,7 +110,9 @@ export function matchHostedToolRuleForBaseUrl(baseUrl: string): HostedToolRule |
  * without a query string (hostname-driven; no provider-specific code in callers).
  */
 export function applyPlatformQueryPolicy(routing: PlatformOutboundQueryRouting): void {
-  const rule = matchHostedToolRuleForBaseUrl(routing.provider.baseUrl);
+  const rule = matchHostedToolRuleForBaseUrl(routing.provider.baseUrl, {
+    openaiCompat: routing.provider.openaiCompat,
+  });
   if (!rule?.stripQuery || !routing.targetQuery) {
     return;
   }
@@ -137,71 +123,39 @@ export function applyPlatformQueryPolicy(routing: PlatformOutboundQueryRouting):
 }
 
 /** Match first rule that declares outbound `responses` transforms. */
-function matchPlatformResponseRule(baseUrl: string): HostedToolRule | undefined {
-  const hostname = normalizedHostnameFromBaseUrl(baseUrl);
-  if (!hostname) {
-    return undefined;
-  }
-  for (const rule of PLATFORM_TRANSFORM_RULES) {
-    if (!rule.responses) {
-      continue;
-    }
-    if (ruleHostnameMatches(hostname, rule)) {
-      return rule;
-    }
-  }
-  return undefined;
+function matchPlatformResponseRule(
+  baseUrl: string,
+  options?: PlatformMatchOptions
+): HostedToolRule | undefined {
+  const rule = matchHostedToolRuleForBaseUrl(baseUrl, options);
+  return rule?.responses ? rule : undefined;
 }
 
 /** Match first rule that declares `messages` transforms. */
-function matchPlatformMessageRule(baseUrl: string): HostedToolRule | undefined {
-  const hostname = normalizedHostnameFromBaseUrl(baseUrl);
-  if (!hostname) {
-    return undefined;
-  }
-  for (const rule of PLATFORM_TRANSFORM_RULES) {
-    if (!rule.messages) {
-      continue;
-    }
-    if (ruleHostnameMatches(hostname, rule)) {
-      return rule;
-    }
-  }
-  return undefined;
+function matchPlatformMessageRule(
+  baseUrl: string,
+  options?: PlatformMatchOptions
+): HostedToolRule | undefined {
+  const rule = matchHostedToolRuleForBaseUrl(baseUrl, options);
+  return rule?.messages ? rule : undefined;
 }
 
 /** Match first rule that declares `requestOverride` transforms. */
-function matchRequestOverrideRule(baseUrl: string): HostedToolRule | undefined {
-  const hostname = normalizedHostnameFromBaseUrl(baseUrl);
-  if (!hostname) {
-    return undefined;
-  }
-  for (const rule of PLATFORM_TRANSFORM_RULES) {
-    if (!rule.requestOverride) {
-      continue;
-    }
-    if (ruleHostnameMatches(hostname, rule)) {
-      return rule;
-    }
-  }
-  return undefined;
+function matchRequestOverrideRule(
+  baseUrl: string,
+  options?: PlatformMatchOptions
+): HostedToolRule | undefined {
+  const rule = matchHostedToolRuleForBaseUrl(baseUrl, options);
+  return rule?.requestOverride ? rule : undefined;
 }
 
 /** Match first rule that declares inbound Anthropic SSE buffered transforms. */
-export function matchAnthropicSseRule(baseUrl: string): HostedToolRule | undefined {
-  const hostname = normalizedHostnameFromBaseUrl(baseUrl);
-  if (!hostname) {
-    return undefined;
-  }
-  for (const rule of PLATFORM_TRANSFORM_RULES) {
-    if (!rule.anthropicSse) {
-      continue;
-    }
-    if (ruleHostnameMatches(hostname, rule)) {
-      return rule;
-    }
-  }
-  return undefined;
+export function matchAnthropicSseRule(
+  baseUrl: string,
+  options?: PlatformMatchOptions
+): HostedToolRule | undefined {
+  const rule = matchHostedToolRuleForBaseUrl(baseUrl, options);
+  return rule?.anthropicSse ? rule : undefined;
 }
 
 /**
@@ -210,10 +164,11 @@ export function matchAnthropicSseRule(baseUrl: string): HostedToolRule | undefin
  */
 export function normalizeToolForProvider(
   tool: Record<string, unknown>,
-  baseUrl: string
+  baseUrl: string,
+  options?: PlatformMatchOptions
 ): Record<string, unknown> {
   const toolType = typeof tool.type === "string" ? tool.type : "";
-  const rule = matchHostedToolRuleForBaseUrl(baseUrl);
+  const rule = matchHostedToolRuleForBaseUrl(baseUrl, options);
   const transformName = rule?.tools?.[toolType] ?? "passthrough";
   const transform = TOOL_TRANSFORM_REGISTRY[transformName] ?? passthroughTransform;
   return transform(tool);
@@ -230,13 +185,14 @@ export interface NormalizeToolsResult {
 export function normalizeToolsForProvider(
   tools: Record<string, unknown>[],
   baseUrl: string,
-  toolChoice?: unknown
+  toolChoice?: unknown,
+  options?: PlatformMatchOptions
 ): NormalizeToolsResult {
   if (tools.length === 0) {
     return { tools, toolChoice };
   }
 
-  const normalized = tools.map(t => normalizeToolForProvider(t, baseUrl));
+  const normalized = tools.map(t => normalizeToolForProvider(t, baseUrl, options));
   return { tools: normalized, toolChoice };
 }
 
@@ -244,9 +200,10 @@ export function normalizeToolsForProvider(
 export function applyPlatformToolTransforms(
   tools: Record<string, unknown>[],
   baseUrl: string,
-  toolChoice?: unknown
+  toolChoice?: unknown,
+  options?: PlatformMatchOptions
 ): NormalizeToolsResult {
-  return normalizeToolsForProvider(tools, baseUrl, toolChoice);
+  return normalizeToolsForProvider(tools, baseUrl, toolChoice, options);
 }
 
 /**
@@ -255,9 +212,10 @@ export function applyPlatformToolTransforms(
 export function applyPlatformRequestOverride(
   chatBody: Record<string, unknown>,
   chatPath: string,
-  baseUrl: string
+  baseUrl: string,
+  options?: PlatformMatchOptions
 ): PlatformRequestOverrideResult | null {
-  const rule = matchRequestOverrideRule(baseUrl);
+  const rule = matchRequestOverrideRule(baseUrl, options);
   if (!rule?.requestOverride) {
     return null;
   }
@@ -268,9 +226,10 @@ export function applyPlatformRequestOverride(
 /** Apply per-provider outbound message transforms inside Chat bodies. */
 export function applyPlatformMessageTransforms(
   messages: OpenAIMessage[],
-  baseUrl: string
+  baseUrl: string,
+  options?: PlatformMatchOptions
 ): OpenAIMessage[] {
-  const rule = matchPlatformMessageRule(baseUrl);
+  const rule = matchPlatformMessageRule(baseUrl, options);
   if (!rule?.messages) {
     return messages;
   }
@@ -284,8 +243,12 @@ export function applyPlatformMessageTransforms(
 /**
  * Apply outbound Chat Completions body sanitization when the platform rule declares `requestSanitize`.
  */
-export function applyPlatformRequestSanitize(body: Record<string, unknown>, baseUrl: string): void {
-  const rule = matchHostedToolRuleForBaseUrl(baseUrl);
+export function applyPlatformRequestSanitize(
+  body: Record<string, unknown>,
+  baseUrl: string,
+  options?: PlatformMatchOptions
+): void {
+  const rule = matchHostedToolRuleForBaseUrl(baseUrl, options);
   const key = rule?.requestSanitize;
   if (!key) {
     return;
@@ -300,9 +263,10 @@ export function applyPlatformRequestSanitize(body: Record<string, unknown>, base
  */
 export function applyPlatformChatResponseSanitize(
   body: Record<string, unknown>,
-  baseUrl: string
+  baseUrl: string,
+  options?: PlatformMatchOptions
 ): void {
-  const rule = matchHostedToolRuleForBaseUrl(baseUrl);
+  const rule = matchHostedToolRuleForBaseUrl(baseUrl, options);
   const key = rule?.chatResponseSanitize;
   if (!key) {
     return;
@@ -312,8 +276,11 @@ export function applyPlatformChatResponseSanitize(
 }
 
 /** True when the platform rule buffers streamed assistant text to rewrite tool XML at finish. */
-export function platformBuffersChatContentForToolParse(baseUrl: string): boolean {
-  const rule = matchHostedToolRuleForBaseUrl(baseUrl);
+export function platformBuffersChatContentForToolParse(
+  baseUrl: string,
+  options?: PlatformMatchOptions
+): boolean {
+  const rule = matchHostedToolRuleForBaseUrl(baseUrl, options);
   return typeof rule?.chatResponseSanitize === "string" && rule.chatResponseSanitize.length > 0;
 }
 
@@ -323,9 +290,10 @@ export function platformBuffersChatContentForToolParse(baseUrl: string): boolean
 export function applyPlatformResponseTransforms(
   openaiCompletionBody: Record<string, unknown>,
   anthropicContent: AnthropicContentBlock[],
-  baseUrl: string
+  baseUrl: string,
+  options?: PlatformMatchOptions
 ): AnthropicContentBlock[] {
-  const rule = matchPlatformResponseRule(baseUrl);
+  const rule = matchPlatformResponseRule(baseUrl, options);
   if (!rule?.responses) {
     return anthropicContent;
   }
@@ -342,9 +310,10 @@ export function applyPlatformResponseTransforms(
  */
 export function applyAnthropicSseRowsPlatformTransform(
   rows: AnthropicSseEventRow[],
-  baseUrl: string
+  baseUrl: string,
+  options?: PlatformMatchOptions
 ): AnthropicSseEventRow[] {
-  const rule = matchAnthropicSseRule(baseUrl);
+  const rule = matchAnthropicSseRule(baseUrl, options);
   if (!rule?.anthropicSse) {
     return rows;
   }
