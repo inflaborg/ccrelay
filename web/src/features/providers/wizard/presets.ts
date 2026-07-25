@@ -301,6 +301,7 @@ const PARTNER_PRESETS_LIST: PartnerPreset[] = [
         urlTemplate: "{userBaseUrl}",
         idSuffix: "gpt",
         nameSuffix: "",
+        overrides: { openaiCompat: "azure_openai" },
       },
     ],
   },

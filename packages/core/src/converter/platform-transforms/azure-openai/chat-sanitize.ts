@@ -1,6 +1,6 @@
 /**
- * Azure OpenAI Chat Completions: strip fields the upstream rejects when relaying
- * from Anthropic-shaped cross-protocol conversion.
+ * Azure OpenAI Chat Completions: strip / rewrite fields the upstream rejects when
+ * relaying from Responses, Anthropic, or Codex-shaped conversion.
  */
 
 function stripCacheControlFromContent(content: unknown): unknown {
@@ -18,6 +18,11 @@ function stripCacheControlFromContent(content: unknown): unknown {
 }
 
 function sanitizeMessageRecord(msg: Record<string, unknown>): void {
+  // Azure Chat Completions OpenAPI enum: system | user | assistant | tool.
+  if (msg.role === "developer") {
+    msg.role = "system";
+  }
+
   delete msg.thinking;
   msg.content = stripCacheControlFromContent(msg.content);
 
@@ -34,7 +39,8 @@ function sanitizeMessageRecord(msg: Record<string, unknown>): void {
 
 /**
  * Strip legacy nested `reasoning`, message `thinking`, `cache_control` on content parts,
- * and `extra_content` on tool_calls. Top-level `reasoning_effort` (Chat Completions wire) is kept.
+ * and `extra_content` on tool_calls. Map `developer` → `system`. Top-level
+ * `reasoning_effort` (Chat Completions wire) is kept.
  */
 export function azureChatSanitize(data: Record<string, unknown>): void {
   delete data.reasoning;

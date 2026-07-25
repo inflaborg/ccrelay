@@ -64,7 +64,11 @@ function applyAnthropicOutboundSanitizeIfNeeded(
   return sanitizeAnthropicOutboundBody(body);
 }
 
-function applyHostedToolsToOpenAiChatRecord(data: Record<string, unknown>, baseUrl: string): void {
+function applyHostedToolsToOpenAiChatRecord(
+  data: Record<string, unknown>,
+  baseUrl: string,
+  openaiCompat?: RoutingContext["provider"]["openaiCompat"]
+): void {
   const tools = data.tools;
   if (!Array.isArray(tools) || tools.length === 0) {
     return;
@@ -72,7 +76,8 @@ function applyHostedToolsToOpenAiChatRecord(data: Record<string, unknown>, baseU
   const { tools: outTools, toolChoice } = normalizeToolsForProvider(
     tools as Record<string, unknown>[],
     baseUrl,
-    data.tool_choice
+    data.tool_choice,
+    { openaiCompat }
   );
   data.tools = outTools;
   if (toolChoice !== undefined) {
@@ -82,19 +87,23 @@ function applyHostedToolsToOpenAiChatRecord(data: Record<string, unknown>, baseU
 
 function applyPlatformMessagesToOpenAiChatRecord(
   data: Record<string, unknown>,
-  baseUrl: string
+  baseUrl: string,
+  openaiCompat?: RoutingContext["provider"]["openaiCompat"]
 ): void {
   const messages = data.messages;
   if (!Array.isArray(messages) || messages.length === 0) {
     return;
   }
-  data.messages = applyPlatformMessageTransforms(messages as OpenAIMessage[], baseUrl);
+  data.messages = applyPlatformMessageTransforms(messages as OpenAIMessage[], baseUrl, {
+    openaiCompat,
+  });
 }
 
 function applyPlatformTransformsToOpenAiChatBody(
   body: Buffer,
   baseUrl: string,
-  clientModelHint?: string
+  clientModelHint?: string,
+  openaiCompat?: RoutingContext["provider"]["openaiCompat"]
 ): Buffer {
   if (!body.length) {
     return body;
@@ -104,12 +113,13 @@ function applyPlatformTransformsToOpenAiChatBody(
     if (!isOpenAIChatCompletionsRequest(data)) {
       return body;
     }
+    const matchOpts = { openaiCompat };
     normalizeOpenAiChatMaxOutputFields(data, clientModelHint);
     ensureOpenAiChatStreamUsageIncluded(data);
-    applyHostedToolsToOpenAiChatRecord(data, baseUrl);
-    openaiChatStrictToolsSanitize(data, baseUrl);
-    applyPlatformMessagesToOpenAiChatRecord(data, baseUrl);
-    applyPlatformRequestSanitize(data, baseUrl);
+    applyHostedToolsToOpenAiChatRecord(data, baseUrl, openaiCompat);
+    openaiChatStrictToolsSanitize(data, baseUrl, matchOpts);
+    applyPlatformMessagesToOpenAiChatRecord(data, baseUrl, openaiCompat);
+    applyPlatformRequestSanitize(data, baseUrl, matchOpts);
     sanitizeOpenAiChatToolArgumentsInMessages(data.messages);
     sanitizeOpenAiChatRequestRecord(data);
     return Buffer.from(JSON.stringify(data), "utf-8");
@@ -324,7 +334,8 @@ export class BodyProcessor {
           const override = applyPlatformRequestOverride(
             parsed,
             result.newPath,
-            routing.provider.baseUrl
+            routing.provider.baseUrl,
+            { openaiCompat: routing.provider.openaiCompat }
           );
           if (override) {
             nextBody = Buffer.from(JSON.stringify(override.body), "utf-8");
@@ -364,7 +375,8 @@ export class BodyProcessor {
       body = applyPlatformTransformsToOpenAiChatBody(
         body,
         routing.provider.baseUrl,
-        clientWireModel
+        clientWireModel,
+        routing.provider.openaiCompat
       );
     }
 
@@ -383,7 +395,9 @@ export class BodyProcessor {
       routing.method === "POST" &&
       routing.targetPath === "/v1/messages" &&
       body.length > 0 &&
-      matchAnthropicSseRule(routing.provider.baseUrl)?.anthropicSse
+      matchAnthropicSseRule(routing.provider.baseUrl, {
+        openaiCompat: routing.provider.openaiCompat,
+      })?.anthropicSse
     ) {
       try {
         const d = JSON.parse(body.toString("utf-8")) as Record<string, unknown>;
@@ -481,7 +495,11 @@ export class BodyProcessor {
         providerBaseUrl: routing.provider.baseUrl,
       });
       const chatReq = chat.request as unknown as Record<string, unknown>;
-      applyHostedToolsToOpenAiChatRecord(chatReq, routing.provider.baseUrl);
+      applyHostedToolsToOpenAiChatRecord(
+        chatReq,
+        routing.provider.baseUrl,
+        routing.provider.openaiCompat
+      );
       const c = convertOpenAIRequestToAnthropic(
         chatReq as unknown as Parameters<typeof convertOpenAIRequestToAnthropic>[0],
         chat.newPath
@@ -507,7 +525,11 @@ export class BodyProcessor {
       if (!isOpenAIChatCompletionsRequest(oai)) {
         return null;
       }
-      applyHostedToolsToOpenAiChatRecord(oai, routing.provider.baseUrl);
+      applyHostedToolsToOpenAiChatRecord(
+        oai,
+        routing.provider.baseUrl,
+        routing.provider.openaiCompat
+      );
       const c = convertOpenAIRequestToAnthropic(
         oai as unknown as Parameters<typeof convertOpenAIRequestToAnthropic>[0],
         routing.targetPath

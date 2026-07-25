@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 
 const MIMO_API = "https://api.xiaomimimo.com/v1/chat/completions";
 const MIMO_TOKEN_PLAN = "https://token-plan-sgp.xiaomimimo.com/v1/chat/completions";
+const AZURE = "https://example.cognitiveservices.azure.com/openai/v1/chat/completions";
 const UNKNOWN = "https://api.openai.com/v1/chat/completions";
 
 function fnTool(name: string): Record<string, unknown> {
@@ -138,5 +139,30 @@ describe("openaiChatStrictToolsSanitize", () => {
     };
     openaiChatStrictToolsSanitize(body, MIMO_TOKEN_PLAN);
     expect(body.tools).toBeUndefined();
+  });
+
+  it("shims Codex custom exec to function on Azure OpenAI", () => {
+    const body: Record<string, unknown> = {
+      tools: [
+        {
+          type: "custom",
+          name: "exec",
+          description: "Run JS",
+          format: { type: "grammar", syntax: "lark", definition: "start: SOURCE" },
+        },
+        fnTool("wait"),
+      ],
+    };
+    openaiChatStrictToolsSanitize(body, AZURE);
+    const tools = body.tools as Record<string, unknown>[];
+    expect(tools).toHaveLength(2);
+    expect(tools[0]).toMatchObject({
+      type: "function",
+      function: { name: "exec" },
+    });
+    expect(tools[1]).toMatchObject({
+      type: "function",
+      function: { name: "wait" },
+    });
   });
 });

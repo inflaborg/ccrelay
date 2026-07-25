@@ -6,6 +6,7 @@
 
 import type { ResponsesRequestEcho } from "../../types";
 import type {
+  OpenAIContent,
   OpenAIMessage,
   OpenAIMessageRequest,
   OpenAITool,
@@ -13,6 +14,7 @@ import type {
 } from "./anthropic-to-openai-chat-request";
 import { assignOpenAiChatMaxOutput } from "../rules/openai-chat-model-rules";
 import { normalizeOpenAiToolCallArgumentsString } from "../rules/openai-tool-call-arguments";
+import { customToFunctionShim } from "../platform-transforms/openai-chat-strict-tools";
 import { isOpenAIChatCompletionsRequest } from "./openai-chat-to-anthropic-request";
 
 /** Collect tools for Responses echo: `function` defs, nested `namespace` bundles (inner tools), and hosted tools (web_search, etc.). */
@@ -301,6 +303,20 @@ function mapResponsesToolChoice(tc: unknown): OpenAIToolChoice | undefined {
   return undefined;
 }
 
+function mapFunctionToolEntry(o: Record<string, unknown>): OpenAITool {
+  return {
+    type: "function",
+    function: {
+      name: typeof o.name === "string" ? o.name : "",
+      description: typeof o.description === "string" ? o.description : undefined,
+      parameters: (o.parameters as Record<string, unknown>) ?? {
+        type: "object",
+        properties: {},
+      },
+    },
+  };
+}
+
 function mapResponsesTools(tools: unknown): OpenAITool[] {
   if (!Array.isArray(tools)) {
     return [];
@@ -313,18 +329,10 @@ function mapResponsesTools(tools: unknown): OpenAITool[] {
     const o = t as Record<string, unknown>;
     const typ = o.type;
     if (typ === "function") {
-      const fnName = typeof o.name === "string" ? o.name : "";
-      out.push({
-        type: "function",
-        function: {
-          name: fnName,
-          description: typeof o.description === "string" ? o.description : undefined,
-          parameters: (o.parameters as Record<string, unknown>) ?? {
-            type: "object",
-            properties: {},
-          },
-        },
-      });
+      out.push(mapFunctionToolEntry(o));
+    } else if (typ === "custom") {
+      // Chat Completions has no `custom` tools — always shim to string-arg function.
+      out.push(customToFunctionShim(o) as OpenAITool);
     } else if (typ === "namespace" && Array.isArray(o.tools)) {
       for (const inner of o.tools as unknown[]) {
         if (!inner || typeof inner !== "object") {
@@ -333,18 +341,9 @@ function mapResponsesTools(tools: unknown): OpenAITool[] {
         const inn = inner as Record<string, unknown>;
         const it = inn.type;
         if (it === "function") {
-          const f = inner as { name?: string; description?: string; parameters?: unknown };
-          out.push({
-            type: "function",
-            function: {
-              name: String(f.name ?? ""),
-              description: typeof f.description === "string" ? f.description : undefined,
-              parameters: (f.parameters as Record<string, unknown>) ?? {
-                type: "object",
-                properties: {},
-              },
-            },
-          });
+          out.push(mapFunctionToolEntry(inn));
+        } else if (it === "custom") {
+          out.push(customToFunctionShim(inn) as OpenAITool);
         } else if (typeof it === "string") {
           out.push(inn as OpenAITool);
         }
@@ -383,6 +382,73 @@ function mapEasyMessageContentToText(content: unknown): string | undefined {
 }
 
 /**
+ * Map Responses message content to Chat Completions content (string or multimodal parts).
+ * Preserves `input_image` as `image_url` so vision requests survive Responses→Chat.
+ */
+function mapEasyMessageContent(content: unknown): string | OpenAIContent[] | undefined {
+  if (typeof content === "string") {
+    return content;
+  }
+  if (!Array.isArray(content)) {
+    return undefined;
+  }
+
+  const parts: OpenAIContent[] = [];
+  let hasImage = false;
+  for (const block of content) {
+    if (!block || typeof block !== "object") {
+      continue;
+    }
+    const b = block as {
+      type?: string;
+      text?: string;
+      image_url?: string | { url?: string };
+    };
+    if (
+      (b.type === "input_text" || b.type === "output_text" || b.type === "text") &&
+      typeof b.text === "string"
+    ) {
+      parts.push({ type: "text", text: b.text });
+      continue;
+    }
+    if (b.type === "input_image") {
+      let url: string | undefined;
+      if (typeof b.image_url === "string") {
+        url = b.image_url;
+      } else if (
+        b.image_url &&
+        typeof b.image_url === "object" &&
+        typeof b.image_url.url === "string"
+      ) {
+        url = b.image_url.url;
+      }
+      if (url) {
+        hasImage = true;
+        parts.push({ type: "image_url", image_url: { url } });
+      }
+    }
+  }
+
+  if (parts.length === 0) {
+    return undefined;
+  }
+  if (!hasImage && parts.every(p => p.type === "text")) {
+    return parts
+      .filter((p): p is { type: "text"; text: string } => p.type === "text")
+      .map(p => p.text)
+      .join("\n");
+  }
+  return parts;
+}
+
+function messageContentIsEmpty(content: string | OpenAIContent[]): boolean {
+  if (typeof content === "string") {
+    return content.length === 0;
+  }
+  return content.length === 0;
+}
+
+/**
  * Map Responses `input` array into Chat `messages` (subset of item types).
  */
 function appendInputItemsToMessages(items: unknown[], messages: OpenAIMessage[]): void {
@@ -411,22 +477,16 @@ function appendInputItemsToMessages(items: unknown[], messages: OpenAIMessage[])
       const role = o.role;
       const r = typeof role === "string" ? role : "user";
       if (r === "user" || r === "system" || r === "developer" || r === "assistant") {
-        const text =
-          mapEasyMessageContentToText(o.content) ??
-          (typeof o.content === "string" ? o.content : "");
+        const mapped =
+          mapEasyMessageContent(o.content) ?? (typeof o.content === "string" ? o.content : "");
+        // Chat Completions gateways (Azure and many routers) reject `developer`.
         const oaiRole: OpenAIMessage["role"] =
-          r === "developer"
-            ? "developer"
-            : r === "system"
-              ? "system"
-              : r === "assistant"
-                ? "assistant"
-                : "user";
-        // Skip empty assistant/developer/system placeholders (e.g. unmapped content types).
-        if (!text && oaiRole !== "user") {
+          r === "developer" || r === "system" ? "system" : r === "assistant" ? "assistant" : "user";
+        // Skip empty assistant/system placeholders (e.g. unmapped content types).
+        if (messageContentIsEmpty(mapped) && oaiRole !== "user") {
           continue;
         }
-        messages.push({ role: oaiRole, content: text });
+        messages.push({ role: oaiRole, content: mapped });
       }
       continue;
     }

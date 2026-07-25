@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.9] - 2026-07-25 (pre-release)
+
+Pre-release line for 0.2.9.
+
+### Fixed
+
+**Protocol/Conversion**
+
+- Codex Responses traffic converted to Chat Completions no longer fails validation on Azure or Azure-compatible Chat gateways: `developer` roles map to `system`, freeform `custom` tools are shimmed to `function`, and `input_image` blocks are preserved as Chat `image_url` parts.
+- Custom-domain Azure-compatible routers (not only `*.cognitiveservices.azure.com`) can opt into the same Chat sanitization with provider field `openaiCompat: azure_openai`.
+
+### Changed
+
+**Config**
+
+- Provider field `openaiCompat` is active again for Azure Chat shaping on custom hostnames; official Azure Cognitive Services hosts remain auto-detected.
+
 ## [0.2.8] - 2026-07-24
 
 Gateway and Claude Code compatibility is tighter on Azure and similar Anthropic routes. Responses clients keep tools and history when upstream is Chat, and Meituan LongCat is easier to set up and use. Provider editing can test endpoints without re-entering a masked API key; GLM OpenAI hosted web search and the GLM web-search backend are gone.

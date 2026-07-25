@@ -479,6 +479,7 @@ CCRelay 使用 `~/.ccrelay/config.yaml`（首次启动时自动创建）。启�
 | `baseUrl`      | —                 | API 基础 URL                                                                   |
 | `mode`         | `"passthrough"`   | `passthrough`（保留认证）或 `inject`（替换认证）                               |
 | `providerType` | `"anthropic"`     | `"anthropic"`、`"openai"`（完全透传）或 `"openai_chat"`（仅 Chat Completions） |
+| `openaiCompat` | —                 | 可选。自定义域名上的 Azure Chat 整形设为 `azure_openai`（官方 `*.cognitiveservices.azure.com` 会自动识别） |
 | `apiKey`       | —                 | inject 模式的 API Key。支持 `${ENV_VAR}`。                                     |
 | `authHeader`   | `"authorization"` | 认证头名称                                                                     |
 | `modelMap`     | —                 | 模型名映射（`[{pattern, model}]`，支持通配符）                                 |

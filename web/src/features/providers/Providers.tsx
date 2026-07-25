@@ -379,6 +379,7 @@ export default function Providers() {
       modelMappingEnabled: provider.modelMappingEnabled !== false,
       useCustomModelsList: Boolean(provider.useCustomModelsList),
       customModelsList: provider.customModelsList,
+      openaiCompat: provider.openaiCompat,
     });
     setModelMapText(modelMap ? yaml.dump(modelMap, { indent: 2, lineWidth: -1 }) : "");
     setModelMapError(null);
@@ -462,6 +463,12 @@ export default function Providers() {
       ...payload,
       useCustomModelsList: formData.useCustomModelsList === true,
       customModelsList: formData.useCustomModelsList === true ? customLines : undefined,
+      openaiCompat:
+        formData.providerType === "openai" || formData.providerType === "openai_chat"
+          ? formData.openaiCompat === "azure_openai"
+            ? "azure_openai"
+            : undefined
+          : undefined,
     };
   };
 
@@ -1207,6 +1214,7 @@ export default function Providers() {
                       setFormData(prev => ({
                         ...prev,
                         providerType: t,
+                        ...(t === "anthropic" ? { openaiCompat: undefined } : {}),
                       }));
                     }}
                     className="h-8 text-xs"
@@ -1225,6 +1233,30 @@ export default function Providers() {
                   />
                 </div>
               </div>
+
+              {(formData.providerType === "openai" || formData.providerType === "openai_chat") && (
+                <div className="flex items-start gap-2 rounded-md border border-border/60 px-3 py-2">
+                  <Checkbox
+                    id="openai-compat-azure"
+                    checked={formData.openaiCompat === "azure_openai"}
+                    onCheckedChange={checked =>
+                      setFormData(prev => ({
+                        ...prev,
+                        openaiCompat: checked === true ? "azure_openai" : undefined,
+                      }))
+                    }
+                    className="mt-0.5"
+                  />
+                  <div className="space-y-0.5">
+                    <Label htmlFor="openai-compat-azure" className="text-xs font-medium">
+                      {t("providers.modal.azureChatCompat")}
+                    </Label>
+                    <p className="text-[10px] text-muted-foreground">
+                      {t("providers.modal.azureChatCompatHelp")}
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* API Key */}
               <div className="space-y-1">

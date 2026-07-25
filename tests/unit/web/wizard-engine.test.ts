@@ -274,6 +274,7 @@ describe("generateProviders", () => {
     expect(out[0].providerType).toBe("openai");
     expect(out[0].authHeader).toBe("authorization");
     expect(out[0].id).toBe("azure-gpt");
+    expect(out[0].openaiCompat).toBe("azure_openai");
   });
 
   it("applies Xiaomi authHeader only for token plan", () => {

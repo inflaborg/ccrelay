@@ -439,8 +439,9 @@ export interface Provider {
    */
   customModelsList?: string[];
   /**
-   * Legacy YAML/API field; parsed for backward compatibility but **ignored** at runtime.
-   * Azure Chat outbound sanitization is selected by upstream hostname (`platform-transforms`).
+   * When `azure_openai`, apply Azure Chat Completions sanitization and strict tools
+   * even if the upstream hostname is a custom Azure-compatible router.
+   * Official `*.cognitiveservices.azure.com` hosts are still matched automatically.
    */
   openaiCompat?: OpenAICompat;
 }

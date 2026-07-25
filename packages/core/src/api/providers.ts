@@ -74,6 +74,7 @@ export function handleListProviders(
     useCustomModelsList: Boolean(p.useCustomModelsList),
     customModelsList: p.useCustomModelsList ? (p.customModelsList ?? []) : undefined,
     webSearchEnabled: webSearchProviders.includes(p.id),
+    ...(p.openaiCompat !== undefined ? { openaiCompat: p.openaiCompat } : {}),
   }));
 
   const response: ProvidersResponse = {
@@ -437,7 +438,7 @@ interface AddProviderRequest {
   headers?: Record<string, string>;
   useCustomModelsList?: boolean;
   customModelsList?: string[];
-  /** @deprecated Ignored at runtime; accepted for backward-compatible YAML/API. */
+  /** @deprecated comment removed — when `azure_openai`, apply Azure Chat sanitization for custom domains. */
   openaiCompat?: "default" | "azure_openai";
 }
 

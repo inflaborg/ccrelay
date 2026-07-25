@@ -8,6 +8,7 @@ import {
   collectResponsesToolsRaw,
 } from "@/converter/adapters/openai-responses-to-chat";
 import {
+  azureChatSanitize,
   normalizeToolsForProvider,
   openaiChatStrictToolsSanitize,
 } from "@/converter/platform-transforms";
@@ -318,7 +319,10 @@ describe("convertResponsesRequestToChatCompletions", () => {
     expect(request.messages).toEqual([{ role: "user", content: "list dirs" }]);
 
     expect(request.tools).toHaveLength(3);
-    expect(request.tools?.[0]).toMatchObject({ type: "custom", name: "exec" });
+    expect(request.tools?.[0]).toMatchObject({
+      type: "function",
+      function: { name: "exec" },
+    });
     expect(request.tools?.[1]).toMatchObject({
       type: "function",
       function: { name: "wait" },
@@ -393,6 +397,43 @@ describe("convertResponsesRequestToChatCompletions", () => {
     ]);
   });
 
+  it("maps developer messages to system and preserves input_image as image_url", () => {
+    const { request } = convertResponsesRequestToChatCompletions(
+      {
+        model: "m",
+        input: [
+          {
+            type: "message",
+            role: "developer",
+            content: [{ type: "input_text", text: "You are Codex." }],
+          },
+          {
+            type: "message",
+            role: "user",
+            content: [
+              { type: "input_text", text: "what is this" },
+              {
+                type: "input_image",
+                image_url: "data:image/png;base64,abc",
+              },
+            ],
+          },
+        ],
+      },
+      "/v1/responses"
+    );
+    expect(request.messages).toEqual([
+      { role: "system", content: "You are Codex." },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "what is this" },
+          { type: "image_url", image_url: { url: "data:image/png;base64,abc" } },
+        ],
+      },
+    ]);
+  });
+
   it("shims additional_tools custom entries for GLM strictTools", () => {
     const { request } = convertResponsesRequestToChatCompletions(
       {
@@ -437,6 +478,63 @@ describe("convertResponsesRequestToChatCompletions", () => {
     });
     const fn = tools[0].function as { description?: string };
     expect(fn.description).toContain("Run JS");
+  });
+
+  it("shims additional_tools custom entries for Azure OpenAI strictTools", () => {
+    const { request } = convertResponsesRequestToChatCompletions(
+      {
+        model: "gpt-5",
+        input: [
+          {
+            type: "additional_tools",
+            role: "developer",
+            tools: [
+              {
+                type: "custom",
+                name: "exec",
+                description: "Run JS",
+                format: { type: "grammar", syntax: "lark", definition: "start: SOURCE" },
+              },
+              {
+                type: "function",
+                name: "wait",
+                description: "Wait on exec",
+                parameters: {
+                  type: "object",
+                  properties: { cell_id: { type: "string" } },
+                  required: ["cell_id"],
+                },
+              },
+            ],
+          },
+          {
+            type: "message",
+            role: "developer",
+            content: [{ type: "input_text", text: "You are Codex." }],
+          },
+          { type: "message", role: "user", content: "run" },
+        ],
+      },
+      "/v1/responses"
+    );
+    const body = { ...request } as unknown as Record<string, unknown>;
+    openaiChatStrictToolsSanitize(body, "https://example.cognitiveservices.azure.com/openai/v1");
+    azureChatSanitize(body);
+
+    const messages = body.messages as { role: string; content: string }[];
+    expect(messages.map(m => m.role)).toEqual(["system", "user"]);
+    expect(messages[0].content).toBe("You are Codex.");
+
+    const tools = body.tools as Record<string, unknown>[];
+    expect(tools).toHaveLength(2);
+    expect(tools[0]).toMatchObject({
+      type: "function",
+      function: { name: "exec" },
+    });
+    expect(tools[1]).toMatchObject({
+      type: "function",
+      function: { name: "wait" },
+    });
   });
 });
 

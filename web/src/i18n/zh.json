@@ -383,6 +383,8 @@
       "type": "类型",
       "typeOpenaiFull": "OpenAI（完整）",
       "typeOpenaiChatOnly": "OpenAI（仅 Chat）",
+      "azureChatCompat": "Azure Chat 兼容",
+      "azureChatCompatHelp": "用于 Azure OpenAI 或自定义域名的 Azure 兼容网关（developer→system，custom 工具转 function）。官方 *.cognitiveservices.azure.com 会自动识别。",
       "modePassthrough": "透传",
       "modeInject": "注入",
       "apiKey": "API 密钥",
