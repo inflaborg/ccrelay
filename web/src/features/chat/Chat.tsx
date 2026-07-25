@@ -51,6 +51,8 @@ export default function Chat() {
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  /** True while IME (e.g. Chinese Pinyin) has an open candidate window. */
+  const imeComposingRef = useRef(false);
 
   const focusInput = useCallback(() => {
     // Keep caret in the composer after Enter / Send / Stop.
@@ -327,10 +329,24 @@ export default function Chat() {
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      void handleSend();
+    if (e.key !== "Enter" || e.shiftKey) {
+      return;
     }
+    // IME candidate confirm uses Enter — must not send mid-composition.
+    // keyCode 229 is the legacy "IME processing" signal some browsers still emit.
+    if (e.nativeEvent.isComposing || imeComposingRef.current || e.keyCode === 229) {
+      return;
+    }
+    e.preventDefault();
+    void handleSend();
+  };
+
+  const onCompositionStart = () => {
+    imeComposingRef.current = true;
+  };
+
+  const onCompositionEnd = () => {
+    imeComposingRef.current = false;
   };
 
   if (providersLoading) {
@@ -536,6 +552,8 @@ export default function Chat() {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={onKeyDown}
+            onCompositionStart={onCompositionStart}
+            onCompositionEnd={onCompositionEnd}
             rows={2}
             placeholder={t("chat.inputPlaceholder")}
             disabled={!activeSession?.model}
