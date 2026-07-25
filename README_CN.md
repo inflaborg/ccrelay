@@ -62,6 +62,7 @@
 **桌面与 UI**
 
 - 可选 Electron 或 Tauri 桌面应用——无需打开 VS Code 即可运行 CCRelay
+- Electron 正式安装包支持自动检查更新，并可从托盘菜单安装
 - Web 管理面板：提供商管理、设置、i18n（中英文）
 - Provider 导入/导出为 JSON 文件
 
@@ -137,6 +138,7 @@ npm run compile        # 或 npm run watch
 - 共用 `~/.ccrelay/` 配置、状态和 Leader 选举
 - 请求日志使用进程内 SQLite（默认桌面构建无需系统 `sqlite3` 命令）
 - 托盘菜单 → **打开控制台** 在应用窗口内加载 Web UI；**打开日志目录** 可打开 `~/.ccrelay/logs/` 下的运行诊断日志
+- 正式安装包会自动检查更新（启动约 15 秒后，以及之后每 24 小时）。也可在托盘菜单 → **Check for Updates…** 立即检查。确认后下载并重启以完成安装。从源码运行时不提供自动更新。
 - 从 [GitHub Releases](https://github.com/inflaborg/ccrelay/releases) 下载：
   - **macOS**: `CCRelay-<版本>-darwin-arm64.dmg` 或 `-darwin-x64.dmg`
   - **Windows**: `CCRelay-<版本>-win32-x64.exe` 或 `-win32-arm64.exe`

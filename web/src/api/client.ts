@@ -43,6 +43,8 @@ declare global {
     CCRELAY_API_BEARER?: string;
     /** Injected by VS Code webviews from backend config.server.locale */
     CCRELAY_LOCALE?: string;
+    /** Injected by Electron desktop when native auto-update is active */
+    CCRELAY_NATIVE_UPDATER?: boolean;
   }
 }
 

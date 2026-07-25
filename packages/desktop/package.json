@@ -20,7 +20,8 @@
   },
   "dependencies": {
     "@ccrelay/core": "*",
-    "better-sqlite3": "^12.9.0"
+    "better-sqlite3": "^12.9.0",
+    "electron-updater": "^6.8.9"
   },
   "devDependencies": {
     "@types/node": "^22.19.11",
@@ -61,13 +62,18 @@
       "out/database-worker.cjs",
       "node_modules/better-sqlite3/**"
     ],
+    "publish": {
+      "provider": "generic",
+      "url": "https://github.com/inflaborg/ccrelay/releases/download/channel-prod"
+    },
     "mac": {
       "extendInfo": {
         "NSLocalNetworkUsageDescription": "CCRelay needs local network access to proxy API requests between your IDE and AI services."
       },
       "category": "public.app-category.developer-tools",
       "target": [
-        "dmg"
+        "dmg",
+        "zip"
       ],
       "hardenedRuntime": true,
       "gatekeeperAssess": false,

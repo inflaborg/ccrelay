@@ -20,6 +20,7 @@ import {
   setWebDistPath,
 } from "@ccrelay/core";
 import { createTray } from "./tray";
+import { initAutoUpdate } from "./autoUpdate";
 import { showDashboardWindow } from "./window";
 import {
   registerDashboardProtocolHandler,
@@ -129,5 +130,6 @@ void app.whenReady().then(async () => {
   }
 
   createTray(server, configManager);
+  initAutoUpdate();
   showDashboardWindow(server, configManager);
 });

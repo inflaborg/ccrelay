@@ -13,6 +13,7 @@ export type DashboardInjectConfig = {
   apiOrigin: string;
   apiBearer: string;
   locale?: string;
+  nativeUpdater?: boolean;
 };
 
 /* eslint-disable @typescript-eslint/naming-convention -- file extension keys */
@@ -58,7 +59,7 @@ export function registerDashboardProtocolSchemes(): void {
 }
 
 function buildInjectScript(config: DashboardInjectConfig): string {
-  return `<script>window.CCRELAY_API_URL=${JSON.stringify(config.apiOrigin)};window.CCRELAY_API_BEARER=${JSON.stringify(config.apiBearer)};window.CCRELAY_LOCALE=${JSON.stringify(config.locale ?? "")};</script>`;
+  return `<script>window.CCRELAY_API_URL=${JSON.stringify(config.apiOrigin)};window.CCRELAY_API_BEARER=${JSON.stringify(config.apiBearer)};window.CCRELAY_LOCALE=${JSON.stringify(config.locale ?? "")};window.CCRELAY_NATIVE_UPDATER=${config.nativeUpdater === true ? "true" : "false"};</script>`;
 }
 
 function resolveAssetPath(urlPathname: string): string | null {

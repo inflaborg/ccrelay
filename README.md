@@ -62,6 +62,7 @@
 **Desktop & UI**
 
 - Optional Electron or Tauri desktop app — run CCRelay without VS Code
+- Electron packaged builds auto-check for updates and can install them from the tray menu
 - Web dashboard with provider management, settings, and i18n (English + Chinese)
 - Provider import/export as JSON
 
@@ -136,6 +137,7 @@ An optional Electron desktop app (`packages/desktop`) runs the same core as the 
 - Shares `~/.ccrelay/` config, state, and Leader election with the extension
 - Stores request logs with in-process SQLite (no system `sqlite3` binary required for the default desktop build)
 - Tray menu → **Open Dashboard** loads the web UI in an app window; **Open Logs Folder** opens runtime diagnostics under `~/.ccrelay/logs/`
+- Packaged builds check for updates automatically (about 15 seconds after launch, then once every 24 hours). Use the tray menu → **Check for Updates…** to check immediately. Confirming an update downloads it and restarts the app to install. Auto-update is not available when running from source.
 - Download from [GitHub Releases](https://github.com/inflaborg/ccrelay/releases):
   - **macOS**: `CCRelay-<version>-darwin-arm64.dmg` or `-darwin-x64.dmg`
   - **Windows**: `CCRelay-<version>-win32-x64.exe` or `-win32-arm64.exe`

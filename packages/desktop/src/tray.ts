@@ -6,6 +6,7 @@ import { Tray, Menu, shell, nativeImage, app } from "electron";
 import * as path from "path";
 import { getLogDir, type ConfigManager, type ProxyServer } from "@ccrelay/core";
 import { setOpenAtLogin, getOpenAtLogin } from "./autoLaunch";
+import { requestUpdateCheck } from "./autoUpdate";
 import { showDashboardWindow, updateDashboardInjectConfig } from "./window";
 
 /** macOS tray uses template (monochrome); Windows/Linux use the full-color asset. */
@@ -91,6 +92,14 @@ export function createTray(server: ProxyServer, config: ConfigManager): Tray {
         label: "Open Dashboard",
         click: (): void => {
           showDashboardWindow(server, config);
+        },
+      },
+      {
+        label: "Check for Updates…",
+        enabled: app.isPackaged,
+        toolTip: app.isPackaged ? undefined : "Auto-update is only available in packaged builds",
+        click: (): void => {
+          void requestUpdateCheck(true);
         },
       },
       { type: "separator" },
