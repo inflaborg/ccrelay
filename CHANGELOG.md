@@ -7,41 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+## [0.2.8] - 2026-07-24
 
-**Protocol/Conversion**
+Gateway and Claude Code compatibility is tighter on Azure and similar Anthropic routes. Responses clients keep tools and history when upstream is Chat, and Meituan LongCat is easier to set up and use. Provider editing can test endpoints without re-entering a masked API key; GLM OpenAI hosted web search and the GLM web-search backend are gone.
 
-- Claude models routed through Azure or other Anthropic-compatible gateways no longer fail when the client sends `context_management`; that beta field is stripped by default before the request reaches upstream.
-- Claude Code Stop hooks and other clients that request structured outputs (`output_config.format` / `json_schema`) no longer get a hard 400 from Azure Hosted-on-Azure or similar gateways; that field is stripped by default while effort/thinking are preserved when supported.
-- Long Claude Code sessions no longer get stuck on empty thinking blocks in message history; whitespace-only shells are removed before forwarding.
+### Added
+
+**UI**
+
+- Provider wizard includes a **Meituan LongCat** partner preset (OpenAI and Anthropic base URLs plus default custom models).
+- Edit Provider dialog footer can run the same endpoint/model test as the wizard; when the API key is masked, the stored secret is used automatically.
 
 ### Changed
 
 **Protocol/Conversion**
 
-- GLM on the OpenAI Chat protocol no longer receives special hosted web search handling: outbound `web_search` tools are dropped (upstream no longer returns structured search results on that path). GLM Anthropic endpoint hosted search (`web_search_prime` SSE normalization) is unchanged.
+- GLM on the OpenAI Chat protocol no longer receives special hosted web search handling: outbound `web_search` tools are dropped (upstream no longer returns structured search results on that path). GLM Anthropic endpoint hosted search remains unchanged.
+
+**Desktop/CI**
+
+- Prod releases automatically publish the VSIX to Open VSX after GitHub Release creation; a manual **Publish Open VSX** workflow can republish from an existing release.
+- CI no longer runs lint/tests in GitHub Actions; validate locally before merging.
+- **Build Dev (Auto)** on `main` builds only targets whose source paths changed (shared core/web/scripts changes still build all); workflow-only pushes are ignored.
+
+### Fixed
+
+**Protocol/Conversion**
+
+- Claude models routed through Azure or other Anthropic-compatible gateways no longer fail when the client sends `context_management`; that beta field is stripped by default before the request reaches upstream.
+- Claude Code Stop hooks and other clients that request structured outputs no longer get a hard 400 from Azure Hosted-on-Azure or similar gateways; structured-output format fields are stripped by default while effort/thinking are preserved when supported.
+- Long Claude Code sessions no longer get stuck on empty thinking blocks in message history; whitespace-only shells are removed before forwarding.
+- Forwarding Claude Desktop / Cowork agent traffic to GLM via the Anthropic-compatible API no longer fails with parameter errors: adaptive thinking is mapped to a supported mode, and Claude-only fields are stripped or normalized before the request reaches GLM.
+- Codex and other Responses clients no longer lose tools or assistant history when the upstream is OpenAI Chat: tools carried in the input list and `output_text` content are preserved through conversion.
+- LongCat Chat responses that return tool calls as XML in content are normalized to standard OpenAI `tool_calls` for Chat, Responses, and Anthropic clients.
 
 ### Removed
 
 **Config**
 
 - Built-in web search backend **GLM (Z.ai)** removed; **Tavily** and **Parallel** remain. Legacy `webSearch.glm` and `defaultSearchBackend: glm` in YAML are ignored.
-
-## [0.2.8] - 2026-07-16 (pre-release)
-
-Pre-release line for 0.2.8.
-
-### Fixed
-
-**Protocol/Conversion**
-
-- Forwarding Claude Desktop / Cowork agent traffic to GLM via the Anthropic-compatible API no longer fails with parameter errors: adaptive thinking is mapped to a supported mode, and Claude-only fields (deferred tool loading, tool schema references, extended prompt-cache TTL, inline system messages) are stripped or normalized before the request reaches GLM.
-
-### CI/CD
-
-- Prod releases automatically publish the VSIX to Open VSX after GitHub Release creation; a manual **Publish Open VSX** workflow can republish from an existing release.
-- CI no longer runs lint/tests in GitHub Actions; validate locally before merging.
-- **Build Dev (Auto)** on `main` builds only targets whose source paths changed (shared `core`/`web`/`scripts` changes still build all); workflow-only pushes are ignored.
 
 ## [0.2.7] - 2026-07-16
 
