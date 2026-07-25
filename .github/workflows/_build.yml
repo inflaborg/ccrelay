@@ -320,18 +320,29 @@ jobs:
           echo "signed=true" >> "$GITHUB_OUTPUT"
 
       - name: Pack desktop (${{ matrix.platform }} ${{ matrix.arch }})
-        run: >
-          npx electron-builder
-          --${{ matrix.platform }}
-          --${{ matrix.arch }}
-          --publish never
-          -c.publish.url=https://github.com/${{ github.repository }}/releases/download/channel-${{ inputs.channel }}
+        # Avoid -c.publish.url=… CLI overrides: Windows PowerShell/yargs treat -c as
+        # --config <file> and try to open a path like .publish.url=https:\….
+        # Bake the channel feed into package.json instead (same pattern as version).
+        shell: bash
         working-directory: packages/desktop
         env:
+          PUBLISH_URL: https://github.com/${{ github.repository }}/releases/download/channel-${{ inputs.channel }}
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.platform == 'mac' }}
           APPLE_ID: ${{ matrix.platform == 'mac' && secrets.APPLE_ID || '' }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.platform == 'mac' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
           APPLE_TEAM_ID: ${{ matrix.platform == 'mac' && secrets.APPLE_TEAM_ID || '' }}
+        run: |
+          set -euo pipefail
+          node -e "
+            const fs = require('fs');
+            const p = 'package.json';
+            const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
+            pkg.build = pkg.build || {};
+            pkg.build.publish = { provider: 'generic', url: process.env.PUBLISH_URL };
+            fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n');
+            console.log('publish.url =', pkg.build.publish.url);
+          "
+          npx electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never
 
       - name: Verify macOS DMG, ZIP and code signature
         if: matrix.platform == 'mac'
