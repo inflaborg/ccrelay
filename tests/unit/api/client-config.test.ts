@@ -237,8 +237,10 @@ base_url = "http://127.0.0.1:7575/openai"
       "model_provider",
       "model_providers.ccrelay.base_url",
       "model",
+      "model_catalog_json",
     ]);
     const gapKeys = fields.filter(f => !f.ok).map(f => f.key);
-    expect(gapKeys).toEqual(["model"]);
+    expect(gapKeys).toContain("model");
+    expect(gapKeys).toContain("model_catalog_json");
   });
 });

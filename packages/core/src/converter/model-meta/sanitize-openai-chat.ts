@@ -4,6 +4,25 @@ import type { ModelMeta } from "./types";
 
 const log = new ScopedLogger("ModelMeta");
 
+function chatRequestHasFunctionTools(data: Record<string, unknown>): boolean {
+  const tools = data.tools;
+  if (!Array.isArray(tools) || tools.length === 0) {
+    return false;
+  }
+  return tools.some(t => {
+    if (!t || typeof t !== "object") {
+      return false;
+    }
+    const o = t as Record<string, unknown>;
+    // Chat Completions: { type: "function", function: {...} }
+    if (o.type === "function") {
+      return true;
+    }
+    // Defensive: some converters may leave bare function objects
+    return typeof o.function === "object" && o.function !== null;
+  });
+}
+
 /**
  * Strip OpenAI Chat Completions fields unsupported by the resolved model meta.
  */
@@ -16,6 +35,15 @@ export function sanitizeOpenAiChatRequestByMeta(
   const openaiChat = meta.openaiChat;
 
   if (!reasoning.supportsReasoningEffort && data.reasoning_effort !== undefined) {
+    delete data.reasoning_effort;
+    stripped.push("reasoning_effort");
+  } else if (
+    openaiChat?.dropReasoningEffortWhenTools &&
+    data.reasoning_effort !== undefined &&
+    chatRequestHasFunctionTools(data)
+  ) {
+    // gpt-5 / o-series: Chat Completions rejects tools + reasoning_effort together
+    // ("Please use /v1/responses instead"). Prefer keeping tools for Codex agent turns.
     delete data.reasoning_effort;
     stripped.push("reasoning_effort");
   } else if (

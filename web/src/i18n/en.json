@@ -168,6 +168,7 @@
       "model_provider": "Model provider",
       "model_providers.ccrelay.base_url": "CCRelay base URL",
       "model": "Model",
+      "model_catalog_json": "Model catalog JSON",
       "inferenceGatewayBaseUrl": "Gateway base URL",
       "inferenceProvider": "Inference provider",
       "inferenceGatewayApiKey": "Gateway API key",
@@ -211,7 +212,8 @@
       "configureModel": "Configure model",
       "restore": "Restore",
       "upToDate": "Up to date",
-      "apply": "Apply CCRelay template"
+      "apply": "Apply CCRelay template",
+      "restartHint": "Restart Codex after Apply or provider switch so /model picks up the catalog."
     },
     "version": {
       "desktopBundles": "Installed bundles",
@@ -240,15 +242,17 @@
       "restore": {
         "title": "Restore {{name}} config?",
         "claudeDescription": "This will remove CCRelay-injected keys (ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, etc.) from settings.json. Other settings are preserved.",
-        "codexDescription": "This will remove the CCRelay model provider section from config.toml and reset the model to the default.",
+        "codexDescription": "This will remove the CCRelay model provider section and model catalog from config.toml and reset the model to the default.",
         "claudeDesktopDescription": "This will remove CCRelay config files from the Claude-3p directory, revert deploymentMode to 1p, and delete developer_settings.json.",
         "action": "Restore"
       }
     },
     "codexModelModal": {
       "title": "Codex model",
-      "description": "Written to model in ~/.codex/config.toml. Leave empty to use the default.",
+      "description": "Written to model in ~/.codex/config.toml and listed in the CCRelay model catalog. Leave empty to use the default.",
       "label": "Model",
+      "pickFromProvider": "From current provider",
+      "orType": "Or type a model id",
       "saveAndApply": "Save & Apply"
     },
     "modelsModal": {

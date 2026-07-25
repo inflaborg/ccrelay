@@ -168,6 +168,7 @@
       "model_provider": "模型提供商",
       "model_providers.ccrelay.base_url": "CCRelay 基础 URL",
       "model": "模型",
+      "model_catalog_json": "模型目录 JSON",
       "inferenceGatewayBaseUrl": "网关基础 URL",
       "inferenceProvider": "推理提供商",
       "inferenceGatewayApiKey": "网关 API 密钥",
@@ -211,7 +212,8 @@
       "configureModel": "配置模型",
       "restore": "还原",
       "upToDate": "已是最新",
-      "apply": "应用 CCRelay 模板"
+      "apply": "应用 CCRelay 模板",
+      "restartHint": "Apply 或切换供应商后请重启 Codex，以便 /model 加载新的模型目录。"
     },
     "version": {
       "desktopBundles": "已安装 bundle",
@@ -240,15 +242,17 @@
       "restore": {
         "title": "还原 {{name}} 配置？",
         "claudeDescription": "将从 settings.json 中移除 CCRelay 注入的键（ANTHROPIC_BASE_URL、ANTHROPIC_AUTH_TOKEN 等）。其他设置不受影响。",
-        "codexDescription": "将从 config.toml 中移除 CCRelay 的 model_provider 配置段，并将 model 重置为默认值。",
+        "codexDescription": "将从 config.toml 中移除 CCRelay 的 model_provider 配置段与模型目录指针，并将 model 重置为默认值。",
         "claudeDesktopDescription": "将从 Claude-3p 目录中移除 CCRelay 配置文件，将 deploymentMode 还原为 1p，并删除 developer_settings.json。",
         "action": "还原"
       }
     },
     "codexModelModal": {
       "title": "Codex 模型",
-      "description": "写入 ~/.codex/config.toml 中的 model 字段。留空则使用默认值。",
+      "description": "写入 ~/.codex/config.toml 的 model，并列入 CCRelay 模型目录。留空则使用默认值。",
       "label": "模型",
+      "pickFromProvider": "从当前供应商选择",
+      "orType": "或手动输入模型 id",
       "saveAndApply": "保存并应用"
     },
     "modelsModal": {

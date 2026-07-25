@@ -738,6 +738,7 @@ export default function ClientConfigStatus() {
                     )}
                   </OptionalModelConfigRow>
                   <ConfigFieldList fields={data.codex.fields ?? []} />
+                  <p className={`${metaText} pt-1`}>{t("clientConfig.codex.restartHint")}</p>
                 </ClientConfigSection>
               )}
 
@@ -884,13 +885,39 @@ export default function ClientConfigStatus() {
               </div>
               <p className={`${metaText} pt-1`}>{t("clientConfig.codexModelModal.description")}</p>
             </CardHeader>
-            <CardContent className="p-4 space-y-2">
+            <CardContent className="p-4 space-y-3">
+              {(data?.codexAvailableModels?.length ?? 0) > 0 && (
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">
+                    {t("clientConfig.codexModelModal.pickFromProvider")}
+                  </Label>
+                  <select
+                    className="flex h-8 w-full rounded-md border border-input bg-background px-2 font-mono text-xs"
+                    value={
+                      data?.codexAvailableModels?.some(m => m.id === codexModel) ? codexModel : ""
+                    }
+                    onChange={e => {
+                      if (e.target.value) {
+                        setCodexModel(e.target.value);
+                      }
+                    }}
+                  >
+                    <option value="">{t("clientConfig.codexModelModal.orType")}</option>
+                    {data?.codexAvailableModels?.map(m => (
+                      <option key={m.id} value={m.id}>
+                        {m.displayName !== m.id ? `${m.displayName} (${m.id})` : m.id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="space-y-1">
                 <Label className="text-xs font-medium">
                   {t("clientConfig.codexModelModal.label")}
                 </Label>
                 <Input
                   type="text"
+                  list="ccrelay-codex-available-models"
                   className="h-8 font-mono text-xs"
                   value={codexModel}
                   onChange={e => setCodexModel(e.target.value)}
@@ -914,6 +941,15 @@ export default function ClientConfigStatus() {
                     }
                   }}
                 />
+                {(data?.codexAvailableModels?.length ?? 0) > 0 && (
+                  <datalist id="ccrelay-codex-available-models">
+                    {data?.codexAvailableModels?.map(m => (
+                      <option key={m.id} value={m.id}>
+                        {m.displayName}
+                      </option>
+                    ))}
+                  </datalist>
+                )}
               </div>
               {applyMutation.isError && (
                 <p className="text-xs text-destructive">{(applyMutation.error as Error).message}</p>

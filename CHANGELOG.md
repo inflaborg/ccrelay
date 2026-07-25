@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**Config**
+
+- Codex Client configuration Apply now writes a model catalog (`ccrelay-model-catalog.json`) from the active provider’s models and points `model_catalog_json` at it, so Codex `/model` can list those models. Switching or saving the active provider refreshes the catalog when Codex already points at CCRelay.
+
+### Fixed
+
+**Protocol/Conversion**
+
+- When Codex Responses traffic is converted to Chat Completions for OpenAI gpt-5 / o-series models, `reasoning_effort` is dropped if the request also has function tools (upstream Chat Completions rejects that combination).
+
 ## [0.2.9] - 2026-07-25 (pre-release)
 
 Pre-release line for 0.2.9.

@@ -261,18 +261,19 @@ claude
 
 ### Codex
 
-创建或编辑 `~/.codex/config.toml`：
+创建或编辑 `~/.codex/config.toml`（或在仪表盘使用 **客户端配置 → Codex → 应用**）：
 
 ```toml
 model = "gpt-5.4-mini"
 model_provider = "ccrelay"
+model_catalog_json = "ccrelay-model-catalog.json"
 
 [model_providers.ccrelay]
 name = "CCRelay"
 base_url = "http://localhost:7575/openai"
 ```
 
-请将 `model` 改为你的 CCRelay 提供商能路由到的模型名（通过 `modelMap`）。
+应用配置时会根据**当前激活供应商**的自定义模型列表（或精确的 `modelMap` 条目）生成 `~/.codex/ccrelay-model-catalog.json`，供 Codex `/model` 列出可选模型。将 `model` 设为其中某个 id。Apply 或切换供应商后请重启 Codex 以重新加载目录。
 
 ---
 

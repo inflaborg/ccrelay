@@ -29,6 +29,12 @@ export interface ModelVisionMeta {
 export interface ModelOpenAiChatMeta {
   usesMaxCompletionTokens?: boolean;
   validReasoningEfforts?: readonly string[];
+  /**
+   * OpenAI Chat Completions rejects `reasoning_effort` together with function tools
+   * for some reasoning models (e.g. gpt-5.*); Responses API still accepts both.
+   * When true, strip `reasoning_effort` if the request includes function tools.
+   */
+  dropReasoningEffortWhenTools?: boolean;
 }
 
 export interface ModelGeminiMeta {

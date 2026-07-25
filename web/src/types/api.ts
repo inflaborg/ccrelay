@@ -312,6 +312,11 @@ export interface ClientConfigItem {
   message?: string;
 }
 
+export interface CodexAvailableModel {
+  id: string;
+  displayName: string;
+}
+
 export interface ClaudeDefaultModels {
   opus?: string;
   sonnet?: string;
@@ -325,6 +330,7 @@ export interface ClientConfigGetResponse {
   claudeDesktop: ClientConfigItem | null;
   claudeCode: ClientConfigItem;
   codex: ClientConfigItem;
+  codexAvailableModels?: CodexAvailableModel[];
   claudeDefaultModels: ClaudeDefaultModels;
   claudeDesktopBundles: ClaudeDesktopBundleVersions;
   claudeCli: ClaudeCliVersionInfo;

@@ -12,6 +12,7 @@ import { parseCustomModelLine } from "../converter/models-fallback";
 import { rebuildCoworkModelMap } from "../server/smartRouting/coworkModelMap";
 import type { ModelCatalog } from "../server/smartRouting/modelCatalog";
 import { sendJson, parseJsonBody } from "./httpJson";
+import { syncCodexCatalogIfConfigured } from "./codexModelCatalog";
 
 let serverInstance: ProxyServer | null = null;
 
@@ -139,6 +140,16 @@ export async function handleSmartRoutingAliasDriftApply(
       sendJson(res, 500, { status: "error", message: `Failed to update ${providerId}` });
       return;
     }
+  }
+
+  // Current provider models may have changed via alias drift.
+  try {
+    const currentId = serverInstance.getRouter().getCurrentProviderId();
+    if (byProvider.has(currentId)) {
+      syncCodexCatalogIfConfigured(serverInstance.getRouter().getCurrentProvider());
+    }
+  } catch {
+    // Best-effort
   }
 
   sendJson(res, 200, { status: "ok" });

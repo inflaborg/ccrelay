@@ -13,6 +13,7 @@ export const OPENAI_MODEL_FAMILIES: readonly ModelFamilyEntry[] = [
       openaiChat: {
         usesMaxCompletionTokens: true,
         validReasoningEfforts: OPENAI_REASONING_EFFORTS,
+        dropReasoningEffortWhenTools: true,
       },
     },
   },
@@ -27,6 +28,7 @@ export const OPENAI_MODEL_FAMILIES: readonly ModelFamilyEntry[] = [
       openaiChat: {
         usesMaxCompletionTokens: true,
         validReasoningEfforts: OPENAI_REASONING_EFFORTS,
+        dropReasoningEffortWhenTools: true,
       },
     },
   },

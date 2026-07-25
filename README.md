@@ -260,18 +260,19 @@ Set the app's **Anthropic Base URL** to `http://127.0.0.1:7575/anthropic`. Switc
 
 ### Codex
 
-Create or edit `~/.codex/config.toml`:
+Create or edit `~/.codex/config.toml` (or use **Client configuration → Codex → Apply** in the dashboard):
 
 ```toml
 model = "gpt-5.4-mini"
 model_provider = "ccrelay"
+model_catalog_json = "ccrelay-model-catalog.json"
 
 [model_providers.ccrelay]
 name = "CCRelay"
 base_url = "http://localhost:7575/openai"
 ```
 
-Adjust `model` to one your CCRelay provider can route (via `modelMap`).
+Apply writes `~/.codex/ccrelay-model-catalog.json` from the **active provider’s** custom models (or exact `modelMap` entries) so Codex `/model` can list them. Set `model` to one of those ids. Restart Codex after Apply or a provider switch so the catalog reloads.
 
 ---
 
