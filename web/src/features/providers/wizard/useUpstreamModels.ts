@@ -16,9 +16,12 @@ export function useUpstreamModels(
   baseUrl: string,
   apiKey: string,
   providerType: "anthropic" | "openai" | "openai_chat",
-  enabled: boolean
+  enabled: boolean,
+  /** When apiKey is missing/masked, server resolves the stored secret. */
+  providerId?: string
 ): UpstreamModelsResult {
-  const canProbe = enabled && Boolean(baseUrl.trim()) && Boolean(apiKey.trim());
+  const canProbe =
+    enabled && Boolean(baseUrl.trim()) && (Boolean(apiKey.trim()) || Boolean(providerId?.trim()));
 
   const [result, setResult] = useState<UpstreamModelsResult>({
     loading: false,
@@ -50,8 +53,9 @@ export function useUpstreamModels(
         .wizardProbeModels(
           {
             baseUrl: baseUrl.trim(),
-            apiKey: apiKey.trim(),
+            apiKey: apiKey.trim() || undefined,
             providerType,
+            providerId: providerId?.trim() || undefined,
           },
           ac.signal
         )
@@ -86,7 +90,7 @@ export function useUpstreamModels(
       abortRef.current?.abort();
       abortRef.current = null;
     };
-  }, [canProbe, baseUrl, apiKey, providerType]);
+  }, [canProbe, baseUrl, apiKey, providerType, providerId]);
 
   if (!canProbe) {
     return { loading: false, models: null, errorCode: null };

@@ -29,6 +29,8 @@ export interface RunEndpointTestParams {
   variants: TestVariantInput[];
   apiKey: string;
   modelId: string;
+  /** When apiKey is missing/masked, server resolves the stored secret. */
+  providerId?: string;
 }
 
 export function shortLabel(name: string, id: string): string {
@@ -63,8 +65,11 @@ export function useEndpointTest(): {
 
   const runTest = useCallback(
     (params: RunEndpointTestParams) => {
-      const { variants, apiKey, modelId } = params;
+      const { variants, apiKey, modelId, providerId } = params;
       if (!modelId.trim() || variants.length === 0) {
+        return;
+      }
+      if (!apiKey.trim() && !providerId?.trim()) {
         return;
       }
 
@@ -87,7 +92,8 @@ export function useEndpointTest(): {
         try {
           const data = await api.wizardEndpointTest(
             {
-              apiKey,
+              apiKey: apiKey.trim() || undefined,
+              providerId: providerId?.trim() || undefined,
               modelId: modelId.trim(),
               variants,
             },

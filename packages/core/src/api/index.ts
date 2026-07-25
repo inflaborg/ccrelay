@@ -39,7 +39,11 @@ import {
   handleSmartRoutingAliasDriftApply,
   setServer as setSmartRoutingServer,
 } from "./smartRouting";
-import { handleWizardProbeModels, handleWizardEndpointTest } from "./wizardUpstream";
+import {
+  handleWizardProbeModels,
+  handleWizardEndpointTest,
+  setServer as setWizardUpstreamServer,
+} from "./wizardUpstream";
 import { sendJson } from "./httpJson";
 import { setProxyServerForApi } from "./serverRef";
 import { getUiAccessToken } from "../server/httpAccessGate";
@@ -59,6 +63,7 @@ export function setServer(server: ProxyServer): void {
   setClientConfigServer(server);
   setSettingsServer(server);
   setSmartRoutingServer(server);
+  setWizardUpstreamServer(server);
 }
 
 /** Return this leader's UI access token (for followers to proxy dashboard auth). */
