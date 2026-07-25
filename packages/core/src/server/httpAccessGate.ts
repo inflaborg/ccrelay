@@ -178,5 +178,6 @@ export function sendHtmlUiGateBlocked(res: http.ServerResponse): void {
 }
 
 export function corsExtraAllowedHeadersCsv(): string {
-  return `Content-Type, X-API-Key, ${CCRELAY_UI_HEADER_NAME}, Authorization`;
+  // anthropic-version is required by Anthropic Messages clients (e.g. Chat tab from desktop origin).
+  return `Content-Type, X-API-Key, ${CCRELAY_UI_HEADER_NAME}, Authorization, anthropic-version`;
 }

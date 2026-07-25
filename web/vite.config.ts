@@ -43,6 +43,15 @@ export default defineConfig({
           });
         },
       },
+      // Chat tab calls the LLM proxy directly (same as clients).
+      "/openai": {
+        target: "http://127.0.0.1:7575",
+        changeOrigin: true,
+      },
+      "/anthropic": {
+        target: "http://127.0.0.1:7575",
+        changeOrigin: true,
+      },
     },
   },
 });

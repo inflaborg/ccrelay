@@ -16,6 +16,7 @@
     "hint": "服务器恢复后将自动返回管理界面。"
   },
   "nav": {
+    "chat": "聊天",
     "clientConfig": "客户端配置",
     "dashboard": "仪表盘",
     "smartRouting": "智能路由",
@@ -23,6 +24,34 @@
     "capabilities": "能力",
     "logs": "日志",
     "settings": "设置"
+  },
+  "chat": {
+    "loading": "加载中…",
+    "noProviderTitle": "没有当前提供商",
+    "noProviderHint": "请先添加并启用一个提供商，然后用聊天页通过 CCRelay 发送测试请求。",
+    "activeProvider": "提供商：{{name}}",
+    "newSession": "新建",
+    "deleteSession": "删除会话",
+    "clearAll": "清空全部",
+    "clearAllTitle": "清空全部聊天？",
+    "clearAllDesc": "将删除本浏览器中保存的所有本地会话及其历史记录。",
+    "clearMessages": "清空",
+    "clearMessagesTitle": "清空当前聊天？",
+    "clearMessagesDesc": "删除当前会话中的全部消息，会话本身会保留。",
+    "protocolLabel": "协议",
+    "modelLabel": "模型",
+    "noModels": "无模型",
+    "emptyHint": "发送一条消息，通过 CCRelay 测试当前提供商。",
+    "inputPlaceholder": "输入消息…",
+    "enterHint": "Enter 发送 · Shift+Enter 换行",
+    "send": "发送",
+    "stop": "停止",
+    "stopped": "已停止",
+    "protocol": {
+      "openaiChat": "OpenAI Chat",
+      "openaiResponses": "OpenAI Responses",
+      "anthropic": "Anthropic"
+    }
   },
   "app": {
     "footer": {

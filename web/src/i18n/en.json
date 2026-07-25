@@ -16,6 +16,7 @@
     "hint": "The dashboard will reopen automatically when the server is reachable again."
   },
   "nav": {
+    "chat": "Chat",
     "clientConfig": "Client Config",
     "dashboard": "Dashboard",
     "smartRouting": "Smart Routing",
@@ -23,6 +24,34 @@
     "capabilities": "Capabilities",
     "logs": "Logs",
     "settings": "Settings"
+  },
+  "chat": {
+    "loading": "Loading…",
+    "noProviderTitle": "No active provider",
+    "noProviderHint": "Add and activate a provider first, then use Chat to send a test request through CCRelay.",
+    "activeProvider": "Provider: {{name}}",
+    "newSession": "New",
+    "deleteSession": "Delete session",
+    "clearAll": "Clear all",
+    "clearAllTitle": "Clear all chats?",
+    "clearAllDesc": "This removes every local chat session and their history from this browser.",
+    "clearMessages": "Clear",
+    "clearMessagesTitle": "Clear this chat?",
+    "clearMessagesDesc": "Remove all messages in the current session. The session itself is kept.",
+    "protocolLabel": "Protocol",
+    "modelLabel": "Model",
+    "noModels": "No models",
+    "emptyHint": "Send a message to test the current provider through CCRelay.",
+    "inputPlaceholder": "Message…",
+    "enterHint": "Enter to send · Shift+Enter for newline",
+    "send": "Send",
+    "stop": "Stop",
+    "stopped": "Stopped",
+    "protocol": {
+      "openaiChat": "OpenAI Chat",
+      "openaiResponses": "OpenAI Responses",
+      "anthropic": "Anthropic"
+    }
   },
   "app": {
     "footer": {

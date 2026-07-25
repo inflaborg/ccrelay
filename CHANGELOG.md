@@ -9,12 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**UI**
+
+- New Chat tab (left of Client Config) for a simple multi-session test chat against the current provider, with OpenAI Chat / Responses / Anthropic protocol switch, model picker, local history, and clear actions.
+
 **Config**
 
 - Codex Client configuration Apply now writes a model catalog (`ccrelay-model-catalog.json`) from the active provider’s models and points `model_catalog_json` at it, so Codex `/model` can list those models. Switching or saving the active provider refreshes the catalog when Codex already points at CCRelay.
 - Client Config detects when Codex `model` is not in the active provider’s model list (e.g. after switching providers) and prompts you to update it.
 
 ### Fixed
+
+**UI**
+
+- Desktop Chat can call Anthropic endpoints: CORS now allows the `anthropic-version` request header (preflight was blocking cross-origin requests from the dashboard).
 
 **Protocol/Conversion**
 
