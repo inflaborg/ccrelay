@@ -5,6 +5,7 @@
 
 import { BrowserWindow, app } from "electron";
 import type { ProxyServer, ConfigManager } from "@ccrelay/core";
+import { isNativeUpdaterEnabled } from "./autoUpdate";
 import {
   dashboardLocalUrl,
   setDashboardInjectConfig,
@@ -24,6 +25,7 @@ function buildInjectConfig(server: ProxyServer, config: ConfigManager): Dashboar
     apiOrigin: resolveApiOrigin(server, config),
     apiBearer: config.getApiBearerToken(),
     locale: config.locale,
+    nativeUpdater: isNativeUpdaterEnabled(),
   };
 }
 

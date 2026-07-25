@@ -7,14 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.9] - 2026-07-25 (pre-release)
+## [0.2.9] - 2026-07-25
 
-Pre-release line for 0.2.9.
+Chat testing lands in the dashboard with multimodal image input. Electron packaged builds can auto-update from the tray. Codex Client Config writes a model catalog and warns when the selected model is stale. Azure Chat conversion and Anthropic streaming through OpenAI-compatible upstreams are more reliable.
+
+### Added
+
+**UI**
+
+- New Chat tab (left of Client Config) for a simple multi-session test chat against the current provider, with OpenAI Chat / Responses / Anthropic protocol switch, model picker, local history, and clear actions.
+- Chat image input for multimodal models (attach or Ctrl+V paste), gated by model-meta input modalities.
+
+**Desktop**
+
+- Electron packaged builds auto-check for updates and can download/install from the tray menu (restart required). VS Code and Tauri keep the existing GitHub release prompt.
+
+**Config**
+
+- Codex Client configuration Apply now writes a model catalog (`ccrelay-model-catalog.json`) from the active provider’s models and points `model_catalog_json` at it, so Codex `/model` can list those models. Switching or saving the active provider refreshes the catalog when Codex already points at CCRelay.
+- Client Config detects when Codex `model` is not in the active provider’s model list (e.g. after switching providers) and prompts you to update it.
 
 ### Fixed
 
+**UI**
+
+- Desktop Chat can call Anthropic endpoints: CORS now allows the `anthropic-version` request header (preflight was blocking cross-origin requests from the dashboard).
+- Chat Anthropic protocol now shows replies correctly when the active provider is OpenAI-compatible (cross-protocol returned JSON while the UI expected SSE).
+- Chat renders real SSE deltas as they arrive; when the proxy returns non-streaming JSON, the full reply is shown at once (no simulated typewriter).
+- Chat history no longer persists image binaries (quota), and assistant reply text is saved after the turn finishes instead of mid-stream.
+
 **Protocol/Conversion**
 
+- Model metadata now includes `input.modalities` (default text-only; Claude / GPT / Gemini / Kimi / GLM families include image).
+- Anthropic clients that request `stream: true` against an OpenAI-compatible upstream now receive synthesized Anthropic SSE instead of a plain JSON message.
+- When Codex Responses traffic is converted to Chat Completions for OpenAI gpt-5 / o-series models, `reasoning_effort` is dropped if the request also has function tools (upstream Chat Completions rejects that combination).
 - Codex Responses traffic converted to Chat Completions no longer fails validation on Azure or Azure-compatible Chat gateways: `developer` roles map to `system`, freeform `custom` tools are shimmed to `function`, and `input_image` blocks are preserved as Chat `image_url` parts.
 - Custom-domain Azure-compatible routers (not only `*.cognitiveservices.azure.com`) can opt into the same Chat sanitization with provider field `openaiCompat: azure_openai`.
 

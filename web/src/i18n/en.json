@@ -16,6 +16,7 @@
     "hint": "The dashboard will reopen automatically when the server is reachable again."
   },
   "nav": {
+    "chat": "Chat",
     "clientConfig": "Client Config",
     "dashboard": "Dashboard",
     "smartRouting": "Smart Routing",
@@ -23,6 +24,41 @@
     "capabilities": "Capabilities",
     "logs": "Logs",
     "settings": "Settings"
+  },
+  "chat": {
+    "loading": "Loading…",
+    "noProviderTitle": "No active provider",
+    "noProviderHint": "Add and activate a provider first, then use Chat to send a test request through CCRelay.",
+    "activeProvider": "Provider: {{name}}",
+    "newSession": "New",
+    "deleteSession": "Delete session",
+    "clearAll": "Clear all",
+    "clearAllTitle": "Clear all chats?",
+    "clearAllDesc": "This removes every local chat session and their history from this browser.",
+    "clearMessages": "Clear",
+    "clearMessagesTitle": "Clear this chat?",
+    "clearMessagesDesc": "Remove all messages in the current session. The session itself is kept.",
+    "protocolLabel": "Protocol",
+    "modelLabel": "Model",
+    "noModels": "No models",
+    "emptyHint": "Send a message to test the current provider through CCRelay.",
+    "inputPlaceholder": "Message…",
+    "inputPlaceholderWithImage": "Message… (paste or attach images)",
+    "enterHint": "Enter to send · Shift+Enter for newline",
+    "enterHintWithImage": "Enter to send · Shift+Enter newline · Ctrl+V paste image",
+    "addImage": "Add image",
+    "removeImage": "Remove image",
+    "imageMessageTitle": "Image",
+    "imageOmitted": "Image (not saved)",
+    "imageHistoryHint": "History does not save images.",
+    "send": "Send",
+    "stop": "Stop",
+    "stopped": "Stopped",
+    "protocol": {
+      "openaiChat": "OpenAI Chat",
+      "openaiResponses": "OpenAI Responses",
+      "anthropic": "Anthropic"
+    }
   },
   "app": {
     "footer": {
@@ -157,6 +193,7 @@
       "truthy": "Truthy (1, \"1\", or true)",
       "absent": "Must be absent",
       "anyNonEmpty": "Any non-empty value",
+      "currentProviderModels": "A model id from the current provider's model list",
       "nonEmptyArrayIncludingStar": "Non-empty array including \"*\"",
       "aliasHeaderNonEmpty": "x-ccrelay-model-alias header with non-empty value (key case-insensitive)"
     },
@@ -168,6 +205,7 @@
       "model_provider": "Model provider",
       "model_providers.ccrelay.base_url": "CCRelay base URL",
       "model": "Model",
+      "model_catalog_json": "Model catalog JSON",
       "inferenceGatewayBaseUrl": "Gateway base URL",
       "inferenceProvider": "Inference provider",
       "inferenceGatewayApiKey": "Gateway API key",
@@ -206,12 +244,15 @@
         "label": "Model",
         "description": "(written to model in config.toml)",
         "notSet": "Not set.",
-        "default": "Default:"
+        "default": "Default:",
+        "bannerTitle": "Codex model needs update",
+        "needsUpdate": "Current model is not in the active provider's list. Update it after switching providers."
       },
       "configureModel": "Configure model",
       "restore": "Restore",
       "upToDate": "Up to date",
-      "apply": "Apply CCRelay template"
+      "apply": "Apply CCRelay template",
+      "restartHint": "Restart Codex after Apply or provider switch so /model picks up the catalog."
     },
     "version": {
       "desktopBundles": "Installed bundles",
@@ -240,15 +281,17 @@
       "restore": {
         "title": "Restore {{name}} config?",
         "claudeDescription": "This will remove CCRelay-injected keys (ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, etc.) from settings.json. Other settings are preserved.",
-        "codexDescription": "This will remove the CCRelay model provider section from config.toml and reset the model to the default.",
+        "codexDescription": "This will remove the CCRelay model provider section and model catalog from config.toml and reset the model to the default.",
         "claudeDesktopDescription": "This will remove CCRelay config files from the Claude-3p directory, revert deploymentMode to 1p, and delete developer_settings.json.",
         "action": "Restore"
       }
     },
     "codexModelModal": {
       "title": "Codex model",
-      "description": "Written to model in ~/.codex/config.toml. Leave empty to use the default.",
+      "description": "Written to model in ~/.codex/config.toml and listed in the CCRelay model catalog. Leave empty to use the default.",
       "label": "Model",
+      "pickFromProvider": "From current provider",
+      "orType": "Or type a model id",
       "saveAndApply": "Save & Apply"
     },
     "modelsModal": {

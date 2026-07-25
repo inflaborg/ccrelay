@@ -62,6 +62,7 @@
 **Desktop & UI**
 
 - Optional Electron or Tauri desktop app — run CCRelay without VS Code
+- Electron packaged builds auto-check for updates and can install them from the tray menu
 - Web dashboard with provider management, settings, and i18n (English + Chinese)
 - Provider import/export as JSON
 
@@ -136,6 +137,7 @@ An optional Electron desktop app (`packages/desktop`) runs the same core as the 
 - Shares `~/.ccrelay/` config, state, and Leader election with the extension
 - Stores request logs with in-process SQLite (no system `sqlite3` binary required for the default desktop build)
 - Tray menu → **Open Dashboard** loads the web UI in an app window; **Open Logs Folder** opens runtime diagnostics under `~/.ccrelay/logs/`
+- Packaged builds check for updates automatically (about 15 seconds after launch, then once every 24 hours). Use the tray menu → **Check for Updates…** to check immediately. Confirming an update downloads it and restarts the app to install. Auto-update is not available when running from source.
 - Download from [GitHub Releases](https://github.com/inflaborg/ccrelay/releases):
   - **macOS**: `CCRelay-<version>-darwin-arm64.dmg` or `-darwin-x64.dmg`
   - **Windows**: `CCRelay-<version>-win32-x64.exe` or `-win32-arm64.exe`
@@ -260,18 +262,19 @@ Set the app's **Anthropic Base URL** to `http://127.0.0.1:7575/anthropic`. Switc
 
 ### Codex
 
-Create or edit `~/.codex/config.toml`:
+Create or edit `~/.codex/config.toml` (or use **Client configuration → Codex → Apply** in the dashboard):
 
 ```toml
 model = "gpt-5.4-mini"
 model_provider = "ccrelay"
+model_catalog_json = "ccrelay-model-catalog.json"
 
 [model_providers.ccrelay]
 name = "CCRelay"
 base_url = "http://localhost:7575/openai"
 ```
 
-Adjust `model` to one your CCRelay provider can route (via `modelMap`).
+Apply writes `~/.codex/ccrelay-model-catalog.json` from the **active provider’s** custom models (or exact `modelMap` entries) so Codex `/model` can list them. Set `model` to one of those ids. Restart Codex after Apply or a provider switch so the catalog reloads.
 
 ---
 

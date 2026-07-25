@@ -66,6 +66,7 @@ jobs:
       is_prod: true
       create_release: true
       prerelease: false
+      channel: prod
       tag_name: ${{ needs.prepare.outputs.tag_name }}
       release_name: ${{ needs.prepare.outputs.release_name }}
       retention_days: 90

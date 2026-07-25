@@ -15,8 +15,25 @@ import {
   SMART_ROUTING_PROVIDER_ID,
 } from "../server/smartRouting/virtualProvider";
 import { sendJson, parseJsonBody } from "./index";
+import { syncCodexCatalogIfConfigured } from "./codexModelCatalog";
 
 let serverInstance: ProxyServer | null = null;
+
+/** When the current provider's model list changes and Codex points at ccrelay, refresh catalog. */
+function syncCodexCatalogForCurrentProviderIfNeeded(providerId: string): void {
+  if (!serverInstance) {
+    return;
+  }
+  const router = serverInstance.getRouter();
+  if (router.getCurrentProviderId() !== providerId) {
+    return;
+  }
+  try {
+    syncCodexCatalogIfConfigured(router.getCurrentProvider());
+  } catch {
+    // Best-effort; Codex catalog sync must not fail provider save.
+  }
+}
 
 /**
  * Set the server instance (called from extension.ts)
@@ -145,6 +162,7 @@ export async function handleAddProvider(
     const success = configManager.addProvider(body.id, providerConfig);
 
     if (success) {
+      syncCodexCatalogForCurrentProviderIfNeeded(body.id);
       sendJson(res, 200, {
         status: "ok",
         provider: {

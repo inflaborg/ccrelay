@@ -4,6 +4,17 @@
 
 export type ModelVendor = "anthropic" | "openai" | "gemini" | "deepseek" | "generic";
 
+/** Request content modalities the model accepts. */
+export type ModelInputModality = "text" | "image";
+
+export interface ModelInputMeta {
+  /**
+   * Supported input modalities for user content.
+   * Default / unknown fallback: `["text"]` only.
+   */
+  modalities: readonly ModelInputModality[];
+}
+
 export interface ModelReasoningMeta {
   /** Whether the model family supports extended / adaptive reasoning. */
   enabled: boolean;
@@ -22,6 +33,11 @@ export interface ModelReasoningMeta {
   supportsReasoningEffort?: boolean;
 }
 
+/**
+ * Vision / image input capability.
+ * Prefer {@link ModelInputMeta.modalities}; `enabled` stays for older call sites
+ * and must stay in sync with `input.modalities.includes("image")`.
+ */
 export interface ModelVisionMeta {
   enabled: boolean;
 }
@@ -29,6 +45,12 @@ export interface ModelVisionMeta {
 export interface ModelOpenAiChatMeta {
   usesMaxCompletionTokens?: boolean;
   validReasoningEfforts?: readonly string[];
+  /**
+   * OpenAI Chat Completions rejects `reasoning_effort` together with function tools
+   * for some reasoning models (e.g. gpt-5.*); Responses API still accepts both.
+   * When true, strip `reasoning_effort` if the request includes function tools.
+   */
+  dropReasoningEffortWhenTools?: boolean;
 }
 
 export interface ModelGeminiMeta {
@@ -64,6 +86,8 @@ export interface ModelAnthropicMeta {
 export interface ModelMeta {
   id: string;
   vendor: ModelVendor;
+  /** Input modalities (text / image). Unknown models default to text-only. */
+  input: ModelInputMeta;
   reasoning: ModelReasoningMeta;
   vision: ModelVisionMeta;
   openaiChat?: ModelOpenAiChatMeta;

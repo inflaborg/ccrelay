@@ -10,6 +10,7 @@ import {
   RefreshCw,
   RotateCcw,
   SlidersHorizontal,
+  TriangleAlert,
   X,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -183,6 +184,7 @@ function OptionalModelConfigRow({
   buttonLabel,
   buttonDisabled,
   onConfigure,
+  warning,
 }: {
   title: string;
   description: string;
@@ -190,6 +192,7 @@ function OptionalModelConfigRow({
   buttonLabel: string;
   buttonDisabled?: boolean;
   onConfigure: () => void;
+  warning?: string;
 }) {
   return (
     <div className="w-full">
@@ -198,11 +201,12 @@ function OptionalModelConfigRow({
           <p className={sectionTitle}>{title}</p>
           <p className={metaText}>{description}</p>
           {children}
+          {warning ? <p className="text-xs text-amber-700 dark:text-amber-400">{warning}</p> : null}
         </div>
         <Button
           type="button"
           size="sm"
-          variant="secondary"
+          variant={warning ? "default" : "secondary"}
           className={`${actionButton} shrink-0`}
           disabled={buttonDisabled}
           onClick={onConfigure}
@@ -466,6 +470,18 @@ export default function ClientConfigStatus() {
           ? data?.claudeDesktop
           : null;
 
+  const codexModelNeedsUpdate = Boolean(
+    data?.codex &&
+    data.codex.status !== "invalid" &&
+    data.codex.fields?.some(f => f.key === "model" && !f.ok)
+  );
+
+  const openCodexModelConfigure = () => {
+    setCodexModalMode("configure");
+    setCodexModel(data?.codex?.model ?? "");
+    setCodexModelModalOpen(true);
+  };
+
   return (
     <>
       <Card className="p-0">
@@ -477,6 +493,40 @@ export default function ClientConfigStatus() {
               codexPath: clientConfigPath(".codex/config.toml"),
             })}
           </p>
+          {codexModelNeedsUpdate && (
+            <div
+              role="alert"
+              className="rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="flex items-start gap-2 min-w-0">
+                <TriangleAlert className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div className="min-w-0 space-y-0.5">
+                  <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+                    {t("clientConfig.codex.model.bannerTitle")}
+                  </p>
+                  <p className="text-xs text-amber-700/90 dark:text-amber-400/90">
+                    {t("clientConfig.codex.model.needsUpdate")}
+                    {data?.codex?.model ? (
+                      <>
+                        {" "}
+                        <span className="font-mono">({data.codex.model})</span>
+                      </>
+                    ) : null}
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                className={`${actionButton} shrink-0 bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-500 dark:text-amber-950 dark:hover:bg-amber-400`}
+                disabled={applyMutation.isPending || codexModelPatchMutation.isPending}
+                onClick={openCodexModelConfigure}
+              >
+                <SlidersHorizontal className={actionIcon} />
+                {t("clientConfig.codex.configureModel")}
+              </Button>
+            </div>
+          )}
           <div className="flex items-start gap-2.5">
             <Checkbox
               id="client-version-detection"
@@ -721,11 +771,10 @@ export default function ClientConfigStatus() {
                     description={t("clientConfig.codex.model.description")}
                     buttonLabel={t("clientConfig.codex.configureModel")}
                     buttonDisabled={applyMutation.isPending || codexModelPatchMutation.isPending}
-                    onConfigure={() => {
-                      setCodexModalMode("configure");
-                      setCodexModel(data.codex?.model ?? "");
-                      setCodexModelModalOpen(true);
-                    }}
+                    warning={
+                      codexModelNeedsUpdate ? t("clientConfig.codex.model.needsUpdate") : undefined
+                    }
+                    onConfigure={openCodexModelConfigure}
                   >
                     {data.codex.model ? (
                       <p className={monoValue}>{data.codex.model}</p>
@@ -738,6 +787,7 @@ export default function ClientConfigStatus() {
                     )}
                   </OptionalModelConfigRow>
                   <ConfigFieldList fields={data.codex.fields ?? []} />
+                  <p className={`${metaText} pt-1`}>{t("clientConfig.codex.restartHint")}</p>
                 </ClientConfigSection>
               )}
 
@@ -884,13 +934,39 @@ export default function ClientConfigStatus() {
               </div>
               <p className={`${metaText} pt-1`}>{t("clientConfig.codexModelModal.description")}</p>
             </CardHeader>
-            <CardContent className="p-4 space-y-2">
+            <CardContent className="p-4 space-y-3">
+              {(data?.codexAvailableModels?.length ?? 0) > 0 && (
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">
+                    {t("clientConfig.codexModelModal.pickFromProvider")}
+                  </Label>
+                  <select
+                    className="flex h-8 w-full rounded-md border border-input bg-background px-2 font-mono text-xs"
+                    value={
+                      data?.codexAvailableModels?.some(m => m.id === codexModel) ? codexModel : ""
+                    }
+                    onChange={e => {
+                      if (e.target.value) {
+                        setCodexModel(e.target.value);
+                      }
+                    }}
+                  >
+                    <option value="">{t("clientConfig.codexModelModal.orType")}</option>
+                    {data?.codexAvailableModels?.map(m => (
+                      <option key={m.id} value={m.id}>
+                        {m.displayName !== m.id ? `${m.displayName} (${m.id})` : m.id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="space-y-1">
                 <Label className="text-xs font-medium">
                   {t("clientConfig.codexModelModal.label")}
                 </Label>
                 <Input
                   type="text"
+                  list="ccrelay-codex-available-models"
                   className="h-8 font-mono text-xs"
                   value={codexModel}
                   onChange={e => setCodexModel(e.target.value)}
@@ -914,6 +990,15 @@ export default function ClientConfigStatus() {
                     }
                   }}
                 />
+                {(data?.codexAvailableModels?.length ?? 0) > 0 && (
+                  <datalist id="ccrelay-codex-available-models">
+                    {data?.codexAvailableModels?.map(m => (
+                      <option key={m.id} value={m.id}>
+                        {m.displayName}
+                      </option>
+                    ))}
+                  </datalist>
+                )}
               </div>
               {applyMutation.isError && (
                 <p className="text-xs text-destructive">{(applyMutation.error as Error).message}</p>

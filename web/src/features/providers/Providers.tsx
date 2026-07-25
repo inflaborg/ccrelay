@@ -289,6 +289,7 @@ export default function Providers() {
       queryClient.invalidateQueries({ queryKey: ["providers"] });
       queryClient.invalidateQueries({ queryKey: ["config"] });
       queryClient.invalidateQueries({ queryKey: ["smartRoutingCatalog"] });
+      queryClient.invalidateQueries({ queryKey: ["clientConfig"] });
     },
   });
 
@@ -296,6 +297,7 @@ export default function Providers() {
     mutationFn: (data: AddProviderRequest) => api.addProvider(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["providers"] });
+      queryClient.invalidateQueries({ queryKey: ["clientConfig"] });
       closeModal();
     },
   });
@@ -485,6 +487,7 @@ export default function Providers() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["providers"] });
       queryClient.invalidateQueries({ queryKey: ["status"] });
+      queryClient.invalidateQueries({ queryKey: ["clientConfig"] });
       closeModal();
     },
   });

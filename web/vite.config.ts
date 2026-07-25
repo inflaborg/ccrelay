@@ -13,6 +13,10 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
       "@ccrelay/shared": path.resolve(__dirname, "../packages/core/src/shared"),
+      "@ccrelay/model-meta": path.resolve(
+        __dirname,
+        "../packages/core/src/converter/model-meta/browser.ts"
+      ),
     },
   },
   base: "/ccrelay/",
@@ -42,6 +46,15 @@ export default defineConfig({
             }
           });
         },
+      },
+      // Chat tab calls the LLM proxy directly (same as clients).
+      "/openai": {
+        target: "http://127.0.0.1:7575",
+        changeOrigin: true,
+      },
+      "/anthropic": {
+        target: "http://127.0.0.1:7575",
+        changeOrigin: true,
       },
     },
   },

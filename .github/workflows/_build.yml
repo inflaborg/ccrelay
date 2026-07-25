@@ -27,6 +27,10 @@ on:
       retention_days:
         type: number
         default: 30
+      channel:
+        description: 'Update channel for Electron auto-update feed (dev or prod)'
+        type: string
+        default: 'dev'
     secrets:
       APPLE_CSC_LINK:
         required: false
@@ -51,6 +55,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.meta.outputs.version }}
+      app_version: ${{ steps.meta.outputs.app_version }}
       want_any_build: ${{ steps.targets.outputs.want_any_build }}
       want_build_vscode: ${{ steps.targets.outputs.want_build_vscode }}
       want_build_desktop: ${{ steps.targets.outputs.want_build_desktop }}
@@ -63,9 +68,17 @@ jobs:
 
       - name: Resolve version
         id: meta
+        env:
+          CHANNEL: ${{ inputs.channel }}
         run: |
           VERSION=$(node -p "require('./packages/vscode/package.json').version")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [ "$CHANNEL" = "prod" ]; then
+            echo "app_version=$VERSION" >> "$GITHUB_OUTPUT"
+          else
+            echo "app_version=${VERSION}-dev.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Resolved app_version for channel=${CHANNEL}"
 
       - name: Resolve build targets & desktop matrix JSON
         id: targets
@@ -270,6 +283,9 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Apply build version
+        run: node scripts/set-build-version.mjs --version "${{ needs.configure.outputs.app_version }}"
+
       - name: Rebuild native modules for Electron
         run: npx @electron/rebuild -f -w better-sqlite3 --arch ${{ matrix.arch }}
         working-directory: packages/desktop
@@ -304,7 +320,12 @@ jobs:
           echo "signed=true" >> "$GITHUB_OUTPUT"
 
       - name: Pack desktop (${{ matrix.platform }} ${{ matrix.arch }})
-        run: npx electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never
+        run: >
+          npx electron-builder
+          --${{ matrix.platform }}
+          --${{ matrix.arch }}
+          --publish never
+          -c.publish.url=https://github.com/${{ github.repository }}/releases/download/channel-${{ inputs.channel }}
         working-directory: packages/desktop
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.platform == 'mac' }}
@@ -312,7 +333,7 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.platform == 'mac' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
           APPLE_TEAM_ID: ${{ matrix.platform == 'mac' && secrets.APPLE_TEAM_ID || '' }}
 
-      - name: Verify macOS DMG and code signature
+      - name: Verify macOS DMG, ZIP and code signature
         if: matrix.platform == 'mac'
         run: |
           set -euo pipefail
@@ -336,6 +357,19 @@ jobs:
             echo "OK: $dmg (${size} bytes) — $filetype"
             hdiutil verify "$dmg"
           done
+          zips=(packages/desktop/dist/*.zip)
+          if [[ ${#zips[@]} -eq 0 ]]; then
+            echo "::error::No .zip found in packages/desktop/dist (required for auto-update)"
+            exit 1
+          fi
+          for zipf in "${zips[@]}"; do
+            size=$(stat -f%z "$zipf" 2>/dev/null || stat --printf="%s" "$zipf" 2>/dev/null)
+            if [[ "$size" -lt 1048576 ]]; then
+              echo "::error::$zipf is too small (${size} bytes) — likely corrupt"
+              exit 1
+            fi
+            echo "OK: $zipf (${size} bytes)"
+          done
           if [[ "${{ steps.mac_signing.outputs.signed }}" == "true" ]]; then
             APP=$(find packages/desktop/dist -name '*.app' -maxdepth 3 | head -1)
             if [[ -z "${APP}" ]]; then
@@ -353,7 +387,9 @@ jobs:
           name: ccrelay-desktop-${{ matrix.platform }}-${{ matrix.arch }}-${{ needs.configure.outputs.version }}${{ inputs.suffix }}
           path: |
             packages/desktop/dist/*.dmg
+            packages/desktop/dist/*.zip
             packages/desktop/dist/*.exe
+            packages/desktop/dist/*.blockmap
           retention-days: ${{ inputs.retention_days }}
 
       - name: Cleanup signing keychain
@@ -519,6 +555,15 @@ jobs:
         && (needs.configure.outputs.want_build_tauri != 'true' || needs.build-tauri.result == 'success')
       }}
     steps:
+      # Checkout first: download-artifact after checkout so clean:true does not wipe assets.
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -527,6 +572,27 @@ jobs:
 
       - name: List release assets
         run: find release-assets -type f | head -50
+
+      - name: Generate updater manifests
+        id: manifests
+        run: |
+          set -euo pipefail
+          mkdir -p release-metadata
+          node scripts/generate-update-manifests.mjs \
+            --assets-dir release-assets \
+            --output-dir release-metadata \
+            --version "${{ needs.configure.outputs.app_version }}" \
+            --base-url "https://github.com/${{ github.repository }}/releases/download/${{ inputs.tag_name }}"
+          shopt -s nullglob
+          files=(release-metadata/*)
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "has_manifests=false" >> "$GITHUB_OUTPUT"
+            echo "No Electron manifests generated"
+          else
+            echo "has_manifests=true" >> "$GITHUB_OUTPUT"
+            cp release-metadata/* release-assets/
+            ls -la release-metadata/
+          fi
 
       - name: Create release
         uses: softprops/action-gh-release@v2
@@ -538,6 +604,21 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish channel manifests
+        if: steps.manifests.outputs.has_manifests == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          set -euo pipefail
+          TAG="channel-${CHANNEL}"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --prerelease --target "${GITHUB_SHA}" \
+              --title "Update channel: ${CHANNEL}" \
+              --notes "Rolling auto-update manifests for the ${CHANNEL} channel. Not a downloadable build."
+          fi
+          gh release upload "$TAG" release-metadata/* --clobber
 
   publish-openvsx:
     runs-on: ubuntu-latest

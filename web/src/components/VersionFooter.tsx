@@ -24,6 +24,7 @@ function statusTitleKey(status: UpdateCheckStatus): string {
 
 export function VersionFooter() {
   const { t } = useTranslation();
+  const nativeUpdater = typeof window !== "undefined" && window.CCRELAY_NATIVE_UPDATER === true;
   const [version, setVersion] = useState<string | null>(null);
   const [updateCheck, setUpdateCheck] = useState<UpdateCheckResponse | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -40,6 +41,9 @@ export function VersionFooter() {
   }, []);
 
   const startPolling = useCallback(() => {
+    if (nativeUpdater) {
+      return;
+    }
     stopPolling();
     pollRef.current = setInterval(() => {
       void api
@@ -54,7 +58,7 @@ export function VersionFooter() {
           stopPolling();
         });
     }, POLL_INTERVAL_MS);
-  }, [stopPolling]);
+  }, [nativeUpdater, stopPolling]);
 
   useEffect(() => {
     api
@@ -64,6 +68,9 @@ export function VersionFooter() {
   }, []);
 
   const pollUpdateCheck = useCallback(async () => {
+    if (nativeUpdater) {
+      return;
+    }
     try {
       const state = await api.getUpdateCheck();
       setUpdateCheck(state);
@@ -73,15 +80,21 @@ export function VersionFooter() {
     } catch {
       stopPolling();
     }
-  }, [stopPolling]);
+  }, [nativeUpdater, stopPolling]);
 
   useEffect(() => {
+    if (nativeUpdater) {
+      return;
+    }
     void pollUpdateCheck();
     startPolling();
     return () => stopPolling();
-  }, [pollUpdateCheck, startPolling, stopPolling]);
+  }, [nativeUpdater, pollUpdateCheck, startPolling, stopPolling]);
 
   useEffect(() => {
+    if (nativeUpdater) {
+      return;
+    }
     if (
       updateCheck?.status !== "available" ||
       !updateCheck.latestVersion ||
@@ -94,10 +107,10 @@ export function VersionFooter() {
     }
     lastAutoShownVersionRef.current = updateCheck.latestVersion;
     setModalOpen(true);
-  }, [updateCheck]);
+  }, [nativeUpdater, updateCheck]);
 
   const handleRecheck = async () => {
-    if (manualChecking || updateCheck?.status === "checking") {
+    if (nativeUpdater || manualChecking || updateCheck?.status === "checking") {
       return;
     }
     setManualChecking(true);
@@ -116,6 +129,15 @@ export function VersionFooter() {
   };
 
   const displayVersion = version ?? updateCheck?.currentVersion ?? null;
+
+  if (nativeUpdater) {
+    return (
+      <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+        {displayVersion && <span>{displayVersion}</span>}
+      </div>
+    );
+  }
+
   const status: UpdateCheckStatus = updateCheck?.status ?? "pending";
   const isChecking = manualChecking || status === "checking";
   const isUpdateAvailable = status === "available";
