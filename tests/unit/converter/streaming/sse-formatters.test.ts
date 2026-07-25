@@ -1,8 +1,14 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 import { describe, it, expect } from "vitest";
 import { convertChatCompletionToResponses } from "@/converter/adapters/openai-chat-to-responses";
-import { formatOpenAIResponsesSse } from "@/converter/streaming/sse-formatters";
-import type { OpenAIChatCompletionResponse } from "@/converter/adapters/openai-chat-to-anthropic-response";
+import {
+  formatOpenAIResponsesSse,
+  formatAnthropicMessageSse,
+} from "@/converter/streaming/sse-formatters";
+import type {
+  AnthropicMessageResponse,
+  OpenAIChatCompletionResponse,
+} from "@/converter/adapters/openai-chat-to-anthropic-response";
 import { extractResponsesEcho } from "@/converter/adapters/openai-responses-to-chat";
 
 function parseSseDataEvents(sse: string): Array<Record<string, unknown>> {
@@ -198,5 +204,28 @@ describe("formatOpenAIResponsesSse", () => {
       response?: { tools?: unknown[] };
     };
     expect(completed?.response?.tools).toHaveLength(1);
+  });
+});
+
+describe("formatAnthropicMessageSse", () => {
+  it("emits text_delta events and message_stop for a text message", () => {
+    const message: AnthropicMessageResponse = {
+      id: "msg_1",
+      type: "message",
+      role: "assistant",
+      model: "m",
+      content: [{ type: "text", text: "Hello world" }],
+      stop_reason: "end_turn",
+      stop_sequence: null,
+      usage: { input_tokens: 1, output_tokens: 2, cache_read_input_tokens: 0 },
+    };
+    const sse = formatAnthropicMessageSse(message);
+    const events = parseSseDataEvents(sse);
+    expect(events.some(e => e.type === "message_start")).toBe(true);
+    const deltas = events.filter(e => e.type === "content_block_delta");
+    expect(deltas.length).toBeGreaterThan(0);
+    const text = deltas.map(e => (e.delta as { text?: string } | undefined)?.text ?? "").join("");
+    expect(text).toBe("Hello world");
+    expect(events.some(e => e.type === "message_stop")).toBe(true);
   });
 });

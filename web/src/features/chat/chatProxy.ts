@@ -110,6 +110,10 @@ async function* iterateSse(
   }
 }
 
+function isEventStream(res: Response): boolean {
+  return (res.headers.get("content-type") ?? "").includes("text/event-stream");
+}
+
 async function streamOpenAiChat(params: StreamChatParams): Promise<void> {
   const origin = getProxyOrigin();
   const history = toOpenAiChatMessages(params.messages);
@@ -126,6 +130,12 @@ async function streamOpenAiChat(params: StreamChatParams): Promise<void> {
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(text || `HTTP ${res.status}`);
+  }
+
+  // Non-streaming JSON: render complete content once (no fake typewriter).
+  if (!isEventStream(res)) {
+    applyOpenAiChatJsonBody(await res.text(), params.onDelta);
+    return;
   }
 
   for await (const { data } of iterateSse(res, params.signal)) {
@@ -153,6 +163,29 @@ async function streamOpenAiChat(params: StreamChatParams): Promise<void> {
   }
 }
 
+function applyOpenAiChatJsonBody(body: string, onDelta: (text: string) => void): void {
+  const trimmed = body.trim();
+  if (!trimmed) {
+    return;
+  }
+  let json: {
+    choices?: Array<{ message?: { content?: string | null } }>;
+    error?: { message?: string };
+  };
+  try {
+    json = JSON.parse(trimmed) as typeof json;
+  } catch {
+    throw new Error(trimmed.slice(0, 500) || "Invalid OpenAI chat response");
+  }
+  if (json.error?.message) {
+    throw new Error(json.error.message);
+  }
+  const content = json.choices?.[0]?.message?.content;
+  if (typeof content === "string" && content) {
+    onDelta(content);
+  }
+}
+
 async function streamOpenAiResponses(params: StreamChatParams): Promise<void> {
   const origin = getProxyOrigin();
   const history = toOpenAiChatMessages(params.messages);
@@ -169,6 +202,11 @@ async function streamOpenAiResponses(params: StreamChatParams): Promise<void> {
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(text || `HTTP ${res.status}`);
+  }
+
+  if (!isEventStream(res)) {
+    applyOpenAiResponsesJsonBody(await res.text(), params.onDelta);
+    return;
   }
 
   for await (const { event, data } of iterateSse(res, params.signal)) {
@@ -194,6 +232,48 @@ async function streamOpenAiResponses(params: StreamChatParams): Promise<void> {
   }
 }
 
+function applyOpenAiResponsesJsonBody(body: string, onDelta: (text: string) => void): void {
+  const trimmed = body.trim();
+  if (!trimmed) {
+    return;
+  }
+  let json: Record<string, unknown>;
+  try {
+    json = JSON.parse(trimmed) as Record<string, unknown>;
+  } catch {
+    throw new Error(trimmed.slice(0, 500) || "Invalid OpenAI Responses body");
+  }
+  if (typeof json.error === "object" && json.error && "message" in json.error) {
+    throw new Error(String((json.error as { message?: string }).message ?? "error"));
+  }
+  const output = json.output;
+  if (!Array.isArray(output)) {
+    return;
+  }
+  let text = "";
+  for (const item of output) {
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+    const content = (item as { content?: unknown }).content;
+    if (!Array.isArray(content)) {
+      continue;
+    }
+    for (const part of content) {
+      if (!part || typeof part !== "object") {
+        continue;
+      }
+      const p = part as { type?: string; text?: string };
+      if ((p.type === "output_text" || p.type === "text") && typeof p.text === "string") {
+        text += p.text;
+      }
+    }
+  }
+  if (text) {
+    onDelta(text);
+  }
+}
+
 async function streamAnthropic(params: StreamChatParams): Promise<void> {
   const origin = getProxyOrigin();
   const history = toOpenAiChatMessages(params.messages);
@@ -213,6 +293,12 @@ async function streamAnthropic(params: StreamChatParams): Promise<void> {
     throw new Error(text || `HTTP ${res.status}`);
   }
 
+  // Non-streaming JSON: show full message at once.
+  if (!isEventStream(res)) {
+    applyAnthropicJsonBody(await res.text(), params.onDelta);
+    return;
+  }
+
   for await (const { data } of iterateSse(res, params.signal)) {
     let json: Record<string, unknown>;
     try {
@@ -226,11 +312,55 @@ async function streamAnthropic(params: StreamChatParams): Promise<void> {
       throw new Error(err?.message || "Anthropic error");
     }
     if (type === "content_block_delta") {
-      const delta = json.delta as { type?: string; text?: string } | undefined;
+      const delta = json.delta as { type?: string; text?: string; thinking?: string } | undefined;
       if (delta?.type === "text_delta" && typeof delta.text === "string" && delta.text) {
         params.onDelta(delta.text);
+      } else if (
+        delta?.type === "thinking_delta" &&
+        typeof delta.thinking === "string" &&
+        delta.thinking
+      ) {
+        params.onDelta(delta.thinking);
       }
     }
+  }
+}
+
+function applyAnthropicJsonBody(body: string, onDelta: (text: string) => void): void {
+  const trimmed = body.trim();
+  if (!trimmed) {
+    return;
+  }
+  let json: Record<string, unknown>;
+  try {
+    json = JSON.parse(trimmed) as Record<string, unknown>;
+  } catch {
+    throw new Error(trimmed.slice(0, 500) || "Invalid Anthropic response");
+  }
+  if (json.type === "error") {
+    const err = json.error as { message?: string } | undefined;
+    throw new Error(err?.message || "Anthropic error");
+  }
+  const content = json.content;
+  if (!Array.isArray(content)) {
+    throw new Error("Anthropic response missing content");
+  }
+  let text = "";
+  let thinking = "";
+  for (const block of content) {
+    if (!block || typeof block !== "object") {
+      continue;
+    }
+    const b = block as { type?: string; text?: string; thinking?: string };
+    if (b.type === "text" && typeof b.text === "string") {
+      text += b.text;
+    } else if (b.type === "thinking" && typeof b.thinking === "string") {
+      thinking += b.thinking;
+    }
+  }
+  const out = text || thinking;
+  if (out) {
+    onDelta(out);
   }
 }
 

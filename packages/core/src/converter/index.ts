@@ -151,6 +151,7 @@ export {
 export {
   formatOpenAIResponsesSse,
   formatOpenAIChatCompletionsSse,
+  formatAnthropicMessageSse,
   formatAnthropicSseError,
   formatOpenAIChatSseError,
   formatOpenAIResponsesSseError,

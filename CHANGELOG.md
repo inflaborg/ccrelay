@@ -23,9 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **UI**
 
 - Desktop Chat can call Anthropic endpoints: CORS now allows the `anthropic-version` request header (preflight was blocking cross-origin requests from the dashboard).
+- Chat Anthropic protocol now shows replies correctly when the active provider is OpenAI-compatible (cross-protocol returned JSON while the UI expected SSE).
+- Chat renders real SSE deltas as they arrive; when the proxy returns non-streaming JSON, the full reply is shown at once (no simulated typewriter).
 
 **Protocol/Conversion**
 
+- Anthropic clients that request `stream: true` against an OpenAI-compatible upstream now receive synthesized Anthropic SSE instead of a plain JSON message.
 - When Codex Responses traffic is converted to Chat Completions for OpenAI gpt-5 / o-series models, `reasoning_effort` is dropped if the request also has function tools (upstream Chat Completions rejects that combination).
 
 ## [0.2.9] - 2026-07-25 (pre-release)

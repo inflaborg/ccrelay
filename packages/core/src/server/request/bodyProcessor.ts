@@ -259,17 +259,13 @@ export class BodyProcessor {
     let streamRequested = false;
     let originalResponsesEcho: ResponsesRequestEcho | undefined;
 
-    if (
-      needsConversion &&
-      (clientSurface === "openai_responses" || clientSurface === "openai") &&
-      body.length > 0
-    ) {
+    if (needsConversion && body.length > 0) {
       try {
         const d = JSON.parse(body.toString("utf-8")) as Record<string, unknown>;
         if (d.stream === true) {
           if (clientSurface === "openai_responses") {
             responsesStreamRequested = true;
-          } else {
+          } else if (clientSurface === "openai" || clientSurface === "anthropic") {
             streamRequested = true;
           }
         }

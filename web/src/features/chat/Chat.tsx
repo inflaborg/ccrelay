@@ -498,7 +498,15 @@ export default function Chat() {
                       <p className="text-destructive whitespace-pre-wrap">{msg.error}</p>
                     ) : (
                       <>
-                        {msg.content ? <MarkdownViewer content={msg.content} /> : null}
+                        {msg.content ? (
+                          sending &&
+                          msg.id ===
+                            activeSession.messages[activeSession.messages.length - 1]?.id ? (
+                            <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                          ) : (
+                            <MarkdownViewer content={msg.content} />
+                          )
+                        ) : null}
                         {msg.error ? (
                           <p className="mt-1 text-destructive whitespace-pre-wrap text-[11px]">
                             {msg.error}

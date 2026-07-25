@@ -16,6 +16,7 @@ import {
   convertChatCompletionToResponses,
   formatOpenAIResponsesSse,
   formatOpenAIChatCompletionsSse,
+  formatAnthropicMessageSse,
   formatAnthropicSseError,
   formatOpenAIChatSseError,
   formatOpenAIResponsesSseError,
@@ -1318,6 +1319,36 @@ export class ProxyExecutor {
           { openaiCompat: provider.openaiCompat }
         );
 
+        if (task.streamRequested) {
+          const sse = formatAnthropicMessageSse(anthropicResponse);
+          log.info(`[O->A] synthetic SSE: bytes=${sse.length}`);
+          ctx.responseChunks.push(Buffer.from(sse, "utf-8"));
+          this.responseLogger.logResponse(
+            clientId,
+            duration,
+            status,
+            ctx.responseChunks,
+            undefined,
+            ctx.originalResponseBody,
+            ttfbForStreamLog(ctx, false),
+            undefined,
+            ctx.responseHeadersMasked,
+            computeTiming(ctx, task)
+          );
+          resolve({
+            statusCode: status,
+            headers: {
+              ...responseHeaders,
+              "content-type": "text/event-stream; charset=utf-8",
+            },
+            body: sse,
+            duration,
+            responseBodyChunks: ctx.responseChunks,
+            originalResponseBody: ctx.originalResponseBody,
+          });
+          return;
+        }
+
         ctx.responseChunks.push(Buffer.from(JSON.stringify(anthropicResponse), "utf-8"));
 
         this.responseLogger.logResponse(
@@ -1423,6 +1454,36 @@ export class ProxyExecutor {
           provider.baseUrl,
           { openaiCompat: provider.openaiCompat }
         );
+
+        if (task.streamRequested) {
+          const sse = formatAnthropicMessageSse(anthropicResponse);
+          log.info(`[Responses->A] synthetic SSE: bytes=${sse.length}`);
+          ctx.responseChunks.push(Buffer.from(sse, "utf-8"));
+          this.responseLogger.logResponse(
+            clientId,
+            duration,
+            status,
+            ctx.responseChunks,
+            undefined,
+            ctx.originalResponseBody,
+            ttfbForStreamLog(ctx, false),
+            undefined,
+            ctx.responseHeadersMasked,
+            computeTiming(ctx, task)
+          );
+          resolve({
+            statusCode: status,
+            headers: {
+              ...responseHeaders,
+              "content-type": "text/event-stream; charset=utf-8",
+            },
+            body: sse,
+            duration,
+            responseBodyChunks: ctx.responseChunks,
+            originalResponseBody: ctx.originalResponseBody,
+          });
+          return;
+        }
 
         ctx.responseChunks.push(Buffer.from(JSON.stringify(anthropicResponse), "utf-8"));
 

@@ -5,7 +5,10 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 
 import { randomUUID } from "crypto";
-import type { OpenAIChatCompletionResponse } from "../adapters/openai-chat-to-anthropic-response";
+import type {
+  AnthropicMessageResponse,
+  OpenAIChatCompletionResponse,
+} from "../adapters/openai-chat-to-anthropic-response";
 import type { OpenAIResponsesApiObject } from "../adapters/openai-chat-to-responses";
 
 /** Chars per synthetic delta chunk when upstream is non-streaming. */
@@ -424,6 +427,110 @@ export function formatAnthropicSseError(_status: number, message: string, type?:
     `event: error\ndata: ${JSON.stringify({ type: "error", error: { type: errorType, message } })}\n\n`
   );
   lines.push(`event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`);
+  return lines.join("");
+}
+
+function appendAnthropicSseEvent(
+  lines: string[],
+  eventName: string,
+  data: Record<string, unknown>
+): void {
+  lines.push(`event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
+/**
+ * Synthesize Anthropic Messages SSE for clients that sent `stream: true` while
+ * cross-protocol conversion forced a non-streaming upstream JSON message.
+ */
+export function formatAnthropicMessageSse(message: AnthropicMessageResponse): string {
+  const lines: string[] = [];
+  const push = (eventName: string, data: Record<string, unknown>) =>
+    appendAnthropicSseEvent(lines, eventName, data);
+
+  push("message_start", {
+    type: "message_start",
+    message: {
+      id: message.id,
+      type: "message",
+      role: "assistant",
+      model: message.model,
+      content: [],
+      stop_reason: null,
+      stop_sequence: null,
+      usage: {
+        input_tokens: message.usage?.input_tokens ?? 0,
+        output_tokens: 0,
+        ...(message.usage?.cache_read_input_tokens !== undefined
+          ? { cache_read_input_tokens: message.usage.cache_read_input_tokens }
+          : {}),
+      },
+    },
+  });
+
+  const blocks = Array.isArray(message.content) ? message.content : [];
+  for (let index = 0; index < blocks.length; index++) {
+    const block = blocks[index];
+    if (!block || typeof block !== "object") {
+      continue;
+    }
+    if (block.type === "text") {
+      push("content_block_start", {
+        type: "content_block_start",
+        index,
+        content_block: { type: "text", text: "" },
+      });
+      const text = typeof block.text === "string" ? block.text : "";
+      for (let i = 0; i < text.length; i += SSE_TEXT_CHUNK) {
+        push("content_block_delta", {
+          type: "content_block_delta",
+          index,
+          delta: { type: "text_delta", text: text.slice(i, i + SSE_TEXT_CHUNK) },
+        });
+      }
+      push("content_block_stop", { type: "content_block_stop", index });
+      continue;
+    }
+    if (block.type === "thinking") {
+      push("content_block_start", {
+        type: "content_block_start",
+        index,
+        content_block: {
+          type: "thinking",
+          thinking: "",
+          ...(typeof block.signature === "string" ? { signature: block.signature } : {}),
+        },
+      });
+      const thinking = typeof block.thinking === "string" ? block.thinking : "";
+      for (let i = 0; i < thinking.length; i += SSE_TEXT_CHUNK) {
+        push("content_block_delta", {
+          type: "content_block_delta",
+          index,
+          delta: { type: "thinking_delta", thinking: thinking.slice(i, i + SSE_TEXT_CHUNK) },
+        });
+      }
+      push("content_block_stop", { type: "content_block_stop", index });
+      continue;
+    }
+    // tool_use / server_tool_use / web_search_tool_result: emit as complete blocks (no deltas)
+    push("content_block_start", {
+      type: "content_block_start",
+      index,
+      content_block: block,
+    });
+    push("content_block_stop", { type: "content_block_stop", index });
+  }
+
+  push("message_delta", {
+    type: "message_delta",
+    delta: {
+      stop_reason: message.stop_reason ?? "end_turn",
+      stop_sequence: message.stop_sequence ?? null,
+    },
+    usage: {
+      output_tokens: message.usage?.output_tokens ?? 0,
+    },
+  });
+  push("message_stop", { type: "message_stop" });
   return lines.join("");
 }
 
