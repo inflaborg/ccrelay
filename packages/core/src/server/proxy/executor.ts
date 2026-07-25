@@ -51,10 +51,12 @@ import {
 } from "../../converter";
 import {
   applyPlatformResponseTransforms,
+  applyPlatformChatResponseSanitize,
   applyAnthropicSseRowsPlatformTransform,
   matchAnthropicSseRule,
   parseAnthropicSseRows,
   serializeAnthropicSseRows,
+  platformBuffersChatContentForToolParse,
 } from "../../converter/platform-transforms";
 import type { ApiSurface } from "../../types";
 import type { RequestTask, ProxyResult } from "../../types";
@@ -1300,6 +1302,10 @@ export class ProxyExecutor {
 
       try {
         const openaiResponse = JSON.parse(responseBody) as OpenAIChatCompletionResponse;
+        applyPlatformChatResponseSanitize(
+          openaiResponse as unknown as Record<string, unknown>,
+          provider.baseUrl
+        );
         const anthropicResponse = convertResponseToAnthropic(
           openaiResponse,
           originalModel || "none"
@@ -1641,6 +1647,10 @@ export class ProxyExecutor {
           }
         }
         const openaiResponse = JSON.parse(jsonBody) as OpenAIChatCompletionResponse;
+        applyPlatformChatResponseSanitize(
+          openaiResponse as unknown as Record<string, unknown>,
+          provider.baseUrl
+        );
         const out = convertChatCompletionToResponses(
           openaiResponse,
           originalModel || "none",
@@ -1753,7 +1763,10 @@ export class ProxyExecutor {
     let firstChunkTime = 0;
     let totalBytes = 0;
 
-    const state = createStreamingState({ echo: task.originalResponsesEcho });
+    const state = createStreamingState({
+      echo: task.originalResponsesEcho,
+      bufferContentForToolParse: platformBuffersChatContentForToolParse(provider.baseUrl),
+    });
     const upstreamLog: Buffer[] = [];
 
     const processLine = (line: string): void => {

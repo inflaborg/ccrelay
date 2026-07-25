@@ -17,6 +17,7 @@ import {
   MESSAGE_TRANSFORM_REGISTRY,
   REQUEST_OVERRIDE_REGISTRY,
   REQUEST_SANITIZE_REGISTRY,
+  CHAT_RESPONSE_SANITIZE_REGISTRY,
   RESPONSE_TRANSFORM_REGISTRY,
   TOOL_TRANSFORM_REGISTRY,
   ANTHROPIC_SSE_TRANSFORM_REGISTRY,
@@ -36,6 +37,7 @@ export type {
   PlatformAnthropicSseTransform,
   PlatformMessageTransform,
   PlatformRequestSanitizeTransform,
+  PlatformChatResponseSanitizeTransform,
   PlatformResponseTransform,
   PlatformToolTransform,
 } from "./registries";
@@ -62,10 +64,14 @@ export {
   isPlainObject,
   customToFunctionShim,
   openaiChatStrictToolsSanitize,
+  extractLongcatToolCalls,
+  parseLongcatArgValue,
+  sanitizeLongcatChatCompletion,
   TOOL_TRANSFORM_REGISTRY,
   MESSAGE_TRANSFORM_REGISTRY,
   REQUEST_OVERRIDE_REGISTRY,
   REQUEST_SANITIZE_REGISTRY,
+  CHAT_RESPONSE_SANITIZE_REGISTRY,
   RESPONSE_TRANSFORM_REGISTRY,
   ANTHROPIC_SSE_TRANSFORM_REGISTRY,
   TRANSFORM_REGISTRY,
@@ -286,6 +292,29 @@ export function applyPlatformRequestSanitize(body: Record<string, unknown>, base
   }
   const fn = REQUEST_SANITIZE_REGISTRY[key];
   fn?.(body);
+}
+
+/**
+ * Apply inbound OpenAI Chat Completions sanitization (e.g. LongCat XML → `tool_calls`)
+ * when the platform rule declares `chatResponseSanitize`.
+ */
+export function applyPlatformChatResponseSanitize(
+  body: Record<string, unknown>,
+  baseUrl: string
+): void {
+  const rule = matchHostedToolRuleForBaseUrl(baseUrl);
+  const key = rule?.chatResponseSanitize;
+  if (!key) {
+    return;
+  }
+  const fn = CHAT_RESPONSE_SANITIZE_REGISTRY[key];
+  fn?.(body);
+}
+
+/** True when the platform rule buffers streamed assistant text to rewrite tool XML at finish. */
+export function platformBuffersChatContentForToolParse(baseUrl: string): boolean {
+  const rule = matchHostedToolRuleForBaseUrl(baseUrl);
+  return typeof rule?.chatResponseSanitize === "string" && rule.chatResponseSanitize.length > 0;
 }
 
 /**

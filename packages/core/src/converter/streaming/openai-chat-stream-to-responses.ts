@@ -11,6 +11,7 @@ import { randomUUID } from "crypto";
 
 import type { ResponsesRequestEcho } from "../../types";
 import { mergedResponseShellEcho } from "../adapters/openai-responses-to-chat";
+import { extractLongcatToolCalls } from "../platform-transforms/longcat/chat-tool-calls";
 
 const SSE_TEXT_CHUNK = 64;
 
@@ -40,6 +41,11 @@ export interface StreamingConversionState {
   outputIndex: number;
   /** Tool calls received finish_reason; close on [DONE] after trailing arg deltas. */
   toolsPendingClose: boolean;
+  /**
+   * When true, buffer assistant `content` deltas and rewrite LongCat XML tool calls at finish
+   * instead of streaming raw XML as `output_text`.
+   */
+  bufferContentForToolParse: boolean;
   /** Original Responses request fields to echo back in response shells */
   echo?: ResponsesRequestEcho;
   usage?: {
@@ -57,6 +63,7 @@ export interface StreamingConversionState {
 
 export function createStreamingState(opts?: {
   echo?: ResponsesRequestEcho;
+  bufferContentForToolParse?: boolean;
 }): StreamingConversionState {
   return {
     responseId: `resp_${randomUUID().replace(/-/g, "")}`,
@@ -72,6 +79,7 @@ export function createStreamingState(opts?: {
     currentToolIndex: 0,
     outputIndex: 0,
     toolsPendingClose: false,
+    bufferContentForToolParse: opts?.bufferContentForToolParse === true,
     ...(opts?.echo !== undefined ? { echo: opts.echo } : {}),
   };
 }
@@ -163,18 +171,24 @@ export function processStreamingChunk(state: StreamingConversionState, line: str
         events.push(...emitResponseCreated(state));
       }
       state.phase = "text";
-      events.push(...emitOutputItemAdded(state, "message"));
-      events.push(...emitContentPartAdded(state, state.messageId, "output_text"));
+      if (!state.bufferContentForToolParse) {
+        events.push(...emitOutputItemAdded(state, "message"));
+        events.push(...emitContentPartAdded(state, state.messageId, "output_text"));
+      }
     } else if (state.phase === "reasoning") {
       events.push(...emitReasoningTextDone(state));
       events.push(...emitReasoningItemDone(state));
       state.outputIndex++;
       state.phase = "text";
-      events.push(...emitOutputItemAdded(state, "message"));
-      events.push(...emitContentPartAdded(state, state.messageId, "output_text"));
+      if (!state.bufferContentForToolParse) {
+        events.push(...emitOutputItemAdded(state, "message"));
+        events.push(...emitContentPartAdded(state, state.messageId, "output_text"));
+      }
     }
     state.accumulatedText += delta.content;
-    events.push(...emitTextDeltasForItem(state, state.messageId, delta.content));
+    if (!state.bufferContentForToolParse) {
+      events.push(...emitTextDeltasForItem(state, state.messageId, delta.content));
+    }
   }
 
   // Tool call deltas
@@ -202,9 +216,7 @@ export function processStreamingChunk(state: StreamingConversionState, line: str
       if (fn && typeof fn.name === "string") {
         // If we have accumulated text, close the text item first
         if (state.phase === "text" && state.accumulatedText) {
-          events.push(...emitTextDone(state));
-          events.push(...emitOutputItemDone(state, "message"));
-          state.outputIndex++;
+          events.push(...closeBufferedOrStreamedTextPhase(state));
         }
         state.phase = "tool";
 
@@ -236,9 +248,7 @@ export function processStreamingChunk(state: StreamingConversionState, line: str
       events.push(...emitReasoningItemDone(state));
       state.outputIndex++;
     } else if (state.phase === "text") {
-      events.push(...emitTextDone(state));
-      events.push(...emitOutputItemDone(state, "message"));
-      state.outputIndex++;
+      events.push(...closeBufferedOrStreamedTextPhase(state));
     } else if (state.phase === "tool") {
       // Defer tool close until [DONE] so trailing argument deltas after finish_reason are included.
       state.toolsPendingClose = true;
@@ -289,6 +299,54 @@ export function createSseLineBuffer(callback: (line: string) => void): {
 /* -------------------------------------------------------------------------- */
 /*  Internal helpers                                                          */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * Close the text phase. When buffering for LongCat XML tool calls, rewrite
+ * accumulated text into cleaned content + function_call items before emitting.
+ */
+function closeBufferedOrStreamedTextPhase(state: StreamingConversionState): string[] {
+  const events: string[] = [];
+
+  if (state.bufferContentForToolParse) {
+    const { content, toolCalls } = extractLongcatToolCalls(state.accumulatedText);
+    state.accumulatedText = content;
+
+    if (content.length > 0) {
+      events.push(...emitOutputItemAdded(state, "message"));
+      events.push(...emitContentPartAdded(state, state.messageId, "output_text"));
+      events.push(...emitTextDeltasForItem(state, state.messageId, content));
+      events.push(...emitTextDone(state));
+      events.push(...emitOutputItemDone(state, "message"));
+      state.outputIndex++;
+    }
+
+    if (toolCalls.length > 0) {
+      state.phase = "tool";
+      for (let i = 0; i < toolCalls.length; i++) {
+        const tc = toolCalls[i];
+        const tcIndex = state.toolCalls.length;
+        state.toolCalls[tcIndex] = {
+          id: `fc_${randomUUID().replace(/-/g, "")}`,
+          name: tc.function.name,
+          callId: tc.id,
+          arguments: tc.function.arguments,
+        };
+        events.push(...emitOutputItemAdded(state, "function_call", tcIndex));
+        if (tc.function.arguments.length > 0) {
+          events.push(...emitFunctionCallArgDeltas(state, tcIndex, tc.function.arguments));
+        }
+      }
+      state.toolsPendingClose = true;
+    }
+
+    return events;
+  }
+
+  events.push(...emitTextDone(state));
+  events.push(...emitOutputItemDone(state, "message"));
+  state.outputIndex++;
+  return events;
+}
 
 function sseLine(data: string): string {
   return `${data}\n\n`;
@@ -709,9 +767,11 @@ function flushCompletion(state: StreamingConversionState): string[] {
     state.outputIndex++;
     events.push(...emitResponseCompleted(state));
   } else if (state.phase === "text") {
-    events.push(...emitTextDone(state));
-    events.push(...emitOutputItemDone(state, "message"));
-    state.outputIndex++;
+    events.push(...closeBufferedOrStreamedTextPhase(state));
+    if (state.toolsPendingClose) {
+      events.push(...emitPendingToolCallCloseEvents(state));
+      state.toolsPendingClose = false;
+    }
     events.push(...emitResponseCompleted(state));
   } else if (state.phase === "tool") {
     events.push(...emitPendingToolCallCloseEvents(state));

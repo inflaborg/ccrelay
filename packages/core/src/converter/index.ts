@@ -68,6 +68,7 @@ export {
   extractResponsesEcho,
   mergedResponseShellEcho,
   extractFunctionToolsForEcho,
+  collectResponsesToolsRaw,
 } from "./adapters/openai-responses-to-chat";
 
 export {
