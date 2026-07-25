@@ -10,6 +10,7 @@ const EXPECTED_RULE_SLUGS: Record<string, string> = {
   "(truthy)": "truthy",
   "(absent)": "absent",
   "(any non-empty)": "anyNonEmpty",
+  "(current provider models)": "currentProviderModels",
   '(non-empty array including "*")': "nonEmptyArrayIncludingStar",
   "x-ccrelay-model-alias: (non-empty, key case-insensitive)": "aliasHeaderNonEmpty",
 };

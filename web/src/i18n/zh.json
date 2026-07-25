@@ -157,6 +157,7 @@
       "truthy": "Truthy（1、\"1\" 或 true）",
       "absent": "必须不存在",
       "anyNonEmpty": "任意非空值",
+      "currentProviderModels": "当前供应商模型列表中的某个模型 id",
       "nonEmptyArrayIncludingStar": "非空数组且包含 \"*\"",
       "aliasHeaderNonEmpty": "x-ccrelay-model-alias 请求头非空（key 大小写不敏感）"
     },
@@ -207,7 +208,9 @@
         "label": "模型",
         "description": "（写入 config.toml 中的 model 字段）",
         "notSet": "未设置。",
-        "default": "默认："
+        "default": "默认：",
+        "bannerTitle": "Codex 模型需要更新",
+        "needsUpdate": "当前模型不在激活供应商的列表中。切换供应商后请更新模型。"
       },
       "configureModel": "配置模型",
       "restore": "还原",

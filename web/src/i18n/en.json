@@ -157,6 +157,7 @@
       "truthy": "Truthy (1, \"1\", or true)",
       "absent": "Must be absent",
       "anyNonEmpty": "Any non-empty value",
+      "currentProviderModels": "A model id from the current provider's model list",
       "nonEmptyArrayIncludingStar": "Non-empty array including \"*\"",
       "aliasHeaderNonEmpty": "x-ccrelay-model-alias header with non-empty value (key case-insensitive)"
     },
@@ -207,7 +208,9 @@
         "label": "Model",
         "description": "(written to model in config.toml)",
         "notSet": "Not set.",
-        "default": "Default:"
+        "default": "Default:",
+        "bannerTitle": "Codex model needs update",
+        "needsUpdate": "Current model is not in the active provider's list. Update it after switching providers."
       },
       "configureModel": "Configure model",
       "restore": "Restore",

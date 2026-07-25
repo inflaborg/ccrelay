@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Config**
 
 - Codex Client configuration Apply now writes a model catalog (`ccrelay-model-catalog.json`) from the active provider’s models and points `model_catalog_json` at it, so Codex `/model` can list those models. Switching or saving the active provider refreshes the catalog when Codex already points at CCRelay.
+- Client Config detects when Codex `model` is not in the active provider’s model list (e.g. after switching providers) and prompts you to update it.
 
 ### Fixed
 

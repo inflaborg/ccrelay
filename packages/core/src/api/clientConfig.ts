@@ -490,16 +490,27 @@ function detectClaude(claudePath: string, port: number): ClientConfigItem {
   });
 }
 
-export function buildCodexFields(toml: ParsedTomlLite, port: number): ClientConfigField[] {
+export function buildCodexFields(
+  toml: ParsedTomlLite,
+  port: number,
+  availableModelIds?: readonly string[]
+): ClientConfigField[] {
   const expectedBase = `http://127.0.0.1:${port}/openai`;
   const modelProvider = toml.top.model_provider;
-  const model = toml.top.model;
+  const model = toml.top.model?.trim() || undefined;
   const baseUrl = modelProvider
     ? toml.sections[`model_providers.${modelProvider}`]?.base_url
     : undefined;
   const catalogJson = toml.top.model_catalog_json;
   const catalogOk =
     isCcrelayCatalogPointer(catalogJson) && catalogFileExists(path.dirname(CODEX_CONFIG()));
+
+  const available =
+    availableModelIds && availableModelIds.length > 0
+      ? new Set(availableModelIds.map(id => id.trim()).filter(Boolean))
+      : null;
+  const modelOk = available ? Boolean(model && available.has(model)) : Boolean(model);
+  const modelExpected = available ? "(current provider models)" : "(any non-empty)";
 
   return [
     {
@@ -516,9 +527,9 @@ export function buildCodexFields(toml: ParsedTomlLite, port: number): ClientConf
     },
     {
       key: "model",
-      expected: "(any non-empty)",
-      current: model?.trim() || undefined,
-      ok: Boolean(model?.trim()),
+      expected: modelExpected,
+      current: model,
+      ok: modelOk,
     },
     {
       key: "model_catalog_json",
@@ -529,18 +540,26 @@ export function buildCodexFields(toml: ParsedTomlLite, port: number): ClientConf
   ];
 }
 
-function detectCodex(codexPath: string, port: number): ClientConfigItem {
+function detectCodex(
+  codexPath: string,
+  port: number,
+  availableModelIds?: readonly string[]
+): ClientConfigItem {
   const filePath = codexPath;
   if (!fs.existsSync(codexPath)) {
-    return itemFromFields(filePath, buildCodexFields({ top: {}, sections: {} }, port), {
-      baseUrlKey: "model_providers.ccrelay.base_url",
-    });
+    return itemFromFields(
+      filePath,
+      buildCodexFields({ top: {}, sections: {} }, port, availableModelIds),
+      {
+        baseUrlKey: "model_providers.ccrelay.base_url",
+      }
+    );
   }
   const raw = fs.readFileSync(codexPath, "utf-8");
   const toml = parseTomlLite(raw);
   const modelProvider = toml.top.model_provider;
   const model = toml.top.model;
-  const fields = buildCodexFields(toml, port);
+  const fields = buildCodexFields(toml, port, availableModelIds);
   const baseUrl = modelProvider
     ? toml.sections[`model_providers.${modelProvider}`]?.base_url
     : undefined;
@@ -793,14 +812,16 @@ export async function handleGetClientConfig(
   const claudePath = CLAUDE_SETTINGS();
   const detectionEnabled = routerConfig.clientVersionDetection?.enabled !== false;
   const claudeCli = await detectClaudeCliVersion({ enabled: detectionEnabled });
+  const availableModels = resolveCurrentProviderModels();
+  const availableModelIds = availableModels.map(m => m.slug);
   const body: ClientConfigGetResponse = {
     expectedAnthropicBase,
     expectedCodexBaseUrl,
     port,
     claudeCode: detectClaude(claudePath, port),
-    codex: detectCodex(CODEX_CONFIG(), port),
+    codex: detectCodex(CODEX_CONFIG(), port, availableModelIds),
     claudeDesktop: detectClaudeDesktop(claudeDesktopDir(), port),
-    codexAvailableModels: resolveCurrentProviderModels().map(m => ({
+    codexAvailableModels: availableModels.map(m => ({
       id: m.slug,
       displayName: m.displayName,
     })),
@@ -829,7 +850,8 @@ export async function handleApplyClientConfig(
   const claudePath = CLAUDE_SETTINGS();
   const codexPath = CODEX_CONFIG();
   const existingClaude = detectClaude(claudePath, port);
-  const existingCodex = detectCodex(codexPath, port);
+  const availableModelIds = resolveCurrentProviderModels().map(m => m.slug);
+  const existingCodex = detectCodex(codexPath, port, availableModelIds);
 
   try {
     const body = await parseJsonBody<{

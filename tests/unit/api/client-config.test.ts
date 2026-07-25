@@ -243,4 +243,28 @@ base_url = "http://127.0.0.1:7575/openai"
     expect(gapKeys).toContain("model");
     expect(gapKeys).toContain("model_catalog_json");
   });
+
+  it("marks model stale when it is not in the current provider list", () => {
+    const toml = parseTomlLite(`model = "old-provider-model"
+model_provider = "ccrelay"
+model_catalog_json = "ccrelay-model-catalog.json"
+[model_providers.ccrelay]
+base_url = "http://127.0.0.1:7575/openai"
+`);
+    const fields = buildCodexFields(toml, 7575, ["deepseek-v4-flash", "deepseek-v4-pro"]);
+    const modelField = fields.find(f => f.key === "model");
+    expect(modelField?.ok).toBe(false);
+    expect(modelField?.expected).toBe("(current provider models)");
+    expect(modelField?.current).toBe("old-provider-model");
+  });
+
+  it("accepts model when it belongs to the current provider list", () => {
+    const toml = parseTomlLite(`model = "deepseek-v4-flash"
+model_provider = "ccrelay"
+[model_providers.ccrelay]
+base_url = "http://127.0.0.1:7575/openai"
+`);
+    const fields = buildCodexFields(toml, 7575, ["deepseek-v4-flash", "deepseek-v4-pro"]);
+    expect(fields.find(f => f.key === "model")?.ok).toBe(true);
+  });
 });
