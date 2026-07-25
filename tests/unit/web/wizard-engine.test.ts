@@ -446,6 +446,34 @@ describe("generateProviders", () => {
     expect(out[1].id).toBe("company-glm-intl-openai");
     expect(new Set(out.map(p => p.id)).size).toBe(2);
   });
+
+  it("generates LongCat OpenAI and Anthropic providers with fixed endpoints", () => {
+    const preset = getPresetById("longcat");
+    if (!preset) {
+      throw new Error("preset longcat");
+    }
+    const out = generateProviders(preset, {
+      selections: initSelections(preset),
+      apiKey: "lc-key",
+      modelIds: ["LongCat-2.0"],
+      claudeSupport: true,
+      useCustomModels: true,
+    });
+    expect(out).toHaveLength(2);
+    expect(out[0]).toMatchObject({
+      id: "longcat-openai",
+      providerType: "openai_chat",
+      baseUrl: "https://api.longcat.chat/openai",
+      apiKey: "lc-key",
+    });
+    expect(out[1]).toMatchObject({
+      id: "longcat-anthropic",
+      providerType: "anthropic",
+      baseUrl: "https://api.longcat.chat/anthropic",
+      apiKey: "lc-key",
+    });
+    expect(out[0].customModelsList?.[0]).toMatch(/^LongCat-2\.0;/);
+  });
 });
 
 describe("slugifyProviderId", () => {

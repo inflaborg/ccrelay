@@ -469,6 +469,7 @@
       "xiaomi": "Xiaomi MiMo",
       "azure": "Azure OpenAI",
       "minimax": "MiniMax",
+      "longcat": "Meituan LongCat",
       "geminiOpenai": "Gemini (OpenAI-compatible)",
       "deepseek": "DeepSeek",
       "astraflow": "Astraflow (UCloud)"

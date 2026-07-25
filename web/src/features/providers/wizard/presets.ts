@@ -12,6 +12,7 @@ const VENDOR_DISPLAY: Record<string, string> = {
   claude: "Claude",
   llama: "Llama",
   qwen: "Qwen",
+  longcat: "LongCat",
 };
 
 /**
@@ -445,6 +446,32 @@ const PARTNER_PRESETS_LIST: PartnerPreset[] = [
       {
         providerType: "anthropic",
         urlTemplate: "https://api.deepseek.com/anthropic",
+        idSuffix: "anthropic",
+        nameSuffix: "-Anthropic",
+      },
+    ],
+  },
+  {
+    id: "longcat",
+    nameKey: "wizard.brand.longcat",
+    mode: "inject",
+    idPrefix: "longcat",
+    namePrefix: "LongCat",
+    defaultModelIds: ["LongCat-2.0;LongCat 2.0"],
+    defaultCustomModels: true,
+    authHeader: "authorization",
+    options: [],
+    segmentRules: [],
+    variants: [
+      {
+        providerType: "openai_chat",
+        urlTemplate: "https://api.longcat.chat/openai",
+        idSuffix: "openai",
+        nameSuffix: "-OpenAI",
+      },
+      {
+        providerType: "anthropic",
+        urlTemplate: "https://api.longcat.chat/anthropic",
         idSuffix: "anthropic",
         nameSuffix: "-Anthropic",
       },
