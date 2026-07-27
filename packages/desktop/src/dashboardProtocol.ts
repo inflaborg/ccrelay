@@ -14,6 +14,8 @@ export type DashboardInjectConfig = {
   apiBearer: string;
   locale?: string;
   nativeUpdater?: boolean;
+  /** process.platform when running inside Electron desktop */
+  desktopPlatform?: string;
 };
 
 /* eslint-disable @typescript-eslint/naming-convention -- file extension keys */
@@ -59,7 +61,7 @@ export function registerDashboardProtocolSchemes(): void {
 }
 
 function buildInjectScript(config: DashboardInjectConfig): string {
-  return `<script>window.CCRELAY_API_URL=${JSON.stringify(config.apiOrigin)};window.CCRELAY_API_BEARER=${JSON.stringify(config.apiBearer)};window.CCRELAY_LOCALE=${JSON.stringify(config.locale ?? "")};window.CCRELAY_NATIVE_UPDATER=${config.nativeUpdater === true ? "true" : "false"};</script>`;
+  return `<script>window.CCRELAY_API_URL=${JSON.stringify(config.apiOrigin)};window.CCRELAY_API_BEARER=${JSON.stringify(config.apiBearer)};window.CCRELAY_LOCALE=${JSON.stringify(config.locale ?? "")};window.CCRELAY_NATIVE_UPDATER=${config.nativeUpdater === true ? "true" : "false"};window.CCRELAY_DESKTOP_PLATFORM=${JSON.stringify(config.desktopPlatform ?? "")};</script>`;
 }
 
 function resolveAssetPath(urlPathname: string): string | null {

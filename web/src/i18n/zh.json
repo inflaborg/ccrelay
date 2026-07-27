@@ -23,7 +23,8 @@
     "providers": "提供商",
     "capabilities": "能力",
     "logs": "日志",
-    "settings": "设置"
+    "settings": "设置",
+    "menu": "导航"
   },
   "chat": {
     "loading": "加载中…",

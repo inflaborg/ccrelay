@@ -45,6 +45,17 @@ declare global {
     CCRELAY_LOCALE?: string;
     /** Injected by Electron desktop when native auto-update is active */
     CCRELAY_NATIVE_UPDATER?: boolean;
+    /** Injected by Electron desktop: process.platform (darwin/win32/linux) */
+    CCRELAY_DESKTOP_PLATFORM?: string;
+    /** Preload bridge for frameless window controls */
+    ccrelayDesktop?: {
+      platform: string;
+      minimize: () => Promise<void>;
+      toggleMaximize: () => Promise<void>;
+      close: () => Promise<void>;
+      isMaximized: () => Promise<boolean>;
+      onMaximizedChange: (callback: (maximized: boolean) => void) => () => void;
+    };
   }
 }
 

@@ -1,9 +1,14 @@
 /**
  * Electron BrowserWindow loads the dashboard from bundled web assets (custom protocol).
  * API calls still target the proxy server on the configured host/port.
+ *
+ * Frameless chrome:
+ * - macOS: hiddenInset title bar + native traffic lights; drag via CSS app-region
+ * - Windows/Linux: frame:false + renderer caption buttons via preload IPC
  */
 
 import { BrowserWindow, app } from "electron";
+import * as path from "path";
 import type { ProxyServer, ConfigManager } from "@ccrelay/core";
 import { isNativeUpdaterEnabled } from "./autoUpdate";
 import {
@@ -12,6 +17,7 @@ import {
   type DashboardInjectConfig,
 } from "./dashboardProtocol";
 import { attachExternalLinkHandlers } from "./externalLinks";
+import { attachMaximizedEvents, registerWindowControlIpc } from "./windowControlsIpc";
 
 let dashboardWin: BrowserWindow | null = null;
 
@@ -26,11 +32,16 @@ function buildInjectConfig(server: ProxyServer, config: ConfigManager): Dashboar
     apiBearer: config.getApiBearerToken(),
     locale: config.locale,
     nativeUpdater: isNativeUpdaterEnabled(),
+    desktopPlatform: process.platform,
   };
 }
 
 export function updateDashboardInjectConfig(server: ProxyServer, config: ConfigManager): void {
   setDashboardInjectConfig(buildInjectConfig(server, config));
+}
+
+function preloadPath(): string {
+  return path.join(__dirname, "preload.js");
 }
 
 export function showDashboardWindow(server: ProxyServer, config: ConfigManager): void {
@@ -51,6 +62,10 @@ export function showDashboardWindow(server: ProxyServer, config: ConfigManager):
     return;
   }
 
+  registerWindowControlIpc();
+
+  const isMac = process.platform === "darwin";
+
   dashboardWin = new BrowserWindow({
     width: 1024,
     height: 720,
@@ -58,13 +73,25 @@ export function showDashboardWindow(server: ProxyServer, config: ConfigManager):
     minHeight: 480,
     title: "CCRelay",
     show: false,
+    backgroundColor: "#1f1f1f",
+    ...(isMac
+      ? {
+          titleBarStyle: "hiddenInset" as const,
+          trafficLightPosition: { x: 14, y: 12 },
+        }
+      : {
+          frame: false,
+          autoHideMenuBar: true,
+        }),
     webPreferences: {
+      preload: preloadPath(),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
     },
   });
 
+  attachMaximizedEvents(dashboardWin);
   attachExternalLinkHandlers(dashboardWin.webContents);
 
   void dashboardWin.loadURL(url).catch(() => {
@@ -76,7 +103,7 @@ export function showDashboardWindow(server: ProxyServer, config: ConfigManager):
     dashboardWin?.focus();
   });
 
-  if (process.platform === "darwin") {
+  if (isMac) {
     void app.dock?.show();
   }
 

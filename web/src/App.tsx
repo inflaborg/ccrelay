@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, type ComponentType } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -10,6 +10,7 @@ import {
   Terminal,
   Route,
   MessageSquare,
+  ChevronDown,
 } from "lucide-react";
 import { api } from "./api/client";
 import { applyAppLocale, parseAppLocale } from "./i18n";
@@ -23,6 +24,17 @@ import Settings from "./features/settings/Settings";
 import Capabilities from "./features/capabilities/Capabilities";
 import { LanguageModal } from "./components/LanguageModal";
 import { VersionFooter } from "./components/VersionFooter";
+import { WindowCaptionButtons } from "./components/WindowCaptionButtons";
+import { Button } from "./components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "./components/ui/dropdown-menu";
+import { isDarwinDesktop, isElectronDesktop, needsWindowCaptionButtons } from "./lib/desktopShell";
 import { cn } from "./lib/utils";
 
 // CCRelay icon as data URI (works in VSCode webview)
@@ -47,6 +59,23 @@ const VALID_TABS: Tab[] = [
   "capabilities",
   "logs",
   "settings",
+];
+
+type NavItem = {
+  id: Tab;
+  labelKey: `nav.${Tab}`;
+  icon: ComponentType<{ className?: string }>;
+};
+
+const NAV_ITEMS: NavItem[] = [
+  { id: "chat", labelKey: "nav.chat", icon: MessageSquare },
+  { id: "clientConfig", labelKey: "nav.clientConfig", icon: Terminal },
+  { id: "dashboard", labelKey: "nav.dashboard", icon: Server },
+  { id: "smartRouting", labelKey: "nav.smartRouting", icon: Route },
+  { id: "providers", labelKey: "nav.providers", icon: Activity },
+  { id: "capabilities", labelKey: "nav.capabilities", icon: Puzzle },
+  { id: "logs", labelKey: "nav.logs", icon: Database },
+  { id: "settings", labelKey: "nav.settings", icon: SettingsIcon },
 ];
 
 function useHashTab(defaultTab: Tab): [Tab, (tab: Tab) => void] {
@@ -110,112 +139,127 @@ function App() {
     }
   }, [loggingEnabled, activeTab, setActiveTab]);
 
+  const navItems = useMemo(
+    () => NAV_ITEMS.filter(item => item.id !== "logs" || loggingEnabled),
+    [loggingEnabled]
+  );
+
+  const activeNav = navItems.find(item => item.id === activeTab) ?? navItems[0];
+  const ActiveIcon = activeNav.icon;
+
   const uiLanguageKey = i18n.resolvedLanguage ?? i18n.language;
+  const electronDesktop = isElectronDesktop();
+  const darwinDesktop = isDarwinDesktop();
+  const showCaptionButtons = needsWindowCaptionButtons();
 
   return (
     <div key={uiLanguageKey} className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
-      {/* Header - Tab Style */}
-      <header className="bg-card flex-shrink-0 border-b border-border">
-        <div className="max-w-full px-2 sm:px-4">
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center sm:h-10 justify-between gap-3 sm:gap-0 pt-3 pb-3 sm:py-0">
-            <div className="flex items-center gap-1.5 px-1 sm:px-0">
+      {/* Header - Tab Style (Electron: frameless drag region + OS chrome) */}
+      <header
+        className={cn(
+          "bg-card relative flex-shrink-0 border-b border-border",
+          electronDesktop && "electron-drag select-none"
+        )}
+      >
+        {showCaptionButtons && (
+          <div className="absolute right-0 top-0 z-10">
+            <WindowCaptionButtons />
+          </div>
+        )}
+        <div
+          className={cn(
+            "max-w-full px-2 sm:px-4",
+            darwinDesktop && "pl-[78px] sm:pl-[78px]",
+            showCaptionButtons && "pr-[132px]"
+          )}
+        >
+          <div className="flex h-10 items-center gap-2">
+            <div className="flex min-w-0 shrink-0 items-center gap-1.5">
               <img src={iconSvg} alt="CCRelay" className="h-6 w-6 sm:h-8 sm:w-8" />
               <h1 className="text-[13px] sm:text-sm font-semibold">CCRelay</h1>
             </div>
-            <nav className="flex items-center w-full sm:w-auto">
-              <div className="flex w-full sm:w-auto bg-muted/50 sm:bg-transparent rounded-lg sm:rounded-none p-1 sm:p-0 gap-1 sm:gap-0">
-                <button
-                  className={`flex-1 sm:flex-none h-8 sm:h-10 px-2 sm:px-4 text-[11px] sm:text-xs sm:min-w-[80px] flex items-center justify-center gap-1.5 rounded-md sm:rounded-none transition-all duration-200 ${
-                    activeTab === "chat"
-                      ? "bg-background sm:bg-primary text-foreground sm:text-primary-foreground shadow-sm sm:shadow-none"
-                      : "text-muted-foreground sm:text-foreground hover:text-foreground sm:hover:bg-primary/15"
-                  }`}
-                  onClick={() => setActiveTab("chat")}
-                >
-                  <MessageSquare className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">{t("nav.chat")}</span>
-                </button>
-                <button
-                  className={`flex-1 sm:flex-none h-8 sm:h-10 px-2 sm:px-4 text-[11px] sm:text-xs sm:min-w-[80px] flex items-center justify-center gap-1.5 rounded-md sm:rounded-none transition-all duration-200 ${
-                    activeTab === "clientConfig"
-                      ? "bg-background sm:bg-primary text-foreground sm:text-primary-foreground shadow-sm sm:shadow-none"
-                      : "text-muted-foreground sm:text-foreground hover:text-foreground sm:hover:bg-primary/15"
-                  }`}
-                  onClick={() => setActiveTab("clientConfig")}
-                >
-                  <Terminal className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">{t("nav.clientConfig")}</span>
-                </button>
-                <button
-                  className={`flex-1 sm:flex-none h-8 sm:h-10 px-2 sm:px-4 text-[11px] sm:text-xs sm:min-w-[80px] flex items-center justify-center gap-1.5 rounded-md sm:rounded-none transition-all duration-200 ${
-                    activeTab === "dashboard"
-                      ? "bg-background sm:bg-primary text-foreground sm:text-primary-foreground shadow-sm sm:shadow-none"
-                      : "text-muted-foreground sm:text-foreground hover:text-foreground sm:hover:bg-primary/15"
-                  }`}
-                  onClick={() => setActiveTab("dashboard")}
-                >
-                  <Server className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">{t("nav.dashboard")}</span>
-                </button>
-                <button
-                  className={`flex-1 sm:flex-none h-8 sm:h-10 px-2 sm:px-4 text-[11px] sm:text-xs sm:min-w-[80px] flex items-center justify-center gap-1.5 rounded-md sm:rounded-none transition-all duration-200 ${
-                    activeTab === "smartRouting"
-                      ? "bg-background sm:bg-primary text-foreground sm:text-primary-foreground shadow-sm sm:shadow-none"
-                      : "text-muted-foreground sm:text-foreground hover:text-foreground sm:hover:bg-primary/15"
-                  }`}
-                  onClick={() => setActiveTab("smartRouting")}
-                >
-                  <Route className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">{t("nav.smartRouting")}</span>
-                </button>
-                <button
-                  className={`flex-1 sm:flex-none h-8 sm:h-10 px-2 sm:px-4 text-[11px] sm:text-xs sm:min-w-[80px] flex items-center justify-center gap-1.5 rounded-md sm:rounded-none transition-all duration-200 ${
-                    activeTab === "providers"
-                      ? "bg-background sm:bg-primary text-foreground sm:text-primary-foreground shadow-sm sm:shadow-none"
-                      : "text-muted-foreground sm:text-foreground hover:text-foreground sm:hover:bg-primary/15"
-                  }`}
-                  onClick={() => setActiveTab("providers")}
-                >
-                  <Activity className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">{t("nav.providers")}</span>
-                </button>
-                <button
-                  className={`flex-1 sm:flex-none h-8 sm:h-10 px-2 sm:px-4 text-[11px] sm:text-xs sm:min-w-[80px] flex items-center justify-center gap-1.5 rounded-md sm:rounded-none transition-all duration-200 ${
-                    activeTab === "capabilities"
-                      ? "bg-background sm:bg-primary text-foreground sm:text-primary-foreground shadow-sm sm:shadow-none"
-                      : "text-muted-foreground sm:text-foreground hover:text-foreground sm:hover:bg-primary/15"
-                  }`}
-                  onClick={() => setActiveTab("capabilities")}
-                >
-                  <Puzzle className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">{t("nav.capabilities")}</span>
-                </button>
-                {loggingEnabled && (
-                  <button
-                    className={`flex-1 sm:flex-none h-8 sm:h-10 px-2 sm:px-4 text-[11px] sm:text-xs sm:min-w-[80px] flex items-center justify-center gap-1.5 rounded-md sm:rounded-none transition-all duration-200 ${
-                      activeTab === "logs"
-                        ? "bg-background sm:bg-primary text-foreground sm:text-primary-foreground shadow-sm sm:shadow-none"
-                        : "text-muted-foreground sm:text-foreground hover:text-foreground sm:hover:bg-primary/15"
-                    }`}
-                    onClick={() => setActiveTab("logs")}
-                  >
-                    <Database className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">{t("nav.logs")}</span>
-                  </button>
-                )}
-                <button
-                  className={`flex-1 sm:flex-none h-8 sm:h-10 px-2 sm:px-4 text-[11px] sm:text-xs sm:min-w-[80px] flex items-center justify-center gap-1.5 rounded-md sm:rounded-none transition-all duration-200 ${
-                    activeTab === "settings"
-                      ? "bg-background sm:bg-primary text-foreground sm:text-primary-foreground shadow-sm sm:shadow-none"
-                      : "text-muted-foreground sm:text-foreground hover:text-foreground sm:hover:bg-primary/15"
-                  }`}
-                  onClick={() => setActiveTab("settings")}
-                >
-                  <SettingsIcon className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">{t("nav.settings")}</span>
-                </button>
+
+            {/* Wide: horizontal tabs */}
+            <nav
+              className={cn(
+                "ml-auto hidden min-w-0 items-center lg:flex",
+                electronDesktop && "electron-no-drag"
+              )}
+            >
+              <div className="flex items-center">
+                {navItems.map(item => {
+                  const Icon = item.icon;
+                  const selected = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={cn(
+                        "flex h-10 min-w-[80px] items-center justify-center gap-1.5 px-4 text-xs transition-all duration-200",
+                        selected
+                          ? "bg-primary text-primary-foreground"
+                          : "text-foreground hover:bg-primary/15"
+                      )}
+                      onClick={() => setActiveTab(item.id)}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      <span>{t(item.labelKey)}</span>
+                    </button>
+                  );
+                })}
               </div>
             </nav>
+
+            {/* Narrow: collapsed current-tab menu */}
+            <div
+              className={cn(
+                "ml-auto flex min-w-0 items-center lg:hidden",
+                electronDesktop && "electron-no-drag"
+              )}
+            >
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 max-w-[min(100%,16rem)] gap-1.5 border-border bg-muted/40 px-2.5 text-xs"
+                    aria-label={t("nav.menu")}
+                  >
+                    <ActiveIcon className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{t(activeNav.labelKey)}</span>
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  sideOffset={6}
+                  className="w-56 min-w-[12rem] border border-border bg-card p-1 text-card-foreground shadow-md"
+                >
+                  <DropdownMenuLabel className="px-2 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {t("nav.menu")}
+                  </DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={activeTab}
+                    onValueChange={value => setActiveTab(value as Tab)}
+                  >
+                    {navItems.map(item => {
+                      const Icon = item.icon;
+                      return (
+                        <DropdownMenuRadioItem
+                          key={item.id}
+                          value={item.id}
+                          className="gap-2 rounded-md px-2 py-1.5 text-xs data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                        >
+                          <Icon className="h-3.5 w-3.5" />
+                          <span className="truncate">{t(item.labelKey)}</span>
+                        </DropdownMenuRadioItem>
+                      );
+                    })}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </div>
       </header>
@@ -261,7 +305,9 @@ function App() {
       <LanguageModal
         open={showLanguagePrompt}
         onOpenChange={open => {
-          if (!open) setLanguagePromptDismissed(true);
+          if (!open) {
+            setLanguagePromptDismissed(true);
+          }
         }}
       />
     </div>

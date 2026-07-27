@@ -42,8 +42,14 @@ await esbuild.build({
 
 await esbuild.build({
   ...commonOptions,
+  entryPoints: [path.join(desktopDir, "src/preload.ts")],
+  outfile: path.join(outDir, "preload.js"),
+});
+
+await esbuild.build({
+  ...commonOptions,
   entryPoints: [path.join(coreDir, "src/database/worker/worker.ts")],
   outfile: path.join(outDir, "database-worker.cjs"),
 });
 
-console.log("Desktop main + database worker bundles created successfully");
+console.log("Desktop main + preload + database worker bundles created successfully");
