@@ -139,6 +139,7 @@ npm run compile        # 或 npm run watch
 - 请求日志使用进程内 SQLite（默认桌面构建无需系统 `sqlite3` 命令）
 - 托盘菜单 → **打开控制台** 在应用窗口内加载 Web UI；**打开日志目录** 可打开 `~/.ccrelay/logs/` 下的运行诊断日志
 - 正式安装包会自动检查更新（启动约 15 秒后，以及之后每 24 小时）。也可在托盘菜单 → **Check for Updates…** 立即检查。确认后下载并重启以完成安装。从源码运行时不提供自动更新。
+- 托盘 → **Update Channel** 可在 **Stable**（`channel-prod`）与 **Dev**（`channel-dev`）之间切换。选择保存在本机应用用户数据目录，并覆盖该安装包内置的更新源。
 - 从 [GitHub Releases](https://github.com/inflaborg/ccrelay/releases) 下载：
   - **macOS**: `CCRelay-<版本>-darwin-arm64.dmg` 或 `-darwin-x64.dmg`
   - **Windows**: `CCRelay-<版本>-win32-x64.exe` 或 `-win32-arm64.exe`
