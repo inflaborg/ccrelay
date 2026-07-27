@@ -715,7 +715,7 @@ export default function Chat() {
                 <div
                   key={msg.id}
                   className={cn(
-                    "group/msg flex items-center gap-1",
+                    "group/msg flex items-end gap-1",
                     msg.role === "user" ? "justify-end" : "justify-start"
                   )}
                 >
