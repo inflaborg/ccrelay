@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+**Desktop**
+
+- Tray Update Channel now keeps the correct selection after restart (resolve preference / version default before building the menu). Dev installs default to Dev; stable installs default to Stable.
+- Chat tab OpenAI protocol against Anthropic upstreams works again from the desktop dashboard: upstream CORS headers are stripped and CCRelay CORS is re-applied on proxied/streaming responses (writeHead was dropping the earlier CORS headers).
+
+### Added
+
+**Desktop**
+
+- Dashboard footer shows the current update channel (Stable / Dev) next to the version; tray changes update it live.
+
+**UI**
+
+- Chat user messages can be edited inline; saving truncates later turns and retries the assistant reply.
+
 ## [0.3.0] - 2026-07-25 (pre-release)
 
 Pre-release line for 0.3.0.

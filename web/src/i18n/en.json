@@ -55,6 +55,11 @@
     "send": "Send",
     "stop": "Stop",
     "stopped": "Stopped",
+    "edit": "Edit",
+    "saveEdit": "Save & retry",
+    "cancelEdit": "Cancel",
+    "copy": "Copy",
+    "copied": "Copied",
     "protocol": {
       "openaiChat": "OpenAI Chat",
       "openaiResponses": "OpenAI Responses",
@@ -76,7 +81,10 @@
     "modalTitle": "New version {{version}}",
     "download": "View release on GitHub",
     "current": "Current version: {{version}}",
-    "noNotes": "No release notes provided."
+    "noNotes": "No release notes provided.",
+    "channelStable": "Stable",
+    "channelDev": "Dev",
+    "channelHint": "Update channel (change from tray → Update Channel)"
   },
   "language": {
     "title": "Choose Language",

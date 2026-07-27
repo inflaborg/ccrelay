@@ -181,3 +181,30 @@ export function corsExtraAllowedHeadersCsv(): string {
   // anthropic-version is required by Anthropic Messages clients (e.g. Chat tab from desktop origin).
   return `Content-Type, X-API-Key, ${CCRELAY_UI_HEADER_NAME}, Authorization, anthropic-version`;
 }
+
+/** Upstream CORS headers must not be forwarded — they collide with CCRelay's own CORS. */
+const UPSTREAM_CORS_HEADER_NAMES = new Set([
+  "access-control-allow-origin",
+  "access-control-allow-methods",
+  "access-control-allow-headers",
+  "access-control-allow-credentials",
+  "access-control-expose-headers",
+  "access-control-max-age",
+]);
+
+export function isUpstreamCorsHeaderName(name: string): boolean {
+  return UPSTREAM_CORS_HEADER_NAMES.has(name.toLowerCase());
+}
+
+/**
+ * Apply CCRelay CORS on a headers object that will be passed to `writeHead`.
+ * `writeHead(status, headers)` replaces headers previously set via `setHeader`,
+ * so streaming/proxy paths must include CORS in that object.
+ */
+export function applyClientCorsHeaders(
+  headers: Record<string, string | string[] | number | undefined>
+): void {
+  headers["Access-Control-Allow-Origin"] = "*";
+  headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS";
+  headers["Access-Control-Allow-Headers"] = corsExtraAllowedHeadersCsv();
+}

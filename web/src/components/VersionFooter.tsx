@@ -22,10 +22,21 @@ function statusTitleKey(status: UpdateCheckStatus): string {
   }
 }
 
+function readInjectedUpdateChannel(): "prod" | "dev" | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const value = window.CCRELAY_UPDATE_CHANNEL;
+  return value === "prod" || value === "dev" ? value : null;
+}
+
 export function VersionFooter() {
   const { t } = useTranslation();
   const nativeUpdater = typeof window !== "undefined" && window.CCRELAY_NATIVE_UPDATER === true;
   const [version, setVersion] = useState<string | null>(null);
+  const [updateChannel, setUpdateChannel] = useState<"prod" | "dev" | null>(
+    readInjectedUpdateChannel
+  );
   const [updateCheck, setUpdateCheck] = useState<UpdateCheckResponse | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [manualChecking, setManualChecking] = useState(false);
@@ -65,6 +76,19 @@ export function VersionFooter() {
       .getVersion()
       .then(v => setVersion(v.version))
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const onChannel = (event: Event): void => {
+      const detail = (event as CustomEvent<unknown>).detail;
+      if (detail === "prod" || detail === "dev") {
+        setUpdateChannel(detail);
+        return;
+      }
+      setUpdateChannel(readInjectedUpdateChannel());
+    };
+    window.addEventListener("ccrelay-update-channel", onChannel);
+    return () => window.removeEventListener("ccrelay-update-channel", onChannel);
   }, []);
 
   const pollUpdateCheck = useCallback(async () => {
@@ -129,11 +153,29 @@ export function VersionFooter() {
   };
 
   const displayVersion = version ?? updateCheck?.currentVersion ?? null;
+  const channelLabel =
+    updateChannel === "dev"
+      ? t("update.channelDev")
+      : updateChannel === "prod"
+        ? t("update.channelStable")
+        : null;
+
+  const versionAndChannel = (
+    <>
+      {displayVersion && <span>{displayVersion}</span>}
+      {channelLabel && (
+        <>
+          {displayVersion && <span aria-hidden>·</span>}
+          <span title={t("update.channelHint")}>{channelLabel}</span>
+        </>
+      )}
+    </>
+  );
 
   if (nativeUpdater) {
     return (
       <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-        {displayVersion && <span>{displayVersion}</span>}
+        {versionAndChannel}
       </div>
     );
   }
@@ -179,7 +221,7 @@ export function VersionFooter() {
     <>
       <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
         {isChecking && <Loader2 className="h-3 w-3 animate-spin shrink-0" aria-hidden />}
-        {displayVersion && <span>{displayVersion}</span>}
+        {versionAndChannel}
         <button
           type="button"
           className={`shrink-0 disabled:opacity-50 disabled:pointer-events-none ${statusButtonClass}`}

@@ -138,7 +138,7 @@ An optional Electron desktop app (`packages/desktop`) runs the same core as the 
 - Stores request logs with in-process SQLite (no system `sqlite3` binary required for the default desktop build)
 - Tray menu → **Open Dashboard** loads the web UI in an app window; **Open Logs Folder** opens runtime diagnostics under `~/.ccrelay/logs/`
 - Packaged builds check for updates automatically (about 15 seconds after launch, then once every 24 hours). Use the tray menu → **Check for Updates…** to check immediately. Confirming an update downloads it and restarts the app to install. Auto-update is not available when running from source.
-- Tray → **Update Channel** switches between **Stable** (`channel-prod`) and **Dev** (`channel-dev`). The choice is stored locally under the app user data directory and overrides the feed baked into that install.
+- Tray → **Update Channel** switches between **Stable** (`channel-prod`) and **Dev** (`channel-dev`). Default follows the install (dev builds → Dev, stable builds → Stable). A tray choice is stored under the app user data directory and overrides that default.
 - Packaged dashboard uses a frameless window: macOS keeps native traffic lights; Windows/Linux show minimize / maximize / close in the header. Drag the empty header area to move the window.
 - Download from [GitHub Releases](https://github.com/inflaborg/ccrelay/releases):
   - **macOS**: `CCRelay-<version>-darwin-arm64.dmg` or `-darwin-x64.dmg`

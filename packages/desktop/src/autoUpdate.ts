@@ -1,16 +1,17 @@
 /**
  * Packaged-build auto-update via electron-updater (generic provider).
- * Feed URL defaults to the pack-time electron-builder `publish.url`
- * (channel-prod / channel-dev). Users can override via tray → Update Channel;
- * preference is stored in userData. Manifest filenames are always
- * latest-mac.yml / latest.yml (`publish.channel: latest`) so prerelease
- * app versions like 0.2.9-dev.N do not request missing dev-mac.yml files.
+ * Default channel: saved preference, else version-based (`X.Y.Z-dev.N` →
+ * dev, else prod). Users can override via tray → Update Channel; preference
+ * is stored in userData. Manifest filenames are always latest-mac.yml /
+ * latest.yml (`publish.channel: latest`) so prerelease app versions like
+ * 0.2.9-dev.N do not request missing dev-mac.yml files.
  */
 
 import { BrowserWindow, app, dialog } from "electron";
 import type { AppUpdater, UpdateInfo } from "electron-updater";
 import { Logger } from "@ccrelay/core";
 import {
+  defaultUpdateChannelFromVersion,
   feedUrlForChannel,
   loadUpdateChannel,
   saveUpdateChannel,
@@ -28,8 +29,12 @@ let manualCheck = false;
 let checking = false;
 let startupTimer: ReturnType<typeof setTimeout> | null = null;
 let dailyInterval: ReturnType<typeof setInterval> | null = null;
-/** Runtime preference; null means use pack-time baked feed. */
+/** Resolved channel after init (preference or version default). */
 let activeChannel: UpdateChannel | null = null;
+
+function resolveUpdateChannel(): UpdateChannel {
+  return loadUpdateChannel() ?? defaultUpdateChannelFromVersion(app.getVersion());
+}
 
 function parentWindow(): BrowserWindow | null {
   return BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null;
@@ -105,6 +110,7 @@ async function promptInstall(info: UpdateInfo): Promise<void> {
 }
 
 function applyUpdateChannel(channel: UpdateChannel): void {
+  activeChannel = channel;
   if (!updater) {
     return;
   }
@@ -115,12 +121,12 @@ function applyUpdateChannel(channel: UpdateChannel): void {
     channel: "latest",
   });
   updater.allowPrerelease = channel === "dev";
-  activeChannel = channel;
   log.info(`[autoUpdater] update channel set to ${channel} (${url})`);
 }
 
-export function getUpdateChannel(): UpdateChannel | null {
-  return activeChannel;
+/** Effective update channel for tray UI (after init, always set). */
+export function getUpdateChannel(): UpdateChannel {
+  return activeChannel ?? resolveUpdateChannel();
 }
 
 export async function setUpdateChannel(channel: UpdateChannel): Promise<void> {
@@ -168,9 +174,13 @@ export async function requestUpdateCheck(manual: boolean): Promise<void> {
 }
 
 /**
- * Wire electron-updater when packaged. Call once from `app.whenReady()`.
+ * Resolve channel (and wire electron-updater when packaged). Call once from
+ * `app.whenReady()` before building the tray so the menu matches reality.
  */
 export function initAutoUpdate(): void {
+  const channel = resolveUpdateChannel();
+  applyUpdateChannel(channel);
+
   if (!app.isPackaged) {
     return;
   }
@@ -189,11 +199,7 @@ export function initAutoUpdate(): void {
     // blockmap path rewriting always 404s; skip the failed attempt and full-download.
     autoUpdater.disableDifferentialDownload = true;
     updater = autoUpdater;
-
-    const preferred = loadUpdateChannel();
-    if (preferred) {
-      applyUpdateChannel(preferred);
-    }
+    applyUpdateChannel(channel);
 
     autoUpdater.on("update-available", (info: UpdateInfo) => {
       void promptDownload(info);
