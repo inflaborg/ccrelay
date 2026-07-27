@@ -1,6 +1,8 @@
 export type ChatProtocol = "openai_chat" | "openai_responses" | "anthropic";
 
-export type ChatRole = "user" | "assistant";
+export type ChatMode = "agent" | "playground";
+
+export type ChatRole = "user" | "assistant" | "tool";
 
 export interface ChatImageAttachment {
   id: string;
@@ -11,6 +13,8 @@ export interface ChatImageAttachment {
   omitted?: boolean;
 }
 
+export type ToolTraceStatus = "running" | "done" | "error";
+
 export interface ChatMessage {
   id: string;
   role: ChatRole;
@@ -19,6 +23,10 @@ export interface ChatMessage {
   images?: ChatImageAttachment[];
   /** Set when the assistant turn failed. */
   error?: string;
+  /** Agent tool row: function name. */
+  toolName?: string;
+  /** Agent tool row: execution status. */
+  toolStatus?: ToolTraceStatus;
 }
 
 export interface ChatSession {
@@ -26,6 +34,10 @@ export interface ChatSession {
   title: string;
   protocol: ChatProtocol;
   model: string;
+  /** Agent = harness loop with tools; Playground = single-turn proxy chat. Default agent. */
+  mode: ChatMode;
+  /** Rolling markdown memory for agent mode (History / Plan / Insights). */
+  memoryMarkdown: string;
   messages: ChatMessage[];
   createdAt: number;
   updatedAt: number;

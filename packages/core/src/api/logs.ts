@@ -14,9 +14,18 @@ import { ScopedLogger } from "../utils/logger";
 
 const log = new ScopedLogger("API:Logs");
 
+function parseOptionalInt(value: string | null): number | undefined {
+  if (value === null || value === "") {
+    return undefined;
+  }
+  const n = parseInt(value, 10);
+  return Number.isFinite(n) ? n : undefined;
+}
+
 /**
  * Handle GET /ccrelay/api/logs
- * Query params: limit, offset, providerId, method, pathPattern, hasError
+ * Query params: limit, offset, providerId, method, pathPattern, hasError,
+ *   startTime, endTime, minDuration, maxDuration
  */
 export async function handleLogs(
   req: http.IncomingMessage,
@@ -48,6 +57,10 @@ export async function handleLogs(
   const method = url.searchParams.get("method") || undefined;
   const pathPattern = url.searchParams.get("pathPattern") || undefined;
   const hasError = url.searchParams.get("hasError") === "true" ? true : undefined;
+  const startTime = parseOptionalInt(url.searchParams.get("startTime"));
+  const endTime = parseOptionalInt(url.searchParams.get("endTime"));
+  const minDuration = parseOptionalInt(url.searchParams.get("minDuration"));
+  const maxDuration = parseOptionalInt(url.searchParams.get("maxDuration"));
 
   const filter: LogFilter = {
     limit,
@@ -56,6 +69,10 @@ export async function handleLogs(
     method,
     pathPattern,
     hasError,
+    startTime,
+    endTime,
+    minDuration,
+    maxDuration,
   };
 
   const result = await db.queryLogs(filter);

@@ -7,32 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+## [0.3.0] - 2026-07-27
 
-**Desktop**
-
-- Tray Update Channel now keeps the correct selection after restart (resolve preference / version default before building the menu). Dev installs default to Dev; stable installs default to Stable.
-- Chat tab OpenAI protocol against Anthropic upstreams works again from the desktop dashboard: upstream CORS headers are stripped and CCRelay CORS is re-applied on proxied/streaming responses (writeHead was dropping the earlier CORS headers).
+Chat gains an Agent mode with local log tools, optional web search, and session memory. The desktop app ships a frameless window and Stable/Dev update channel switching. Chat edit/retry and several desktop streaming fixes round out the release.
 
 ### Added
 
-**Desktop**
-
-- Dashboard footer shows the current update channel (Stable / Dev) next to the version; tray changes update it live.
-
 **UI**
 
+- Chat Agent mode (default) for multi-step assistance with built-in tools: query local request logs and token stats, optional web search/fetch when Capabilities Search is configured, and rolling session memory (History / Plan / Insights).
+- Chat Playground mode keeps the previous protocol-switching test chat.
 - Chat user messages can be edited inline; saving truncates later turns and retries the assistant reply.
 
-## [0.3.0] - 2026-07-25 (pre-release)
+**Desktop**
 
-Pre-release line for 0.3.0.
+- Frameless dashboard window (native macOS traffic lights; Windows/Linux caption buttons) with a draggable header; below the large breakpoint, tabs collapse into a dropdown.
+- Packaged Electron apps can switch Stable vs Dev update feeds from the tray; preference is stored and the dashboard footer shows the active channel.
 
 ### Fixed
 
 **Desktop**
 
-- Dev Electron builds can check for updates again: the updater feed always uses `latest-*.yml` (and channel-dev also mirrors `dev-*.yml` for older installs), so prerelease versions no longer 404 on `dev-mac.yml`.
+- Tray Update Channel keeps the correct selection after restart (dev installs default to Dev; stable to Stable).
+- Chat OpenAI protocol against Anthropic upstreams works again from the desktop dashboard (streaming CORS headers were being dropped).
+- Dev Electron builds can check for updates again: the updater feed always uses `latest-*.yml` so prerelease versions no longer 404.
+
+**UI**
+
+- Leaving the Chat tab no longer cancels an in-flight Agent or Playground turn; the session keeps running until you return or press Stop.
 
 ## [0.2.9] - 2026-07-25
 

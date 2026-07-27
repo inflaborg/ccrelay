@@ -177,6 +177,14 @@ export interface LogsQuery {
   method?: string;
   pathPattern?: string;
   hasError?: boolean;
+  /** Millisecond epoch lower bound (inclusive). */
+  startTime?: number;
+  /** Millisecond epoch upper bound (inclusive). */
+  endTime?: number;
+  /** Minimum request duration in ms. */
+  minDuration?: number;
+  /** Maximum request duration in ms. */
+  maxDuration?: number;
 }
 
 export interface LogsResponse {
@@ -470,6 +478,42 @@ export interface WebSearchSettings {
   };
   providers?: string[];
   defaultSearchBackend?: string;
+}
+
+export interface WebSearchStatusResponse {
+  available: boolean;
+  enabled?: boolean;
+  backend?: string;
+  /** True when Capabilities web search feature is enabled (Tavily Extract or direct fetch). */
+  fetchAvailable?: boolean;
+  fetchBackend?: "tavily" | "direct";
+}
+
+export interface WebSearchResultItem {
+  title: string;
+  url: string;
+  content: string;
+}
+
+export interface WebSearchResponse {
+  available: boolean;
+  backend?: string;
+  query: string;
+  answer: string | null;
+  results: WebSearchResultItem[];
+  error?: string;
+}
+
+export interface WebFetchResponse {
+  available: boolean;
+  url: string;
+  finalUrl: string;
+  title?: string;
+  content: string;
+  backend: "tavily" | "direct";
+  truncated: boolean;
+  contentType?: string;
+  error?: string;
 }
 
 export interface LoggingSettings {

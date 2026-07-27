@@ -55,10 +55,13 @@ export interface StreamChatParams {
   onDelta: (text: string) => void;
 }
 
-function usableMessages(messages: ChatMessage[]): ChatMessage[] {
-  return messages
-    .filter(m => m.role === "user" || m.role === "assistant")
-    .filter(m => !(m.role === "assistant" && m.error));
+type PlaygroundMessage = ChatMessage & { role: "user" | "assistant" };
+
+function usableMessages(messages: ChatMessage[]): PlaygroundMessage[] {
+  return messages.filter(
+    (m): m is PlaygroundMessage =>
+      (m.role === "user" || m.role === "assistant") && !(m.role === "assistant" && Boolean(m.error))
+  );
 }
 
 function parseDataUrl(dataUrl: string): { mediaType: string; base64: string } | null {
@@ -492,6 +495,225 @@ export async function streamChat(params: StreamChatParams): Promise<void> {
       throw new Error(`Unknown protocol: ${_exhaustive}`);
     }
   }
+}
+
+/** OpenAI tool definition (function calling). */
+export interface OpenAiToolDef {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
+}
+
+/** Message shapes accepted by agent tool-calling requests. */
+export type AgentLlmMessage =
+  | { role: "system"; content: string }
+  | { role: "user"; content: string }
+  | {
+      role: "assistant";
+      content: string | null;
+      tool_calls?: Array<{
+        id: string;
+        type: "function";
+        function: { name: string; arguments: string };
+      }>;
+    }
+  | { role: "tool"; tool_call_id: string; content: string };
+
+export interface StreamToolCall {
+  id: string;
+  name: string;
+  arguments: string;
+}
+
+export interface StreamChatWithToolsResult {
+  content: string;
+  toolCalls: StreamToolCall[];
+}
+
+export interface StreamChatWithToolsParams {
+  model: string;
+  messages: AgentLlmMessage[];
+  tools: OpenAiToolDef[];
+  signal?: AbortSignal;
+  onDelta?: (text: string) => void;
+}
+
+type ToolCallAccumulator = {
+  id: string;
+  name: string;
+  arguments: string;
+};
+
+function mergeToolCallDelta(
+  acc: Map<number, ToolCallAccumulator>,
+  index: number,
+  delta: {
+    id?: string;
+    type?: string;
+    function?: { name?: string; arguments?: string };
+  }
+): void {
+  let entry = acc.get(index);
+  if (!entry) {
+    entry = { id: "", name: "", arguments: "" };
+    acc.set(index, entry);
+  }
+  if (typeof delta.id === "string" && delta.id) {
+    entry.id = delta.id;
+  }
+  if (typeof delta.function?.name === "string" && delta.function.name) {
+    entry.name += delta.function.name;
+  }
+  if (typeof delta.function?.arguments === "string") {
+    entry.arguments += delta.function.arguments;
+  }
+}
+
+function finalizeToolCalls(acc: Map<number, ToolCallAccumulator>): StreamToolCall[] {
+  const indexes = [...acc.keys()].sort((a, b) => a - b);
+  const out: StreamToolCall[] = [];
+  for (const i of indexes) {
+    const entry = acc.get(i)!;
+    if (!entry.name) {
+      continue;
+    }
+    out.push({
+      id: entry.id || `call_${i}`,
+      name: entry.name,
+      arguments: entry.arguments || "{}",
+    });
+  }
+  return out;
+}
+
+function applyOpenAiChatToolsJsonBody(body: string): StreamChatWithToolsResult {
+  const trimmed = body.trim();
+  if (!trimmed) {
+    return { content: "", toolCalls: [] };
+  }
+  let json: {
+    choices?: Array<{
+      message?: {
+        content?: string | null;
+        tool_calls?: Array<{
+          id?: string;
+          type?: string;
+          function?: { name?: string; arguments?: string };
+        }>;
+      };
+    }>;
+    error?: { message?: string };
+  };
+  try {
+    json = JSON.parse(trimmed) as typeof json;
+  } catch {
+    throw new Error(trimmed.slice(0, 500) || "Invalid OpenAI chat response");
+  }
+  if (json.error?.message) {
+    throw new Error(json.error.message);
+  }
+  const message = json.choices?.[0]?.message;
+  const content = typeof message?.content === "string" ? message.content : "";
+  const toolCalls: StreamToolCall[] = [];
+  for (const tc of message?.tool_calls ?? []) {
+    const name = tc.function?.name;
+    if (!name) {
+      continue;
+    }
+    toolCalls.push({
+      id: tc.id || `call_${toolCalls.length}`,
+      name,
+      arguments: tc.function?.arguments || "{}",
+    });
+  }
+  return { content, toolCalls };
+}
+
+/**
+ * Stream OpenAI Chat Completions with tools; accumulates text + tool_calls.
+ * Always uses /openai/chat/completions (agent mode).
+ */
+export async function streamChatWithTools(
+  params: StreamChatWithToolsParams
+): Promise<StreamChatWithToolsResult> {
+  const origin = getProxyOrigin();
+  const res = await fetch(`${origin}/openai/chat/completions`, {
+    method: "POST",
+    headers: proxyHeaders("openai_chat"),
+    signal: params.signal,
+    body: JSON.stringify({
+      model: params.model,
+      messages: params.messages,
+      tools: params.tools,
+      tool_choice: "auto",
+      stream: true,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+
+  if (!isEventStream(res)) {
+    const result = applyOpenAiChatToolsJsonBody(await res.text());
+    if (result.content && params.onDelta) {
+      params.onDelta(result.content);
+    }
+    return result;
+  }
+
+  let content = "";
+  const toolAcc = new Map<number, ToolCallAccumulator>();
+
+  for await (const { data } of iterateSse(res, params.signal)) {
+    if (data === "[DONE]") {
+      break;
+    }
+    try {
+      const json = JSON.parse(data) as {
+        choices?: Array<{
+          delta?: {
+            content?: string | null;
+            tool_calls?: Array<{
+              index?: number;
+              id?: string;
+              type?: string;
+              function?: { name?: string; arguments?: string };
+            }>;
+          };
+        }>;
+        error?: { message?: string };
+      };
+      if (json.error?.message) {
+        throw new Error(json.error.message);
+      }
+      const delta = json.choices?.[0]?.delta;
+      if (!delta) {
+        continue;
+      }
+      const chunk = delta.content;
+      if (typeof chunk === "string" && chunk.length > 0) {
+        content += chunk;
+        params.onDelta?.(chunk);
+      }
+      if (Array.isArray(delta.tool_calls)) {
+        for (const tc of delta.tool_calls) {
+          const index = typeof tc.index === "number" ? tc.index : 0;
+          mergeToolCallDelta(toolAcc, index, tc);
+        }
+      }
+    } catch (e) {
+      if (e instanceof SyntaxError) {
+        continue;
+      }
+      throw e;
+    }
+  }
+
+  return { content, toolCalls: finalizeToolCalls(toolAcc) };
 }
 
 export function defaultProtocolForProvider(

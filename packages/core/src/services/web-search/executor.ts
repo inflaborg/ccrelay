@@ -8,6 +8,7 @@ import { formatAnthropicWebSearchSse, formatAnthropicWebResponse } from "./forma
 import { createSearchProvider } from "./providers";
 import { synthesizeAnswer } from "./synthesizer";
 import type { WebSearchDetection } from "./types";
+import type { SearchProviderResponse } from "./providers/types";
 
 const log = Logger.getInstance();
 
@@ -25,6 +26,41 @@ export function isWebSearchFeatureEnabled(
     return true;
   }
   return (globalConfig.providers?.length ?? 0) > 0;
+}
+
+/** True when the feature is on and the configured search backend has an API key. */
+export function isWebSearchBackendReady(globalConfig: WebSearchGlobalConfig | undefined): boolean {
+  if (!isWebSearchFeatureEnabled(globalConfig)) {
+    return false;
+  }
+  const backend = globalConfig?.defaultSearchBackend ?? "tavily";
+  return createSearchProvider(backend, globalConfig ?? {}) !== null;
+}
+
+export function resolveWebSearchBackendName(
+  globalConfig: WebSearchGlobalConfig | undefined
+): string {
+  return globalConfig?.defaultSearchBackend ?? "tavily";
+}
+
+/**
+ * Run a plain web search with the configured backend (no Anthropic protocol wrapping).
+ * Throws if the feature/backend is not ready or the provider fails.
+ */
+export async function runPlainWebSearch(
+  query: string,
+  globalConfig: WebSearchGlobalConfig
+): Promise<SearchProviderResponse> {
+  const backend = resolveWebSearchBackendName(globalConfig);
+  const provider = createSearchProvider(backend, globalConfig);
+  if (!provider) {
+    throw new Error(`Web search backend "${backend}" is not configured`);
+  }
+  const searchResult = await provider.search(query.trim());
+  if (searchResult.answer === null) {
+    searchResult.answer = synthesizeAnswer(query.trim(), searchResult);
+  }
+  return searchResult;
 }
 
 /** Successful web-search synthesis (caller applies headers and body to the HTTP response). */
