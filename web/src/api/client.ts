@@ -29,6 +29,9 @@ import type {
   WizardEndpointTestResponse,
   SmartRoutingCatalogResponse,
   AliasDriftResponse,
+  WebSearchStatusResponse,
+  WebSearchResponse,
+  WebFetchResponse,
 } from "../types/api";
 import { fetchServerStatus } from "./serverReachability";
 
@@ -177,6 +180,10 @@ export const api = {
     if (query.method) params.append("method", query.method);
     if (query.pathPattern) params.append("pathPattern", query.pathPattern);
     if (query.hasError !== undefined) params.append("hasError", query.hasError.toString());
+    if (query.startTime !== undefined) params.append("startTime", query.startTime.toString());
+    if (query.endTime !== undefined) params.append("endTime", query.endTime.toString());
+    if (query.minDuration !== undefined) params.append("minDuration", query.minDuration.toString());
+    if (query.maxDuration !== undefined) params.append("maxDuration", query.maxDuration.toString());
 
     return fetchAPI<LogsResponse>(`/logs?${params.toString()}`);
   },
@@ -206,6 +213,21 @@ export const api = {
     const params = range && range !== "all" ? `?range=${range}` : "";
     return fetchAPI<LogStats>(`/stats${params}`);
   },
+
+  getWebSearchStatus: (): Promise<WebSearchStatusResponse> =>
+    fetchAPI<WebSearchStatusResponse>("/web-search"),
+
+  webSearch: (query: string): Promise<WebSearchResponse> =>
+    fetchAPI<WebSearchResponse>("/web-search", {
+      method: "POST",
+      body: JSON.stringify({ query }),
+    }),
+
+  webFetch: (url: string, query?: string): Promise<WebFetchResponse> =>
+    fetchAPI<WebFetchResponse>("/web-fetch", {
+      method: "POST",
+      body: JSON.stringify(query ? { url, query } : { url }),
+    }),
 
   getQueueStats: (): Promise<QueueOverviewResponse> => fetchAPI<QueueOverviewResponse>("/queue"),
 

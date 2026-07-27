@@ -44,6 +44,12 @@ import {
   handleWizardEndpointTest,
   setServer as setWizardUpstreamServer,
 } from "./wizardUpstream";
+import {
+  handleWebSearch,
+  handleWebSearchStatus,
+  handleWebFetch,
+  setServer as setWebSearchServer,
+} from "./webSearch";
 import { sendJson } from "./httpJson";
 import { setProxyServerForApi } from "./serverRef";
 import { getUiAccessToken } from "../server/httpAccessGate";
@@ -64,6 +70,7 @@ export function setServer(server: ProxyServer): void {
   setSettingsServer(server);
   setSmartRoutingServer(server);
   setWizardUpstreamServer(server);
+  setWebSearchServer(server);
 }
 
 /** Return this leader's UI access token (for followers to proxy dashboard auth). */
@@ -260,6 +267,38 @@ export function handleApiRequest(req: http.IncomingMessage, res: http.ServerResp
   if (reqPath === "/ccrelay/api/config" && method === "PATCH") {
     handlePatchConfig(req, res).catch(err => {
       log.error("Error handling PATCH /config", err);
+      if (!res.headersSent) {
+        sendJson(res, 500, { error: "Internal server error" });
+      }
+    });
+    return true;
+  }
+
+  if (reqPath === "/ccrelay/api/web-search" && method === "GET") {
+    try {
+      handleWebSearchStatus(req, res);
+    } catch (err) {
+      log.error("Error handling GET /web-search", err);
+      if (!res.headersSent) {
+        sendJson(res, 500, { error: "Internal server error" });
+      }
+    }
+    return true;
+  }
+
+  if (reqPath === "/ccrelay/api/web-search" && method === "POST") {
+    handleWebSearch(req, res).catch(err => {
+      log.error("Error handling POST /web-search", err);
+      if (!res.headersSent) {
+        sendJson(res, 500, { error: "Internal server error" });
+      }
+    });
+    return true;
+  }
+
+  if (reqPath === "/ccrelay/api/web-fetch" && method === "POST") {
+    handleWebFetch(req, res).catch(err => {
+      log.error("Error handling POST /web-fetch", err);
       if (!res.headersSent) {
         sendJson(res, 500, { error: "Internal server error" });
       }

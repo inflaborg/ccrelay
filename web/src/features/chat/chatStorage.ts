@@ -1,6 +1,8 @@
+import { INITIAL_MEMORY_MARKDOWN, normalizeMemoryMarkdown } from "./agent/memory";
 import type {
   ChatImageAttachment,
   ChatMessage,
+  ChatMode,
   ChatProtocol,
   ChatSession,
   ChatStoreV1,
@@ -24,6 +26,31 @@ export function newMessageId(): string {
     : `m-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+function normalizeMode(raw: unknown): ChatMode {
+  return raw === "playground" ? "playground" : "agent";
+}
+
+/** Migrate legacy sessions missing mode / memoryMarkdown. */
+export function normalizeSession(raw: Partial<ChatSession> & { id: string }): ChatSession {
+  const t = now();
+  return {
+    id: raw.id,
+    title: typeof raw.title === "string" && raw.title.trim() ? raw.title : "New chat",
+    protocol:
+      raw.protocol === "openai_chat" ||
+      raw.protocol === "openai_responses" ||
+      raw.protocol === "anthropic"
+        ? raw.protocol
+        : "openai_chat",
+    model: typeof raw.model === "string" ? raw.model : "",
+    mode: normalizeMode(raw.mode),
+    memoryMarkdown: normalizeMemoryMarkdown(raw.memoryMarkdown),
+    messages: Array.isArray(raw.messages) ? raw.messages : [],
+    createdAt: typeof raw.createdAt === "number" ? raw.createdAt : t,
+    updatedAt: typeof raw.updatedAt === "number" ? raw.updatedAt : t,
+  };
+}
+
 export function createSession(protocol: ChatProtocol, model: string, title?: string): ChatSession {
   const t = now();
   return {
@@ -31,6 +58,8 @@ export function createSession(protocol: ChatProtocol, model: string, title?: str
     title: title?.trim() || "New chat",
     protocol,
     model,
+    mode: "agent",
+    memoryMarkdown: INITIAL_MEMORY_MARKDOWN,
     messages: [],
     createdAt: t,
     updatedAt: t,
@@ -109,7 +138,9 @@ export function loadChatStore(): ChatStoreV1 {
     }
     const store: ChatStoreV1 = {
       version: 1,
-      sessions: parsed.sessions,
+      sessions: parsed.sessions.map(s =>
+        normalizeSession(s as Partial<ChatSession> & { id: string })
+      ),
       activeSessionId: parsed.activeSessionId ?? null,
     };
     // Migrate legacy sessions that stored full data-URLs (often breaks later writes/clears).

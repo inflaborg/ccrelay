@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import {
   Check,
+  ChevronDown,
+  ChevronUp,
   Copy,
   Eraser,
   ImagePlus,
@@ -13,6 +15,7 @@ import {
   Send,
   Square,
   Trash2,
+  Wrench,
   X,
 } from "lucide-react";
 import { modelSupportsImageInput } from "@ccrelay/model-meta";
@@ -31,6 +34,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { INITIAL_MEMORY_MARKDOWN } from "./agent/memory";
+import { runAgentLoop } from "./agent/harness";
 import {
   clearPersistedChatStore,
   createSession,
@@ -45,6 +50,7 @@ import { modelsFromProvider } from "./models";
 import type {
   ChatImageAttachment,
   ChatMessage,
+  ChatMode,
   ChatProtocol,
   ChatSession,
   ChatStoreV1,
@@ -92,12 +98,15 @@ export default function Chat() {
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [clearAllOpen, setClearAllOpen] = useState(false);
   const [clearSessionOpen, setClearSessionOpen] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   /** True while IME (e.g. Chinese Pinyin) has an open candidate window. */
   const imeComposingRef = useRef(false);
+  /** Latest memory for agent tools during an in-flight loop. */
+  const memoryRef = useRef(INITIAL_MEMORY_MARKDOWN);
 
   const focusInput = useCallback(() => {
     // Keep caret in the composer after Enter / Send / Stop.
@@ -126,16 +135,30 @@ export default function Chat() {
   );
 
   const supportsImageInput = useMemo(
-    () => Boolean(activeSession?.model && modelSupportsImageInput(activeSession.model)),
-    [activeSession?.model]
+    () =>
+      Boolean(
+        activeSession?.mode === "playground" &&
+        activeSession?.model &&
+        modelSupportsImageInput(activeSession.model)
+      ),
+    [activeSession?.mode, activeSession?.model]
   );
+
+  const sessionMode: ChatMode = activeSession?.mode ?? "agent";
 
   const activeProtocol =
     activeSession?.protocol ?? defaultProtocolForProvider(activeProvider?.providerType);
 
+  /** Agent always calls OpenAI Chat Completions (+ tools); use that for model list too. */
+  const modelsProtocol: ChatProtocol = sessionMode === "agent" ? "openai_chat" : activeProtocol;
+
+  useEffect(() => {
+    memoryRef.current = activeSession?.memoryMarkdown ?? INITIAL_MEMORY_MARKDOWN;
+  }, [activeSession?.id, activeSession?.memoryMarkdown]);
+
   const { data: upstreamModels, isFetching: upstreamFetching } = useQuery({
-    queryKey: ["chat-proxy-models", activeProvider?.id, activeProtocol],
-    queryFn: () => fetchProxyModels(activeProtocol),
+    queryKey: ["chat-proxy-models", activeProvider?.id, modelsProtocol],
+    queryFn: () => fetchProxyModels(modelsProtocol),
     enabled: Boolean(activeProvider) && configModels.length === 0,
     retry: false,
     staleTime: 60_000,
@@ -306,7 +329,12 @@ export default function Chat() {
       return;
     }
     setPendingImages([]);
-    updateSession(activeSession.id, { messages: [], title: "New chat" });
+    updateSession(activeSession.id, {
+      messages: [],
+      title: "New chat",
+      memoryMarkdown: INITIAL_MEMORY_MARKDOWN,
+    });
+    memoryRef.current = INITIAL_MEMORY_MARKDOWN;
     setClearSessionOpen(false);
   };
 
@@ -317,7 +345,7 @@ export default function Chat() {
     focusInput();
   };
 
-  const runAssistantTurn = useCallback(
+  const runPlaygroundTurn = useCallback(
     async (
       session: ChatSession,
       historyMessages: ChatMessage[],
@@ -422,6 +450,184 @@ export default function Chat() {
     [focusInput, t]
   );
 
+  const runAgentTurn = useCallback(
+    async (
+      session: ChatSession,
+      historyMessages: ChatMessage[],
+      options?: { title?: string }
+    ): Promise<void> => {
+      memoryRef.current = session.memoryMarkdown || INITIAL_MEMORY_MARKDOWN;
+
+      setStore(prev => ({
+        ...prev,
+        sessions: prev.sessions.map(s =>
+          s.id === session.id
+            ? {
+                ...s,
+                ...(options?.title !== undefined ? { title: options.title } : {}),
+                messages: historyMessages,
+                updatedAt: Date.now(),
+              }
+            : s
+        ),
+      }));
+
+      const controller = new AbortController();
+      abortRef.current = controller;
+      setSending(true);
+      focusInput();
+
+      const patchSessionMessages = (
+        sessionId: string,
+        updater: (messages: ChatMessage[]) => ChatMessage[]
+      ) => {
+        setStore(prev => ({
+          ...prev,
+          sessions: prev.sessions.map(s => {
+            if (s.id !== sessionId) {
+              return s;
+            }
+            return {
+              ...s,
+              updatedAt: Date.now(),
+              messages: updater(s.messages),
+            };
+          }),
+        }));
+      };
+
+      try {
+        let webSearchAvailable = false;
+        let webFetchAvailable = false;
+        try {
+          const status = await api.getWebSearchStatus();
+          webSearchAvailable = Boolean(status.available);
+          webFetchAvailable = Boolean(status.fetchAvailable);
+        } catch {
+          webSearchAvailable = false;
+          webFetchAvailable = false;
+        }
+
+        await runAgentLoop({
+          model: session.model,
+          historyMessages,
+          webSearchAvailable,
+          webFetchAvailable,
+          signal: controller.signal,
+          callbacks: {
+            appendMessage: message => {
+              patchSessionMessages(session.id, msgs => [...msgs, message]);
+            },
+            patchMessage: (id, patch) => {
+              patchSessionMessages(session.id, msgs =>
+                msgs.map(m => (m.id === id ? { ...m, ...patch } : m))
+              );
+            },
+            removeMessage: id => {
+              patchSessionMessages(session.id, msgs => msgs.filter(m => m.id !== id));
+            },
+            getMemory: () => memoryRef.current,
+            setMemory: markdown => {
+              memoryRef.current = markdown;
+              setStore(prev => ({
+                ...prev,
+                sessions: prev.sessions.map(s =>
+                  s.id === session.id
+                    ? { ...s, memoryMarkdown: markdown, updatedAt: Date.now() }
+                    : s
+                ),
+              }));
+            },
+            onAssistantDelta: (assistantId, chunk) => {
+              patchSessionMessages(session.id, msgs =>
+                msgs.map(m => (m.id === assistantId ? { ...m, content: m.content + chunk } : m))
+              );
+            },
+          },
+        });
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          setStore(prev => ({
+            ...prev,
+            sessions: prev.sessions.map(s => {
+              if (s.id !== session.id) {
+                return s;
+              }
+              const messages = [...s.messages];
+              for (let i = messages.length - 1; i >= 0; i--) {
+                const m = messages[i]!;
+                if (m.role === "assistant" && !m.content && !m.error) {
+                  messages[i] = { ...m, error: t("chat.stopped") };
+                  break;
+                }
+                if (m.role === "tool" && m.toolStatus === "running") {
+                  messages[i] = { ...m, toolStatus: "error", error: t("chat.stopped") };
+                }
+              }
+              return { ...s, messages, updatedAt: Date.now() };
+            }),
+          }));
+        } else {
+          const message = err instanceof Error ? err.message : String(err);
+          // Error already patched onto assistant when thrown from harness (non-abort).
+          // If nothing was patched, append an error bubble.
+          setStore(prev => {
+            const current = prev.sessions.find(s => s.id === session.id);
+            const last = current?.messages[current.messages.length - 1];
+            if (last?.role === "assistant" && last.error) {
+              return prev;
+            }
+            return {
+              ...prev,
+              sessions: prev.sessions.map(s =>
+                s.id === session.id
+                  ? {
+                      ...s,
+                      updatedAt: Date.now(),
+                      messages: [
+                        ...s.messages,
+                        {
+                          id: newMessageId(),
+                          role: "assistant",
+                          content: "",
+                          error: message,
+                        },
+                      ],
+                    }
+                  : s
+              ),
+            };
+          });
+        }
+      } finally {
+        abortRef.current = null;
+        setStore(prev => {
+          const next = stripImagePayloadsFromStore(prev);
+          saveChatStore(next);
+          return next;
+        });
+        setSending(false);
+        focusInput();
+      }
+    },
+    [focusInput, t]
+  );
+
+  const runTurn = useCallback(
+    async (
+      session: ChatSession,
+      historyMessages: ChatMessage[],
+      options?: { title?: string }
+    ): Promise<void> => {
+      if (session.mode === "agent") {
+        await runAgentTurn(session, historyMessages, options);
+      } else {
+        await runPlaygroundTurn(session, historyMessages, options);
+      }
+    },
+    [runAgentTurn, runPlaygroundTurn]
+  );
+
   const handleSend = async () => {
     if (!activeSession || sending) {
       return;
@@ -451,11 +657,7 @@ export default function Chat() {
     setInput("");
     setPendingImages([]);
     setEditingMessageId(null);
-    await runAssistantTurn(
-      activeSession,
-      nextMessages,
-      title !== undefined ? { title } : undefined
-    );
+    await runTurn(activeSession, nextMessages, title !== undefined ? { title } : undefined);
   };
 
   const handleStartEdit = (msg: ChatMessage) => {
@@ -522,7 +724,7 @@ export default function Chat() {
 
     setEditingMessageId(null);
     setEditDraft("");
-    await runAssistantTurn(activeSession, history, title !== undefined ? { title } : undefined);
+    await runTurn(activeSession, history, title !== undefined ? { title } : undefined);
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -635,25 +837,27 @@ export default function Chat() {
       {/* Main chat */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col rounded-md border border-border bg-card overflow-hidden">
         <div className="flex flex-wrap items-center gap-2 border-b border-border px-2 py-1.5">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="text-[10px] text-muted-foreground shrink-0">
-              {t("chat.protocolLabel")}
-            </span>
-            <SelectField
-              value={activeSession?.protocol ?? "openai_chat"}
-              options={PROTOCOLS.map(p => ({
-                value: p,
-                label: t(protocolLabelKey(p)),
-              }))}
-              onChange={v => {
-                if (activeSession) {
-                  updateSession(activeSession.id, { protocol: v as ChatProtocol });
-                }
-              }}
-              triggerClassName="w-[10.5rem]"
-              disabled={!activeSession || sending}
-            />
-          </div>
+          {sessionMode === "playground" ? (
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-[10px] text-muted-foreground shrink-0">
+                {t("chat.protocolLabel")}
+              </span>
+              <SelectField
+                value={activeSession?.protocol ?? "openai_chat"}
+                options={PROTOCOLS.map(p => ({
+                  value: p,
+                  label: t(protocolLabelKey(p)),
+                }))}
+                onChange={v => {
+                  if (activeSession) {
+                    updateSession(activeSession.id, { protocol: v as ChatProtocol });
+                  }
+                }}
+                triggerClassName="w-[10.5rem]"
+                disabled={!activeSession || sending}
+              />
+            </div>
+          ) : null}
           <div className="flex items-center gap-1.5 min-w-0 flex-1">
             <span className="text-[10px] text-muted-foreground shrink-0">
               {t("chat.modelLabel")}
@@ -678,6 +882,58 @@ export default function Chat() {
               <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground shrink-0" />
             ) : null}
           </div>
+          <div
+            className="inline-flex shrink-0 rounded-md border border-border p-0.5 bg-muted/40"
+            title={t("chat.modeLabel")}
+          >
+            <button
+              type="button"
+              disabled={!activeSession || sending}
+              className={cn(
+                "h-6 px-2 rounded text-[10px] font-medium transition-colors",
+                sessionMode === "agent"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+              onClick={() => {
+                if (activeSession) {
+                  updateSession(activeSession.id, { mode: "agent" });
+                  setPendingImages([]);
+                }
+              }}
+            >
+              {t("chat.modeAgent")}
+            </button>
+            <button
+              type="button"
+              disabled={!activeSession || sending}
+              className={cn(
+                "h-6 px-2 rounded text-[10px] font-medium transition-colors",
+                sessionMode === "playground"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+              onClick={() => {
+                if (activeSession) {
+                  updateSession(activeSession.id, { mode: "playground" });
+                }
+              }}
+            >
+              {t("chat.modePlayground")}
+            </button>
+          </div>
+          {sessionMode === "agent" ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 text-xs gap-1 shrink-0"
+              disabled={!activeSession}
+              onClick={() => setMemoryOpen(v => !v)}
+            >
+              {memoryOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              <span className="hidden sm:inline">{t("chat.memoryTitle")}</span>
+            </Button>
+          ) : null}
           <Button
             size="sm"
             variant="ghost"
@@ -690,6 +946,21 @@ export default function Chat() {
           </Button>
         </div>
 
+        {sessionMode === "agent" && memoryOpen && activeSession ? (
+          <div className="border-b border-border bg-muted/30 px-3 py-2 max-h-40 overflow-y-auto">
+            <p className="text-[10px] font-medium text-muted-foreground mb-1">
+              {t("chat.memoryTitle")}
+            </p>
+            {activeSession.memoryMarkdown.trim() ? (
+              <pre className="whitespace-pre-wrap text-[10px] leading-relaxed text-foreground/90 font-mono">
+                {activeSession.memoryMarkdown}
+              </pre>
+            ) : (
+              <p className="text-[10px] text-muted-foreground">{t("chat.memoryEmpty")}</p>
+            )}
+          </div>
+        ) : null}
+
         <div
           className={cn(
             "min-h-0 flex-1 px-3 py-3",
@@ -701,16 +972,48 @@ export default function Chat() {
           {!activeSession?.messages.length ? (
             <div className="flex min-h-0 flex-1 flex-col items-center justify-center text-muted-foreground gap-1 text-center px-4">
               <MessageSquare className="h-6 w-6 opacity-40" />
-              <p className="text-xs">{t("chat.emptyHint")}</p>
+              <p className="text-xs">
+                {sessionMode === "agent" ? t("chat.emptyHintAgent") : t("chat.emptyHint")}
+              </p>
             </div>
           ) : (
             activeSession.messages.map(msg => {
+              if (msg.role === "tool") {
+                return (
+                  <div key={msg.id} className="flex justify-start">
+                    <div
+                      className={cn(
+                        "inline-flex max-w-[85%] items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 py-1 text-[10px] text-muted-foreground",
+                        msg.toolStatus === "error" && "border-destructive/40 text-destructive"
+                      )}
+                    >
+                      {msg.toolStatus === "running" ? (
+                        <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                      ) : (
+                        <Wrench className="h-3 w-3 shrink-0 opacity-70" />
+                      )}
+                      <span className="truncate">{msg.content || msg.toolName || "tool"}</span>
+                      <span className="opacity-60 shrink-0">
+                        {msg.toolStatus === "running"
+                          ? t("chat.toolRunning")
+                          : msg.toolStatus === "error"
+                            ? t("chat.toolError")
+                            : t("chat.toolDone")}
+                      </span>
+                    </div>
+                  </div>
+                );
+              }
+
               const isEditing = msg.role === "user" && editingMessageId === msg.id;
               const copyText = msg.content.trim() || msg.error?.trim() || "";
               const canCopy = Boolean(copyText) && !isEditing;
               const showCopied = copiedMessageId === msg.id;
               const actionBtnClass =
                 "h-6 w-6 shrink-0 rounded opacity-0 group-hover/msg:opacity-100 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60";
+              const streamingAssistantId = sending
+                ? [...activeSession.messages].reverse().find(m => m.role === "assistant")?.id
+                : undefined;
               return (
                 <div
                   key={msg.id}
@@ -762,9 +1065,7 @@ export default function Chat() {
                       ) : (
                         <>
                           {msg.content ? (
-                            sending &&
-                            msg.id ===
-                              activeSession.messages[activeSession.messages.length - 1]?.id ? (
+                            sending && msg.id === streamingAssistantId ? (
                               <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
                             ) : (
                               <MarkdownViewer content={msg.content} />
@@ -776,8 +1077,7 @@ export default function Chat() {
                             </p>
                           ) : null}
                           {sending &&
-                          msg.id ===
-                            activeSession.messages[activeSession.messages.length - 1]?.id &&
+                          msg.id === streamingAssistantId &&
                           !msg.content &&
                           !msg.error ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
@@ -946,14 +1246,20 @@ export default function Chat() {
             }}
             rows={2}
             placeholder={
-              supportsImageInput ? t("chat.inputPlaceholderWithImage") : t("chat.inputPlaceholder")
+              sessionMode === "agent"
+                ? t("chat.inputPlaceholderAgent")
+                : supportsImageInput
+                  ? t("chat.inputPlaceholderWithImage")
+                  : t("chat.inputPlaceholder")
             }
             disabled={!activeSession?.model}
             className="w-full resize-none rounded-md border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
           />
           <div className="flex items-center justify-end gap-2">
             <div className="flex-1 min-w-0 text-[10px] text-muted-foreground">
-              {supportsImageInput ? (
+              {sessionMode === "agent" ? (
+                t("chat.enterHintAgent")
+              ) : supportsImageInput ? (
                 <span>
                   {t("chat.enterHintWithImage")}
                   <span className="block sm:inline sm:before:content-['·_'] text-amber-600/90 dark:text-amber-500/90">
