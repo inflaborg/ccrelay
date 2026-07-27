@@ -25,11 +25,12 @@ on:
           - desktop-mac-arm64
           - desktop-win-x64
           - desktop-win-arm64
-          - tauri
-          - tauri-mac
-          - tauri-win
-          - tauri-mac-arm64
-          - tauri-win-x64
+          # Tauri CI builds disabled
+          # - tauri
+          # - tauri-mac
+          # - tauri-win
+          # - tauri-mac-arm64
+          # - tauri-win-x64
         default: all
 
 permissions:
@@ -68,8 +69,9 @@ jobs:
               - 'packages/vscode/**'
             desktop:
               - 'packages/desktop/**'
-            tauri:
-              - 'packages/desktop-tauri/**'
+            # Tauri CI builds disabled — packages/desktop-tauri changes no longer trigger builds
+            # tauri:
+            #   - 'packages/desktop-tauri/**'
 
       - name: Resolve build targets
         id: targets
@@ -79,7 +81,7 @@ jobs:
           SHARED: ${{ steps.filter.outputs.shared }}
           VSCODE: ${{ steps.filter.outputs.vscode }}
           DESKTOP: ${{ steps.filter.outputs.desktop }}
-          TAURI: ${{ steps.filter.outputs.tauri }}
+          # TAURI: ${{ steps.filter.outputs.tauri }}
         run: |
           set -euo pipefail
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
@@ -103,9 +105,9 @@ jobs:
           if [ "$DESKTOP" = "true" ]; then
             TARGETS="${TARGETS:+$TARGETS,}desktop"
           fi
-          if [ "$TAURI" = "true" ]; then
-            TARGETS="${TARGETS:+$TARGETS,}tauri"
-          fi
+          # if [ "$TAURI" = "true" ]; then
+          #   TARGETS="${TARGETS:+$TARGETS,}tauri"
+          # fi
 
           if [ -z "$TARGETS" ]; then
             echo "build_targets=none" >> "$GITHUB_OUTPUT"
