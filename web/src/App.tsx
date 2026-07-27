@@ -161,7 +161,12 @@ function App() {
           electronDesktop && "electron-drag select-none"
         )}
       >
-        <div className={cn("max-w-full pl-2 sm:pl-4", darwinDesktop && "pl-[78px] sm:pl-[78px]")}>
+        <div
+          className={cn(
+            "max-w-full pl-2 sm:pl-4",
+            darwinDesktop && "pl-[78px] pr-3 sm:pl-[78px] sm:pr-4"
+          )}
+        >
           <div className="flex h-10 items-center gap-2">
             <div className="flex min-w-0 shrink-0 items-center gap-1.5">
               <img src={iconSvg} alt="CCRelay" className="h-6 w-6 sm:h-8 sm:w-8" />
