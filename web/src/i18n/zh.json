@@ -76,7 +76,10 @@
     "modalTitle": "新版本 {{version}}",
     "download": "在 GitHub 查看发布",
     "current": "当前版本：{{version}}",
-    "noNotes": "暂无发布说明。"
+    "noNotes": "暂无发布说明。",
+    "channelStable": "Stable",
+    "channelDev": "Dev",
+    "channelHint": "更新通道（可在托盘 → Update Channel 切换）"
   },
   "language": {
     "title": "选择语言",

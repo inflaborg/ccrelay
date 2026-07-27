@@ -129,7 +129,7 @@ void app.whenReady().then(async () => {
     }
   }
 
-  createTray(server, configManager);
   initAutoUpdate();
+  createTray(server, configManager);
   showDashboardWindow(server, configManager);
 });

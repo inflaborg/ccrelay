@@ -47,6 +47,8 @@ declare global {
     CCRELAY_NATIVE_UPDATER?: boolean;
     /** Injected by Electron desktop: process.platform (darwin/win32/linux) */
     CCRELAY_DESKTOP_PLATFORM?: string;
+    /** Injected by Electron desktop: update feed channel (`prod` | `dev`) */
+    CCRELAY_UPDATE_CHANNEL?: string;
     /** Preload bridge for frameless window controls */
     ccrelayDesktop?: {
       platform: string;

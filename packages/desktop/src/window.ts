@@ -10,7 +10,7 @@
 import { BrowserWindow, app } from "electron";
 import * as path from "path";
 import type { ProxyServer, ConfigManager } from "@ccrelay/core";
-import { isNativeUpdaterEnabled } from "./autoUpdate";
+import { getUpdateChannel, isNativeUpdaterEnabled } from "./autoUpdate";
 import {
   dashboardLocalUrl,
   setDashboardInjectConfig,
@@ -33,11 +33,30 @@ function buildInjectConfig(server: ProxyServer, config: ConfigManager): Dashboar
     locale: config.locale,
     nativeUpdater: isNativeUpdaterEnabled(),
     desktopPlatform: process.platform,
+    updateChannel: getUpdateChannel(),
   };
 }
 
+function pushUpdateChannelToDashboard(channel: "prod" | "dev"): void {
+  if (!dashboardWin || dashboardWin.isDestroyed()) {
+    return;
+  }
+  const payload = JSON.stringify(channel);
+  void dashboardWin.webContents
+    .executeJavaScript(
+      `window.CCRELAY_UPDATE_CHANNEL=${payload};window.dispatchEvent(new CustomEvent("ccrelay-update-channel",{detail:${payload}}));`
+    )
+    .catch(() => {
+      /* dashboard may be mid-navigation */
+    });
+}
+
 export function updateDashboardInjectConfig(server: ProxyServer, config: ConfigManager): void {
-  setDashboardInjectConfig(buildInjectConfig(server, config));
+  const inject = buildInjectConfig(server, config);
+  setDashboardInjectConfig(inject);
+  if (inject.updateChannel) {
+    pushUpdateChannelToDashboard(inject.updateChannel);
+  }
 }
 
 function preloadPath(): string {

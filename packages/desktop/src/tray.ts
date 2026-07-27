@@ -110,13 +110,16 @@ export function createTray(server: ProxyServer, config: ConfigManager): Tray {
         submenu: (["prod", "dev"] as UpdateChannel[]).map(channel => ({
           label: labelForChannel(channel),
           type: "radio" as const,
-          checked: (getUpdateChannel() ?? "prod") === channel,
+          checked: getUpdateChannel() === channel,
           enabled: app.isPackaged,
           click: (): void => {
-            if ((getUpdateChannel() ?? "prod") === channel) {
+            if (getUpdateChannel() === channel) {
               return;
             }
-            void setUpdateChannel(channel).finally(() => updateMenu());
+            void setUpdateChannel(channel).finally(() => {
+              updateDashboardInjectConfig(server, config);
+              updateMenu();
+            });
           },
         })),
       },

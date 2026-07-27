@@ -11,6 +11,11 @@ export type UpdateChannel = "prod" | "dev";
 const PREFS_FILENAME = "update-channel.json";
 const FEED_BASE = "https://github.com/inflaborg/ccrelay/releases/download";
 
+/** Dev CI versions are `X.Y.Z-dev.N`; stable releases are plain `X.Y.Z`. */
+export function defaultUpdateChannelFromVersion(version: string): UpdateChannel {
+  return /(?:^|[.-])dev(?:[.-]|$)/i.test(version) ? "dev" : "prod";
+}
+
 function prefsPath(): string {
   return path.join(app.getPath("userData"), PREFS_FILENAME);
 }
@@ -39,7 +44,7 @@ export function loadUpdateChannel(): UpdateChannel | null {
       return (parsed as { channel: UpdateChannel }).channel;
     }
   } catch {
-    // Missing or invalid file — use pack-time feed.
+    // Missing or invalid file — fall back to version-based default.
   }
   return null;
 }

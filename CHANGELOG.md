@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+**Desktop**
+
+- Tray Update Channel now keeps the correct selection after restart (resolve preference / version default before building the menu). Dev installs default to Dev; stable installs default to Stable.
+
+### Added
+
+**Desktop**
+
+- Dashboard footer shows the current update channel (Stable / Dev) next to the version; tray changes update it live.
+
 ## [0.3.0] - 2026-07-25 (pre-release)
 
 Pre-release line for 0.3.0.
