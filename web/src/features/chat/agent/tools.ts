@@ -104,7 +104,7 @@ const MEMORY_TOOL_DEFINITION: OpenAiToolDefinition = {
   function: {
     name: "update_memory",
     description:
-      "Optional. Replace session memory markdown (History Summary, Plan, Insights) for multi-step work. Skip for simple answers.",
+      "Replace the full session memory markdown (History Summary, Plan, Insights). Required for multi-step work: research with multiple tool calls, investigations, plans, or when the user corrects important facts. Skip only for trivial one-shot answers with no tools.",
     parameters: {
       type: "object",
       properties: {

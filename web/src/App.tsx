@@ -269,7 +269,10 @@ function App() {
             : "overflow-y-auto overflow-x-hidden"
         )}
       >
-        {activeTab === "chat" && <Chat />}
+        {/* Always mount Chat so in-flight Agent/Playground turns survive tab switches. */}
+        <div className={cn(activeTab === "chat" ? "flex min-h-0 flex-1 flex-col" : "hidden")}>
+          <Chat />
+        </div>
         {activeTab === "clientConfig" && <ClientConfig />}
         {activeTab === "dashboard" && <Dashboard />}
         {activeTab === "smartRouting" && <SmartRouting />}
