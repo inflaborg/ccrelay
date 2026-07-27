@@ -161,18 +161,7 @@ function App() {
           electronDesktop && "electron-drag select-none"
         )}
       >
-        {showCaptionButtons && (
-          <div className="absolute right-0 top-0 z-10">
-            <WindowCaptionButtons />
-          </div>
-        )}
-        <div
-          className={cn(
-            "max-w-full px-2 sm:px-4",
-            darwinDesktop && "pl-[78px] sm:pl-[78px]",
-            showCaptionButtons && "pr-[132px]"
-          )}
-        >
+        <div className={cn("max-w-full pl-2 sm:pl-4", darwinDesktop && "pl-[78px] sm:pl-[78px]")}>
           <div className="flex h-10 items-center gap-2">
             <div className="flex min-w-0 shrink-0 items-center gap-1.5">
               <img src={iconSvg} alt="CCRelay" className="h-6 w-6 sm:h-8 sm:w-8" />
@@ -182,11 +171,11 @@ function App() {
             {/* Wide: horizontal tabs */}
             <nav
               className={cn(
-                "ml-auto hidden min-w-0 items-center lg:flex",
+                "ml-auto hidden min-w-0 items-center overflow-hidden lg:flex",
                 electronDesktop && "electron-no-drag"
               )}
             >
-              <div className="flex items-center">
+              <div className="flex max-w-full items-center">
                 {navItems.map(item => {
                   const Icon = item.icon;
                   const selected = activeTab === item.id;
@@ -195,15 +184,15 @@ function App() {
                       key={item.id}
                       type="button"
                       className={cn(
-                        "flex h-10 min-w-[80px] items-center justify-center gap-1.5 px-4 text-xs transition-all duration-200",
+                        "flex h-10 min-w-0 shrink items-center justify-center gap-1.5 px-3 text-xs transition-all duration-200 xl:min-w-[80px] xl:px-4",
                         selected
                           ? "bg-primary text-primary-foreground"
                           : "text-foreground hover:bg-primary/15"
                       )}
                       onClick={() => setActiveTab(item.id)}
                     >
-                      <Icon className="h-3.5 w-3.5" />
-                      <span>{t(item.labelKey)}</span>
+                      <Icon className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">{t(item.labelKey)}</span>
                     </button>
                   );
                 })}
@@ -260,6 +249,8 @@ function App() {
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
+
+            {showCaptionButtons && <WindowCaptionButtons className="shrink-0" />}
           </div>
         </div>
       </header>
