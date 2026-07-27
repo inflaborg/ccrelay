@@ -1,6 +1,9 @@
 import { useTranslation } from "react-i18next";
 import { Loader2, ServerOff } from "lucide-react";
 import { getApiOriginLabel } from "@/api/serverReachability";
+import { WindowCaptionButtons } from "./WindowCaptionButtons";
+import { isDarwinDesktop, isElectronDesktop, needsWindowCaptionButtons } from "@/lib/desktopShell";
+import { cn } from "@/lib/utils";
 
 type ServerStoppedScreenProps = {
   checking: boolean;
@@ -9,9 +12,23 @@ type ServerStoppedScreenProps = {
 export default function ServerStoppedScreen({ checking }: ServerStoppedScreenProps) {
   const { t } = useTranslation();
   const endpoint = getApiOriginLabel();
+  const electronDesktop = isElectronDesktop();
+  const darwinDesktop = isDarwinDesktop();
+  const showCaptionButtons = needsWindowCaptionButtons();
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 py-12 text-center">
+    <div
+      className={cn(
+        "relative flex min-h-screen flex-col items-center justify-center bg-background px-6 py-12 text-center",
+        electronDesktop && "electron-drag select-none",
+        darwinDesktop && "pt-10"
+      )}
+    >
+      {showCaptionButtons && (
+        <div className="absolute right-0 top-0 z-10">
+          <WindowCaptionButtons />
+        </div>
+      )}
       <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted">
         <ServerOff className="h-7 w-7 text-muted-foreground" aria-hidden />
       </div>
