@@ -2,10 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent }
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import {
+  Check,
+  Copy,
   Eraser,
   ImagePlus,
   Loader2,
   MessageSquare,
+  Pencil,
   Plus,
   Send,
   Square,
@@ -84,6 +87,9 @@ export default function Chat() {
   const [input, setInput] = useState("");
   const [pendingImages, setPendingImages] = useState<ChatImageAttachment[]>([]);
   const [sending, setSending] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [clearAllOpen, setClearAllOpen] = useState(false);
   const [clearSessionOpen, setClearSessionOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -191,6 +197,9 @@ export default function Chat() {
   }, [activeSession, modelOptions]);
 
   useEffect(() => {
+    if (!activeSession?.messages.length) {
+      return;
+    }
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeSession?.messages, sending]);
 
@@ -255,6 +264,8 @@ export default function Chat() {
       activeSessionId: session.id,
     }));
     setInput("");
+    setEditingMessageId(null);
+    setEditDraft("");
   };
 
   const handleDeleteSession = (id: string) => {
@@ -306,6 +317,111 @@ export default function Chat() {
     focusInput();
   };
 
+  const runAssistantTurn = useCallback(
+    async (
+      session: ChatSession,
+      historyMessages: ChatMessage[],
+      options?: { title?: string }
+    ): Promise<void> => {
+      const assistantId = newMessageId();
+      const assistantMsg: ChatMessage = {
+        id: assistantId,
+        role: "assistant",
+        content: "",
+      };
+
+      setStore(prev => ({
+        ...prev,
+        sessions: prev.sessions.map(s =>
+          s.id === session.id
+            ? {
+                ...s,
+                ...(options?.title !== undefined ? { title: options.title } : {}),
+                messages: [...historyMessages, assistantMsg],
+                updatedAt: Date.now(),
+              }
+            : s
+        ),
+      }));
+
+      const controller = new AbortController();
+      abortRef.current = controller;
+      setSending(true);
+      focusInput();
+
+      try {
+        await streamChat({
+          protocol: session.protocol,
+          model: session.model,
+          messages: historyMessages,
+          signal: controller.signal,
+          onDelta: chunk => {
+            setStore(prev => ({
+              ...prev,
+              sessions: prev.sessions.map(s => {
+                if (s.id !== session.id) {
+                  return s;
+                }
+                return {
+                  ...s,
+                  updatedAt: Date.now(),
+                  messages: s.messages.map(m =>
+                    m.id === assistantId ? { ...m, content: m.content + chunk } : m
+                  ),
+                };
+              }),
+            }));
+          },
+        });
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          setStore(prev => ({
+            ...prev,
+            sessions: prev.sessions.map(s => {
+              if (s.id !== session.id) {
+                return s;
+              }
+              return {
+                ...s,
+                messages: s.messages.map(m =>
+                  m.id === assistantId && !m.content
+                    ? { ...m, content: "", error: t("chat.stopped") }
+                    : m
+                ),
+              };
+            }),
+          }));
+        } else {
+          const message = err instanceof Error ? err.message : String(err);
+          setStore(prev => ({
+            ...prev,
+            sessions: prev.sessions.map(s => {
+              if (s.id !== session.id) {
+                return s;
+              }
+              return {
+                ...s,
+                messages: s.messages.map(m =>
+                  m.id === assistantId ? { ...m, error: message, content: m.content || "" } : m
+                ),
+              };
+            }),
+          }));
+        }
+      } finally {
+        abortRef.current = null;
+        setStore(prev => {
+          const next = stripImagePayloadsFromStore(prev);
+          saveChatStore(next);
+          return next;
+        });
+        setSending(false);
+        focusInput();
+      }
+    },
+    [focusInput, t]
+  );
+
   const handleSend = async () => {
     if (!activeSession || sending) {
       return;
@@ -325,110 +441,88 @@ export default function Chat() {
       content: text,
       ...(images.length > 0 ? { images } : {}),
     };
-    const assistantId = newMessageId();
-    const assistantMsg: ChatMessage = {
-      id: assistantId,
-      role: "assistant",
-      content: "",
-    };
 
     const nextMessages = [...activeSession.messages, userMsg];
     const title =
       activeSession.messages.length === 0
         ? titleFromFirstUserMessage(text || t("chat.imageMessageTitle"))
-        : activeSession.title;
+        : undefined;
 
     setInput("");
     setPendingImages([]);
-    setStore(prev => ({
-      ...prev,
-      sessions: prev.sessions.map(s =>
-        s.id === activeSession.id
-          ? {
-              ...s,
-              title,
-              messages: [...nextMessages, assistantMsg],
-              updatedAt: Date.now(),
-            }
-          : s
-      ),
-    }));
+    setEditingMessageId(null);
+    await runAssistantTurn(
+      activeSession,
+      nextMessages,
+      title !== undefined ? { title } : undefined
+    );
+  };
 
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setSending(true);
-    focusInput();
-
-    try {
-      await streamChat({
-        protocol: activeSession.protocol,
-        model: activeSession.model,
-        messages: nextMessages,
-        signal: controller.signal,
-        onDelta: chunk => {
-          setStore(prev => ({
-            ...prev,
-            sessions: prev.sessions.map(s => {
-              if (s.id !== activeSession.id) {
-                return s;
-              }
-              return {
-                ...s,
-                updatedAt: Date.now(),
-                messages: s.messages.map(m =>
-                  m.id === assistantId ? { ...m, content: m.content + chunk } : m
-                ),
-              };
-            }),
-          }));
-        },
-      });
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") {
-        setStore(prev => ({
-          ...prev,
-          sessions: prev.sessions.map(s => {
-            if (s.id !== activeSession.id) {
-              return s;
-            }
-            return {
-              ...s,
-              messages: s.messages.map(m =>
-                m.id === assistantId && !m.content
-                  ? { ...m, content: "", error: t("chat.stopped") }
-                  : m
-              ),
-            };
-          }),
-        }));
-      } else {
-        const message = err instanceof Error ? err.message : String(err);
-        setStore(prev => ({
-          ...prev,
-          sessions: prev.sessions.map(s => {
-            if (s.id !== activeSession.id) {
-              return s;
-            }
-            return {
-              ...s,
-              messages: s.messages.map(m =>
-                m.id === assistantId ? { ...m, error: message, content: m.content || "" } : m
-              ),
-            };
-          }),
-        }));
-      }
-    } finally {
-      abortRef.current = null;
-      // Drop image binaries from memory and flush the completed turn (incl. assistant text).
-      setStore(prev => {
-        const next = stripImagePayloadsFromStore(prev);
-        saveChatStore(next);
-        return next;
-      });
-      setSending(false);
-      focusInput();
+  const handleStartEdit = (msg: ChatMessage) => {
+    if (sending || msg.role !== "user") {
+      return;
     }
+    setEditingMessageId(msg.id);
+    setEditDraft(msg.content);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingMessageId(null);
+    setEditDraft("");
+  };
+
+  const handleCopyMessage = async (msg: ChatMessage) => {
+    const text = msg.content.trim() || msg.error?.trim() || "";
+    if (!text) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedMessageId(msg.id);
+      window.setTimeout(() => {
+        setCopiedMessageId(prev => (prev === msg.id ? null : prev));
+      }, 1500);
+    } catch {
+      // Clipboard may be unavailable in some embeds.
+    }
+  };
+
+  const handleSaveEdit = async (messageId: string) => {
+    if (!activeSession || sending) {
+      return;
+    }
+    if (!activeSession.model.trim()) {
+      return;
+    }
+
+    const idx = activeSession.messages.findIndex(m => m.id === messageId);
+    if (idx < 0) {
+      return;
+    }
+    const original = activeSession.messages[idx]!;
+    if (original.role !== "user") {
+      return;
+    }
+
+    const text = editDraft.trim();
+    const hasImages = (original.images?.length ?? 0) > 0;
+    if (!text && !hasImages) {
+      return;
+    }
+
+    const edited: ChatMessage = {
+      ...original,
+      content: text,
+    };
+    const history = [...activeSession.messages.slice(0, idx), edited];
+    const isFirstUser = activeSession.messages.findIndex(m => m.role === "user") === idx;
+    const title = isFirstUser
+      ? titleFromFirstUserMessage(text || t("chat.imageMessageTitle"))
+      : undefined;
+
+    setEditingMessageId(null);
+    setEditDraft("");
+    await runAssistantTurn(activeSession, history, title !== undefined ? { title } : undefined);
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -507,7 +601,11 @@ export default function Chat() {
                   ? "bg-primary/15 text-foreground"
                   : "hover:bg-muted/60 text-muted-foreground"
               )}
-              onClick={() => setStore(prev => ({ ...prev, activeSessionId: session.id }))}
+              onClick={() => {
+                setEditingMessageId(null);
+                setEditDraft("");
+                setStore(prev => ({ ...prev, activeSessionId: session.id }));
+              }}
             >
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[11px] font-medium text-foreground">
@@ -592,84 +690,206 @@ export default function Chat() {
           </Button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 space-y-3">
+        <div
+          className={cn(
+            "min-h-0 flex-1 px-3 py-3",
+            activeSession?.messages.length
+              ? "overflow-y-auto space-y-3"
+              : "overflow-hidden flex flex-col"
+          )}
+        >
           {!activeSession?.messages.length ? (
-            <div className="flex h-full min-h-[12rem] flex-col items-center justify-center text-muted-foreground gap-1 text-center px-4">
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center text-muted-foreground gap-1 text-center px-4">
               <MessageSquare className="h-6 w-6 opacity-40" />
               <p className="text-xs">{t("chat.emptyHint")}</p>
             </div>
           ) : (
-            activeSession.messages.map(msg => (
-              <div
-                key={msg.id}
-                className={cn("flex", msg.role === "user" ? "justify-end" : "justify-start")}
-              >
+            activeSession.messages.map(msg => {
+              const isEditing = msg.role === "user" && editingMessageId === msg.id;
+              const copyText = msg.content.trim() || msg.error?.trim() || "";
+              const canCopy = Boolean(copyText) && !isEditing;
+              const showCopied = copiedMessageId === msg.id;
+              const actionBtnClass =
+                "h-6 w-6 shrink-0 rounded opacity-0 group-hover/msg:opacity-100 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60";
+              return (
                 <div
+                  key={msg.id}
                   className={cn(
-                    "max-w-[85%] rounded-md px-2.5 py-1.5 text-xs",
-                    msg.role === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted/60 text-foreground border border-border"
+                    "group/msg flex items-center gap-1",
+                    msg.role === "user" ? "justify-end" : "justify-start"
                   )}
                 >
-                  {msg.role === "assistant" ? (
-                    msg.error && !msg.content ? (
-                      <p className="text-destructive whitespace-pre-wrap">{msg.error}</p>
-                    ) : (
-                      <>
-                        {msg.content ? (
-                          sending &&
-                          msg.id ===
-                            activeSession.messages[activeSession.messages.length - 1]?.id ? (
-                            <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                  {msg.role === "user" && !isEditing ? (
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      {canCopy ? (
+                        <button
+                          type="button"
+                          className={actionBtnClass}
+                          title={showCopied ? t("chat.copied") : t("chat.copy")}
+                          onClick={() => void handleCopyMessage(msg)}
+                        >
+                          {showCopied ? (
+                            <Check className="h-3 w-3" />
                           ) : (
-                            <MarkdownViewer content={msg.content} />
-                          )
-                        ) : null}
-                        {msg.error ? (
-                          <p className="mt-1 text-destructive whitespace-pre-wrap text-[11px]">
-                            {msg.error}
-                          </p>
-                        ) : null}
-                        {sending &&
-                        msg.id === activeSession.messages[activeSession.messages.length - 1]?.id &&
-                        !msg.content &&
-                        !msg.error ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                        ) : null}
-                      </>
-                    )
-                  ) : (
-                    <div className="space-y-1.5">
-                      {msg.images && msg.images.length > 0 ? (
-                        <div className="flex flex-wrap gap-1.5">
-                          {msg.images.map(img =>
-                            img.dataUrl ? (
-                              <img
-                                key={img.id}
-                                src={img.dataUrl}
-                                alt=""
-                                className="max-h-28 max-w-full rounded border border-primary-foreground/20 object-contain"
-                              />
-                            ) : (
-                              <div
-                                key={img.id}
-                                className="flex h-14 min-w-[3.5rem] items-center justify-center rounded border border-primary-foreground/20 px-2 text-[10px] opacity-80"
-                              >
-                                {t("chat.imageOmitted")}
-                              </div>
-                            )
+                            <Copy className="h-3 w-3" />
                           )}
-                        </div>
+                        </button>
                       ) : null}
-                      {msg.content ? <p className="whitespace-pre-wrap">{msg.content}</p> : null}
+                      {!sending ? (
+                        <button
+                          type="button"
+                          className={actionBtnClass}
+                          title={t("chat.edit")}
+                          onClick={() => handleStartEdit(msg)}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                      ) : null}
                     </div>
-                  )}
+                  ) : null}
+                  <div
+                    className={cn(
+                      "max-w-[85%] rounded-md px-2.5 py-1.5 text-xs",
+                      msg.role === "user"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted/60 text-foreground border border-border",
+                      isEditing && "w-full max-w-[min(100%,28rem)]"
+                    )}
+                  >
+                    {msg.role === "assistant" ? (
+                      msg.error && !msg.content ? (
+                        <p className="text-destructive whitespace-pre-wrap">{msg.error}</p>
+                      ) : (
+                        <>
+                          {msg.content ? (
+                            sending &&
+                            msg.id ===
+                              activeSession.messages[activeSession.messages.length - 1]?.id ? (
+                              <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                            ) : (
+                              <MarkdownViewer content={msg.content} />
+                            )
+                          ) : null}
+                          {msg.error ? (
+                            <p className="mt-1 text-destructive whitespace-pre-wrap text-[11px]">
+                              {msg.error}
+                            </p>
+                          ) : null}
+                          {sending &&
+                          msg.id ===
+                            activeSession.messages[activeSession.messages.length - 1]?.id &&
+                          !msg.content &&
+                          !msg.error ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                          ) : null}
+                        </>
+                      )
+                    ) : isEditing ? (
+                      <div className="space-y-1.5">
+                        {msg.images && msg.images.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5">
+                            {msg.images.map(img =>
+                              img.dataUrl ? (
+                                <img
+                                  key={img.id}
+                                  src={img.dataUrl}
+                                  alt=""
+                                  className="max-h-28 max-w-full rounded border border-primary-foreground/20 object-contain"
+                                />
+                              ) : (
+                                <div
+                                  key={img.id}
+                                  className="flex h-14 min-w-[3.5rem] items-center justify-center rounded border border-primary-foreground/20 px-2 text-[10px] opacity-80"
+                                >
+                                  {t("chat.imageOmitted")}
+                                </div>
+                              )
+                            )}
+                          </div>
+                        ) : null}
+                        <textarea
+                          value={editDraft}
+                          onChange={e => setEditDraft(e.target.value)}
+                          rows={3}
+                          className="w-full resize-y rounded-md border border-primary-foreground/30 bg-primary-foreground/10 px-2 py-1.5 text-xs text-primary-foreground outline-none focus-visible:ring-1 focus-visible:ring-primary-foreground/40"
+                          autoFocus
+                          onKeyDown={e => {
+                            if (e.key === "Escape") {
+                              e.preventDefault();
+                              handleCancelEdit();
+                              return;
+                            }
+                            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                              e.preventDefault();
+                              void handleSaveEdit(msg.id);
+                            }
+                          }}
+                        />
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2 text-[10px] text-primary-foreground/80 hover:text-primary-foreground hover:bg-primary-foreground/15"
+                            onClick={handleCancelEdit}
+                          >
+                            {t("chat.cancelEdit")}
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            className="h-6 px-2 text-[10px] gap-1"
+                            disabled={!editDraft.trim() && !(msg.images && msg.images.length > 0)}
+                            onClick={() => void handleSaveEdit(msg.id)}
+                          >
+                            <Check className="h-3 w-3" />
+                            {t("chat.saveEdit")}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {msg.images && msg.images.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5">
+                            {msg.images.map(img =>
+                              img.dataUrl ? (
+                                <img
+                                  key={img.id}
+                                  src={img.dataUrl}
+                                  alt=""
+                                  className="max-h-28 max-w-full rounded border border-primary-foreground/20 object-contain"
+                                />
+                              ) : (
+                                <div
+                                  key={img.id}
+                                  className="flex h-14 min-w-[3.5rem] items-center justify-center rounded border border-primary-foreground/20 px-2 text-[10px] opacity-80"
+                                >
+                                  {t("chat.imageOmitted")}
+                                </div>
+                              )
+                            )}
+                          </div>
+                        ) : null}
+                        {msg.content ? <p className="whitespace-pre-wrap">{msg.content}</p> : null}
+                      </div>
+                    )}
+                  </div>
+                  {msg.role === "assistant" && canCopy ? (
+                    <button
+                      type="button"
+                      className={actionBtnClass}
+                      title={showCopied ? t("chat.copied") : t("chat.copy")}
+                      onClick={() => void handleCopyMessage(msg)}
+                    >
+                      {showCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                    </button>
+                  ) : null}
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
-          <div ref={bottomRef} />
+          {activeSession?.messages.length ? <div ref={bottomRef} /> : null}
         </div>
 
         <div className="border-t border-border p-2 space-y-1.5">

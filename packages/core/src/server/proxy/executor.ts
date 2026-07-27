@@ -64,6 +64,7 @@ import type { RequestTask, ProxyResult } from "../../types";
 import type { ResponseLogger } from "../responseLogger";
 import type { LogResponseTiming } from "../../database/types";
 import type { ModelCatalog } from "../smartRouting/modelCatalog";
+import { applyClientCorsHeaders, isUpstreamCorsHeaderName } from "../httpAccessGate";
 import {
   synthesizeSmartRoutingModelsListBody,
   synthesizeSmartRoutingModelDetailBody,
@@ -88,12 +89,15 @@ function headersForResponsesSse(
       kl === "content-length" ||
       kl === "content-encoding" ||
       kl === "transfer-encoding" ||
-      kl === "cache-control"
+      kl === "cache-control" ||
+      isUpstreamCorsHeaderName(kl)
     ) {
       continue;
     }
     out[k] = v;
   }
+  // writeHead replaces earlier setCorsHeaders — keep browser/Electron Chat readable.
+  applyClientCorsHeaders(out);
   return out;
 }
 
@@ -104,6 +108,12 @@ const EXCLUDED_HEADERS = new Set([
   "transfer-encoding",
   "connection",
   "keep-alive",
+  "access-control-allow-origin",
+  "access-control-allow-methods",
+  "access-control-allow-headers",
+  "access-control-allow-credentials",
+  "access-control-expose-headers",
+  "access-control-max-age",
 ]);
 
 // Retryable error codes
@@ -658,6 +668,8 @@ export class ProxyExecutor {
         responseHeaders[key] = value;
       }
     }
+    // writeHead(status, headers) replaces CORS set in handleRequest — re-apply here.
+    applyClientCorsHeaders(responseHeaders);
     ctx.responseHeadersMasked = maskHeadersForLog(responseHeaders);
 
     const isJsonResponse = proxyRes.headers["content-type"]?.includes("application/json");

@@ -55,6 +55,11 @@
     "send": "Send",
     "stop": "Stop",
     "stopped": "Stopped",
+    "edit": "Edit",
+    "saveEdit": "Save & retry",
+    "cancelEdit": "Cancel",
+    "copy": "Copy",
+    "copied": "Copied",
     "protocol": {
       "openaiChat": "OpenAI Chat",
       "openaiResponses": "OpenAI Responses",
