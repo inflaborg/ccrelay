@@ -1,7 +1,8 @@
 /**
  * Packaged-build auto-update via electron-updater (generic provider).
- * Feed URL is baked at pack time from electron-builder `publish.url`
- * (channel-prod / channel-dev). Manifest filenames are always
+ * Feed URL defaults to the pack-time electron-builder `publish.url`
+ * (channel-prod / channel-dev). Users can override via tray → Update Channel;
+ * preference is stored in userData. Manifest filenames are always
  * latest-mac.yml / latest.yml (`publish.channel: latest`) so prerelease
  * app versions like 0.2.9-dev.N do not request missing dev-mac.yml files.
  */
@@ -9,6 +10,12 @@
 import { BrowserWindow, app, dialog } from "electron";
 import type { AppUpdater, UpdateInfo } from "electron-updater";
 import { Logger } from "@ccrelay/core";
+import {
+  feedUrlForChannel,
+  loadUpdateChannel,
+  saveUpdateChannel,
+  type UpdateChannel,
+} from "./updateChannel";
 
 const log = Logger.getInstance();
 
@@ -21,6 +28,8 @@ let manualCheck = false;
 let checking = false;
 let startupTimer: ReturnType<typeof setTimeout> | null = null;
 let dailyInterval: ReturnType<typeof setInterval> | null = null;
+/** Runtime preference; null means use pack-time baked feed. */
+let activeChannel: UpdateChannel | null = null;
 
 function parentWindow(): BrowserWindow | null {
   return BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null;
@@ -95,6 +104,31 @@ async function promptInstall(info: UpdateInfo): Promise<void> {
   }
 }
 
+function applyUpdateChannel(channel: UpdateChannel): void {
+  if (!updater) {
+    return;
+  }
+  const url = feedUrlForChannel(channel);
+  updater.setFeedURL({
+    provider: "generic",
+    url,
+    channel: "latest",
+  });
+  updater.allowPrerelease = channel === "dev";
+  activeChannel = channel;
+  log.info(`[autoUpdater] update channel set to ${channel} (${url})`);
+}
+
+export function getUpdateChannel(): UpdateChannel | null {
+  return activeChannel;
+}
+
+export async function setUpdateChannel(channel: UpdateChannel): Promise<void> {
+  saveUpdateChannel(channel);
+  applyUpdateChannel(channel);
+  await requestUpdateCheck(true);
+}
+
 export function isNativeUpdaterEnabled(): boolean {
   return app.isPackaged && updater !== null;
 }
@@ -155,6 +189,11 @@ export function initAutoUpdate(): void {
     // blockmap path rewriting always 404s; skip the failed attempt and full-download.
     autoUpdater.disableDifferentialDownload = true;
     updater = autoUpdater;
+
+    const preferred = loadUpdateChannel();
+    if (preferred) {
+      applyUpdateChannel(preferred);
+    }
 
     autoUpdater.on("update-available", (info: UpdateInfo) => {
       void promptDownload(info);

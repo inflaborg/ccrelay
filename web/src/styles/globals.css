@@ -96,3 +96,14 @@ html {
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground));
 }
+
+/* Electron frameless titlebar: OS-native window drag (not JS-simulated). */
+.electron-drag {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.electron-no-drag {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}

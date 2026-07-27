@@ -6,7 +6,8 @@ import { Tray, Menu, shell, nativeImage, app } from "electron";
 import * as path from "path";
 import { getLogDir, type ConfigManager, type ProxyServer } from "@ccrelay/core";
 import { setOpenAtLogin, getOpenAtLogin } from "./autoLaunch";
-import { requestUpdateCheck } from "./autoUpdate";
+import { getUpdateChannel, requestUpdateCheck, setUpdateChannel } from "./autoUpdate";
+import { labelForChannel, type UpdateChannel } from "./updateChannel";
 import { showDashboardWindow, updateDashboardInjectConfig } from "./window";
 
 /** macOS tray uses template (monochrome); Windows/Linux use the full-color asset. */
@@ -101,6 +102,23 @@ export function createTray(server: ProxyServer, config: ConfigManager): Tray {
         click: (): void => {
           void requestUpdateCheck(true);
         },
+      },
+      {
+        label: "Update Channel",
+        enabled: app.isPackaged,
+        toolTip: app.isPackaged ? undefined : "Update channel is only available in packaged builds",
+        submenu: (["prod", "dev"] as UpdateChannel[]).map(channel => ({
+          label: labelForChannel(channel),
+          type: "radio" as const,
+          checked: (getUpdateChannel() ?? "prod") === channel,
+          enabled: app.isPackaged,
+          click: (): void => {
+            if ((getUpdateChannel() ?? "prod") === channel) {
+              return;
+            }
+            void setUpdateChannel(channel).finally(() => updateMenu());
+          },
+        })),
       },
       { type: "separator" },
       {

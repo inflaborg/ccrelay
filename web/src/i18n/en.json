@@ -23,7 +23,8 @@
     "providers": "Providers",
     "capabilities": "Capabilities",
     "logs": "Logs",
-    "settings": "Settings"
+    "settings": "Settings",
+    "menu": "Navigation"
   },
   "chat": {
     "loading": "Loading…",

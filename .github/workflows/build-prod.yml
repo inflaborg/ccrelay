@@ -17,11 +17,12 @@ on:
           - desktop-mac-arm64
           - desktop-win-x64
           - desktop-win-arm64
-          - tauri
-          - tauri-mac
-          - tauri-win
-          - tauri-mac-arm64
-          - tauri-win-x64
+          # Tauri CI builds disabled
+          # - tauri
+          # - tauri-mac
+          # - tauri-win
+          # - tauri-mac-arm64
+          # - tauri-win-x64
         default: all
       tag_name:
         description: 'Tag name to release (e.g., v1.0.0), will use package.json version if empty'
