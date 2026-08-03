@@ -7,8 +7,9 @@ import * as path from "path";
 import { getLogDir, type ConfigManager, type ProxyServer } from "@ccrelay/core";
 import { setOpenAtLogin, getOpenAtLogin } from "./autoLaunch";
 import { getUpdateChannel, requestUpdateCheck, setUpdateChannel } from "./autoUpdate";
-import { labelForChannel, type UpdateChannel } from "./updateChannel";
+import { type UpdateChannel } from "./updateChannel";
 import { showDashboardWindow, updateDashboardInjectConfig } from "./window";
+import { channelLabel, resolveTrayLocale, roleLabel, trayStrings } from "./trayI18n";
 
 /** macOS tray uses template (monochrome); Windows/Linux use the full-color asset. */
 function trayIconFile(): string {
@@ -23,13 +24,6 @@ function trayIconPath(): string {
   return path.join(__dirname, "..", "assets", file);
 }
 
-function roleLabel(role: string, running: boolean): string {
-  if (!running) {
-    return "Stopped";
-  }
-  return role.charAt(0).toUpperCase() + role.slice(1);
-}
-
 export function createTray(server: ProxyServer, config: ConfigManager): Tray {
   const img = nativeImage.createFromPath(trayIconPath());
   if (process.platform === "darwin") {
@@ -38,6 +32,8 @@ export function createTray(server: ProxyServer, config: ConfigManager): Tray {
   const tray = new Tray(img.resize({ width: 22, height: 22 }));
 
   const updateMenu = (): void => {
+    const locale = resolveTrayLocale(config.locale);
+    const t = trayStrings(locale);
     const role = server.getRole();
     const running = server.running;
     const router = server.getRouter();
@@ -48,7 +44,7 @@ export function createTray(server: ProxyServer, config: ConfigManager): Tray {
 
     const providerMenuItems = [
       {
-        label: "Smart Routing",
+        label: t.smartRouting,
         type: "radio" as const,
         checked: srEnabled,
         click: (): void => {
@@ -81,34 +77,34 @@ export function createTray(server: ProxyServer, config: ConfigManager): Tray {
 
     const contextMenu = Menu.buildFromTemplate([
       {
-        label: `CCRelay — ${roleLabel(role, running)}`,
+        label: `CCRelay — ${roleLabel(role, running, locale)}`,
         enabled: false,
       },
       {
-        label: `Provider: ${srEnabled ? "Smart Routing" : (provider?.name ?? "N/A")}`,
+        label: `${t.providerPrefix}: ${srEnabled ? t.smartRouting : (provider?.name ?? t.na)}`,
         enabled: false,
       },
       { type: "separator" },
       {
-        label: "Open Dashboard",
+        label: t.openDashboard,
         click: (): void => {
           showDashboardWindow(server, config);
         },
       },
       {
-        label: "Check for Updates…",
+        label: t.checkForUpdates,
         enabled: app.isPackaged,
-        toolTip: app.isPackaged ? undefined : "Auto-update is only available in packaged builds",
+        toolTip: app.isPackaged ? undefined : t.updateUnavailableTooltip,
         click: (): void => {
           void requestUpdateCheck(true);
         },
       },
       {
-        label: "Update Channel",
+        label: t.updateChannel,
         enabled: app.isPackaged,
-        toolTip: app.isPackaged ? undefined : "Update channel is only available in packaged builds",
+        toolTip: app.isPackaged ? undefined : t.updateChannelUnavailableTooltip,
         submenu: (["prod", "dev"] as UpdateChannel[]).map(channel => ({
-          label: labelForChannel(channel),
+          label: channelLabel(channel, locale),
           type: "radio" as const,
           checked: getUpdateChannel() === channel,
           enabled: app.isPackaged,
@@ -125,14 +121,14 @@ export function createTray(server: ProxyServer, config: ConfigManager): Tray {
       },
       { type: "separator" },
       {
-        label: "Start Server",
+        label: t.startServer,
         enabled: !running,
         click: (): void => {
           void server.start().then(() => updateMenu());
         },
       },
       {
-        label: "Stop Server",
+        label: t.stopServer,
         enabled: running,
         click: (): void => {
           void server.stop().then(() => updateMenu());
@@ -140,12 +136,12 @@ export function createTray(server: ProxyServer, config: ConfigManager): Tray {
       },
       { type: "separator" },
       {
-        label: "Switch Provider",
+        label: t.switchProvider,
         submenu: providerMenuItems,
       },
       { type: "separator" },
       {
-        label: "Open at Login",
+        label: t.openAtLogin,
         type: "checkbox",
         checked: getOpenAtLogin(),
         click: (item): void => {
@@ -153,20 +149,20 @@ export function createTray(server: ProxyServer, config: ConfigManager): Tray {
         },
       },
       {
-        label: "Open Config File",
+        label: t.openConfigFile,
         click: (): void => {
           void shell.openPath(config.getConfigPath());
         },
       },
       {
-        label: "Open Logs Folder",
+        label: t.openLogsFolder,
         click: (): void => {
           void shell.openPath(getLogDir());
         },
       },
       { type: "separator" },
       {
-        label: "Quit",
+        label: t.quit,
         click: (): void => {
           void server.stop().finally(() => app.quit());
         },
@@ -174,7 +170,7 @@ export function createTray(server: ProxyServer, config: ConfigManager): Tray {
     ]);
 
     tray.setContextMenu(contextMenu);
-    tray.setToolTip(`CCRelay (${running ? role : "stopped"})`);
+    tray.setToolTip(`CCRelay (${running ? role : t.tooltipStopped})`);
   };
 
   server.onRoleChanged(() => updateMenu());

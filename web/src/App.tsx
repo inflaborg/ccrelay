@@ -107,7 +107,7 @@ function useHashTab(defaultTab: Tab): [Tab, (tab: Tab) => void] {
 }
 
 function App() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useHashTab("clientConfig");
   const [languagePromptDismissed, setLanguagePromptDismissed] = useState(false);
 
@@ -125,8 +125,10 @@ function App() {
     !parseAppLocale(window.CCRELAY_LOCALE);
 
   // Sync language when config changes (e.g. Settings save in Electron).
+  // Only apply from persisted config — do not fall back to CCRELAY_LOCALE here,
+  // or a stale config refetch can overwrite an optimistic language switch.
   useEffect(() => {
-    const locale = parseAppLocale(config?.server?.locale) ?? parseAppLocale(window.CCRELAY_LOCALE);
+    const locale = parseAppLocale(config?.server?.locale);
     if (locale) {
       void applyAppLocale(locale);
     }
@@ -147,13 +149,12 @@ function App() {
   const activeNav = navItems.find(item => item.id === activeTab) ?? navItems[0];
   const ActiveIcon = activeNav.icon;
 
-  const uiLanguageKey = i18n.resolvedLanguage ?? i18n.language;
   const electronDesktop = isElectronDesktop();
   const darwinDesktop = isDarwinDesktop();
   const showCaptionButtons = needsWindowCaptionButtons();
 
   return (
-    <div key={uiLanguageKey} className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
       {/* Header - Tab Style (Electron: frameless drag region + OS chrome) */}
       <header
         className={cn(

@@ -95,7 +95,7 @@
     "noNotes": "暂无发布说明。",
     "channelStable": "Stable",
     "channelDev": "Dev",
-    "channelHint": "更新通道（可在托盘 → Update Channel 切换）"
+    "channelHint": "更新通道（可在托盘 → 更新通道 切换）"
   },
   "language": {
     "title": "选择语言",
