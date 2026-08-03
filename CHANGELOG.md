@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-08-02 (pre-release)
+
+Pre-release line for 0.3.1.
+
 ## [0.3.0] - 2026-07-27
 
 Chat gains an Agent mode with local log tools, optional web search, and session memory. The desktop app ships a frameless window and Stable/Dev update channel switching. Chat edit/retry and several desktop streaming fixes round out the release.
