@@ -590,6 +590,8 @@
       "testing": "Testing…",
       "pass": "OK",
       "fail": "Failed",
+      "incomplete": "Complete the required fields to enable testing.",
+      "needAuth": "Enter an API key to enable testing.",
       "noModel": "Enter at least one upstream model ID to test.",
       "noProbeModels": "No models listed yet — wait for endpoint fetch or enable custom model list.",
       "selectModel": "Select model to test",

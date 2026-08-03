@@ -1427,8 +1427,8 @@ export default function Providers() {
               </div>
             </CardContent>
 
-            {/* Modal Footer */}
-            <div className="border-t px-4 pt-4 pb-5 flex-shrink-0 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            {/* Modal Footer: Test on left, Cancel/Submit right-aligned */}
+            <div className="border-t px-4 pt-4 pb-5 flex-shrink-0 flex flex-col gap-3 sm:flex-row sm:items-center">
               <WizardEndpointTest
                 wizardOpen={showAddModal}
                 variants={testVariants}
@@ -1439,7 +1439,7 @@ export default function Providers() {
                 probeModels={formData.useCustomModelsList === true ? null : upstreamModels.models}
                 disabled={saveProviderMutation.isPending}
               />
-              <div className="flex w-full shrink-0 flex-wrap justify-end gap-2 sm:w-auto">
+              <div className="ml-auto flex w-full shrink-0 flex-wrap justify-end gap-2 sm:w-auto">
                 <Button size="sm" variant="outline" className="h-7 text-xs" onClick={closeModal}>
                   {t("common.cancel")}
                 </Button>

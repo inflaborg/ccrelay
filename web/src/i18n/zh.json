@@ -590,6 +590,8 @@
       "testing": "测试中…",
       "pass": "通过",
       "fail": "失败",
+      "incomplete": "请先完善必填项后再测试。",
+      "needAuth": "请先填写 API 密钥后再测试。",
       "noModel": "请至少填写一行上游模型 ID 后再测试。",
       "noProbeModels": "暂无可用模型 — 请等待端点获取列表或开启自定义模型列表。",
       "selectModel": "选择测试模型",

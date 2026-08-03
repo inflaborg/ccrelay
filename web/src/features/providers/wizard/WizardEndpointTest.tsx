@@ -112,7 +112,13 @@ export function WizardEndpointTest({
       ? Boolean(customFirstModelId)
       : Boolean(probeModels && probeModels.length >= 1));
 
-  const noModelReason = useMemo(() => {
+  const disabledReason = useMemo(() => {
+    if (!variants?.length) {
+      return t("wizard.test.incomplete");
+    }
+    if (!hasAuth) {
+      return t("wizard.test.needAuth");
+    }
     if (useCustomModels && !customFirstModelId) {
       return t("wizard.test.noModel");
     }
@@ -122,7 +128,7 @@ export function WizardEndpointTest({
       }
     }
     return null;
-  }, [useCustomModels, customFirstModelId, probeModels, t]);
+  }, [variants, hasAuth, useCustomModels, customFirstModelId, probeModels, t]);
 
   const runWithModelId = useCallback(
     (modelId: string) => {
@@ -179,10 +185,6 @@ export function WizardEndpointTest({
     runWithModelId(modalModelId);
   }, [modalModelId, runWithModelId]);
 
-  if (!variants?.length) {
-    return null;
-  }
-
   return (
     <>
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
@@ -192,8 +194,8 @@ export function WizardEndpointTest({
             variant="outline"
             size="sm"
             className="h-8 shrink-0"
-            disabled={!canClickTest || Boolean(noModelReason)}
-            title={noModelReason ?? undefined}
+            disabled={!canClickTest || Boolean(disabledReason)}
+            title={disabledReason ?? undefined}
             onClick={handleTestClick}
           >
             {state.phase === "testing" ? (
