@@ -511,7 +511,42 @@ export function formatAnthropicMessageSse(message: AnthropicMessageResponse): st
       push("content_block_stop", { type: "content_block_stop", index });
       continue;
     }
-    // tool_use / server_tool_use / web_search_tool_result: emit as complete blocks (no deltas)
+    // tool_use / server_tool_use: Anthropic clients accumulate input ONLY from
+    // input_json_delta (content_block_start.input is a placeholder {}). Emitting the
+    // full input on start with no deltas causes Claude Code / Anthropic SDK to see {}.
+    if (block.type === "tool_use" || block.type === "server_tool_use") {
+      const input =
+        block.input && typeof block.input === "object" && !Array.isArray(block.input)
+          ? block.input
+          : {};
+      push("content_block_start", {
+        type: "content_block_start",
+        index,
+        content_block: {
+          type: block.type,
+          id: block.id,
+          name: block.name,
+          input: {},
+        },
+      });
+      const fullArgs = JSON.stringify(input);
+      if (fullArgs.length > 0) {
+        for (let i = 0; i < fullArgs.length; i += SSE_TEXT_CHUNK) {
+          push("content_block_delta", {
+            type: "content_block_delta",
+            index,
+            delta: {
+              type: "input_json_delta",
+              partial_json: fullArgs.slice(i, i + SSE_TEXT_CHUNK),
+            },
+          });
+        }
+      }
+      push("content_block_stop", { type: "content_block_stop", index });
+      continue;
+    }
+
+    // Other blocks (e.g. web_search_tool_result): emit as complete blocks (no deltas)
     push("content_block_start", {
       type: "content_block_start",
       index,

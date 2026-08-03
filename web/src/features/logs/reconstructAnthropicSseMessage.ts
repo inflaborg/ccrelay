@@ -45,24 +45,18 @@ function finalizeContentBlock(block: WorkingBlock): Record<string, unknown> {
   }
 
   if (bType === "tool_use" || bType === "server_tool_use") {
+    // Anthropic contract: input_json_delta fragments are the full JSON string.
+    // Prefer deltas when present; fall back to content_block_start.input for
+    // complete-block synthetic streams that omit deltas.
     let input: unknown = cb.input;
-    if (input === undefined || input === null) {
-      if (block.inputJsonBuf.trim()) {
-        try {
-          input = JSON.parse(block.inputJsonBuf);
-        } catch {
-          input = { _parseError: true, raw: block.inputJsonBuf };
-        }
-      } else {
-        input = {};
-      }
-    } else if (typeof input === "object" && input !== null && block.inputJsonBuf.trim()) {
+    if (block.inputJsonBuf.trim()) {
       try {
-        const add = JSON.parse(block.inputJsonBuf) as Record<string, unknown>;
-        input = { ...(input as Record<string, unknown>), ...add };
+        input = JSON.parse(block.inputJsonBuf);
       } catch {
-        // keep start payload only
+        input = { _parseError: true, raw: block.inputJsonBuf };
       }
+    } else if (input === undefined || input === null) {
+      input = {};
     }
 
     const out: Record<string, unknown> = {
