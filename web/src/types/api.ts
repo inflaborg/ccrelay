@@ -203,6 +203,39 @@ export interface ProviderBreakdownRow {
   cacheHitRate: number;
 }
 
+export interface ProviderModelStatRow {
+  model: string;
+  count: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCacheTokens: number;
+  cacheHitRate: number;
+}
+
+export interface ProviderDailyStatRow {
+  day: string;
+  count: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCacheTokens: number;
+}
+
+export interface ProviderDetailStats {
+  dbAvailable?: boolean;
+  providerId: string;
+  providerName: string;
+  count: number;
+  successCount: number;
+  errorCount: number;
+  avgDuration: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCacheTokens: number;
+  cacheHitRate: number;
+  modelBreakdown: ProviderModelStatRow[];
+  dailyBreakdown: ProviderDailyStatRow[];
+}
+
 export interface LogStats {
   dbAvailable?: boolean;
   totalLogs: number;

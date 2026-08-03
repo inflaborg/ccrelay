@@ -17,24 +17,30 @@ import {
   TOTAL_MS_SQL_COND,
 } from "../../metrics-sql";
 import { POSTGRES_UPDATE_LOG_COMPLETED } from "../../logs-sql";
-import type {
-  DatabaseDriver,
-  PostgresDriverConfig,
-  RequestLog,
-  LogFilter,
-  LogQueryResult,
-  DatabaseStats,
-  LogResponseTiming,
-  ProviderStatRow,
-  RequestStatus,
-  StatsQuery,
-  DatabaseInitializeOptions,
+import {
+  type DatabaseDriver,
+  type PostgresDriverConfig,
+  type RequestLog,
+  type LogFilter,
+  type LogQueryResult,
+  type DatabaseStats,
+  type LogResponseTiming,
+  type ProviderStatRow,
+  type ProviderDetailStats,
+  type RequestStatus,
+  type StatsQuery,
+  type DatabaseInitializeOptions,
+  UNKNOWN_MODEL_LABEL,
 } from "../../types";
 import {
   utf8StringToBlob,
   dbRowToLog,
   dbRowToLogWithoutBody,
   filterProviderBreakdownByTokenUsage,
+  emptyProviderDetailStats,
+  mapProviderModelStatRow,
+  mapProviderDailyStatRow,
+  cacheHitRatePercent,
 } from "../../shared-utils";
 
 /**
@@ -724,6 +730,104 @@ export class PostgresDriver implements DatabaseDriver {
       p50Duration: Math.round(fnum(base.p50Duration)),
       p90Duration: Math.round(fnum(base.p90Duration)),
       providerBreakdown: filterProviderBreakdownByTokenUsage(providerBreakdown),
+    };
+  }
+
+  async getProviderStats(providerId: string, query?: StatsQuery): Promise<ProviderDetailStats> {
+    if (!this.pool) {
+      return emptyProviderDetailStats(providerId);
+    }
+
+    const since = query?.since ?? null;
+    const timeFilter = since ? "timestamp >= $3" : "1=1";
+    const timeParams = since ? [since] : [];
+    const num = (v: string | number | null | undefined): number =>
+      parseInt(String(v ?? "0"), 10) || 0;
+    const fnum = (v: string | number | null | undefined): number =>
+      parseFloat(String(v ?? "0")) || 0;
+
+    const baseResult = await this.pool.query(
+      `SELECT COUNT(*) as count,
+              COALESCE(MAX(provider_name), $1) as "providerName",
+              SUM(CASE WHEN success = true THEN 1 ELSE 0 END) as "successCount",
+              SUM(CASE WHEN success = false THEN 1 ELSE 0 END) as "errorCount",
+              AVG(duration) as "avgDuration",
+              COALESCE(SUM(input_tokens), 0) as "totalInputTokens",
+              COALESCE(SUM(output_tokens), 0) as "totalOutputTokens",
+              COALESCE(SUM(cache_tokens), 0) as "totalCacheTokens"
+       FROM ${METRICS_TABLE}
+       WHERE provider_id = $2 AND ${timeFilter}`,
+      [providerId, providerId, ...timeParams]
+    );
+    const base = (baseResult.rows[0] as Record<string, string | number | null> | undefined) ?? {};
+    const count = num(base.count);
+    const providerName = String(base.providerName ?? providerId).trim() || providerId;
+    if (count === 0) {
+      return emptyProviderDetailStats(providerId, providerName);
+    }
+
+    const totalInput = num(base.totalInputTokens);
+    const totalCache = num(base.totalCacheTokens);
+
+    const modelTimeFilter = since ? "timestamp >= $3" : "1=1";
+    const modelResult = await this.pool.query(
+      `SELECT COALESCE(NULLIF(TRIM(model), ''), $1) as model,
+              COUNT(*) as count,
+              COALESCE(SUM(input_tokens), 0) as "totalInputTokens",
+              COALESCE(SUM(output_tokens), 0) as "totalOutputTokens",
+              COALESCE(SUM(cache_tokens), 0) as "totalCacheTokens"
+       FROM ${METRICS_TABLE}
+       WHERE provider_id = $2 AND ${modelTimeFilter}
+       GROUP BY COALESCE(NULLIF(TRIM(model), ''), $1)
+       ORDER BY count DESC`,
+      [UNKNOWN_MODEL_LABEL, providerId, ...timeParams]
+    );
+
+    const dailyTimeFilter = since ? "timestamp >= $2" : "1=1";
+    const dailyResult = await this.pool.query(
+      `SELECT to_char(to_timestamp(timestamp / 1000.0) AT TIME ZONE 'UTC', 'YYYY-MM-DD') as day,
+              COUNT(*) as count,
+              COALESCE(SUM(input_tokens), 0) as "totalInputTokens",
+              COALESCE(SUM(output_tokens), 0) as "totalOutputTokens",
+              COALESCE(SUM(cache_tokens), 0) as "totalCacheTokens"
+       FROM ${METRICS_TABLE}
+       WHERE provider_id = $1 AND ${dailyTimeFilter}
+       GROUP BY day
+       ORDER BY day ASC`,
+      [providerId, ...timeParams]
+    );
+
+    return {
+      providerId,
+      providerName,
+      count,
+      successCount: num(base.successCount),
+      errorCount: num(base.errorCount),
+      avgDuration: Math.round(fnum(base.avgDuration)),
+      totalInputTokens: totalInput,
+      totalOutputTokens: num(base.totalOutputTokens),
+      totalCacheTokens: totalCache,
+      cacheHitRate: cacheHitRatePercent(totalInput, totalCache),
+      modelBreakdown: modelResult.rows.map(raw => {
+        const row = raw as Record<string, string | number | null>;
+        return mapProviderModelStatRow({
+          model: String(row.model ?? UNKNOWN_MODEL_LABEL),
+          count: num(row.count),
+          totalInputTokens: num(row.totalInputTokens),
+          totalOutputTokens: num(row.totalOutputTokens),
+          totalCacheTokens: num(row.totalCacheTokens),
+        });
+      }),
+      dailyBreakdown: dailyResult.rows.map(raw => {
+        const row = raw as Record<string, string | number | null>;
+        return mapProviderDailyStatRow({
+          day: String(row.day),
+          count: num(row.count),
+          totalInputTokens: num(row.totalInputTokens),
+          totalOutputTokens: num(row.totalOutputTokens),
+          totalCacheTokens: num(row.totalCacheTokens),
+        });
+      }),
     };
   }
 

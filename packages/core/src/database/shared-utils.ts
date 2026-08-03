@@ -2,7 +2,13 @@
  * Driver-agnostic utilities for request log storage and row mapping.
  */
 
-import type { RequestLog } from "./types";
+import type {
+  ProviderDailyStatRow,
+  ProviderDetailStats,
+  ProviderModelStatRow,
+  RequestLog,
+} from "./types";
+import { UNKNOWN_MODEL_LABEL } from "./types";
 
 export const MAX_LOG_ROWS = 10000;
 export const MAX_LOG_AGE_DAYS = 30;
@@ -297,4 +303,64 @@ export function filterProviderBreakdownByTokenUsage<
   return rows.filter(
     row => row.totalInputTokens > 0 || row.totalOutputTokens > 0 || row.totalCacheTokens > 0
   );
+}
+
+export function cacheHitRatePercent(inputTokens: number, cacheTokens: number): number {
+  return inputTokens > 0 ? Math.round((cacheTokens / inputTokens) * 100) : 0;
+}
+
+export function emptyProviderDetailStats(
+  providerId: string,
+  providerName?: string
+): ProviderDetailStats {
+  return {
+    providerId,
+    providerName: providerName ?? providerId,
+    count: 0,
+    successCount: 0,
+    errorCount: 0,
+    avgDuration: 0,
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
+    totalCacheTokens: 0,
+    cacheHitRate: 0,
+    modelBreakdown: [],
+    dailyBreakdown: [],
+  };
+}
+
+export function mapProviderModelStatRow(raw: {
+  model?: string | null;
+  count: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCacheTokens: number;
+}): ProviderModelStatRow {
+  const inputTokens = raw.totalInputTokens ?? 0;
+  const cacheTokens = raw.totalCacheTokens ?? 0;
+  const model = raw.model?.trim() ? raw.model : UNKNOWN_MODEL_LABEL;
+  return {
+    model,
+    count: raw.count ?? 0,
+    totalInputTokens: inputTokens,
+    totalOutputTokens: raw.totalOutputTokens ?? 0,
+    totalCacheTokens: cacheTokens,
+    cacheHitRate: cacheHitRatePercent(inputTokens, cacheTokens),
+  };
+}
+
+export function mapProviderDailyStatRow(raw: {
+  day: string;
+  count: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCacheTokens: number;
+}): ProviderDailyStatRow {
+  return {
+    day: raw.day,
+    count: raw.count ?? 0,
+    totalInputTokens: raw.totalInputTokens ?? 0,
+    totalOutputTokens: raw.totalOutputTokens ?? 0,
+    totalCacheTokens: raw.totalCacheTokens ?? 0,
+  };
 }

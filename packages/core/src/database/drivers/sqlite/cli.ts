@@ -23,19 +23,21 @@ import {
 } from "../../metrics-sql";
 import { SQLITE_UPDATE_LOG_COMPLETED } from "../../logs-sql";
 import { SQLITE_MIN_VERSION, isSqliteVersionAtLeast } from "../../sqlite-version";
-import type {
-  DatabaseDriver,
-  SqliteDriverConfig,
-  RequestLog,
-  LogFilter,
-  LogQueryResult,
-  DatabaseStats,
-  LogResponseTiming,
-  ProviderStatRow,
-  RequestStatus,
-  StatsQuery,
-  DatabaseInitializeOptions,
-  LogDbMigrationChoice,
+import {
+  type DatabaseDriver,
+  type SqliteDriverConfig,
+  type RequestLog,
+  type LogFilter,
+  type LogQueryResult,
+  type DatabaseStats,
+  type LogResponseTiming,
+  type ProviderStatRow,
+  type ProviderDetailStats,
+  type RequestStatus,
+  type StatsQuery,
+  type DatabaseInitializeOptions,
+  type LogDbMigrationChoice,
+  UNKNOWN_MODEL_LABEL,
 } from "../../types";
 import {
   MAX_LOG_ROWS,
@@ -44,6 +46,10 @@ import {
   dbRowToLogWithoutBody,
   dbRowToLog,
   filterProviderBreakdownByTokenUsage,
+  emptyProviderDetailStats,
+  mapProviderModelStatRow,
+  mapProviderDailyStatRow,
+  cacheHitRatePercent,
 } from "../../shared-utils";
 import {
   buildInsertSql,
@@ -1487,6 +1493,96 @@ export class SqliteCliDriver implements DatabaseDriver {
       p50Duration,
       p90Duration,
       providerBreakdown: filterProviderBreakdownByTokenUsage(providerBreakdown),
+    };
+  }
+
+  async getProviderStats(providerId: string, query?: StatsQuery): Promise<ProviderDetailStats> {
+    if (!this.readConn?.started) {
+      return emptyProviderDetailStats(providerId);
+    }
+
+    const since = query?.since;
+    const timeFilter = since ? "timestamp >= ?" : "1=1";
+    const timeParams = since ? [since] : [];
+
+    const baseRows = await this.readConn.query(
+      `SELECT COUNT(*) as count,
+              COALESCE(MAX(provider_name), ?) as providerName,
+              SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successCount,
+              SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as errorCount,
+              AVG(duration) as avgDuration,
+              COALESCE(SUM(input_tokens), 0) as totalInputTokens,
+              COALESCE(SUM(output_tokens), 0) as totalOutputTokens,
+              COALESCE(SUM(cache_tokens), 0) as totalCacheTokens
+       FROM ${METRICS_TABLE}
+       WHERE provider_id = ? AND ${timeFilter}`,
+      [providerId, providerId, ...timeParams]
+    );
+    const base = baseRows[0] ?? {};
+    const count = (base.count as number) ?? 0;
+    const providerName = ((base.providerName as string) || providerId).trim() || providerId;
+    if (count === 0) {
+      return emptyProviderDetailStats(providerId, providerName);
+    }
+
+    const totalInput = (base.totalInputTokens as number) ?? 0;
+    const totalCache = (base.totalCacheTokens as number) ?? 0;
+
+    const modelRows = await this.readConn.query(
+      `SELECT COALESCE(NULLIF(TRIM(model), ''), ?) as model,
+              COUNT(*) as count,
+              COALESCE(SUM(input_tokens), 0) as totalInputTokens,
+              COALESCE(SUM(output_tokens), 0) as totalOutputTokens,
+              COALESCE(SUM(cache_tokens), 0) as totalCacheTokens
+       FROM ${METRICS_TABLE}
+       WHERE provider_id = ? AND ${timeFilter}
+       GROUP BY COALESCE(NULLIF(TRIM(model), ''), ?)
+       ORDER BY count DESC`,
+      [UNKNOWN_MODEL_LABEL, providerId, ...timeParams, UNKNOWN_MODEL_LABEL]
+    );
+
+    const dailyRows = await this.readConn.query(
+      `SELECT strftime('%Y-%m-%d', timestamp / 1000, 'unixepoch') as day,
+              COUNT(*) as count,
+              COALESCE(SUM(input_tokens), 0) as totalInputTokens,
+              COALESCE(SUM(output_tokens), 0) as totalOutputTokens,
+              COALESCE(SUM(cache_tokens), 0) as totalCacheTokens
+       FROM ${METRICS_TABLE}
+       WHERE provider_id = ? AND ${timeFilter}
+       GROUP BY day
+       ORDER BY day ASC`,
+      [providerId, ...timeParams]
+    );
+
+    return {
+      providerId,
+      providerName,
+      count,
+      successCount: (base.successCount as number) ?? 0,
+      errorCount: (base.errorCount as number) ?? 0,
+      avgDuration: Math.round((base.avgDuration as number) ?? 0),
+      totalInputTokens: totalInput,
+      totalOutputTokens: (base.totalOutputTokens as number) ?? 0,
+      totalCacheTokens: totalCache,
+      cacheHitRate: cacheHitRatePercent(totalInput, totalCache),
+      modelBreakdown: modelRows.map(r =>
+        mapProviderModelStatRow({
+          model: r.model as string,
+          count: r.count as number,
+          totalInputTokens: r.totalInputTokens as number,
+          totalOutputTokens: r.totalOutputTokens as number,
+          totalCacheTokens: r.totalCacheTokens as number,
+        })
+      ),
+      dailyBreakdown: dailyRows.map(r =>
+        mapProviderDailyStatRow({
+          day: r.day as string,
+          count: r.count as number,
+          totalInputTokens: r.totalInputTokens as number,
+          totalOutputTokens: r.totalOutputTokens as number,
+          totalCacheTokens: r.totalCacheTokens as number,
+        })
+      ),
     };
   }
 

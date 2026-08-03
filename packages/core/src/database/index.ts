@@ -9,6 +9,7 @@ import { Logger } from "../utils/logger";
 import type { DatabaseDriver, DatabaseDriverConfig } from "./types";
 import { createDriver } from "./factory";
 import { isSqliteCliUnavailableError } from "./drivers/sqlite";
+import { emptyProviderDetailStats } from "./shared-utils";
 
 export type {
   RequestLog,
@@ -17,11 +18,15 @@ export type {
   RequestStatus,
   RouteType,
   DatabaseStats,
+  ProviderDetailStats,
+  ProviderModelStatRow,
+  ProviderDailyStatRow,
   DatabaseDriverConfig,
   SqliteDriverConfig,
   PostgresDriverConfig,
   LogDbMigrationChoice,
 } from "./types";
+export { UNKNOWN_MODEL_LABEL } from "./types";
 
 /**
  * LogDatabase - Simple wrapper around database driver
@@ -212,6 +217,16 @@ export class LogDatabase {
       ...stats,
       pendingWrites: 0,
     };
+  }
+
+  /**
+   * Get per-provider detail statistics
+   */
+  async getProviderStats(providerId: string, query?: import("./types").StatsQuery) {
+    if (!this.driver) {
+      return emptyProviderDetailStats(providerId);
+    }
+    return this.driver.getProviderStats(providerId, query);
   }
 
   /**
