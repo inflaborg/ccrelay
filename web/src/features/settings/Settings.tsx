@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { api } from "@/api/client";
-import { applyAppLocale } from "@/i18n";
+import { applyAppLocale, parseAppLocale } from "@/i18n";
 import type {
   LoggingSettings,
   ConcurrencySettings,
@@ -278,9 +278,19 @@ function Section({
 // ─── Language (auto-save) ───────────────────────────────────────────────────
 
 function LanguageSettingsSection({ locale }: { locale?: string }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
-  const [value, setValue] = useState(locale ?? "");
+  // Prefer the live UI language so the select stays correct while config catch-up / remounts race.
+  const liveLocale =
+    parseAppLocale(i18n.resolvedLanguage ?? i18n.language) ??
+    parseAppLocale(window.CCRELAY_LOCALE) ??
+    parseAppLocale(locale) ??
+    "";
+  const [value, setValue] = useState(liveLocale);
+
+  useEffect(() => {
+    setValue(liveLocale);
+  }, [liveLocale]);
 
   const localeMutation = useMutation({
     mutationFn: (nextLocale: string | undefined) =>
@@ -301,10 +311,12 @@ function LanguageSettingsSection({ locale }: { locale?: string }) {
     return () => clearTimeout(timer);
   }, [localeSaved, resetLocaleMutation]);
 
-  const handleLocaleChange = (locale: string) => {
-    const nextLocale = locale || undefined;
-    setValue(locale);
-    void applyAppLocale(nextLocale);
+  const handleLocaleChange = (next: string) => {
+    const nextLocale = parseAppLocale(next);
+    setValue(nextLocale ?? "");
+    if (nextLocale) {
+      void applyAppLocale(nextLocale);
+    }
     localeMutation.mutate(nextLocale);
   };
 
@@ -314,7 +326,6 @@ function LanguageSettingsSection({ locale }: { locale?: string }) {
         <SelectField
           value={value}
           options={[
-            { value: "", label: t("common.na") },
             { value: "en", label: t("language.en") },
             { value: "zh", label: t("language.zh") },
           ]}
