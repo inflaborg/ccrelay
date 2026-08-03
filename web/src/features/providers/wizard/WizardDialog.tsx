@@ -323,7 +323,7 @@ export function WizardDialog({
           ) : null}
         </div>
 
-        <DialogFooter className="mx-0 mb-0 shrink-0 flex-col gap-3 rounded-b-xl border-t bg-muted/50 px-6 pt-4 pb-6 sm:flex-row sm:items-center sm:justify-between">
+        <DialogFooter className="mx-0 mb-0 shrink-0 flex-col gap-3 rounded-b-xl border-t bg-muted/50 px-6 pt-4 pb-6 sm:flex-row sm:items-center">
           {phase === "choose" ? (
             <Button
               type="button"
@@ -346,7 +346,7 @@ export function WizardDialog({
                 probeModels={useCustomModels ? null : upstreamModels.models}
                 disabled={busy}
               />
-              <div className="flex w-full shrink-0 flex-wrap justify-end gap-2 sm:w-auto">
+              <div className="ml-auto flex w-full shrink-0 flex-wrap justify-end gap-2 sm:w-auto">
                 <Button
                   type="button"
                   variant="outline"
