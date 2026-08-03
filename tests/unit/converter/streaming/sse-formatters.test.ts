@@ -228,4 +228,131 @@ describe("formatAnthropicMessageSse", () => {
     expect(text).toBe("Hello world");
     expect(events.some(e => e.type === "message_stop")).toBe(true);
   });
+
+  it("streams tool_use input via input_json_delta (not content_block_start.input)", () => {
+    const message: AnthropicMessageResponse = {
+      id: "msg_tool",
+      type: "message",
+      role: "assistant",
+      model: "m",
+      content: [
+        {
+          type: "thinking",
+          thinking: "need bash",
+        },
+        {
+          type: "tool_use",
+          id: "functions.Bash:7",
+          name: "Bash",
+          input: {
+            command: 'find . -name "*.tscn" | head -50',
+            description: "List scenes",
+          },
+        },
+      ],
+      stop_reason: "tool_use",
+      stop_sequence: null,
+      usage: { input_tokens: 10, output_tokens: 20, cache_read_input_tokens: 0 },
+    };
+    const sse = formatAnthropicMessageSse(message);
+    const events = parseSseDataEvents(sse);
+
+    const toolStart = events.find(e => {
+      if (e.type !== "content_block_start") {
+        return false;
+      }
+      const cb = e.content_block;
+      return !!cb && typeof cb === "object" && (cb as { type?: string }).type === "tool_use";
+    });
+    expect(toolStart).toBeDefined();
+    const startBlock = toolStart?.content_block as {
+      type?: string;
+      id?: string;
+      name?: string;
+      input?: unknown;
+    };
+    expect(startBlock.id).toBe("functions.Bash:7");
+    expect(startBlock.name).toBe("Bash");
+    // Anthropic contract: start.input is a placeholder; real args arrive as deltas.
+    expect(startBlock.input).toEqual({});
+
+    const toolIndex = toolStart?.index;
+    const jsonDeltas = events.filter(e => {
+      if (e.type !== "content_block_delta" || e.index !== toolIndex) {
+        return false;
+      }
+      const delta = e.delta;
+      return (
+        !!delta &&
+        typeof delta === "object" &&
+        (delta as { type?: string }).type === "input_json_delta"
+      );
+    });
+    expect(jsonDeltas.length).toBeGreaterThan(0);
+    const partial = jsonDeltas
+      .map(e => {
+        const delta = e.delta;
+        if (!delta || typeof delta !== "object") {
+          return "";
+        }
+        const pj = (delta as { partial_json?: string }).partial_json;
+        return typeof pj === "string" ? pj : "";
+      })
+      .join("");
+    expect(JSON.parse(partial)).toEqual({
+      command: 'find . -name "*.tscn" | head -50',
+      description: "List scenes",
+    });
+
+    const stop = events.find(e => e.type === "message_delta");
+    const stopDelta = stop?.delta as { stop_reason?: string } | undefined;
+    expect(stopDelta?.stop_reason).toBe("tool_use");
+  });
+
+  it("streams server_tool_use input via input_json_delta", () => {
+    const message: AnthropicMessageResponse = {
+      id: "msg_srv",
+      type: "message",
+      role: "assistant",
+      model: "m",
+      content: [
+        {
+          type: "server_tool_use",
+          id: "srv_1",
+          name: "web_search",
+          input: { query: "ccrelay tool use" },
+        },
+      ],
+      stop_reason: "tool_use",
+      stop_sequence: null,
+      usage: { input_tokens: 1, output_tokens: 2, cache_read_input_tokens: 0 },
+    };
+    const sse = formatAnthropicMessageSse(message);
+    const events = parseSseDataEvents(sse);
+    const start = events.find(e => e.type === "content_block_start");
+    const startBlock = start?.content_block as { input?: unknown } | undefined;
+    expect(startBlock?.input).toEqual({});
+    const partial = events
+      .filter(e => {
+        if (e.type !== "content_block_delta") {
+          return false;
+        }
+        const delta = e.delta;
+        return (
+          !!delta &&
+          typeof delta === "object" &&
+          (delta as { type?: string }).type === "input_json_delta"
+        );
+      })
+      .map(e => {
+        const delta = e.delta;
+        if (!delta || typeof delta !== "object") {
+          return "";
+        }
+        const pj = (delta as { partial_json?: string }).partial_json;
+        return typeof pj === "string" ? pj : "";
+      })
+      .join("");
+    expect(JSON.parse(partial)).toEqual({ query: "ccrelay tool use" });
+  });
 });
