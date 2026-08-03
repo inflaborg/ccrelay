@@ -18,6 +18,7 @@ import { api } from "@/api/client";
 import type { StatsRange, ServerStatus } from "@/types/api";
 import { cn } from "@/lib/utils";
 import QueueStatus from "./QueueStatus";
+import { ProviderDetailDialog } from "./ProviderDetailDialog";
 
 function formatTokenCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -75,6 +76,10 @@ export default function Dashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [range, setRange] = useState<StatsRange>("7d");
+  const [selectedProvider, setSelectedProvider] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   const { data: status, isLoading: statusLoading } = useQuery({
     queryKey: ["status"],
@@ -446,9 +451,18 @@ export default function Dashboard() {
                 </thead>
                 <tbody>
                   {stats.providerBreakdown.map(p => (
-                    <tr key={p.providerId} className="border-b border-border last:border-0">
+                    <tr
+                      key={p.providerId}
+                      className="border-b border-border last:border-0 cursor-pointer hover:bg-muted/40"
+                      onClick={() =>
+                        setSelectedProvider({ id: p.providerId, name: p.providerName })
+                      }
+                      title={t("dashboard.providerDetail.clickHint")}
+                    >
                       <td className="py-1.5 pr-3">
-                        <div className="font-medium truncate max-w-[160px]">{p.providerName}</div>
+                        <div className="font-medium truncate max-w-[160px] text-primary underline-offset-2 hover:underline">
+                          {p.providerName}
+                        </div>
                         <div className="text-[10px] text-muted-foreground">{p.providerId}</div>
                       </td>
                       <td className="text-right py-1.5 px-2 font-mono">{p.count}</td>
@@ -479,6 +493,18 @@ export default function Dashboard() {
       )}
 
       <QueueStatus />
+
+      <ProviderDetailDialog
+        open={selectedProvider !== null}
+        onOpenChange={open => {
+          if (!open) {
+            setSelectedProvider(null);
+          }
+        }}
+        providerId={selectedProvider?.id ?? null}
+        providerName={selectedProvider?.name ?? ""}
+        range={range}
+      />
 
       <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
         <AlertDialogContent>

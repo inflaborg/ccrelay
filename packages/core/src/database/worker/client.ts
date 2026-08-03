@@ -14,6 +14,7 @@ import type {
   LogFilter,
   LogQueryResult,
   DatabaseStats,
+  ProviderDetailStats,
   LogResponseTiming,
   RequestStatus,
   DatabaseDriverConfig,
@@ -22,6 +23,7 @@ import type {
   LogDbMigrationChoice,
   SqliteDriverConfig,
 } from "../types";
+import { emptyProviderDetailStats } from "../shared-utils";
 
 // Message types (must match worker)
 type WorkerMessageType =
@@ -39,6 +41,7 @@ type WorkerMessageType =
   | "clearAllLogs"
   | "clearAllMetrics"
   | "getStats"
+  | "getProviderStats"
   | "cleanOldLogs"
   | "forceFlush";
 
@@ -439,6 +442,17 @@ export class DatabaseWorkerClient implements DatabaseDriver {
         p90Duration: 0,
         providerBreakdown: [],
       };
+    }
+  }
+
+  async getProviderStats(providerId: string, query?: StatsQuery): Promise<ProviderDetailStats> {
+    try {
+      return await this.send<ProviderDetailStats>("getProviderStats", { providerId, query });
+    } catch (err) {
+      this.log.warn(
+        `[DatabaseWorker] getProviderStats failed, returning empty: ${err instanceof Error ? err.message : String(err)}`
+      );
+      return emptyProviderDetailStats(providerId);
     }
   }
 

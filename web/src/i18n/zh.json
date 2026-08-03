@@ -166,6 +166,20 @@
       "nonCacheInput": "非缓存输入",
       "cacheHitRate": "缓存命中率"
     },
+    "providerDetail": {
+      "title": "提供商用量",
+      "loading": "正在加载提供商统计…",
+      "empty": "所选时间范围内该提供商暂无用量数据。",
+      "error": "加载提供商统计失败。",
+      "modelChart": "按模型请求数",
+      "dailyChart": "每日用量",
+      "dailyRequestsChart": "每日请求数",
+      "dailyTokensChart": "每日 Token（非缓存输入 / 缓存 / 输出）",
+      "modelTable": "模型明细",
+      "model": "模型",
+      "unknownModel": "未知",
+      "clickHint": "点击查看详情"
+    },
     "queue": {
       "title": "并发队列",
       "loading": "加载队列状态…",

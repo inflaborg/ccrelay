@@ -112,6 +112,51 @@ export interface ProviderStatRow {
   cacheHitRate: number;
 }
 
+/** Sentinel model label when metrics.model is null/empty. */
+export const UNKNOWN_MODEL_LABEL = "(unknown)";
+
+/**
+ * Per-model row in provider detail breakdown
+ */
+export interface ProviderModelStatRow {
+  model: string;
+  count: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCacheTokens: number;
+  cacheHitRate: number;
+}
+
+/**
+ * Per-day row in provider detail trend
+ */
+export interface ProviderDailyStatRow {
+  /** Calendar day YYYY-MM-DD (UTC) */
+  day: string;
+  count: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCacheTokens: number;
+}
+
+/**
+ * Summary + breakdowns for one provider (dashboard detail dialog)
+ */
+export interface ProviderDetailStats {
+  providerId: string;
+  providerName: string;
+  count: number;
+  successCount: number;
+  errorCount: number;
+  avgDuration: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCacheTokens: number;
+  cacheHitRate: number;
+  modelBreakdown: ProviderModelStatRow[];
+  dailyBreakdown: ProviderDailyStatRow[];
+}
+
 /**
  * Database statistics
  */
@@ -262,6 +307,11 @@ export interface DatabaseDriver {
    * Get database statistics
    */
   getStats(query?: StatsQuery): Promise<DatabaseStats>;
+
+  /**
+   * Get per-provider detail stats (model + daily breakdowns)
+   */
+  getProviderStats(providerId: string, query?: StatsQuery): Promise<ProviderDetailStats>;
 
   /**
    * Clean old logs (background maintenance)

@@ -166,6 +166,20 @@
       "nonCacheInput": "Non-cache Input",
       "cacheHitRate": "Cache Hit Rate"
     },
+    "providerDetail": {
+      "title": "Provider usage",
+      "loading": "Loading provider stats…",
+      "empty": "No usage data for this provider in the selected range.",
+      "error": "Failed to load provider stats.",
+      "modelChart": "Requests by model",
+      "dailyChart": "Daily usage",
+      "dailyRequestsChart": "Daily requests",
+      "dailyTokensChart": "Daily tokens (non-cache input / cache / output)",
+      "modelTable": "Model breakdown",
+      "model": "Model",
+      "unknownModel": "Unknown",
+      "clickHint": "Click for details"
+    },
     "queue": {
       "title": "Concurrency Queue",
       "loading": "Loading queue status…",

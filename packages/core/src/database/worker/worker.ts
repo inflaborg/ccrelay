@@ -40,6 +40,7 @@ type WorkerMessageType =
   | "clearAllLogs"
   | "clearAllMetrics"
   | "getStats"
+  | "getProviderStats"
   | "cleanOldLogs"
   | "forceFlush";
 
@@ -198,6 +199,13 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
       case "getStats": {
         const q = (payload as { query?: StatsQuery })?.query;
         const result = await driver?.getStats(q);
+        return { id, success: true, data: result };
+      }
+
+      case "getProviderStats": {
+        const p = payload as { providerId?: string; query?: StatsQuery } | undefined;
+        const providerId = p?.providerId ?? "";
+        const result = await driver?.getProviderStats(providerId, p?.query);
         return { id, success: true, data: result };
       }
 

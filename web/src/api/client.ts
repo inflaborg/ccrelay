@@ -6,6 +6,7 @@ import type {
   LogsResponse,
   LogsQuery,
   LogStats,
+  ProviderDetailStats,
   VersionResponse,
   UpdateCheckResponse,
   AddProviderRequest,
@@ -212,6 +213,13 @@ export const api = {
   getStats: (range?: StatsRange): Promise<LogStats> => {
     const params = range && range !== "all" ? `?range=${range}` : "";
     return fetchAPI<LogStats>(`/stats${params}`);
+  },
+
+  getProviderStats: (providerId: string, range?: StatsRange): Promise<ProviderDetailStats> => {
+    const params = range && range !== "all" ? `?range=${range}` : "";
+    return fetchAPI<ProviderDetailStats>(
+      `/stats/providers/${encodeURIComponent(providerId)}${params}`
+    );
   },
 
   getWebSearchStatus: (): Promise<WebSearchStatusResponse> =>

@@ -22,7 +22,7 @@ import {
 } from "./providers";
 import { handleSwitchProvider, setServer as setSwitchServer } from "./switch";
 import { handleLogs, handleLogDetail, handleDeleteLogs, handleClearLogs } from "./logs";
-import { handleStats, handleClearStats } from "./stats";
+import { handleStats, handleClearStats, handleProviderStats } from "./stats";
 import { handleVersion } from "./version";
 import { handleUpdateCheck, handleTriggerUpdateCheck } from "./updateCheck";
 import { handleQueueStats, handleClearQueue, setServer as setQueueServer } from "./queue";
@@ -155,6 +155,18 @@ export function handleApiRequest(req: http.IncomingMessage, res: http.ServerResp
   if (reqPath === "/ccrelay/api/stats" && method === "DELETE") {
     handleClearStats(req, res).catch(err => {
       log.error("Error handling DELETE /stats", err);
+      if (!res.headersSent) {
+        sendJson(res, 500, { error: "Internal server error" });
+      }
+    });
+    return true;
+  }
+
+  // Check for GET /ccrelay/api/stats/providers/:providerId
+  const statsProviderMatch = reqPath.match(/^\/ccrelay\/api\/stats\/providers\/([^/]+)$/);
+  if (statsProviderMatch && method === "GET") {
+    handleProviderStats(req, res, { providerId: statsProviderMatch[1] }).catch(err => {
+      log.error("Error handling GET /stats/providers/:id", err);
       if (!res.headersSent) {
         sendJson(res, 500, { error: "Internal server error" });
       }
