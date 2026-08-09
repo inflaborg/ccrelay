@@ -1,6 +1,7 @@
 /**
- * Chat Completions strict tools sanitize: drop unsupported Responses hosted tools and
- * shim `custom` freeform tools to string-arg `function` entries for Chat-only upstreams.
+ * Chat Completions tools sanitize: drop unsupported Responses hosted tools,
+ * shim `custom` freeform tools to string-arg `function` entries for Chat-only upstreams,
+ * and enforce the OpenAI Chat Completions tools array limit (128).
  */
 
 import { ScopedLogger } from "../../utils/logger";
@@ -8,6 +9,9 @@ import { isPlainObject } from "./passthrough";
 import { matchHostedToolRuleForBaseUrl, type PlatformMatchOptions } from "./matchRule";
 
 const log = new ScopedLogger("PlatformStrictTools");
+
+/** OpenAI Chat Completions rejects requests with more than this many `tools` entries. */
+export const OPENAI_CHAT_MAX_TOOLS = 128;
 
 function formatHint(format: unknown): string | undefined {
   if (!isPlainObject(format)) {
@@ -168,4 +172,39 @@ export function openaiChatStrictToolsSanitize(
   if (body.tool_choice !== undefined) {
     body.tool_choice = normalizeToolChoiceAfterDrop(body.tool_choice, keptFunctionNames);
   }
+}
+
+/**
+ * Truncate `tools[]` to the OpenAI Chat Completions hard limit (default 128).
+ * Keeps the first N entries; if `tool_choice` names a dropped function, resets to `"auto"`.
+ */
+export function capOpenAiChatTools(
+  body: Record<string, unknown>,
+  max: number = OPENAI_CHAT_MAX_TOOLS
+): void {
+  const rawTools = body.tools;
+  if (!Array.isArray(rawTools) || rawTools.length <= max) {
+    return;
+  }
+
+  const before = rawTools.length;
+  const kept = rawTools.slice(0, max) as Record<string, unknown>[];
+  body.tools = kept;
+  log.warn(`[tools-limit] truncated tools from ${before} to ${max} (dropped ${before - max})`);
+
+  if (body.tool_choice === undefined) {
+    return;
+  }
+
+  const keptFunctionNames = new Set<string>();
+  for (const entry of kept) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const name = toolDisplayName(entry);
+    if (name) {
+      keptFunctionNames.add(name);
+    }
+  }
+  body.tool_choice = normalizeToolChoiceAfterDrop(body.tool_choice, keptFunctionNames);
 }

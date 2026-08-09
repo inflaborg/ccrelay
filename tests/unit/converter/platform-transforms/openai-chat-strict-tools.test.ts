@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 
 import {
+  OPENAI_CHAT_MAX_TOOLS,
+  capOpenAiChatTools,
   customToFunctionShim,
   matchHostedToolRuleForBaseUrl,
   openaiChatStrictToolsSanitize,
@@ -164,5 +166,50 @@ describe("openaiChatStrictToolsSanitize", () => {
       type: "function",
       function: { name: "wait" },
     });
+  });
+});
+
+describe("capOpenAiChatTools", () => {
+  it("no-ops when tools length is within the limit", () => {
+    const tools = Array.from({ length: OPENAI_CHAT_MAX_TOOLS }, (_, i) => fnTool(`t${i}`));
+    const body: Record<string, unknown> = { tools };
+    capOpenAiChatTools(body);
+    expect(body.tools).toBe(tools);
+    expect((body.tools as unknown[]).length).toBe(OPENAI_CHAT_MAX_TOOLS);
+  });
+
+  it("truncates to the first 128 tools", () => {
+    const body: Record<string, unknown> = {
+      tools: Array.from({ length: OPENAI_CHAT_MAX_TOOLS + 5 }, (_, i) => fnTool(`t${i}`)),
+    };
+    capOpenAiChatTools(body);
+    const tools = body.tools as Record<string, unknown>[];
+    expect(tools).toHaveLength(OPENAI_CHAT_MAX_TOOLS);
+    expect((tools[0].function as { name: string }).name).toBe("t0");
+    expect((tools[OPENAI_CHAT_MAX_TOOLS - 1].function as { name: string }).name).toBe(
+      `t${OPENAI_CHAT_MAX_TOOLS - 1}`
+    );
+  });
+
+  it("resets tool_choice to auto when the forced function was truncated away", () => {
+    const body: Record<string, unknown> = {
+      tools: Array.from({ length: OPENAI_CHAT_MAX_TOOLS + 1 }, (_, i) => fnTool(`t${i}`)),
+      tool_choice: {
+        type: "function",
+        function: { name: `t${OPENAI_CHAT_MAX_TOOLS}` },
+      },
+    };
+    capOpenAiChatTools(body);
+    expect(body.tool_choice).toBe("auto");
+  });
+
+  it("keeps tool_choice when the forced function remains", () => {
+    const choice = { type: "function", function: { name: "t0" } };
+    const body: Record<string, unknown> = {
+      tools: Array.from({ length: OPENAI_CHAT_MAX_TOOLS + 1 }, (_, i) => fnTool(`t${i}`)),
+      tool_choice: choice,
+    };
+    capOpenAiChatTools(body);
+    expect(body.tool_choice).toEqual(choice);
   });
 });

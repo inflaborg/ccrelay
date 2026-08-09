@@ -114,7 +114,12 @@ export {
 export { geminiThoughtTagsResponseTransform } from "./gemini/response-thoughts";
 export { minimaxChatSanitize } from "./minimax/request-sanitize";
 export { minimaxReasoningDetailsResponseTransform } from "./minimax/response-reasoning";
-export { customToFunctionShim, openaiChatStrictToolsSanitize } from "./openai-chat-strict-tools";
+export {
+  OPENAI_CHAT_MAX_TOOLS,
+  capOpenAiChatTools,
+  customToFunctionShim,
+  openaiChatStrictToolsSanitize,
+} from "./openai-chat-strict-tools";
 export {
   extractLongcatToolCalls,
   parseLongcatArgValue,

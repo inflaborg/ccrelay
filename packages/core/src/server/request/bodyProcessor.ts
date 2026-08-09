@@ -34,6 +34,7 @@ import {
   applyPlatformRequestSanitize,
   matchAnthropicSseRule,
   openaiChatStrictToolsSanitize,
+  capOpenAiChatTools,
 } from "../../converter/platform-transforms";
 import { anthropicBodyHasHostedTool } from "../../converter/hosted-tools";
 import { ScopedLogger } from "../../utils/logger";
@@ -118,6 +119,8 @@ function applyPlatformTransformsToOpenAiChatBody(
     ensureOpenAiChatStreamUsageIncluded(data);
     applyHostedToolsToOpenAiChatRecord(data, baseUrl, openaiCompat);
     openaiChatStrictToolsSanitize(data, baseUrl, matchOpts);
+    // OpenAI Chat Completions hard limit — after strictTools so truncation sees the filtered list.
+    capOpenAiChatTools(data);
     applyPlatformMessagesToOpenAiChatRecord(data, baseUrl, openaiCompat);
     applyPlatformRequestSanitize(data, baseUrl, matchOpts);
     sanitizeOpenAiChatToolArgumentsInMessages(data.messages);
