@@ -60,6 +60,8 @@ export {
   normalizeGeminiEffort,
   passthroughTransform,
   isPlainObject,
+  OPENAI_CHAT_MAX_TOOLS,
+  capOpenAiChatTools,
   customToFunctionShim,
   openaiChatStrictToolsSanitize,
   extractLongcatToolCalls,
