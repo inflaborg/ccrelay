@@ -229,23 +229,28 @@ export default function Providers() {
     if (!formData.baseUrl.trim() || !formData.id.trim()) {
       return null;
     }
+    const customLines = customModelsText
+      .split("\n")
+      .map(l => l.trim())
+      .filter(l => l.length > 0);
     return [
       {
+        ...formData,
         id: formData.id.trim(),
         name: formData.name.trim() || formData.id.trim(),
         baseUrl: formData.baseUrl.trim(),
-        providerType: pt,
-        authHeader: formData.authHeader,
+        apiKey: endpointTestApiKey.trim() || undefined,
+        useCustomModelsList: formData.useCustomModelsList === true,
+        customModelsList: formData.useCustomModelsList === true ? customLines : undefined,
+        openaiCompat:
+          pt === "openai" || pt === "openai_chat"
+            ? formData.openaiCompat === "azure_openai"
+              ? "azure_openai"
+              : undefined
+            : undefined,
       },
     ];
-  }, [
-    showAddModal,
-    formData.id,
-    formData.name,
-    formData.baseUrl,
-    formData.providerType,
-    formData.authHeader,
-  ]);
+  }, [showAddModal, formData, customModelsText, endpointTestApiKey]);
 
   const { data: catalog, isLoading: catalogLoading } = useQuery({
     queryKey: ["smartRoutingCatalog"],

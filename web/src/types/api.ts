@@ -624,7 +624,15 @@ export interface WizardEndpointVariantInput {
   name: string;
   baseUrl: string;
   providerType: WizardProviderType;
+  mode?: "passthrough" | "inject";
   authHeader?: string;
+  headers?: Record<string, string>;
+  modelMap?: ModelMapEntry[];
+  vlModelMap?: ModelMapEntry[];
+  modelMappingEnabled?: boolean;
+  openaiCompat?: "default" | "azure_openai";
+  useCustomModelsList?: boolean;
+  customModelsList?: string[];
 }
 
 export interface WizardEndpointTestRequest {

@@ -165,42 +165,7 @@ export class Router {
     originalHeaders: Record<string, string>,
     provider: Provider
   ): Record<string, string> {
-    const headers: Record<string, string> = {};
-
-    // Copy all headers except hop-by-hop ones
-    for (const [key, value] of Object.entries(originalHeaders)) {
-      const lowerKey = key.toLowerCase();
-      if (lowerKey !== "host" && lowerKey !== "content-length") {
-        headers[key] = value;
-      }
-    }
-
-    if (provider.mode === "inject") {
-      // Remove original auth headers
-      delete headers["authorization"];
-      delete headers["x-api-key"];
-
-      // Inject provider's API key
-      if (provider.apiKey) {
-        const authHeader = provider.authHeader || "authorization";
-        if (authHeader.toLowerCase() === "authorization") {
-          headers["authorization"] = `Bearer ${provider.apiKey}`;
-        } else if (authHeader.toLowerCase() === "x-api-key") {
-          headers["x-api-key"] = provider.apiKey;
-        } else {
-          headers[authHeader] = provider.apiKey;
-        }
-      }
-    }
-
-    // Add custom headers from provider config
-    if (provider.headers) {
-      for (const [key, value] of Object.entries(provider.headers)) {
-        headers[key] = value;
-      }
-    }
-
-    return headers;
+    return prepareProviderHeaders(originalHeaders, provider);
   }
 
   /**
@@ -251,8 +216,51 @@ export class Router {
    * Build target URL for the provider
    */
   getTargetUrl(path: string, provider: Provider): string {
-    const baseUrl = provider.baseUrl.replace(/\/$/, "");
-    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-    return `${baseUrl}${normalizedPath}`;
+    return buildProviderTargetUrl(path, provider);
   }
+}
+
+/** Copy client headers, inject provider auth, then apply `provider.headers`. */
+export function prepareProviderHeaders(
+  originalHeaders: Record<string, string>,
+  provider: Provider
+): Record<string, string> {
+  const headers: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(originalHeaders)) {
+    const lowerKey = key.toLowerCase();
+    if (lowerKey !== "host" && lowerKey !== "content-length") {
+      headers[key] = value;
+    }
+  }
+
+  if (provider.mode === "inject") {
+    delete headers["authorization"];
+    delete headers["x-api-key"];
+
+    if (provider.apiKey) {
+      const authHeader = provider.authHeader || "authorization";
+      if (authHeader.toLowerCase() === "authorization") {
+        headers["authorization"] = `Bearer ${provider.apiKey}`;
+      } else if (authHeader.toLowerCase() === "x-api-key") {
+        headers["x-api-key"] = provider.apiKey;
+      } else {
+        headers[authHeader] = provider.apiKey;
+      }
+    }
+  }
+
+  if (provider.headers) {
+    for (const [key, value] of Object.entries(provider.headers)) {
+      headers[key] = value;
+    }
+  }
+
+  return headers;
+}
+
+export function buildProviderTargetUrl(path: string, provider: Provider): string {
+  const baseUrl = provider.baseUrl.replace(/\/$/, "");
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${baseUrl}${normalizedPath}`;
 }
