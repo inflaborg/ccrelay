@@ -18,8 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **UI**
 
 - Provider cards: click to select a routing source, then **Apply** in the header to switch. Toolbar **Select** is for export and delete.
+- Provider endpoint test uses the current unsaved form as a temporary provider, so mapping and extra headers are included. The probe no longer sends a one-token output limit.
 
 ### Fixed
+
+**UI**
+
+- Provider endpoint test status now shows the protocol type (Anthropic / OpenAI / OpenAI Chat), not the last hyphen segment of the provider name.
 
 **Protocol/Conversion**
 

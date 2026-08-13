@@ -206,4 +206,109 @@ describe("executeWizardEndpointTest", () => {
       authorization: "Bearer sk-stored",
     });
   });
+
+  function fetchUrl(callIndex = 0): string {
+    const url = vi.mocked(fetch).mock.calls[callIndex]?.[0];
+    return typeof url === "string" ? url : "";
+  }
+
+  function fetchJsonBody(callIndex = 0): Record<string, unknown> {
+    const raw = vi.mocked(fetch).mock.calls[callIndex]?.[1]?.body;
+    const text = Buffer.isBuffer(raw)
+      ? raw.toString("utf-8")
+      : raw instanceof Uint8Array
+        ? Buffer.from(raw).toString("utf-8")
+        : typeof raw === "string"
+          ? raw
+          : "";
+    return JSON.parse(text) as Record<string, unknown>;
+  }
+
+  it("omits max_tokens on OpenAI Chat outbound after Anthropic inbound conversion", async () => {
+    vi.mocked(fetch).mockResolvedValue(jsonOkResponse());
+
+    await executeWizardEndpointTest({
+      apiKey: "k",
+      modelId: "gpt-4o",
+      variants: [
+        {
+          id: "v1",
+          name: "t",
+          baseUrl: "https://api.openai.com/v1",
+          providerType: "openai_chat",
+        },
+      ],
+    });
+
+    expect(fetchUrl()).toBe("https://api.openai.com/v1/chat/completions");
+    const body = fetchJsonBody();
+    expect(body.max_tokens).toBeUndefined();
+    expect(body.max_completion_tokens).toBeUndefined();
+    expect(body.model).toBe("gpt-4o");
+    expect(body.stream).toBe(false);
+  });
+
+  it("fills Anthropic max_tokens only after pipeline when upstream is Messages", async () => {
+    vi.mocked(fetch).mockResolvedValue(jsonOkResponse());
+
+    await executeWizardEndpointTest({
+      apiKey: "k",
+      modelId: "claude-sonnet-4",
+      variants: [
+        {
+          id: "v1",
+          name: "t",
+          baseUrl: "https://api.anthropic.com",
+          providerType: "anthropic",
+        },
+      ],
+    });
+
+    expect(fetchUrl()).toBe("https://api.anthropic.com/v1/messages");
+    const body = fetchJsonBody();
+    expect(body.max_tokens).toBe(4096);
+    expect(body.model).toBe("claude-sonnet-4");
+  });
+
+  it("applies modelMap from the temporary provider snapshot", async () => {
+    vi.mocked(fetch).mockResolvedValue(jsonOkResponse());
+
+    await executeWizardEndpointTest({
+      apiKey: "k",
+      modelId: "claude-sonnet-4",
+      variants: [
+        {
+          id: "v1",
+          name: "t",
+          baseUrl: "https://api.openai.com/v1",
+          providerType: "openai_chat",
+          modelMap: [{ pattern: "claude-*", model: "gpt-4o-mini" }],
+        },
+      ],
+    });
+
+    expect(fetchJsonBody().model).toBe("gpt-4o-mini");
+  });
+
+  it("sends custom headers from the temporary provider snapshot", async () => {
+    vi.mocked(fetch).mockResolvedValue(jsonOkResponse());
+    const customHeader = "X-Custom";
+
+    await executeWizardEndpointTest({
+      apiKey: "k",
+      modelId: "gpt-4o",
+      variants: [
+        {
+          id: "v1",
+          name: "t",
+          baseUrl: "https://api.openai.com/v1",
+          providerType: "openai_chat",
+          headers: { [customHeader]: "from-config" },
+        },
+      ],
+    });
+
+    const init = vi.mocked(fetch).mock.calls[0]?.[1];
+    expect(init?.headers).toMatchObject({ [customHeader]: "from-config" });
+  });
 });

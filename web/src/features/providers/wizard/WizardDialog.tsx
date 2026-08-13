@@ -262,13 +262,7 @@ export function WizardDialog({
     if (!previewResult?.ok) {
       return null;
     }
-    return previewResult.preview.map(p => ({
-      id: p.id,
-      name: p.name,
-      baseUrl: p.baseUrl,
-      providerType: p.providerType,
-      authHeader: p.authHeader,
-    }));
+    return previewResult.preview;
   }, [previewResult]);
 
   return (

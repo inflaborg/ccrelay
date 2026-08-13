@@ -38,6 +38,12 @@ function StatusGlyph({ line }: { line: VariantTestLine }) {
   return <XCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />;
 }
 
+const PROTOCOL_LABEL_KEY: Record<VariantTestLine["providerType"], string> = {
+  anthropic: "providers.protocol.anthropic",
+  openai: "providers.protocol.openai",
+  openai_chat: "providers.protocol.openaiChat",
+};
+
 function detailToKey(detail: string | undefined): string {
   switch (detail) {
     case "timeout":
@@ -214,17 +220,19 @@ export function WizardEndpointTest({
             {state.variants.map(line => (
               <span
                 key={line.key}
-                className="inline-flex max-w-[9rem] items-center gap-1"
+                className="inline-flex max-w-[11rem] items-center gap-1"
                 title={
                   line.status === "fail" && line.detail
                     ? t(detailToKey(line.detail), {
                         status: String(line.httpStatus ?? ""),
                       })
-                    : line.label
+                    : line.name
                 }
               >
                 <StatusGlyph line={line} />
-                <span className="truncate font-medium">{line.label}</span>
+                <span className="truncate font-medium">
+                  {t(PROTOCOL_LABEL_KEY[line.providerType])}
+                </span>
               </span>
             ))}
           </div>

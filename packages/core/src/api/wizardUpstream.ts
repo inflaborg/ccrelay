@@ -5,13 +5,35 @@
 /* eslint-disable @typescript-eslint/naming-convention -- upstream JSON bodies and HTTP header names */
 
 import * as http from "http";
+import type { ModelMapEntry, OpenAICompat, Provider } from "../types";
+import { parseProvider } from "../config/provider-utils";
+import { isOpenAIType } from "../converter";
 import type { ProxyServer } from "../server/handler";
+import type { RoutingContext } from "../server/request/context";
+import { BodyProcessor } from "../server/request/bodyProcessor";
+import { resolveInboundClientSurface } from "../server/request/apiSurfaceDetector";
+import { resolveUpstreamPath } from "../server/request/routerStage";
+import { buildProviderTargetUrl, prepareProviderHeaders } from "../server/router";
 import { Logger } from "../utils/logger";
 import { parseJsonBody, sendJson } from "./httpJson";
 
 const log = Logger.getInstance();
 
 const REQUEST_TIMEOUT_MS = 30_000;
+
+/** Claude Code-shaped inbound path so conversion, mapping, and headers match a real request. */
+const WIZARD_TEST_CLIENT_PATH = "/anthropic/v1/messages";
+
+const FETCH_SKIP_HEADERS = new Set([
+  "host",
+  "content-length",
+  "transfer-encoding",
+  "connection",
+  "keep-alive",
+  "te",
+]);
+
+const bodyProcessor = new BodyProcessor();
 
 let serverInstance: ProxyServer | null = null;
 
@@ -204,75 +226,6 @@ export async function handleWizardProbeModels(
   }
 }
 
-export function inferenceTestUrl(baseUrl: string, providerType: WizardProviderType): string {
-  const b = trimTrailingSlash(baseUrl.trim());
-  if (providerType === "anthropic") {
-    return `${b}/v1/messages`;
-  }
-  return `${b}/chat/completions`;
-}
-
-export function buildAuthHeaders(
-  providerType: WizardProviderType,
-  apiKey: string,
-  authHeader?: string
-): Record<string, string> {
-  const mode = (authHeader ?? "authorization").toLowerCase();
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    accept: "application/json",
-  };
-  if (mode === "authorization") {
-    headers.authorization = `Bearer ${apiKey.trim()}`;
-  } else if (mode === "x-api-key") {
-    headers["x-api-key"] = apiKey.trim();
-    if (providerType === "anthropic") {
-      headers["anthropic-version"] = "2023-06-01";
-    }
-  } else if (authHeader) {
-    headers[authHeader] = apiKey.trim();
-  }
-  return headers;
-}
-
-export function usesMaxCompletionTokensForOpenAiChatModel(modelId: string): boolean {
-  const m = modelId.trim().toLowerCase();
-  if (m.startsWith("gpt-5")) {
-    return true;
-  }
-  if (/^o\d/.test(m)) {
-    return true;
-  }
-  return false;
-}
-
-function openAiStyleBody(modelId: string): string {
-  const base = {
-    model: modelId,
-    messages: [{ role: "user", content: "hi" }],
-    stream: false,
-  };
-  if (usesMaxCompletionTokensForOpenAiChatModel(modelId)) {
-    return JSON.stringify({
-      ...base,
-      max_completion_tokens: 1,
-    });
-  }
-  return JSON.stringify({
-    ...base,
-    max_tokens: 1,
-  });
-}
-
-function anthropicStyleBody(modelId: string): string {
-  return JSON.stringify({
-    model: modelId,
-    messages: [{ role: "user", content: "hi" }],
-    max_tokens: 1,
-    stream: false,
-  });
-}
-
 function isJsonContentType(ct: string | null): boolean {
   return Boolean(ct && ct.toLowerCase().includes("application/json"));
 }
@@ -282,7 +235,15 @@ export interface WizardEndpointVariantInput {
   name: string;
   baseUrl: string;
   providerType: WizardProviderType;
+  mode?: "passthrough" | "inject";
   authHeader?: string;
+  headers?: Record<string, string>;
+  modelMap?: ModelMapEntry[];
+  vlModelMap?: ModelMapEntry[];
+  modelMappingEnabled?: boolean;
+  openaiCompat?: OpenAICompat;
+  useCustomModelsList?: boolean;
+  customModelsList?: string[];
 }
 
 export interface WizardEndpointTestBody {
@@ -305,6 +266,110 @@ export interface WizardEndpointTestResponse {
   results: WizardEndpointTestResultLine[];
 }
 
+function snapshotToTempProvider(v: WizardEndpointVariantInput, apiKey: string): Provider {
+  const id = v.id.trim() || "wizard-test";
+  return parseProvider(id, {
+    name: (v.name || id).trim() || id,
+    baseUrl: v.baseUrl.trim(),
+    mode: v.mode ?? "inject",
+    providerType: v.providerType,
+    apiKey,
+    authHeader: v.authHeader,
+    modelMap: v.modelMap,
+    vlModelMap: v.vlModelMap,
+    ...(v.modelMappingEnabled !== undefined ? { modelMappingEnabled: v.modelMappingEnabled } : {}),
+    headers: v.headers,
+    useCustomModelsList: v.useCustomModelsList === true,
+    ...(v.useCustomModelsList === true ? { customModelsList: v.customModelsList ?? [] } : {}),
+    ...(v.openaiCompat !== undefined ? { openaiCompat: v.openaiCompat } : {}),
+    enabled: true,
+  });
+}
+
+function wizardProbeBody(modelId: string): Buffer {
+  return Buffer.from(
+    JSON.stringify({
+      model: modelId,
+      messages: [{ role: "user", content: "hi" }],
+      stream: false,
+    }),
+    "utf-8"
+  );
+}
+
+function clientHeadersForTempProvider(provider: Provider, apiKey: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    accept: "application/json",
+    "anthropic-version": "2023-06-01",
+  };
+  if (provider.mode === "passthrough") {
+    const authHeader = (provider.authHeader || "authorization").toLowerCase();
+    if (authHeader === "authorization") {
+      headers.authorization = `Bearer ${apiKey}`;
+    } else if (authHeader === "x-api-key") {
+      headers["x-api-key"] = apiKey;
+    } else if (provider.authHeader) {
+      headers[provider.authHeader] = apiKey;
+    }
+  } else {
+    headers["x-api-key"] = "ccrelay-wizard-test";
+    headers.authorization = "Bearer ccrelay-wizard-test";
+  }
+  return headers;
+}
+
+function buildTempRouting(provider: Provider, apiKey: string): RoutingContext {
+  const method = "POST";
+  const path = WIZARD_TEST_CLIENT_PATH;
+  const clientHeaders = clientHeadersForTempProvider(provider, apiKey);
+  const headers = prepareProviderHeaders(clientHeaders, provider);
+  const targetPath = resolveUpstreamPath(method, path);
+  const targetUrl = buildProviderTargetUrl(targetPath, provider);
+  return {
+    blocked: false,
+    method,
+    path,
+    provider,
+    clientHeaders,
+    headers,
+    targetUrl,
+    targetPath,
+    targetQuery: "",
+    isRouted: false,
+    isOpenAIProvider: isOpenAIType(provider.providerType),
+    clientSurface: resolveInboundClientSurface(method, path, provider),
+  };
+}
+
+/** Anthropic Messages requires max_tokens; omit it on OpenAI-compat outbound. */
+function ensureAnthropicOutboundMaxTokens(body: Buffer, targetPath: string): Buffer {
+  if (targetPath !== "/v1/messages" || !body.length) {
+    return body;
+  }
+  try {
+    const data = JSON.parse(body.toString("utf-8")) as Record<string, unknown>;
+    if (typeof data.max_tokens === "number" && data.max_tokens > 0) {
+      return body;
+    }
+    data.max_tokens = 4096;
+    return Buffer.from(JSON.stringify(data), "utf-8");
+  } catch {
+    return body;
+  }
+}
+
+function headersForFetch(headers: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (FETCH_SKIP_HEADERS.has(key.toLowerCase())) {
+      continue;
+    }
+    out[key] = value;
+  }
+  return out;
+}
+
 async function runSingleVariantTest(
   v: WizardEndpointVariantInput,
   apiKey: string,
@@ -316,17 +381,19 @@ async function runSingleVariantTest(
     return { pass: false, detail: "format" };
   }
 
-  const url = inferenceTestUrl(v.baseUrl, v.providerType);
-  const headers = buildAuthHeaders(v.providerType, apiKey, v.authHeader);
-  const body =
-    v.providerType === "anthropic" ? anthropicStyleBody(modelId) : openAiStyleBody(modelId);
+  const provider = snapshotToTempProvider(v, apiKey);
+  const routing = buildTempRouting(provider, apiKey);
+  const processed = bodyProcessor.process(wizardProbeBody(modelId), routing, false);
+  const outboundBody = ensureAnthropicOutboundMaxTokens(processed.body, routing.targetPath);
+  const url = routing.targetUrl;
+  const headers = headersForFetch(routing.headers);
   const start = Date.now();
 
   log.info(`[wizard/test] ${v.id}: POST ${url} (timeout=${REQUEST_TIMEOUT_MS}ms)`);
 
   let res: Response;
   try {
-    res = await fetch(url, { method: "POST", headers, body, signal });
+    res = await fetch(url, { method: "POST", headers, body: outboundBody, signal });
   } catch (e) {
     const elapsed = Date.now() - start;
     if (e instanceof Error && e.name === "AbortError") {

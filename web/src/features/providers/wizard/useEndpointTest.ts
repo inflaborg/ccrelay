@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api } from "../../../api/client";
+import type { WizardEndpointVariantInput } from "../../../types/api";
 
 export type VariantLineStatus = "testing" | "pass" | "fail";
 
 export interface VariantTestLine {
   key: string;
-  label: string;
+  name: string;
+  providerType: WizardEndpointVariantInput["providerType"];
   status: VariantLineStatus;
   httpStatus?: number;
   detail?: string;
@@ -17,12 +19,18 @@ export interface EndpointTestState {
   variants: VariantTestLine[];
 }
 
-export interface TestVariantInput {
-  id: string;
-  name: string;
-  baseUrl: string;
-  providerType: "anthropic" | "openai" | "openai_chat";
-  authHeader?: string;
+export type TestVariantInput = WizardEndpointVariantInput;
+
+function lineFromVariant(
+  v: TestVariantInput,
+  extra: Pick<VariantTestLine, "status"> & Partial<Pick<VariantTestLine, "httpStatus" | "detail">>
+): VariantTestLine {
+  return {
+    key: v.id,
+    name: v.name,
+    providerType: v.providerType,
+    ...extra,
+  };
 }
 
 export interface RunEndpointTestParams {
@@ -31,15 +39,6 @@ export interface RunEndpointTestParams {
   modelId: string;
   /** When apiKey is missing/masked, server resolves the stored secret. */
   providerId?: string;
-}
-
-export function shortLabel(name: string, id: string): string {
-  const parts = name.split("-").filter(Boolean);
-  const last = parts[parts.length - 1];
-  if (last && last.length <= 24) {
-    return last;
-  }
-  return id.length <= 20 ? id : `${id.slice(0, 17)}…`;
 }
 
 export function useEndpointTest(): {
@@ -77,11 +76,9 @@ export function useEndpointTest(): {
       runIdRef.current += 1;
       const runId = runIdRef.current;
 
-      const testingLines: VariantTestLine[] = variants.map(v => ({
-        key: v.id,
-        label: shortLabel(v.name, v.id),
-        status: "testing",
-      }));
+      const testingLines: VariantTestLine[] = variants.map(v =>
+        lineFromVariant(v, { status: "testing" })
+      );
 
       setState({ phase: "testing", variants: testingLines });
 
@@ -106,13 +103,14 @@ export function useEndpointTest(): {
 
           const lines: VariantTestLine[] = data.results.map(r => {
             const v = variants.find(x => x.id === r.id);
-            return {
-              key: r.id,
-              label: shortLabel(v?.name ?? r.id, r.id),
-              status: r.pass ? "pass" : "fail",
-              httpStatus: r.httpStatus,
-              detail: r.detail,
-            };
+            return lineFromVariant(
+              v ?? { id: r.id, name: r.id, baseUrl: "", providerType: "openai_chat" },
+              {
+                status: r.pass ? "pass" : "fail",
+                httpStatus: r.httpStatus,
+                detail: r.detail,
+              }
+            );
           });
 
           setState({ phase: "done", variants: lines });
@@ -125,12 +123,7 @@ export function useEndpointTest(): {
           }
           setState({
             phase: "done",
-            variants: variants.map(v => ({
-              key: v.id,
-              label: shortLabel(v.name, v.id),
-              status: "fail",
-              detail: "network",
-            })),
+            variants: variants.map(v => lineFromVariant(v, { status: "fail", detail: "network" })),
           });
         } finally {
           abortControllersRef.current = [];
