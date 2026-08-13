@@ -1584,6 +1584,7 @@ export default function Providers() {
         key={coworkHelperKey}
         open={coworkHelperOpen}
         initialCustomModelsText={customModelsText}
+        initialModelMap={formData.modelMap}
         providerId={formData.id}
         providerType={formData.providerType as AliasHashProtocol}
         aliasPrefix={aliasPrefix}

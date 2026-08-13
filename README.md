@@ -336,7 +336,7 @@ Canonical alias ids (Wizard, Cowork helper, Smart Routing) use `claude-{8 hex}`:
 
 **Cowork**: In Claude Desktop, add a custom request header `x-ccrelay-model-alias` with any value (for example `1`). With this header, `GET /models` and `GET /models/{id}` return **alias** as the wire `id`. Without the header, the same list returns **real** model ids (for other clients).
 
-**Model mapping** (`modelMap`): auto-generated entries include alias rules, identity rules (`realId` → `realId`), and default `claude-*` / `gpt-*` catch-alls. Identity rules ensure clients sending real model ids are not misrouted by wildcards.
+**Model mapping** (`modelMap`): auto-generated entries include alias rules, identity rules (`realId` → `realId`), Claude family wildcards (`claude-haiku-*` / `claude-sonnet-*` / `claude-opus-*`), and default `claude-*` / `gpt-*` catch-alls. Identity rules ensure clients sending real model ids are not misrouted by wildcards.
 
 **Example** -- two GLM models; Cowork uses aliases via the header above:
 
@@ -356,6 +356,9 @@ glm:
     - { pattern: "glm-5.1", model: "glm-5.1" }
     - { pattern: "claude-02a1bc84", model: "glm-4.7" }
     - { pattern: "glm-4.7", model: "glm-4.7" }
+    - { pattern: "claude-haiku-*", model: "glm-5.1" }
+    - { pattern: "claude-sonnet-*", model: "glm-5.1" }
+    - { pattern: "claude-opus-*", model: "glm-5.1" }
     - { pattern: "claude-*", model: "glm-5.1" }
     - { pattern: "gpt-*", model: "glm-5.1" }
 ```
@@ -364,15 +367,16 @@ With this configuration:
 
 - **Without** `x-ccrelay-model-alias`: `GET /models` returns `glm-5.1` and `glm-4.7` (with display names when they differ from the id).
 - **With** `x-ccrelay-model-alias`: `GET /models` returns canonical alias ids as wire `id`; Cowork selects those; CCRelay maps them to real upstream ids via `modelMap`.
+- The `claude-haiku-*` / `claude-sonnet-*` / `claude-opus-*` family wildcards route those Claude models to the first custom model by default (Quick fill lets you pick a different target per family).
 - The `claude-*` and `gpt-*` wildcards catch any other model names the client may send and route them to the first model.
 
-The built-in wizard and Cowork quick-fill helper generate `realId;displayName;claude-{hash}` lines and matching `modelMap` entries using the canonical hash above. Add `x-ccrelay-model-alias` in Claude Desktop for Cowork; omit it elsewhere. Use **Rebuild model map** in the provider editor to fully rebuild `modelMap` from `customModelsList` after manual edits (custom wildcard rules such as `gpt-*-mini` are not preserved — add them again after rebuilding if needed).
+The built-in wizard and Cowork quick-fill helper generate `realId;displayName;claude-{hash}` lines and matching `modelMap` entries using the canonical hash above. Add `x-ccrelay-model-alias` in Claude Desktop for Cowork; omit it elsewhere. Use **Rebuild model map** in the provider editor to fully rebuild `modelMap` from `customModelsList` after manual edits (Claude family wildcard targets are kept when those models still exist; other custom wildcard rules such as `gpt-*-mini` are not preserved).
 
 #### Custom model list configuration UI
 
 ![Custom model list](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/provider-custom-model-1.webp)
 
-Use **Quick fill custom models** to enter upstream model IDs and display names in a structured form; the custom model list and model map are generated automatically.
+Use **Quick fill custom models** to enter upstream model IDs and display names, then optionally map `claude-haiku-*` / `claude-sonnet-*` / `claude-opus-*` to a model in the list (defaults to the first). The custom model list and model map are generated automatically.
 
 ![Quick fill custom models](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/provider-custom-model-2.webp)
 

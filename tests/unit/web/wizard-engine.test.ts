@@ -1,4 +1,5 @@
 import { computeCanonicalAliasHash } from "@ccrelay/shared/aliasHash";
+import { CLAUDE_FAMILY_WILDCARDS } from "@ccrelay/shared/coworkModelMap";
 import type { ModelMapEntry } from "../../../web/src/types/api";
 import { describe, expect, it } from "vitest";
 import {
@@ -113,8 +114,11 @@ describe("buildModelConfig", () => {
     expect(c.modelMap[1]).toEqual({ pattern: "glm-5.1", model: "glm-5.1" });
     expect(c.modelMap[2]).toEqual({ pattern: alias("glm-4.7"), model: "glm-4.7" });
     expect(c.modelMap[3]).toEqual({ pattern: "glm-4.7", model: "glm-4.7" });
-    expect(c.modelMap[4]).toEqual({ pattern: "claude-*", model: "glm-5.1" });
-    expect(c.modelMap[5]).toEqual({ pattern: "gpt-*", model: "glm-5.1" });
+    expect(c.modelMap[4]).toEqual({ pattern: "claude-haiku-*", model: "glm-5.1" });
+    expect(c.modelMap[5]).toEqual({ pattern: "claude-sonnet-*", model: "glm-5.1" });
+    expect(c.modelMap[6]).toEqual({ pattern: "claude-opus-*", model: "glm-5.1" });
+    expect(c.modelMap[7]).toEqual({ pattern: "claude-*", model: "glm-5.1" });
+    expect(c.modelMap[8]).toEqual({ pattern: "gpt-*", model: "glm-5.1" });
   });
 
   it("includes display name in custom list line when different from upstream id", () => {
@@ -211,6 +215,40 @@ describe("buildModelConfig", () => {
       { pattern: "gpt-*", model: "glm-5.1" },
       { pattern: "anthropic/glm-5.1", model: "glm-5.1" },
     ]);
+  });
+
+  it("honors Claude family targets in custom model map", () => {
+    const c = buildModelConfig({
+      ...baseInput,
+      modelIds: ["glm-5.1", "glm-4.7"],
+      claudeSupport: true,
+      useCustomModels: true,
+      claudeFamilyTargets: {
+        [CLAUDE_FAMILY_WILDCARDS[0]]: "glm-4.7",
+        [CLAUDE_FAMILY_WILDCARDS[1]]: "glm-5.1",
+        [CLAUDE_FAMILY_WILDCARDS[2]]: "glm-4.7",
+      },
+    });
+    expect(c.modelMap.find(m => m.pattern === "claude-haiku-*")).toEqual({
+      pattern: "claude-haiku-*",
+      model: "glm-4.7",
+    });
+    expect(c.modelMap.find(m => m.pattern === "claude-sonnet-*")).toEqual({
+      pattern: "claude-sonnet-*",
+      model: "glm-5.1",
+    });
+    expect(c.modelMap.find(m => m.pattern === "claude-opus-*")).toEqual({
+      pattern: "claude-opus-*",
+      model: "glm-4.7",
+    });
+    expect(c.modelMap.find(m => m.pattern === "claude-*")).toEqual({
+      pattern: "claude-*",
+      model: "glm-5.1",
+    });
+    expect(c.modelMap.find(m => m.pattern === "gpt-*")).toEqual({
+      pattern: "gpt-*",
+      model: "glm-5.1",
+    });
   });
 
   it("parses semicolon for anthropic pattern when custom list off", () => {

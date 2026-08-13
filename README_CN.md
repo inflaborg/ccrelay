@@ -337,7 +337,7 @@ Claude Desktop 1.7196.0 版本起，客户端会屏蔽包含第三方关键词�
 
 **Cowork**：在 Claude Desktop 中为请求添加自定义头 `x-ccrelay-model-alias`，值任意即可（例如 `1`）。带上该头时，`GET /models` 与 `GET /models/{id}` 的 wire `id` 为**别名**；不带该头时，同一列表返回**真实**模型 id（供其他客户端使用）。
 
-**模型映射**（`modelMap`）：自动生成的映射包含 alias 规则、identity 规则（`真实id` → `真实id`）以及默认的 `claude-*` / `gpt-*` 通配兜底。identity 规则确保客户端直接发送真实模型 id 时不会被通配规则误路由。
+**模型映射**（`modelMap`）：自动生成的映射包含 alias 规则、identity 规则（`真实id` → `真实id`）、Claude 系列通配（`claude-haiku-*` / `claude-sonnet-*` / `claude-opus-*`）以及默认的 `claude-*` / `gpt-*` 通配兜底。identity 规则确保客户端直接发送真实模型 id 时不会被通配规则误路由。
 
 **示例** -- 两个 GLM 模型；Cowork 通过上述请求头启用别名：
 
@@ -357,6 +357,9 @@ glm:
     - { pattern: "glm-5.1", model: "glm-5.1" }
     - { pattern: "claude-02a1bc84", model: "glm-4.7" }
     - { pattern: "glm-4.7", model: "glm-4.7" }
+    - { pattern: "claude-haiku-*", model: "glm-5.1" }
+    - { pattern: "claude-sonnet-*", model: "glm-5.1" }
+    - { pattern: "claude-opus-*", model: "glm-5.1" }
     - { pattern: "claude-*", model: "glm-5.1" }
     - { pattern: "gpt-*", model: "glm-5.1" }
 ```
@@ -365,15 +368,16 @@ glm:
 
 - **未带** `x-ccrelay-model-alias`：`GET /models` 返回 `glm-5.1`、`glm-4.7`（展示名与 id 不同时附带展示名）。
 - **带上** `x-ccrelay-model-alias`：`GET /models` 的 id 为规范 alias；Cowork 选择后由 CCRelay 经 `modelMap` 映射到真实上游 ID。
+- `claude-haiku-*` / `claude-sonnet-*` / `claude-opus-*` 系列通配默认路由到第一个自定义模型（快捷填写中可为每个系列另选目标）。
 - `claude-*` 与 `gpt-*` 通配规则兜底，将客户端可能发送的其他模型名路由到第一个模型。
 
-内置向导与 Cowork 快捷填写会按上述规范 hash 生成 `真实id;展示名;claude-{hash}` 行及对应 `modelMap`。Cowork 请在 Claude Desktop 中配置该请求头；其他环境可不配置。手动编辑 `customModelsList` 后，可在 Provider 编辑器中使用 **重建 modelMap** 从列表全量重建映射表（不会保留自定义通配规则，如 `gpt-*-mini` 需在重建后再次手动添加）。
+内置向导与 Cowork 快捷填写会按上述规范 hash 生成 `真实id;展示名;claude-{hash}` 行及对应 `modelMap`。Cowork 请在 Claude Desktop 中配置该请求头；其他环境可不配置。手动编辑 `customModelsList` 后，可在 Provider 编辑器中使用 **重建 modelMap** 从列表全量重建映射表（Claude 系列通配目标在对应模型仍存在时会保留；其他自定义通配规则如 `gpt-*-mini` 需在重建后再次手动添加）。
 
 #### 自定义模型列表配置界面
 
 ![自定义模型列表](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/provider-custom-model-1.webp)
 
-使用**自定义模型快捷填写**，以结构化表单输入上游模型 ID 与展示名，自动生成自定义模型列表和模型映射。
+使用**自定义模型快捷填写**，以结构化表单输入上游模型 ID 与展示名，并可选择将 `claude-haiku-*` / `claude-sonnet-*` / `claude-opus-*` 映射到列表中的某个模型（默认第一个）。自动生成自定义模型列表和模型映射。
 
 ![自定义模型快捷填写](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/provider-custom-model-2.webp)
 

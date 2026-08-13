@@ -494,6 +494,9 @@
       "coworkHelperApply": "Apply",
       "coworkHelperRemoveRow": "Remove row",
       "coworkHelperRequiresId": "Fill in Provider ID and protocol before generating aliases.",
+      "coworkHelperFamilyMaps": "Claude family mappings",
+      "coworkHelperFamilyMapsDesc": "Defaults to the first model in the list. Catch-all claude-* and gpt-* still map to the first model.",
+      "coworkHelperFamilyMapsPlaceholder": "Select a model",
       "rebuildModelMap": "Rebuild model map",
       "rebuildModelMapHelp": "Rebuild exact alias rules from the custom model list and keep wildcards."
     },

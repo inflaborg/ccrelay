@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**UI**
+
+- Quick fill custom models can map `claude-haiku-*`, `claude-sonnet-*`, and `claude-opus-*` to a chosen model (defaults to the first). Catch-all `claude-*` and `gpt-*` still map to the first model.
+
 ### Fixed
 
 **Protocol/Conversion**

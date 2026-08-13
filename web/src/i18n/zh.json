@@ -494,6 +494,9 @@
       "coworkHelperApply": "应用",
       "coworkHelperRemoveRow": "删除此行",
       "coworkHelperRequiresId": "请先填写 Provider ID 与协议类型，再生成 alias。",
+      "coworkHelperFamilyMaps": "Claude 系列映射",
+      "coworkHelperFamilyMapsDesc": "默认映射到列表中的第一个模型，可按需修改。兜底的 claude-* 与 gpt-* 仍指向第一个模型。",
+      "coworkHelperFamilyMapsPlaceholder": "选择模型",
       "rebuildModelMap": "重建 modelMap",
       "rebuildModelMapHelp": "根据自定义模型列表重建 alias 精确映射，并保留 wildcard 规则。"
     },

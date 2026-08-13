@@ -2,6 +2,12 @@ import { useCallback, useMemo, useRef, useState, type KeyboardEvent } from "reac
 import { useTranslation } from "react-i18next";
 import { Minus, Plus } from "lucide-react";
 import type { AliasHashProtocol } from "@ccrelay/shared/aliasHash";
+import {
+  CLAUDE_FAMILY_WILDCARDS,
+  extractClaudeFamilyTargets,
+  type ClaudeFamilyTargets,
+  type ClaudeFamilyWildcard,
+} from "@ccrelay/shared/coworkModelMap";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,6 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { SelectField } from "@/components/select-field";
 import type { ModelMapEntry } from "@/types/api";
 import { buildModelConfig, helperRowsSeedFromCustomModelsText } from "./wizard/engine";
 
@@ -19,6 +26,8 @@ export interface CoworkAliasHelperProps {
   open: boolean;
   /** Current custom models textarea value; used to seed rows when the dialog mounts. */
   initialCustomModelsText: string;
+  /** Current modelMap; used to seed Claude family wildcard targets. */
+  initialModelMap?: ModelMapEntry[];
   providerId: string;
   providerType: AliasHashProtocol;
   aliasPrefix: string;
@@ -44,9 +53,21 @@ function rowsFromSeed(text: string): HelperRow[] {
   }));
 }
 
+function resolveFamilyTarget(
+  stored: string | undefined,
+  validIds: string[],
+  firstId: string
+): string {
+  if (stored && validIds.includes(stored)) {
+    return stored;
+  }
+  return firstId;
+}
+
 export function CoworkAliasHelper({
   open,
   initialCustomModelsText,
+  initialModelMap,
   providerId,
   providerType,
   aliasPrefix,
@@ -55,7 +76,38 @@ export function CoworkAliasHelper({
 }: CoworkAliasHelperProps) {
   const { t } = useTranslation();
   const [rows, setRows] = useState<HelperRow[]>(() => rowsFromSeed(initialCustomModelsText));
+  const [familyTargets, setFamilyTargets] = useState<ClaudeFamilyTargets>(() =>
+    extractClaudeFamilyTargets(initialModelMap)
+  );
   const lastRealIdInputRef = useRef<HTMLInputElement | null>(null);
+
+  const validModels = useMemo(() => {
+    const seen = new Set<string>();
+    const models: { realId: string; displayName: string }[] = [];
+    for (const row of rows) {
+      const realId = row.realId.trim();
+      if (!realId || seen.has(realId)) {
+        continue;
+      }
+      seen.add(realId);
+      models.push({ realId, displayName: row.displayName.trim() });
+    }
+    return models;
+  }, [rows]);
+
+  const firstId = validModels[0]?.realId;
+  const validIds = useMemo(() => validModels.map(m => m.realId), [validModels]);
+
+  const resolvedFamilyTargets = useMemo((): ClaudeFamilyTargets | undefined => {
+    if (!firstId) {
+      return undefined;
+    }
+    const resolved: ClaudeFamilyTargets = {};
+    for (const pattern of CLAUDE_FAMILY_WILDCARDS) {
+      resolved[pattern] = resolveFamilyTarget(familyTargets[pattern], validIds, firstId);
+    }
+    return resolved;
+  }, [familyTargets, firstId, validIds]);
 
   const preview = useMemo(() => {
     const validLines = rows
@@ -73,12 +125,23 @@ export function CoworkAliasHelper({
       modelIds: validLines,
       claudeSupport: true,
       useCustomModels: true,
+      claudeFamilyTargets: resolvedFamilyTargets,
     });
     if (!c.useCustomModelsList) {
       return null;
     }
     return { customModelsList: c.customModelsList, modelMap: c.modelMap };
-  }, [rows, providerId, providerType, aliasPrefix]);
+  }, [rows, providerId, providerType, aliasPrefix, resolvedFamilyTargets]);
+
+  const modelSelectOptions = useMemo(
+    () =>
+      validModels.map(m => ({
+        value: m.realId,
+        label:
+          m.displayName && m.displayName !== m.realId ? `${m.realId} (${m.displayName})` : m.realId,
+      })),
+    [validModels]
+  );
 
   const addRow = useCallback(() => {
     setRows(prev => [...prev, newRow()]);
@@ -99,6 +162,10 @@ export function CoworkAliasHelper({
     },
     []
   );
+
+  const updateFamilyTarget = useCallback((pattern: ClaudeFamilyWildcard, model: string) => {
+    setFamilyTargets(prev => ({ ...prev, [pattern]: model }));
+  }, []);
 
   const handleDisplayKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>, index: number) => {
@@ -172,6 +239,34 @@ export function CoworkAliasHelper({
             <Plus className="h-3.5 w-3.5" />
             {t("providers.modal.coworkHelperAdd")}
           </Button>
+        </div>
+
+        <div className="space-y-2">
+          <div className="space-y-0.5">
+            <p className="text-xs font-medium">{t("providers.modal.coworkHelperFamilyMaps")}</p>
+            <p className="text-[10px] text-muted-foreground">
+              {t("providers.modal.coworkHelperFamilyMapsDesc")}
+            </p>
+          </div>
+          {CLAUDE_FAMILY_WILDCARDS.map(pattern => (
+            <div key={pattern} className="flex items-center gap-2">
+              <span className="text-xs font-mono shrink-0 w-[8.5rem] text-muted-foreground">
+                {pattern}
+              </span>
+              <div className="flex-1 min-w-0">
+                <SelectField
+                  value={
+                    firstId ? resolveFamilyTarget(familyTargets[pattern], validIds, firstId) : ""
+                  }
+                  options={modelSelectOptions}
+                  onChange={v => updateFamilyTarget(pattern, v)}
+                  placeholder={t("providers.modal.coworkHelperFamilyMapsPlaceholder")}
+                  disabled={!firstId}
+                  className="h-8"
+                />
+              </div>
+            </div>
+          ))}
         </div>
 
         <div className="space-y-1">
