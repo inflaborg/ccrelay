@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Quick fill custom models can map `claude-haiku-*`, `claude-sonnet-*`, and `claude-opus-*` to a chosen model (defaults to the first). Catch-all `claude-*` and `gpt-*` still map to the first model.
 
+### Changed
+
+**UI**
+
+- Provider cards: click to select a routing source, then **Apply** in the header to switch. Toolbar **Select** is for export and delete.
+
 ### Fixed
 
 **Protocol/Conversion**
