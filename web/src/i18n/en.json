@@ -405,7 +405,7 @@
   },
   "providers": {
     "title": "Providers",
-    "subtitle": "Choose Smart Routing or a single provider as the routing source",
+    "subtitle": "Select a provider, then Apply to switch the routing source",
     "section": {
       "smartRouting": "Smart Routing",
       "upstream": "Providers"
@@ -439,11 +439,13 @@
     "badgeShort": {
       "mappingOff": "Map",
       "disabled": "Off",
-      "active": "Active"
+      "active": "Active",
+      "selected": "Selected"
     },
     "card": {
       "id": "ID",
       "mode": "Mode",
+      "protocol": "Protocol",
       "baseUrl": "Base URL"
     },
     "emptyState": "No providers configured. Click \"Add\" to create one.",
@@ -494,6 +496,9 @@
       "coworkHelperApply": "Apply",
       "coworkHelperRemoveRow": "Remove row",
       "coworkHelperRequiresId": "Fill in Provider ID and protocol before generating aliases.",
+      "coworkHelperFamilyMaps": "Claude family mappings",
+      "coworkHelperFamilyMapsDesc": "Defaults to the first model in the list. Catch-all claude-* and gpt-* still map to the first model.",
+      "coworkHelperFamilyMapsPlaceholder": "Select a model",
       "rebuildModelMap": "Rebuild model map",
       "rebuildModelMapHelp": "Rebuild exact alias rules from the custom model list and keep wildcards."
     },
@@ -511,6 +516,9 @@
     },
     "deleteDialog": {
       "title": "Delete provider?",
+      "titleBulk": "Delete {{count}} providers?",
+      "description": "{{name}} will be permanently deleted.",
+      "descriptionBulk": "{{count}} providers will be permanently deleted.",
       "thisProvider": "this provider",
       "cannotUndo": "This cannot be undone.",
       "action": "Delete"
@@ -526,9 +534,16 @@
     },
     "import": "Import",
     "export": "Export",
-    "selectAll": "Select All",
-    "cancelSelection": "Cancel",
-    "selectedCount": "{{count}} selected"
+    "select": "Select",
+    "selectAll": "Select all",
+    "doneSelection": "Done",
+    "selectedCount": "{{count}} selected",
+    "selectModeHint": "Check providers to export or delete. This does not change the active routing source.",
+    "selectProvider": "Select {{name}}",
+    "inUse": "In use: {{name}}",
+    "pendingSelect": "Selected: {{name}}",
+    "clickToSelect": "Click to select this provider",
+    "clickToEdit": "Click to edit this provider"
   },
   "wizard": {
     "title": "Add provider",

@@ -405,7 +405,7 @@
   },
   "providers": {
     "title": "供应商",
-    "subtitle": "选择智能路由或具体供应商作为路由源",
+    "subtitle": "点击选中供应商，再点应用以切换路由源",
     "section": {
       "smartRouting": "智能路由",
       "upstream": "供应商"
@@ -439,11 +439,13 @@
     "badgeShort": {
       "mappingOff": "映射关",
       "disabled": "禁用",
-      "active": "使用中"
+      "active": "使用中",
+      "selected": "待切换"
     },
     "card": {
       "id": "ID",
       "mode": "模式",
+      "protocol": "协议",
       "baseUrl": "基础 URL"
     },
     "emptyState": "尚未配置提供商。点击「添加」创建一个。",
@@ -494,6 +496,9 @@
       "coworkHelperApply": "应用",
       "coworkHelperRemoveRow": "删除此行",
       "coworkHelperRequiresId": "请先填写 Provider ID 与协议类型，再生成 alias。",
+      "coworkHelperFamilyMaps": "Claude 系列映射",
+      "coworkHelperFamilyMapsDesc": "默认映射到列表中的第一个模型，可按需修改。兜底的 claude-* 与 gpt-* 仍指向第一个模型。",
+      "coworkHelperFamilyMapsPlaceholder": "选择模型",
       "rebuildModelMap": "重建 modelMap",
       "rebuildModelMapHelp": "根据自定义模型列表重建 alias 精确映射，并保留 wildcard 规则。"
     },
@@ -511,6 +516,9 @@
     },
     "deleteDialog": {
       "title": "删除提供商？",
+      "titleBulk": "删除 {{count}} 个提供商？",
+      "description": "{{name}} 将被永久删除。",
+      "descriptionBulk": "{{count}} 个提供商将被永久删除。",
       "thisProvider": "此提供商",
       "cannotUndo": "此操作无法撤销。",
       "action": "删除"
@@ -526,9 +534,16 @@
     },
     "import": "导入",
     "export": "导出",
+    "select": "选择",
     "selectAll": "全选",
-    "cancelSelection": "取消",
-    "selectedCount": "已选 {{count}} 项"
+    "doneSelection": "完成",
+    "selectedCount": "已选 {{count}} 项",
+    "selectModeHint": "勾选后可导出或删除，不会切换当前使用的供应商。",
+    "selectProvider": "选择 {{name}}",
+    "inUse": "当前：{{name}}",
+    "pendingSelect": "新选中：{{name}}",
+    "clickToSelect": "点击以选中此供应商",
+    "clickToEdit": "点击以编辑此供应商"
   },
   "wizard": {
     "title": "添加提供商",

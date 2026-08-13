@@ -2,7 +2,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Check,
   Copy,
   Loader2,
   Plus,
@@ -12,8 +11,10 @@ import {
   Upload,
   Download,
   CheckSquare,
+  ListChecks,
   MinusSquare,
   Pencil,
+  Trash2,
 } from "lucide-react";
 import * as yaml from "js-yaml";
 import { Button } from "@/components/ui/button";
@@ -89,7 +90,9 @@ export default function Providers() {
   const [dupName, setDupName] = useState("");
   const [dupNewId, setDupNewId] = useState("");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [pendingDeleteProvider, setPendingDeleteProvider] = useState<Provider | null>(null);
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([]);
+  const [selectMode, setSelectMode] = useState(false);
+  const [pendingProviderId, setPendingProviderId] = useState<string | null>(null);
   const [fieldEdit, setFieldEdit] = useState<null | "id" | "apiKey">(null);
   const [fieldEditValue, setFieldEditValue] = useState("");
   const [idChanged, setIdChanged] = useState(false);
@@ -285,6 +288,7 @@ export default function Providers() {
       await api.switchProvider(providerId);
     },
     onSuccess: () => {
+      setPendingProviderId(null);
       queryClient.invalidateQueries({ queryKey: ["status"] });
       queryClient.invalidateQueries({ queryKey: ["providers"] });
       queryClient.invalidateQueries({ queryKey: ["config"] });
@@ -303,10 +307,22 @@ export default function Providers() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.deleteProvider(id),
-    onSuccess: () => {
+    mutationFn: async (ids: string[]) => {
+      for (const id of ids) {
+        await api.deleteProvider(id);
+      }
+    },
+    onSuccess: (_data, ids) => {
       queryClient.invalidateQueries({ queryKey: ["providers"] });
       queryClient.invalidateQueries({ queryKey: ["status"] });
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        for (const id of ids) {
+          next.delete(id);
+        }
+        return next;
+      });
+      setPendingProviderId(prev => (prev && ids.includes(prev) ? null : prev));
     },
   });
 
@@ -546,16 +562,25 @@ export default function Providers() {
       (existingProviderIds.has(fieldEditValue) && fieldEditValue !== editingProvider?.id));
 
   const requestDelete = (provider: Provider) => {
-    setPendingDeleteProvider(provider);
+    setPendingDeleteIds([provider.id]);
+    setDeleteConfirmOpen(true);
+  };
+
+  const requestBulkDelete = () => {
+    if (selectedIds.size === 0) {
+      return;
+    }
+    setPendingDeleteIds([...selectedIds]);
     setDeleteConfirmOpen(true);
   };
 
   const confirmDelete = () => {
-    if (pendingDeleteProvider) {
-      deleteMutation.mutate(pendingDeleteProvider.id);
-      setDeleteConfirmOpen(false);
-      setPendingDeleteProvider(null);
+    if (pendingDeleteIds.length === 0) {
+      return;
     }
+    deleteMutation.mutate(pendingDeleteIds);
+    setDeleteConfirmOpen(false);
+    setPendingDeleteIds([]);
   };
 
   const handleReload = () => {
@@ -574,7 +599,33 @@ export default function Providers() {
     });
   };
 
+  const handleProviderCardClick = (provider: Provider) => {
+    if (selectMode) {
+      if (provider.id !== "official") {
+        toggleSelect(provider.id);
+      }
+      return;
+    }
+    if (!provider.enabled) {
+      openEditModal(provider);
+      return;
+    }
+    setPendingProviderId(prev => (prev === provider.id ? null : provider.id));
+  };
+
+  const applyPendingSwitch = () => {
+    if (!pendingProviderId) {
+      return;
+    }
+    handleSwitch(pendingProviderId);
+  };
+
+  const enterSelectMode = () => {
+    setSelectMode(true);
+  };
+
   const cancelSelection = () => {
+    setSelectMode(false);
     setSelectedIds(new Set());
   };
 
@@ -695,9 +746,23 @@ export default function Providers() {
   });
 
   const selectableProviders = providers.filter(p => p.id !== "official");
-  const isSelectMode = selectedIds.size > 0;
   const isAllSelected =
     selectedIds.size === selectableProviders.length && selectableProviders.length > 0;
+  const pendingDeleteProviders = providers.filter(p => pendingDeleteIds.includes(p.id));
+  const pendingDeleteSingle =
+    pendingDeleteProviders.length === 1 ? pendingDeleteProviders[0] : null;
+
+  const activeProvider = providers.find(p => p.active);
+  const pendingProvider = pendingProviderId
+    ? providers.find(p => p.id === pendingProviderId)
+    : undefined;
+  const inUseName = srEnabled
+    ? t("nav.smartRouting")
+    : activeProvider?.name || activeProvider?.id || t("common.na");
+  const pendingName = pendingProvider?.name || pendingProvider?.id;
+  const hasPendingSwitch = Boolean(
+    pendingProvider?.enabled && (srEnabled || pendingProvider.id !== activeProvider?.id)
+  );
 
   const toggleSelectAll = () => {
     if (isAllSelected) {
@@ -713,23 +778,36 @@ export default function Providers() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-base font-semibold tracking-tight">
-            {isSelectMode
+            {selectMode
               ? t("providers.selectedCount", { count: selectedIds.size })
               : t("providers.title")}
           </h2>
-          <p className="text-xs text-muted-foreground">{t("providers.subtitle")}</p>
+          <p className="text-xs text-muted-foreground">
+            {selectMode ? t("providers.selectModeHint") : t("providers.subtitle")}
+          </p>
         </div>
-        <div className="flex items-center gap-1">
-          {isSelectMode ? (
+        <div className="flex items-center gap-1 shrink-0">
+          {selectMode ? (
             <>
               <Button
                 size="sm"
                 variant="outline"
                 className="h-7 text-xs gap-1"
+                disabled={selectedIds.size === 0}
                 onClick={() => void handleExport()}
               >
                 <Download className="h-3 w-3" />
                 {t("providers.export")} ({selectedIds.size})
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs gap-1 text-destructive hover:text-destructive"
+                disabled={selectedIds.size === 0 || deleteMutation.isPending}
+                onClick={requestBulkDelete}
+              >
+                <Trash2 className="h-3 w-3" />
+                {t("common.delete")} ({selectedIds.size})
               </Button>
               <Button
                 size="sm"
@@ -751,7 +829,7 @@ export default function Providers() {
                 onClick={cancelSelection}
               >
                 <X className="h-3 w-3" />
-                {t("providers.cancelSelection")}
+                {t("providers.doneSelection")}
               </Button>
             </>
           ) : (
@@ -783,6 +861,15 @@ export default function Providers() {
               >
                 <Upload className="h-3 w-3" />
                 {t("providers.import")}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs gap-1"
+                onClick={enterSelectMode}
+              >
+                <ListChecks className="h-3 w-3" />
+                {t("providers.select")}
               </Button>
               <Button
                 size="sm"
@@ -894,9 +981,38 @@ export default function Providers() {
       </section>
 
       <section className="space-y-2">
-        <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          {t("providers.section.upstream")}
-        </h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide shrink-0">
+            {t("providers.section.upstream")}
+          </h3>
+          <div className="flex flex-1 min-w-0 items-center justify-end gap-2">
+            <div className="flex-1 min-w-0 min-h-[1.25rem] flex items-center justify-end text-right text-[10px]">
+              <span className="text-muted-foreground truncate">
+                {t("providers.inUse", { name: inUseName })}
+              </span>
+              {hasPendingSwitch && pendingName ? (
+                <>
+                  <span className="text-muted-foreground shrink-0">&nbsp;·&nbsp;</span>
+                  <span className="text-amber-600 dark:text-amber-500 truncate">
+                    {t("providers.pendingSelect", { name: pendingName })}
+                  </span>
+                </>
+              ) : null}
+            </div>
+            <Button
+              size="sm"
+              className="h-7 min-w-[7rem] shrink-0 text-xs"
+              disabled={!hasPendingSwitch || switchMutation.isPending}
+              onClick={applyPendingSwitch}
+            >
+              {switchMutation.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                t("common.apply")
+              )}
+            </Button>
+          </div>
+        </div>
 
         {/* Providers List - Compact grid */}
         <div className="grid min-w-0 gap-2 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
@@ -916,28 +1032,47 @@ export default function Providers() {
           ) : (
             providers.map(provider => {
               const isActive = !srEnabled && provider.active;
+              const isSelected = selectedIds.has(provider.id);
+              const isPending = !selectMode && pendingProviderId === provider.id;
+              const canPick = !selectMode && provider.enabled;
+              const proto = PROVIDER_PROTOCOL_LABEL[provider.providerType];
               return (
                 <ContextMenu key={provider.id}>
                   <ContextMenuTrigger asChild>
                     <Card
-                      className={`p-0 h-full min-w-0 overflow-hidden border group ${isActive ? srActiveClass : selectedIds.has(provider.id) ? "border-primary ring-1 ring-primary" : "border-border"} ${!provider.enabled ? "opacity-50" : ""}`}
+                      title={
+                        selectMode
+                          ? provider.id === "official"
+                            ? undefined
+                            : t("providers.selectProvider", { name: provider.name })
+                          : provider.enabled
+                            ? t("providers.clickToSelect")
+                            : t("providers.clickToEdit")
+                      }
+                      onClick={() => handleProviderCardClick(provider)}
+                      className={`p-0 gap-0 h-full min-w-0 overflow-hidden border group ${isActive ? srActiveClass : isPending ? "border-amber-600/50 bg-amber-600/5" : isSelected ? "border-foreground/30 bg-muted/40" : "border-border"} ${canPick || (selectMode && provider.id !== "official") || (!selectMode && !provider.enabled) ? "cursor-pointer" : ""} ${canPick && !isPending && !isActive ? "hover:border-primary/50" : ""} ${!provider.enabled ? "opacity-50" : ""}`}
                     >
                       <CardHeader className="p-3 pb-1 overflow-hidden">
                         <div className="flex min-w-0 items-center gap-1">
-                          {provider.id !== "official" ? (
-                            <button
-                              type="button"
-                              className={`h-3.5 w-3.5 shrink-0 rounded-[3px] border flex items-center justify-center transition-opacity cursor-pointer ${selectedIds.has(provider.id) ? "opacity-100 bg-primary border-primary text-primary-foreground" : isSelectMode ? "opacity-100 bg-background border-border text-muted-foreground" : "opacity-0 group-hover:opacity-100 bg-background border-border text-muted-foreground hover:border-primary"}`}
-                              onClick={e => {
-                                e.stopPropagation();
-                                toggleSelect(provider.id);
-                              }}
-                            >
-                              {selectedIds.has(provider.id) && <Check className="h-2.5 w-2.5" />}
-                            </button>
-                          ) : (
-                            <span className="w-3.5 shrink-0" />
-                          )}
+                          {selectMode ? (
+                            provider.id !== "official" ? (
+                              <div
+                                className="shrink-0"
+                                onClick={e => e.stopPropagation()}
+                                onKeyDown={e => e.stopPropagation()}
+                              >
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={() => toggleSelect(provider.id)}
+                                  aria-label={t("providers.selectProvider", {
+                                    name: provider.name,
+                                  })}
+                                />
+                              </div>
+                            ) : (
+                              <span className="size-4 shrink-0" />
+                            )
+                          ) : null}
                           <CardTitle
                             className="min-w-0 flex-1 truncate text-xs font-medium leading-tight"
                             title={provider.name}
@@ -945,26 +1080,14 @@ export default function Providers() {
                             {provider.name}
                           </CardTitle>
                           <div className="flex shrink-0 items-center gap-0.5">
-                            {(() => {
-                              const proto = PROVIDER_PROTOCOL_LABEL[provider.providerType];
-                              return proto ? (
-                                <span
-                                  className={`inline-flex shrink-0 items-center whitespace-nowrap px-1.5 py-0.5 text-[9px] font-semibold leading-none ${proto.className}`}
-                                  title={t(proto.label)}
-                                >
-                                  {t(proto.label)}
-                                </span>
-                              ) : null;
-                            })()}
-                            {isActive && (
+                            {isPending && !isActive ? (
                               <span
-                                className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold leading-none text-primary"
-                                title={t("providers.badge.active")}
+                                className="inline-flex shrink-0 items-center whitespace-nowrap px-1.5 py-0.5 text-[9px] font-semibold leading-none text-amber-700 dark:text-amber-400"
+                                title={t("providers.pendingSelect", { name: provider.name })}
                               >
-                                <Check className="h-2.5 w-2.5 shrink-0" aria-hidden />
-                                {t("providers.badgeShort.active")}
+                                {t("providers.badgeShort.selected")}
                               </span>
-                            )}
+                            ) : null}
                             {provider.modelMap?.length && provider.modelMappingEnabled === false ? (
                               <Badge
                                 variant="outline"
@@ -986,28 +1109,69 @@ export default function Providers() {
                           </div>
                         </div>
                       </CardHeader>
-                      <CardContent className="p-3 pt-0 space-y-1">
+                      <CardContent className="p-3 pt-0 space-y-1 flex-1">
                         <div className="flex items-center justify-between text-xs">
                           <span className="text-muted-foreground">{t("providers.card.id")}:</span>
                           <span className="font-mono text-[10px]">{provider.id}</span>
                         </div>
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground">{t("providers.card.mode")}:</span>
-                          <Badge variant="outline" className="text-[10px] px-1 py-0">
-                            {provider.mode}
-                          </Badge>
+                        <div className="flex items-center justify-between gap-2 text-xs">
+                          <span className="shrink-0 leading-4 text-muted-foreground">
+                            {t("providers.card.protocol")}:
+                          </span>
+                          {proto ? (
+                            <span
+                              className={`inline-flex h-4 min-w-0 max-w-[70%] items-center overflow-hidden px-2 text-[10px] font-semibold leading-none ${proto.className}`}
+                              title={t(proto.label)}
+                            >
+                              <span className="truncate">{t(proto.label)}</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex h-4 items-center px-2 text-[10px] leading-none text-muted-foreground">
+                              {t("common.na")}
+                            </span>
+                          )}
                         </div>
-                        {provider.baseUrl && (
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground">
-                              {t("providers.card.baseUrl")}:
-                            </span>
-                            <span className="font-mono text-[10px] truncate max-w-[140px]">
-                              {provider.baseUrl}
-                            </span>
-                          </div>
-                        )}
+                        <div className="flex items-center justify-between gap-2 text-xs">
+                          <span className="shrink-0 leading-4 text-muted-foreground">
+                            {t("providers.card.mode")}:
+                          </span>
+                          <span className="truncate font-mono text-[10px]">{provider.mode}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">
+                            {t("providers.card.baseUrl")}:
+                          </span>
+                          <span className="font-mono text-[10px] truncate max-w-[140px]">
+                            {provider.baseUrl || t("common.na")}
+                          </span>
+                        </div>
                       </CardContent>
+                      <div className="mt-auto flex min-h-7 items-center justify-between gap-1 border-t border-border/50 px-3 py-1.5">
+                        {isActive ? (
+                          <Badge
+                            variant="success"
+                            className="h-auto rounded-none border-emerald-600 bg-transparent px-1.5 py-0.5 text-[9px] leading-none dark:border-emerald-400"
+                            title={t("providers.badge.active")}
+                          >
+                            {t("providers.badgeShort.active")}
+                          </Badge>
+                        ) : (
+                          <span className="min-w-0 flex-1" />
+                        )}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 shrink-0 gap-1 px-1.5 text-[10px] opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                          onClick={e => {
+                            e.stopPropagation();
+                            openEditModal(provider);
+                          }}
+                        >
+                          <Pencil className="h-2.5 w-2.5" />
+                          {t("providers.contextMenu.edit")}
+                        </Button>
+                      </div>
                     </Card>
                   </ContextMenuTrigger>
                   <ContextMenuContent>
@@ -1584,6 +1748,7 @@ export default function Providers() {
         key={coworkHelperKey}
         open={coworkHelperOpen}
         initialCustomModelsText={customModelsText}
+        initialModelMap={formData.modelMap}
         providerId={formData.id}
         providerType={formData.providerType as AliasHashProtocol}
         aliasPrefix={aliasPrefix}
@@ -1596,23 +1761,29 @@ export default function Providers() {
         onOpenChange={o => {
           setDeleteConfirmOpen(o);
           if (!o) {
-            setPendingDeleteProvider(null);
+            setPendingDeleteIds([]);
           }
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t("providers.deleteDialog.title")}</AlertDialogTitle>
+            <AlertDialogTitle>
+              {pendingDeleteIds.length > 1
+                ? t("providers.deleteDialog.titleBulk", { count: pendingDeleteIds.length })
+                : t("providers.deleteDialog.title")}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              {t("providers.deleteDialog.description", {
-                name: pendingDeleteProvider?.name || t("providers.deleteDialog.thisProvider"),
-              })}
-              {pendingDeleteProvider?.id ? (
+              {pendingDeleteIds.length > 1
+                ? t("providers.deleteDialog.descriptionBulk", { count: pendingDeleteIds.length })
+                : t("providers.deleteDialog.description", {
+                    name: pendingDeleteSingle?.name || t("providers.deleteDialog.thisProvider"),
+                  })}
+              {pendingDeleteSingle?.id ? (
                 <>
                   {" "}
-                  (<span className="font-mono">{pendingDeleteProvider.id}</span>)
+                  (<span className="font-mono">{pendingDeleteSingle.id}</span>)
                 </>
-              ) : null}
+              ) : null}{" "}
               {t("providers.deleteDialog.cannotUndo")}
             </AlertDialogDescription>
           </AlertDialogHeader>

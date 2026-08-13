@@ -1,5 +1,8 @@
 import { computeCanonicalAliasHash, type AliasHashProtocol } from "@ccrelay/shared/aliasHash";
-import { buildCoworkModelMapEntries } from "@ccrelay/shared/coworkModelMap";
+import {
+  buildCoworkModelMapEntries,
+  type ClaudeFamilyTargets,
+} from "@ccrelay/shared/coworkModelMap";
 import type { AddProviderRequest, ModelMapEntry } from "../../../types/api";
 import type { PartnerPreset, WizardInput } from "./types";
 
@@ -162,6 +165,7 @@ export interface BuildModelConfigInput {
   modelIds: string[];
   claudeSupport: boolean;
   useCustomModels: boolean;
+  claudeFamilyTargets?: ClaudeFamilyTargets;
 }
 
 export function buildModelConfig(input: BuildModelConfigInput):
@@ -176,7 +180,15 @@ export function buildModelConfig(input: BuildModelConfigInput):
       modelMap: ModelMapEntry[];
       modelMappingEnabled: true;
     } {
-  const { providerId, providerType, aliasPrefix, modelIds, claudeSupport, useCustomModels } = input;
+  const {
+    providerId,
+    providerType,
+    aliasPrefix,
+    modelIds,
+    claudeSupport,
+    useCustomModels,
+    claudeFamilyTargets,
+  } = input;
 
   const parsed = modelIds
     .map(s => s.trim())
@@ -196,7 +208,7 @@ export function buildModelConfig(input: BuildModelConfigInput):
         }
         return `${real};${dn};${alias}`;
       });
-      const modelMap = buildCoworkModelMapEntries(customModelsList);
+      const modelMap = buildCoworkModelMapEntries(customModelsList, { claudeFamilyTargets });
       return {
         useCustomModelsList: true,
         customModelsList,
