@@ -21,7 +21,13 @@ import {
   setServer as setProvidersServer,
 } from "./providers";
 import { handleSwitchProvider, setServer as setSwitchServer } from "./switch";
-import { handleLogs, handleLogDetail, handleDeleteLogs, handleClearLogs } from "./logs";
+import {
+  handleLogs,
+  handleLogDetail,
+  handleLogsBatch,
+  handleDeleteLogs,
+  handleClearLogs,
+} from "./logs";
 import { handleStats, handleClearStats, handleProviderStats } from "./stats";
 import { handleVersion } from "./version";
 import { handleUpdateCheck, handleTriggerUpdateCheck } from "./updateCheck";
@@ -129,6 +135,17 @@ export function handleApiRequest(req: http.IncomingMessage, res: http.ServerResp
 
   // Set CORS headers for all responses
   setCorsHeaders(res);
+
+  // Check for POST /ccrelay/api/logs/batch (full bodies for selected IDs)
+  if (reqPath === "/ccrelay/api/logs/batch" && method === "POST") {
+    handleLogsBatch(req, res).catch(err => {
+      log.error("Error handling POST /logs/batch", err);
+      if (!res.headersSent) {
+        sendJson(res, 500, { error: "Internal server error" });
+      }
+    });
+    return true;
+  }
 
   // Check for /ccrelay/api/logs/:id pattern
   const logsIdMatch = reqPath.match(/^\/ccrelay\/api\/logs\/(\d+)$/);
@@ -424,6 +441,7 @@ export {
   handleSwitchProvider,
   handleLogs,
   handleLogDetail,
+  handleLogsBatch,
   handleDeleteLogs,
   handleClearLogs,
   handleStats,
