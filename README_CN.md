@@ -432,7 +432,7 @@ gemini:
 - **Smart Routing（智能路由）** — 聚合所有提供商模型列表；统一 `/v1/models` 返回 `<providerId>:<modelId>`；按 model 自动路由到对应提供商（切换模型无需切换 provider / 重启客户端）
 - **Providers** — 配置上游连接；点击卡片选中后点应用切换；用 **选择** 导出或删除
 - **Capabilities** — 可选联网搜索后端（**Tavily** 与/或 **Parallel**）：API Key、默认后端，以及启用本地代答的提供商列表
-- **Logs** — 请求/响应日志查看器，支持 Token 列、TTFB、输出 TPS 和模型映射显示（未启用日志时自动隐藏）
+- **Logs** — 请求/响应日志查看器，支持 Token 列、TTFB、输出 TPS 和模型映射；可多选行并导出压缩包（每个 ID 一个目录，含 JSON、请求/响应头和分析 Markdown）。未启用日志时自动隐藏。
 - **Settings** — 在 UI 中管理 YAML 配置；路由和并发保存后即时生效，服务器和日志需重启
 - **Client configuration** — 从 UI 写入 Claude Code 环境变量和 Codex 配置；同时显示 Claude Desktop 已安装的 claude-code bundle 版本与 Claude Code CLI 版本（后台执行 `claude --version`，可在页面上关闭）
 

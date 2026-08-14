@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **UI**
 
+- Logs: multi-select rows and export a zip of per-id folders (converted/original JSON, headers, and analysis markdown).
 - Quick fill custom models can map `claude-haiku-*`, `claude-sonnet-*`, and `claude-opus-*` to a chosen model (defaults to the first). Catch-all `claude-*` and `gpt-*` still map to the first model.
 
 ### Changed

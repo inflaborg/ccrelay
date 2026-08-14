@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Copy,
   Check,
+  Download,
   Loader2,
   RefreshCw,
   Trash2,
@@ -32,9 +33,6 @@ import {
 import { InfiniteTable, type InfiniteTableColumn } from "@/components/ui/infinite-table";
 import { MarkdownViewer } from "@/components/ui/markdown-viewer";
 import { api, type LogEntry } from "@/api/client";
-import { isSseLogBody, reconstructMessageFromSseLogBody } from "./reconstructAnthropicSseMessage";
-import { reconstructOpenAIChatFromSseLogBody } from "./reconstructOpenAIChatSseMessage";
-import { reconstructOpenAIResponsesFromSseLogBody } from "./reconstructOpenAIResponsesSseMessage";
 import {
   effectiveGenMs,
   effectiveTtfb,
@@ -43,28 +41,16 @@ import {
   outputTps,
 } from "./streamPerf";
 import { formatServiceMetaForDetail, formatServiceMetaSummary } from "./service-log-display";
+import {
+  formatJson,
+  parseRequestMarkdownAnalysis,
+  parseToolsMarkdown,
+  reconstructResponseStructuredJson,
+} from "./log-analysis";
+import { logExportFilename, logExportZipEntries, MAX_LOG_EXPORT_IDS } from "./log-export";
+import { zipFiles } from "@/lib/zip";
 
 const PAGE_SIZE = 50;
-
-const formatJson = (str: string): string => {
-  if (!str) return str;
-
-  const trimmed = str.trim();
-
-  // Check if it's SSE (Server-Sent Events) format - not JSON
-  if (isSseLogBody(trimmed)) {
-    return str;
-  }
-
-  // Try to parse and format JSON
-  try {
-    const parsed = JSON.parse(trimmed);
-    return JSON.stringify(parsed, null, 2);
-  } catch {
-    // Return original if parse fails
-    return str;
-  }
-};
 
 /** Parse a masked-JSON header string into [key, value] entries (arrays joined). */
 const parseHeaderEntries = (headersJson: string | undefined): Array<[string, string]> | null => {
@@ -74,75 +60,6 @@ const parseHeaderEntries = (headersJson: string | undefined): Array<[string, str
     return Object.entries(parsed).map(([k, v]) => [k, Array.isArray(v) ? v.join(", ") : v]);
   } catch {
     return null;
-  }
-};
-
-const parseRequestMarkdownAnalysis = (str: string): string => {
-  if (!str) return "";
-
-  const trimmed = str.trim();
-  let markdown = "";
-
-  try {
-    const parsed = JSON.parse(trimmed);
-
-    if (parsed.system) {
-      markdown += `### System\n\n`;
-      if (typeof parsed.system === "string") {
-        markdown += `> ${parsed.system.replace(/\n/g, "\n> ")}\n\n`;
-      } else if (Array.isArray(parsed.system)) {
-        parsed.system.forEach((sys: Record<string, unknown>) => {
-          if (sys.type === "text" && typeof sys.text === "string") {
-            markdown += `> ${sys.text.replace(/\n/g, "\n> ")}\n\n`;
-          }
-        });
-      }
-    }
-
-    if (Array.isArray(parsed.messages)) {
-      parsed.messages.forEach((msg: Record<string, unknown>) => {
-        markdown += `### ${msg.role === "user" ? "User" : "Assistant"}\n\n`;
-        if (typeof msg.content === "string") {
-          markdown += `${msg.content}\n\n`;
-        } else if (Array.isArray(msg.content)) {
-          msg.content.forEach((contentPart: Record<string, unknown>) => {
-            if (contentPart.type === "text" && typeof contentPart.text === "string") {
-              markdown += `${contentPart.text}\n\n`;
-            } else if (contentPart.type === "image_url" || contentPart.type === "image") {
-              markdown += `*[Image Attached]*\n\n`;
-            } else if (contentPart.type === "tool_use") {
-              markdown += `### Tool Use: \`${contentPart.name}\`\n\n`;
-              markdown += `\`\`\`json\n`;
-              const inputStr = JSON.stringify(contentPart.input, null, 2) || "{}";
-              markdown += `${inputStr}\n`;
-              markdown += `\`\`\`\n\n`;
-            } else if (contentPart.type === "tool_result") {
-              markdown += `### Tool Result\n\n`;
-              let resultContent = "";
-              if (typeof contentPart.content === "string") {
-                resultContent = contentPart.content;
-              } else if (Array.isArray(contentPart.content)) {
-                // Some models return tool_result content as an array of text/image
-                resultContent = contentPart.content
-                  .map((c: Record<string, unknown>) =>
-                    typeof c.text === "string" ? c.text : JSON.stringify(c)
-                  )
-                  .join("\n");
-              }
-              if (resultContent) {
-                markdown += `\`\`\`text\n`;
-                markdown += `${resultContent}\n`;
-                markdown += `\`\`\`\n\n`;
-              }
-            }
-          });
-        }
-      });
-    }
-
-    return markdown.trim() || "*No parseable content found.*";
-  } catch {
-    return "*Failed to parse content into markdown.*";
   }
 };
 
@@ -197,6 +114,9 @@ export default function Logs() {
     "analysis"
   );
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   // Use ref for stable data access in callbacks
   const stateRef = useRef({
@@ -237,6 +157,8 @@ export default function Logs() {
       totalCount: 0,
       lastLogId: null,
     }));
+    setSelectedIds(new Set());
+    setExportError(null);
     setFilter({ ...filter, [key]: value || undefined });
   };
 
@@ -258,6 +180,8 @@ export default function Logs() {
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
+    setSelectedIds(new Set());
+    setExportError(null);
     setState(state => ({
       ...state,
       allLogs: [],
@@ -384,6 +308,8 @@ export default function Logs() {
         totalCount: 0,
         lastLogId: null,
       }));
+      setSelectedIds(new Set());
+      setExportError(null);
 
       // Remove all cached queries to force fresh fetch
       queryClient.removeQueries({ queryKey: ["logs"] });
@@ -400,6 +326,73 @@ export default function Logs() {
 
   const handleConfirmClear = () => {
     clearLogsMutation.mutate();
+  };
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+    setExportError(null);
+  };
+
+  const loadedIds = allLogs.map(log => log.id);
+  const allLoadedSelected = loadedIds.length > 0 && loadedIds.every(id => selectedIds.has(id));
+  const someLoadedSelected = loadedIds.some(id => selectedIds.has(id));
+
+  const toggleSelectAllLoaded = () => {
+    setSelectedIds(prev => {
+      if (loadedIds.length === 0) {
+        return prev;
+      }
+      if (loadedIds.every(id => prev.has(id))) {
+        const next = new Set(prev);
+        for (const id of loadedIds) {
+          next.delete(id);
+        }
+        return next;
+      }
+      const next = new Set(prev);
+      for (const id of loadedIds) {
+        next.add(id);
+      }
+      return next;
+    });
+    setExportError(null);
+  };
+
+  const handleExport = async () => {
+    if (selectedIds.size === 0 || exporting) {
+      return;
+    }
+    setExporting(true);
+    setExportError(null);
+    try {
+      const ids = [...selectedIds].slice(0, MAX_LOG_EXPORT_IDS);
+      const result = await api.getLogsByIds(ids);
+      if (result.logs.length === 0) {
+        setExportError(t("logs.exportEmpty"));
+        return;
+      }
+      const zipBytes = await zipFiles(logExportZipEntries(result.logs));
+      const blob = new Blob([Uint8Array.from(zipBytes)], { type: "application/zip" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = logExportFilename();
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("[Logs] Export failed:", err);
+      setExportError(t("logs.exportFailed"));
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handleCopy = async (content: string, section: "request" | "response") => {
@@ -459,61 +452,54 @@ export default function Logs() {
     if (!selectedLog?.responseBody) {
       return "";
     }
-    const raw = selectedLog.responseBody;
-    const trimmed = raw.trim();
-    const reconstructed = reconstructMessageFromSseLogBody(raw);
-    if (reconstructed.ok) {
-      return JSON.stringify(reconstructed.message, null, 2);
-    }
-    const openaiResponses = reconstructOpenAIResponsesFromSseLogBody(raw);
-    if (openaiResponses.ok) {
-      return JSON.stringify(openaiResponses.message, null, 2);
-    }
-    const openaiChat = reconstructOpenAIChatFromSseLogBody(raw);
-    if (openaiChat.ok) {
-      return JSON.stringify(openaiChat.message, null, 2);
-    }
-    if (!isSseLogBody(trimmed)) {
-      try {
-        return JSON.stringify(JSON.parse(trimmed), null, 2);
-      } catch {
-        return "";
-      }
-    }
-    return "";
+    return reconstructResponseStructuredJson(selectedLog.responseBody);
   }, [selectedLog?.responseBody]);
 
   const hasStructuredResponseAnalysis = responseStructuredJson.length > 0;
 
-  const parsedToolsMarkdown = useMemo(() => {
-    if (!selectedLog?.requestBody) return null;
-    try {
-      const parsed = JSON.parse(selectedLog.requestBody);
-      if (parsed.tools && Array.isArray(parsed.tools) && parsed.tools.length > 0) {
-        let markdown = "";
-        parsed.tools.forEach((tool: Record<string, unknown>) => {
-          if (tool.name) {
-            markdown += `### \`${String(tool.name)}\`\n\n`;
-          }
-          if (tool.description) {
-            markdown += `${String(tool.description)}\n\n`;
-          }
-          if (tool.input_schema) {
-            markdown += `**Input Schema:**\n\`\`\`json\n${JSON.stringify(tool.input_schema, null, 2)}\n\`\`\`\n\n`;
-          }
-        });
-        return markdown.trim();
-      }
-    } catch {
-      // ignore
-    }
-    return null;
-  }, [selectedLog?.requestBody]);
+  const parsedToolsMarkdown = useMemo(
+    () => parseToolsMarkdown(selectedLog?.requestBody),
+    [selectedLog?.requestBody]
+  );
 
   const providers = stats?.byProvider ? Object.keys(stats.byProvider) : [];
 
   // Define table columns
   const columns: InfiniteTableColumn<LogEntry>[] = [
+    {
+      id: "select",
+      header: (
+        <div
+          className="flex justify-center"
+          onClick={e => e.stopPropagation()}
+          onPointerDown={e => e.stopPropagation()}
+        >
+          <Checkbox
+            checked={allLoadedSelected ? true : someLoadedSelected ? "indeterminate" : false}
+            onCheckedChange={() => toggleSelectAllLoaded()}
+            aria-label={t("logs.selectAllLoaded")}
+            className="size-3.5"
+          />
+        </div>
+      ),
+      cell: log => (
+        <div
+          className="flex justify-center"
+          onClick={e => e.stopPropagation()}
+          onPointerDown={e => e.stopPropagation()}
+        >
+          <Checkbox
+            checked={selectedIds.has(log.id)}
+            onCheckedChange={() => toggleSelect(log.id)}
+            aria-label={t("logs.selectRow", { id: log.id })}
+            className="size-3.5"
+          />
+        </div>
+      ),
+      className: "text-center",
+      headerClassName: "text-center px-1",
+      width: 36,
+    },
     {
       id: "id",
       header: t("logs.table.header.id"),
@@ -744,10 +730,30 @@ export default function Logs() {
       <div className="flex-shrink-0 space-y-2">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-base font-semibold tracking-tight">{t("logs.title")}</h2>
-            <p className="text-xs text-muted-foreground">{t("logs.subtitle")}</p>
+            <h2 className="text-base font-semibold tracking-tight">
+              {selectedIds.size > 0
+                ? t("logs.selectedCount", { count: selectedIds.size })
+                : t("logs.title")}
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              {selectedIds.size > 0 ? t("logs.exportHint") : t("logs.subtitle")}
+            </p>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => void handleExport()}
+              disabled={selectedIds.size === 0 || exporting}
+            >
+              {exporting ? (
+                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              ) : (
+                <Download className="h-3 w-3 mr-1" />
+              )}
+              {exporting ? t("logs.exporting") : `${t("logs.export")} (${selectedIds.size})`}
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -774,6 +780,7 @@ export default function Logs() {
             </Button>
           </div>
         </div>
+        {exportError && <p className="text-xs text-destructive">{exportError}</p>}
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -832,6 +839,7 @@ export default function Logs() {
           onLoadMore={loadMore}
           keyExtractor={log => log.id}
           onRowClick={log => setSelectedLogId(log.id)}
+          rowClassName={log => (selectedIds.has(log.id) ? "bg-muted/40" : "")}
           emptyMessage={t("logs.emptyMessage")}
           height="100%"
         />

@@ -1,10 +1,10 @@
-import { useEffect, useRef, useCallback, useMemo } from "react";
+import { useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface InfiniteTableColumn<T> {
   id: string;
-  header: string;
+  header: ReactNode;
   /** Optional native tooltip on the column header */
   headerTitle?: string;
   cell: (item: T, index: number) => React.ReactNode;

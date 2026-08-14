@@ -192,6 +192,12 @@ export const api = {
   getLogById: (id: number): Promise<{ log: LogEntry | null }> =>
     fetchAPI<{ log: LogEntry | null }>(`/logs/${id}`),
 
+  getLogsByIds: (ids: number[]): Promise<{ logs: LogEntry[] }> =>
+    fetchAPI<{ logs: LogEntry[] }>("/logs/batch", {
+      method: "POST",
+      body: JSON.stringify({ ids }),
+    }),
+
   deleteLogs: (ids: number[]): Promise<void> =>
     fetchAPI<void>("/logs", {
       method: "DELETE",

@@ -581,6 +581,21 @@ describe("api: handleApiRequest specific routes", () => {
     expect(res.statusCode).toBe(200);
   });
 
+  it("should return 503 for POST /ccrelay/api/logs/batch without leader API ref", async () => {
+    resetProxyServerForApi();
+    const req = new MockIncomingMessage(
+      "/ccrelay/api/logs/batch",
+      "POST"
+    ) as unknown as MockIncomingMessage & IncomingMessage;
+    const res = new MockServerResponse() as unknown as MockServerResponse & ServerResponse;
+
+    handleApiRequest(req, res);
+
+    await vi.waitFor(() => expect(res.ended).toBe(true));
+    expect(res.statusCode).toBe(503);
+    expect(res.body).toContain("leader");
+  });
+
   it("should return 503 for GET /ccrelay/api/stats without leader API ref", async () => {
     resetProxyServerForApi();
     const req = new MockIncomingMessage(

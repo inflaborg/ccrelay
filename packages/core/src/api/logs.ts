@@ -2,17 +2,21 @@
  * Logs API endpoint
  * GET /ccrelay/api/logs - List logs
  * GET /ccrelay/api/logs/:id - Get log detail
+ * POST /ccrelay/api/logs/batch - Full log bodies for selected IDs
  * DELETE /ccrelay/api/logs - Delete logs
  */
 
 import * as http from "http";
 import { getDatabase } from "../database";
-import type { LogFilter } from "../database";
+import type { LogFilter, RequestLog } from "../database";
 import { sendJson, parseJsonBody } from "./index";
 import { rejectLogStorageApiIfNotLeader } from "./serverRef";
 import { ScopedLogger } from "../utils/logger";
 
 const log = new ScopedLogger("API:Logs");
+
+/** Max IDs accepted by POST /logs/batch (full bodies). */
+export const MAX_LOG_BATCH_IDS = 100;
 
 function parseOptionalInt(value: string | null): number | undefined {
   if (value === null || value === "") {
@@ -113,6 +117,62 @@ export async function handleLogDetail(
 
   const logEntry = await db.getLogById(id);
   sendJson(res, 200, { log: logEntry });
+}
+
+/**
+ * Handle POST /ccrelay/api/logs/batch
+ * Body: { ids: number[] }
+ */
+export async function handleLogsBatch(
+  req: http.IncomingMessage,
+  res: http.ServerResponse
+): Promise<void> {
+  if (rejectLogStorageApiIfNotLeader(res)) {
+    return;
+  }
+
+  const db = getDatabase();
+
+  if (!db.enabled || !db.logsEnabled) {
+    sendJson(res, 200, { logs: [] });
+    return;
+  }
+
+  try {
+    const data = await parseJsonBody<{ ids?: unknown }>(req);
+    if (!Array.isArray(data.ids)) {
+      sendJson(res, 400, { error: "ids must be an array of log IDs" });
+      return;
+    }
+
+    const uniqueIds: number[] = [];
+    const seen = new Set<number>();
+    for (const raw of data.ids) {
+      const id = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : NaN;
+      if (!Number.isInteger(id) || id <= 0 || seen.has(id)) {
+        continue;
+      }
+      seen.add(id);
+      uniqueIds.push(id);
+      if (uniqueIds.length >= MAX_LOG_BATCH_IDS) {
+        break;
+      }
+    }
+
+    const logs: RequestLog[] = [];
+    for (const id of uniqueIds) {
+      const entry = await db.getLogById(id);
+      if (entry) {
+        logs.push(entry);
+      }
+    }
+
+    log.info(`[handleLogsBatch] Returning ${logs.length} of ${uniqueIds.length} requested log(s)`);
+    sendJson(res, 200, { logs });
+  } catch (err) {
+    log.error("Error processing logs batch request", err);
+    sendJson(res, 400, { error: "Invalid JSON in request body" });
+  }
 }
 
 /**

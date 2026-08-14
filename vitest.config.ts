@@ -13,6 +13,7 @@ export default {
       "@": resolve(__dirname, "./packages/core/src"),
       "@ccrelay/core": resolve(__dirname, "./packages/core/src/index.ts"),
       "@ccrelay/shared": resolve(__dirname, "./packages/core/src/shared"),
+      fflate: resolve(__dirname, "./web/node_modules/fflate"),
     },
   },
 };

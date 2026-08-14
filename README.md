@@ -431,7 +431,7 @@ Built-in web dashboard accessible via Command Palette → `CCRelay: Open Dashboa
 - **Smart Routing** — aggregate all provider model lists; unified `/v1/models` with `<providerId>:<modelId>` ids; route each request to the matching provider by model (no provider switch / client restart when changing models)
 - **Providers** — configure upstream connections; click a card to select it, then Apply to switch; **Select** to export or delete
 - **Capabilities** — optional web search backends (**Tavily** and/or **Parallel**): API keys, default backend, and which providers answer web search locally
-- **Logs** — request/response log viewer with token columns, TTFB, output TPS, and model mapping display (hidden when logging is disabled)
+- **Logs** — request/response log viewer with token columns, TTFB, output TPS, and model mapping; multi-select rows to export a zip of per-id folders (JSON, headers, analysis markdown). Hidden when logging is disabled.
 - **Settings** — manage YAML config in the UI; routing and concurrency hot-reload on save, server and logging changes require a restart
 - **Client configuration** — write Claude Code env vars and Codex config from the UI; shows installed Claude Desktop claude-code bundle versions and Claude Code CLI version (`claude --version`, can be disabled on the page)
 
