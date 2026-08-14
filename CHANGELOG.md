@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Protocol/Conversion**
 
 - Cap OpenAI Chat Completions `tools` at 128 (API hard limit) on every Chat upstream path, including passthrough and cross-protocol conversion.
+- Claude Code mid-conversation system reminders keep their original order when forwarded to OpenAI Chat by merging into the adjacent user or tool message.
 
 ## [0.3.1] - 2026-08-02 (pre-release)
 
