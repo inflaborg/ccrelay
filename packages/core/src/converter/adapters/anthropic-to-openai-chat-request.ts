@@ -20,12 +20,21 @@ import { mapAnthropicWirePathToOpenAiUpstream } from "../paths";
 import { anthropicServerToolDefToOpenAIHosted } from "../tool-schema-conversion";
 
 /**
+ * Claude Code mid-conversation system/developer reminder (Messages API beta).
+ * Not part of the official `MessageParam` user/assistant union.
+ */
+export interface AnthropicInlineSystemMessage {
+  role: "system" | "developer";
+  content: string | AnthropicSystemBlock[];
+}
+
+/**
  * Anthropic Messages API request format
  */
 export interface AnthropicMessageRequest {
   model: string;
   max_tokens: number;
-  messages: MessageParam[];
+  messages: Array<MessageParam | AnthropicInlineSystemMessage>;
   system?: string | AnthropicSystemBlock[];
   temperature?: number;
   top_p?: number;
@@ -197,7 +206,9 @@ export interface ConvertRequestToOpenAIOptions {
  * Message splitting:
  * - user messages with tool_result → split into separate tool messages
  * - assistant messages → join text, extract tool_calls & thinking
- * - system → supports both string and array forms
+ * - top-level system → first Chat system message (string and array forms)
+ * - inline messages[].system/developer → fold into the previous user/tool message
+ *   (or a synthetic user if the previous role is assistant/system/none)
  */
 export function convertRequestToOpenAI(
   anthropic: AnthropicMessageRequest,
@@ -237,8 +248,15 @@ export function convertRequestToOpenAI(
   // Convert each message - a single Anthropic message may produce multiple OpenAI messages
   const requestMessages = anthropic.messages || [];
   for (const msg of requestMessages) {
-    const converted = convertMessage(msg);
-    messages.push(...converted);
+    if (isInlineSystemMessage(msg)) {
+      const text = extractInlineSystemText(msg.content);
+      if (!text) {
+        continue;
+      }
+      foldInlineSystemIntoMessages(messages, wrapSystemReminder(text));
+      continue;
+    }
+    messages.push(...convertMessage(msg));
   }
 
   openai.messages = messages;
@@ -334,6 +352,57 @@ function getThinkLevel(budgetTokens?: number): string {
   // 4097–8192+ maps to "high" to avoid round-trip loss
   // (medium → 4096 would reduce budget; high → 16000 preserves or increases it)
   return "high";
+}
+
+function isInlineSystemMessage(
+  msg: MessageParam | AnthropicInlineSystemMessage
+): msg is AnthropicInlineSystemMessage {
+  return msg.role === "system" || msg.role === "developer";
+}
+
+function extractInlineSystemText(content: AnthropicInlineSystemMessage["content"]): string {
+  if (typeof content === "string") {
+    return content.trim();
+  }
+  if (!Array.isArray(content)) {
+    return "";
+  }
+  return content
+    .filter(item => item.type === "text" && item.text)
+    .map(item => item.text)
+    .join("\n")
+    .trim();
+}
+
+function wrapSystemReminder(text: string): string {
+  if (text.includes("<system-reminder>")) {
+    return text;
+  }
+  return `<system-reminder>\n${text}\n</system-reminder>`;
+}
+
+function appendTextToOpenAIMessage(msg: OpenAIMessage, text: string): void {
+  if (typeof msg.content === "string") {
+    msg.content = msg.content ? `${msg.content}\n\n${text}` : text;
+    return;
+  }
+  if (Array.isArray(msg.content)) {
+    msg.content.push({ type: "text", text });
+  }
+}
+
+/**
+ * Fold a mid-conversation system reminder into the previous user/tool message.
+ * Assistant, leading system, or empty history get a synthetic user message so
+ * the reminder is not delayed and is not attributed to the model.
+ */
+function foldInlineSystemIntoMessages(messages: OpenAIMessage[], wrapped: string): void {
+  const prev = messages[messages.length - 1];
+  if (prev && (prev.role === "user" || prev.role === "tool")) {
+    appendTextToOpenAIMessage(prev, wrapped);
+    return;
+  }
+  messages.push({ role: "user", content: wrapped });
 }
 
 /**

@@ -1506,4 +1506,260 @@ describe("converter: anthropic-to-openai-chat-request", () => {
       });
     });
   });
+
+  describe("inline system / developer fold", () => {
+    it("folds plan-mode system into the preceding tool result, before Explore agents", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-opus-5",
+        max_tokens: 4096,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: "call_O5zMnTCPBZ3t35vVpy9eWE8n",
+                content:
+                  "Entered plan mode. You should now focus on exploring the codebase and designing an implementation approach.",
+              },
+            ],
+          },
+          {
+            role: "system",
+            content:
+              "Plan mode is active. The user indicated that they do not want you to execute yet.",
+          },
+          {
+            role: "assistant",
+            content: [
+              {
+                type: "tool_use",
+                id: "call_a1",
+                name: "Agent",
+                input: { description: "one" },
+              },
+              {
+                type: "tool_use",
+                id: "call_a2",
+                name: "Agent",
+                input: { description: "two" },
+              },
+              {
+                type: "tool_use",
+                id: "call_a3",
+                name: "Agent",
+                input: { description: "three" },
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+      const roles = result.request.messages.map(m => m.role);
+
+      expect(roles).toEqual(["tool", "assistant"]);
+      expect(result.request.messages[0]).toEqual({
+        role: "tool",
+        tool_call_id: "call_O5zMnTCPBZ3t35vVpy9eWE8n",
+        content:
+          "Entered plan mode. You should now focus on exploring the codebase and designing an implementation approach.\n\n<system-reminder>\nPlan mode is active. The user indicated that they do not want you to execute yet.\n</system-reminder>",
+      });
+      expect(result.request.messages[1].tool_calls).toHaveLength(3);
+    });
+
+    it("folds array-form system with cache_control into the preceding tool, not assistant", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-opus-5",
+        max_tokens: 4096,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: "call_exit",
+                content: "User has approved your plan. You can now start coding.",
+              },
+            ],
+          },
+          {
+            role: "system",
+            content: [
+              {
+                type: "text",
+                text: "## Exited Plan Mode\n\nYou have exited plan mode.",
+                cache_control: { type: "ephemeral" },
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.messages).toHaveLength(1);
+      expect(result.request.messages[0].role).toBe("tool");
+      expect(result.request.messages[0].content).toBe(
+        "User has approved your plan. You can now start coding.\n\n<system-reminder>\n## Exited Plan Mode\n\nYou have exited plan mode.\n</system-reminder>"
+      );
+    });
+
+    it("appends inline system to the preceding user text message", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-opus-5",
+        max_tokens: 4096,
+        messages: [
+          { role: "user", content: "解读一下项目" },
+          {
+            role: "system",
+            content: "Available agent types for the Agent tool:\n- Explore",
+          },
+        ],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.messages).toEqual([
+        {
+          role: "user",
+          content:
+            "解读一下项目\n\n<system-reminder>\nAvailable agent types for the Agent tool:\n- Explore\n</system-reminder>",
+        },
+      ]);
+    });
+
+    it("appends inline system as a text part when the preceding user has array content", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-opus-5",
+        max_tokens: 4096,
+        messages: [
+          {
+            role: "user",
+            content: [{ type: "text", text: "hello" }],
+          },
+          { role: "system", content: "reminder" },
+        ],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.messages).toEqual([
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "hello" },
+            {
+              type: "text",
+              text: "<system-reminder>\nreminder\n</system-reminder>",
+            },
+          ],
+        },
+      ]);
+    });
+
+    it("inserts a synthetic user after assistant instead of merging into assistant", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-opus-5",
+        max_tokens: 4096,
+        messages: [
+          { role: "assistant", content: "I will look around." },
+          { role: "system", content: "Stay in read-only mode." },
+        ],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.messages).toEqual([
+        { role: "assistant", content: "I will look around." },
+        {
+          role: "user",
+          content: "<system-reminder>\nStay in read-only mode.\n</system-reminder>",
+        },
+      ]);
+    });
+
+    it("appends consecutive system messages onto the same previous user/tool", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-opus-5",
+        max_tokens: 4096,
+        messages: [
+          { role: "user", content: "continue" },
+          { role: "system", content: "Plan mode is active." },
+          { role: "developer", content: "The TodoWrite tool hasn't been used recently." },
+        ],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.messages).toEqual([
+        {
+          role: "user",
+          content:
+            "continue\n\n<system-reminder>\nPlan mode is active.\n</system-reminder>\n\n<system-reminder>\nThe TodoWrite tool hasn't been used recently.\n</system-reminder>",
+        },
+      ]);
+    });
+
+    it("keeps top-level system as messages[0] and does not hoist inline reminders into it", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-opus-5",
+        max_tokens: 4096,
+        system: "You are Claude Code.",
+        messages: [
+          { role: "user", content: "hi" },
+          { role: "system", content: "Plan mode is active." },
+        ],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.messages).toHaveLength(2);
+      expect(result.request.messages[0]).toEqual({
+        role: "system",
+        content: "You are Claude Code.",
+      });
+      expect(result.request.messages[1]).toEqual({
+        role: "user",
+        content: "hi\n\n<system-reminder>\nPlan mode is active.\n</system-reminder>",
+      });
+    });
+
+    it("does not double-wrap content that already has system-reminder tags", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-opus-5",
+        max_tokens: 4096,
+        messages: [
+          { role: "user", content: "hi" },
+          {
+            role: "system",
+            content: "<system-reminder>\nAlready wrapped.\n</system-reminder>",
+          },
+        ],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.messages[0].content).toBe(
+        "hi\n\n<system-reminder>\nAlready wrapped.\n</system-reminder>"
+      );
+    });
+
+    it("emits a synthetic user when inline system is the first message", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-opus-5",
+        max_tokens: 4096,
+        messages: [{ role: "system", content: "Only reminder." }],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.messages).toEqual([
+        {
+          role: "user",
+          content: "<system-reminder>\nOnly reminder.\n</system-reminder>",
+        },
+      ]);
+    });
+  });
 });
