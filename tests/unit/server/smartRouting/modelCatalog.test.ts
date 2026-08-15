@@ -12,7 +12,7 @@ function mockConfig(providers: Record<string, Provider>): ConfigManager {
     defaultProvider: "official",
     providers,
     routing: { forward: [], block: [] },
-    logging: { enabled: false },
+    logging: { storeBodies: false },
     smartRouting: {
       enabled: true,
       aliasPrefix: "claude-",

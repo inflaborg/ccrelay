@@ -321,7 +321,10 @@ function LanguageSettingsSection({ locale }: { locale?: string }) {
   };
 
   return (
-    <Section title={t("language.title")} description={t("settings.server.languageAutoSave")}>
+    <Section
+      title={t("settings.server.language")}
+      description={t("settings.server.languageAutoSave")}
+    >
       <div className="flex items-center gap-2">
         <SelectField
           value={value}
@@ -431,30 +434,30 @@ const FORWARD_GROUP_ORDER: ForwardGroupId[] = [
   "custom",
 ];
 
-const FORWARD_GROUP_LABEL: Record<ForwardGroupId, { title: string; hint: string }> = {
+const FORWARD_GROUP_I18N_KEYS: Record<ForwardGroupId, { title: string; hint: string }> = {
   anthropic_messages: {
-    title: "Anthropic · Messages API",
-    hint: "/v1/messages, /v1/messages/count_tokens, /anthropic/v1/messages …",
+    title: "settings.routing.group.anthropicMessages",
+    hint: "settings.routing.group.anthropicMessagesHint",
   },
   openai_chat: {
-    title: "OpenAI · Chat Completions",
-    hint: "/v1/chat/completions, /openai/chat/completions",
+    title: "settings.routing.group.openaiChat",
+    hint: "settings.routing.group.openaiChatHint",
   },
   openai_responses: {
-    title: "OpenAI · Responses API",
-    hint: "/v1/responses, /openai/responses",
+    title: "settings.routing.group.openaiResponses",
+    hint: "settings.routing.group.openaiResponsesHint",
   },
   openai_models: {
-    title: "OpenAI · Models list",
-    hint: "/v1/models, /openai/models",
+    title: "settings.routing.group.openaiModels",
+    hint: "settings.routing.group.openaiModelsHint",
   },
   anthropic_models: {
-    title: "Anthropic · Models list",
-    hint: "/anthropic/v1/models",
+    title: "settings.routing.group.anthropicModels",
+    hint: "settings.routing.group.anthropicModelsHint",
   },
   custom: {
-    title: "Custom paths",
-    hint: "Any other patterns; rows from Add appear here until they match a group above.",
+    title: "settings.routing.group.custom",
+    hint: "settings.routing.group.customHint",
   },
 };
 
@@ -488,8 +491,6 @@ function forwardRuleGroupId(path: string): ForwardGroupId {
 
 function buildForwardDisplayGroups(items: Array<{ path: string; provider: string }>): Array<{
   id: ForwardGroupId;
-  title: string;
-  hint: string;
   rows: Array<{ flatIndex: number; rule: { path: string; provider: string } }>;
 }> {
   const buckets: Record<
@@ -508,7 +509,6 @@ function buildForwardDisplayGroups(items: Array<{ path: string; provider: string
   });
   const groups = FORWARD_GROUP_ORDER.map(id => ({
     id,
-    ...FORWARD_GROUP_LABEL[id],
     rows: buckets[id],
   })).filter(g => g.rows.length > 0);
   groups.sort((a, b) => {
@@ -529,14 +529,23 @@ function ForwardRuleEditor({
   onChange: (v: Array<{ path: string; provider: string }>) => void;
   providerOptions: Array<{ value: string; label: string }>;
 }) {
-  const groups = useMemo(() => buildForwardDisplayGroups(items), [items]);
+  const { t } = useTranslation();
+  const groups = useMemo(
+    () =>
+      buildForwardDisplayGroups(items).map(g => ({
+        ...g,
+        title: t(FORWARD_GROUP_I18N_KEYS[g.id].title),
+        hint: t(FORWARD_GROUP_I18N_KEYS[g.id].hint),
+      })),
+    [items, t]
+  );
 
   return (
     <div className="space-y-3">
       {items.length > 0 ? (
         <div className="grid grid-cols-[1fr_1fr_28px] gap-1.5 text-[10px] text-muted-foreground px-0.5">
-          <span>Path</span>
-          <span>Provider</span>
+          <span>{t("settings.routing.column.path")}</span>
+          <span>{t("settings.routing.column.provider")}</span>
           <span />
         </div>
       ) : null}
@@ -559,7 +568,7 @@ function ForwardRuleEditor({
                   type="text"
                   className="h-7 text-xs font-mono min-w-0"
                   value={rule.path}
-                  placeholder="/my/custom/route"
+                  placeholder={t("settings.routing.placeholder.forwardPath")}
                   onChange={e => {
                     const n = [...items];
                     n[flatIndex] = { ...n[flatIndex], path: e.target.value };
@@ -598,16 +607,9 @@ function ForwardRuleEditor({
         className="h-7 text-xs gap-1"
         onClick={() => onChange([...items, { path: "", provider: "auto" }])}
       >
-        <Plus className="h-3 w-3" /> Add rule
+        <Plus className="h-3 w-3" /> {t("settings.routing.addRule")}
       </Button>
-      <p className="text-[10px] text-muted-foreground">
-        <span className="font-semibold text-foreground/80">Evaluation order</span> follows YAML top
-        to bottom. Section cards are sorted by each group’s earliest rule — groups are labels only,
-        never a parallel pipeline. First match wins. <span className="font-mono">auto</span> =
-        active provider — see{" "}
-        <span className="font-semibold text-foreground/80">Routing and 404</span>; unknown paths
-        return <span className="font-mono">404</span>.
-      </p>
+      <p className="text-[10px] text-muted-foreground">{t("settings.routing.evaluationHelp")}</p>
     </div>
   );
 }
@@ -637,23 +639,24 @@ function mergeBlockProviderCondition(
 
 function summarizeBlockConditionForRow(
   cond: RoutingBlockRule["condition"] | undefined,
-  providerIdOptions: Array<{ value: string; label: string }>
+  providerIdOptions: Array<{ value: string; label: string }>,
+  t: (key: string) => string
 ): { summary: string; title: string } {
   const allow = dedupePreserveProviderIds(cond?.providers ?? []);
   const skip = dedupePreserveProviderIds(cond?.providerNot ?? []);
   const labelOf = (id: string) => providerIdOptions.find(o => o.value === id)?.label ?? id;
   if (allow.length === 0 && skip.length === 0) {
     return {
-      summary: "Any provider",
-      title: "No provider condition — click to add Only when / Unless lists",
+      summary: t("settings.routing.blockCondition.anyProvider"),
+      title: t("settings.routing.blockCondition.noConditionHint"),
     };
   }
   const parts: string[] = [];
   if (allow.length > 0) {
-    parts.push(`Only: ${allow.map(labelOf).join(", ")}`);
+    parts.push(`${t("settings.routing.blockCondition.only")} ${allow.map(labelOf).join(", ")}`);
   }
   if (skip.length > 0) {
-    parts.push(`Unless: ${skip.map(labelOf).join(", ")}`);
+    parts.push(`${t("settings.routing.blockCondition.unless")} ${skip.map(labelOf).join(", ")}`);
   }
   const summary = parts.join(" · ");
   return { summary, title: summary };
@@ -672,6 +675,7 @@ function BlockConditionProviderLists({
   onChangeSkip: (next: string[]) => void;
   providerIdOptions: Array<{ value: string; label: string }>;
 }) {
+  const { t } = useTranslation();
   const allowAvail = providerIdOptions.filter(o => !allowIds.includes(o.value));
   const skipAvail = providerIdOptions.filter(o => !skipIds.includes(o.value));
   const unlessBlocksAllow = skipIds.length > 0;
@@ -686,17 +690,17 @@ function BlockConditionProviderLists({
           unlessBlocksAllow && "opacity-[0.45] saturate-75"
         )}
       >
-        <legend className="sr-only">Only-when providers</legend>
+        <legend className="sr-only">{t("settings.routing.blockCondition.onlyWhenLabel")}</legend>
         <p className="text-[10px] text-muted-foreground leading-tight">
-          Only when current provider is
+          {t("settings.routing.blockCondition.onlyWhen")}
           <span className="font-mono text-[9px] text-foreground/70">
             {" "}
-            (YAML condition.providers)
+            {t("settings.routing.blockCondition.onlyWhenYaml")}
           </span>
         </p>
         {unlessBlocksAllow ? (
           <p className="text-[9px] text-muted-foreground leading-snug italic">
-            Clear all entries under “Unless…” below to edit this section.
+            {t("settings.routing.blockCondition.clearUnless")}
           </p>
         ) : null}
         <div className="flex flex-wrap items-start gap-1 pt-0.5">
@@ -713,7 +717,7 @@ function BlockConditionProviderLists({
                   type="button"
                   className="rounded-sm p-0.5 hover:bg-muted-foreground/15"
                   onClick={() => onChangeAllow(allowIds.filter(x => x !== id))}
-                  aria-label={`Remove ${id}`}
+                  aria-label={t("settings.routing.blockCondition.removeProvider", { id })}
                 >
                   <X className="h-3 w-3 shrink-0" />
                 </button>
@@ -725,10 +729,10 @@ function BlockConditionProviderLists({
               options={allowAvail}
               placeholder={
                 providerIdOptions.length === 0
-                  ? "No providers loaded"
+                  ? t("settings.routing.blockCondition.noProvidersLoaded")
                   : allowAvail.length === 0 && allowIds.length > 0
-                    ? "All providers selected"
-                    : "Add provider ID…"
+                    ? t("settings.routing.blockCondition.allSelected")
+                    : t("settings.routing.blockCondition.addProviderId")
               }
               onChange={v => {
                 if (!v || allowIds.includes(v)) return;
@@ -750,17 +754,17 @@ function BlockConditionProviderLists({
           allowBlocksUnless && "opacity-[0.45] saturate-75"
         )}
       >
-        <legend className="sr-only">Unless providers</legend>
+        <legend className="sr-only">{t("settings.routing.blockCondition.unlessLabel")}</legend>
         <p className="text-[10px] text-muted-foreground leading-tight">
-          Unless current provider is
+          {t("settings.routing.blockCondition.unlessWhen")}
           <span className="font-mono text-[9px] text-foreground/70">
             {" "}
-            (YAML condition.providerNot)
+            {t("settings.routing.blockCondition.unlessYaml")}
           </span>
         </p>
         {allowBlocksUnless ? (
           <p className="text-[9px] text-muted-foreground leading-snug italic">
-            Clear all entries under “Only when…” above to edit this section.
+            {t("settings.routing.blockCondition.clearOnlyWhen")}
           </p>
         ) : null}
         <div className="flex flex-wrap items-start gap-1 pt-0.5">
@@ -777,7 +781,7 @@ function BlockConditionProviderLists({
                   type="button"
                   className="rounded-sm p-0.5 hover:bg-muted"
                   onClick={() => onChangeSkip(skipIds.filter(x => x !== id))}
-                  aria-label={`Remove ${id}`}
+                  aria-label={t("settings.routing.blockCondition.removeProvider", { id })}
                 >
                   <X className="h-3 w-3 shrink-0" />
                 </button>
@@ -789,10 +793,10 @@ function BlockConditionProviderLists({
               options={skipAvail}
               placeholder={
                 providerIdOptions.length === 0
-                  ? "No providers loaded"
+                  ? t("settings.routing.blockCondition.noProvidersLoaded")
                   : skipAvail.length === 0 && skipIds.length > 0
-                    ? "All providers selected"
-                    : "Add provider ID…"
+                    ? t("settings.routing.blockCondition.allSelected")
+                    : t("settings.routing.blockCondition.addProviderId")
               }
               onChange={v => {
                 if (!v || skipIds.includes(v)) return;
@@ -819,6 +823,7 @@ function BlockRuleEditor({
   onChange: (v: RoutingBlockRule[]) => void;
   providerIdOptions: Array<{ value: string; label: string }>;
 }) {
+  const { t } = useTranslation();
   const [conditionModalIndex, setConditionModalIndex] = useState<number | null>(null);
   const [draftAllow, setDraftAllow] = useState<string[]>([]);
   const [draftSkip, setDraftSkip] = useState<string[]>([]);
@@ -869,15 +874,19 @@ function BlockRuleEditor({
     <div className="space-y-1.5">
       {items.length > 0 && (
         <div className="grid grid-cols-[1fr_1fr_72px_minmax(9rem,11rem)_28px] gap-1.5 text-[10px] text-muted-foreground px-0.5 items-end">
-          <span>Path</span>
-          <span>Response</span>
-          <span>Code</span>
-          <span>Condition</span>
+          <span>{t("settings.routing.column.path")}</span>
+          <span>{t("settings.routing.column.response")}</span>
+          <span>{t("settings.routing.column.code")}</span>
+          <span>{t("settings.routing.column.condition")}</span>
           <span />
         </div>
       )}
       {items.map((item, i) => {
-        const { summary, title } = summarizeBlockConditionForRow(item.condition, providerIdOptions);
+        const { summary, title } = summarizeBlockConditionForRow(
+          item.condition,
+          providerIdOptions,
+          t
+        );
         return (
           <div
             key={i}
@@ -887,7 +896,7 @@ function BlockRuleEditor({
               type="text"
               className="h-7 text-xs font-mono min-w-0"
               value={item.path}
-              placeholder="/api/event_logging/*"
+              placeholder={t("settings.routing.placeholder.blockPath")}
               onChange={e => {
                 const n = [...items];
                 n[i] = { ...n[i], path: e.target.value };
@@ -898,7 +907,7 @@ function BlockRuleEditor({
               type="text"
               className="h-7 text-xs font-mono min-w-0"
               value={item.response}
-              placeholder='{"ok":true}'
+              placeholder={t("settings.routing.placeholder.blockResponse")}
               onChange={e => {
                 const n = [...items];
                 n[i] = { ...n[i], response: e.target.value };
@@ -947,15 +956,9 @@ function BlockRuleEditor({
           onChange([...items, { path: "", response: "", code: 200, condition: undefined }])
         }
       >
-        <Plus className="h-3 w-3" /> Add
+        <Plus className="h-3 w-3" /> {t("settings.routing.add")}
       </Button>
-      <p className="text-[10px] text-muted-foreground">
-        Runs before <span className="font-mono">forward</span>. One row per rule.{" "}
-        <span className="font-medium text-foreground/80">Condition</span> chooses either{" "}
-        <span className="font-mono">providers</span> only-when lists or{" "}
-        <span className="font-mono">providerNot</span> unless-lists against the dashboard’s active
-        provider (not both in the UI).
-      </p>
+      <p className="text-[10px] text-muted-foreground">{t("settings.routing.blockHelp")}</p>
 
       <Dialog
         open={conditionModalIndex !== null}
@@ -965,14 +968,9 @@ function BlockRuleEditor({
       >
         <DialogContent className="sm:max-w-lg" onClick={e => e.stopPropagation()}>
           <DialogHeader>
-            <DialogTitle>Block condition (provider)</DialogTitle>
+            <DialogTitle>{t("settings.routing.blockConditionModal.title")}</DialogTitle>
             <DialogDescription>
-              Pick <strong className="text-foreground/90">one mode</strong> at a time: either “Only
-              when” (<span className="font-mono">condition.providers</span>){" "}
-              <em className="not-italic text-muted-foreground">or</em> “Unless” (
-              <span className="font-mono">condition.providerNot</span>). Adding to one clears the
-              other. Empty both = no provider filter. If YAML had both, this dialog keeps Unless and
-              drops Only-when lists.
+              {t("settings.routing.blockConditionModal.description")}
             </DialogDescription>
           </DialogHeader>
           <BlockConditionProviderLists
@@ -989,10 +987,10 @@ function BlockRuleEditor({
               size="sm"
               onClick={() => setConditionModalIndex(null)}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button type="button" size="sm" onClick={applyConditionModal}>
-              Apply
+              {t("common.apply")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1012,6 +1010,7 @@ function RoutingSection({
   routingDefaults: RoutingSettings | undefined;
   providerOptions: Array<{ value: string; label: string }>;
 }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [form, setForm] = useState(() => cloneRouting(routing));
   const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
@@ -1036,15 +1035,15 @@ function RoutingSection({
   const defaultsAvailable = routingDefaults !== undefined;
 
   return (
-    <Section title="Routing">
-      <Field label="Forward rules">
+    <Section title={t("settings.routing.title")}>
+      <Field label={t("settings.routing.forwardRules")}>
         <ForwardRuleEditor
           items={form.forward ?? []}
           onChange={v => setForm(f => ({ ...f, forward: v }))}
           providerOptions={providerOptions}
         />
       </Field>
-      <Field label="Block rules">
+      <Field label={t("settings.routing.blockRules")}>
         <BlockRuleEditor
           items={form.block ?? []}
           onChange={v => setForm(f => ({ ...f, block: v }))}
@@ -1052,14 +1051,10 @@ function RoutingSection({
         />
       </Field>
       <div className="rounded-md border border-border/70 bg-muted/25 p-2.5 text-[11px] text-muted-foreground space-y-1.5 leading-snug">
-        <p className="text-foreground/90 font-medium text-xs">Routing and 404</p>
-        <p>
-          Rules are evaluated in order: matching <span className="font-mono">block</span> rules run
-          first (first match wins), then matching <span className="font-mono">forward</span> rules
-          (first match wins). Paths that never match any <span className="font-mono">forward</span>{" "}
-          rule return HTTP <strong className="text-foreground">404</strong>; there is no implicit
-          catch‑all fallback for unlisted paths.
+        <p className="text-foreground/90 font-medium text-xs">
+          {t("settings.routing.helpBox.title")}
         </p>
+        <p>{t("settings.routing.helpBox.description")}</p>
       </div>
       <RoutingSaveBar
         mutation={mutation}
@@ -1074,27 +1069,25 @@ function RoutingSection({
             disabled={!defaultsAvailable || mutation.isPending}
             title={
               defaultsAvailable
-                ? "Load bundled defaults into the editor (use Save to write config.yaml)"
-                : "Default routing template unavailable from server"
+                ? t("settings.routing.restoreTooltipEnabled")
+                : t("settings.routing.restoreTooltipDisabled")
             }
             onClick={() => setRestoreConfirmOpen(true)}
           >
-            Restore default routing
+            {t("settings.routing.restore")}
           </Button>
         }
       />
       <AlertDialog open={restoreConfirmOpen} onOpenChange={setRestoreConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Restore default routing?</AlertDialogTitle>
+            <AlertDialogTitle>{t("settings.routing.restoreDialog.title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This replaces the forward and block lists in the editor with CCRelay’s bundled
-              defaults. Nothing is written to disk until you click{" "}
-              <span className="font-semibold text-foreground">Save routing</span>.
+              {t("settings.routing.restoreDialog.description")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className={cn(
                 "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90",
@@ -1108,7 +1101,7 @@ function RoutingSection({
                 setRestoreConfirmOpen(false);
               }}
             >
-              Restore
+              {t("settings.routing.restoreDialog.action")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1120,6 +1113,7 @@ function RoutingSection({
 // ─── Concurrency section ────────────────────────────────────────────────────
 
 function ConcurrencySection({ data }: { data: ConcurrencySettings }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [form, setForm] = useState(data);
 
@@ -1132,28 +1126,28 @@ function ConcurrencySection({ data }: { data: ConcurrencySettings }) {
   const retry = form.retry429 ?? { enabled: true, maxRetries: 3, delayMs: 1000 };
 
   return (
-    <Section title="Concurrency">
+    <Section title={t("settings.concurrency.title")}>
       <Toggle
         checked={form.enabled}
         onChange={v => setForm(f => ({ ...f, enabled: v }))}
-        label="Enable concurrency manager"
+        label={t("settings.concurrency.enable")}
       />
       <div className="grid grid-cols-3 gap-3">
-        <Field label="Max workers">
+        <Field label={t("settings.concurrency.maxWorkers")}>
           <NumberInput
             value={form.maxWorkers ?? 3}
             onChange={v => setForm(f => ({ ...f, maxWorkers: v }))}
             min={1}
           />
         </Field>
-        <Field label="Max queue size">
+        <Field label={t("settings.concurrency.maxQueueSize")}>
           <NumberInput
             value={form.maxQueueSize ?? 100}
             onChange={v => setForm(f => ({ ...f, maxQueueSize: v }))}
             min={1}
           />
         </Field>
-        <Field label="Request timeout (s)">
+        <Field label={t("settings.concurrency.requestTimeout")}>
           <NumberInput
             value={form.requestTimeout ?? 0}
             onChange={v => setForm(f => ({ ...f, requestTimeout: v }))}
@@ -1162,21 +1156,23 @@ function ConcurrencySection({ data }: { data: ConcurrencySettings }) {
         </Field>
       </div>
       <div className="border-t border-border/50 pt-3 space-y-2">
-        <p className="text-[10px] font-medium text-foreground/80">Retry on 429</p>
+        <p className="text-[10px] font-medium text-foreground/80">
+          {t("settings.concurrency.retry429.title")}
+        </p>
         <Toggle
           checked={retry.enabled}
           onChange={v => setForm(f => ({ ...f, retry429: { ...retry, enabled: v } }))}
-          label="Enable 429 retry"
+          label={t("settings.concurrency.retry429.enable")}
         />
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Max retries">
+          <Field label={t("settings.concurrency.retry429.maxRetries")}>
             <NumberInput
               value={retry.maxRetries ?? 3}
               onChange={v => setForm(f => ({ ...f, retry429: { ...retry, maxRetries: v } }))}
               min={0}
             />
           </Field>
-          <Field label="Delay (ms)">
+          <Field label={t("settings.concurrency.retry429.delay")}>
             <NumberInput
               value={retry.delayMs ?? 1000}
               onChange={v => setForm(f => ({ ...f, retry429: { ...retry, delayMs: v } }))}
@@ -1188,7 +1184,7 @@ function ConcurrencySection({ data }: { data: ConcurrencySettings }) {
       {form.routes && form.routes.length > 0 && (
         <div className="border-t border-border/50 pt-3">
           <p className="text-[10px] text-muted-foreground">
-            {form.routes.length} per-route override(s) configured. Edit in YAML for now.
+            {t("settings.concurrency.routeOverrides", { count: form.routes.length })}
           </p>
         </div>
       )}
@@ -1200,6 +1196,7 @@ function ConcurrencySection({ data }: { data: ConcurrencySettings }) {
 // ─── Logging section ────────────────────────────────────────────────────────
 
 function LoggingSection({ data }: { data: LoggingSettings }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [form, setForm] = useState(data);
 
@@ -1210,19 +1207,17 @@ function LoggingSection({ data }: { data: LoggingSettings }) {
   });
 
   const db = form.database ?? { type: "sqlite" as const };
+  const storeBodies = form.storeBodies ?? form.enabled ?? true;
 
   return (
-    <Section title="Logging">
+    <Section title={t("settings.logging.title")}>
       <Toggle
-        checked={form.enabled}
-        onChange={v => setForm(f => ({ ...f, enabled: v }))}
-        label="Enable request/response body logging"
+        checked={storeBodies}
+        onChange={v => setForm(f => ({ ...f, storeBodies: v, enabled: undefined }))}
+        label={t("settings.logging.enable")}
       />
-      <p className="text-[11px] text-muted-foreground -mt-1">
-        Token usage and performance metrics are always recorded when the database is available. This
-        toggle only controls storing full request and response bodies in the Logs tab.
-      </p>
-      <Field label="Database type">
+      <p className="text-[11px] text-muted-foreground -mt-1">{t("settings.logging.enableHint")}</p>
+      <Field label={t("settings.logging.databaseType")}>
         <SelectField
           value={db.type}
           options={[
@@ -1237,7 +1232,7 @@ function LoggingSection({ data }: { data: LoggingSettings }) {
       </Field>
       {db.type === "sqlite" ? (
         <>
-          <Field label="Database path">
+          <Field label={t("settings.logging.databasePath")}>
             <TextInput
               value={db.path ?? ""}
               onChange={v =>
@@ -1246,10 +1241,10 @@ function LoggingSection({ data }: { data: LoggingSettings }) {
                   database: { ...db, path: v || undefined },
                 }))
               }
-              placeholder="~/.ccrelay/logs.db (default)"
+              placeholder={t("settings.logging.databasePathPlaceholder")}
             />
           </Field>
-          <Field label="sqlite3 executable (optional)">
+          <Field label={t("settings.logging.sqlite3Executable")}>
             <TextInput
               value={db.sqlite3Executable ?? ""}
               onChange={v =>
@@ -1261,55 +1256,63 @@ function LoggingSection({ data }: { data: LoggingSettings }) {
                   },
                 }))
               }
-              placeholder="Blank = resolve from PATH"
+              placeholder={t("settings.logging.sqlite3ExecutablePlaceholder")}
             />
           </Field>
         </>
       ) : (
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Host">
+          <Field label={t("settings.logging.host")}>
             <TextInput
               value={db.host ?? ""}
               onChange={v => setForm(f => ({ ...f, database: { ...db, host: v } }))}
               placeholder="localhost"
             />
           </Field>
-          <Field label="Port">
+          <Field label={t("settings.logging.port")}>
             <NumberInput
               value={db.port ?? 5432}
               onChange={v => setForm(f => ({ ...f, database: { ...db, port: v } }))}
             />
           </Field>
-          <Field label="Database name">
+          <Field label={t("settings.logging.databaseName")}>
             <TextInput
               value={db.name ?? ""}
               onChange={v => setForm(f => ({ ...f, database: { ...db, name: v } }))}
               placeholder="ccrelay"
             />
           </Field>
-          <Field label="User">
+          <Field label={t("settings.logging.user")}>
             <TextInput
               value={db.user ?? ""}
               onChange={v => setForm(f => ({ ...f, database: { ...db, user: v } }))}
             />
           </Field>
-          <Field label="Password">
+          <Field label={t("settings.logging.password")}>
             <TextInput
               value={db.password ?? ""}
               onChange={v => setForm(f => ({ ...f, database: { ...db, password: v } }))}
-              placeholder="${POSTGRES_PASSWORD}"
+              placeholder={t("settings.logging.passwordPlaceholder")}
             />
           </Field>
           <div className="flex items-end">
             <Toggle
               checked={db.ssl ?? false}
               onChange={v => setForm(f => ({ ...f, database: { ...db, ssl: v } }))}
-              label="SSL"
+              label={t("settings.logging.ssl")}
             />
           </div>
         </div>
       )}
-      <SaveBar mutation={mutation} onSave={() => mutation.mutate(form)} />
+      <SaveBar
+        mutation={mutation}
+        onSave={() =>
+          mutation.mutate({
+            storeBodies,
+            database: form.database,
+          })
+        }
+      />
     </Section>
   );
 }
@@ -1329,7 +1332,7 @@ export default function Settings() {
   });
 
   const providerOptions = [
-    { value: "auto", label: "auto (current)" },
+    { value: "auto", label: t("settings.providerOption.auto") },
     ...(providersData?.providers ?? []).map(p => ({
       value: p.id,
       label: p.name || p.id,

@@ -550,7 +550,10 @@ export interface WebFetchResponse {
 }
 
 export interface LoggingSettings {
-  enabled: boolean;
+  /** Store request/response bodies in the Logs tab. */
+  storeBodies?: boolean;
+  /** @deprecated Use storeBodies. Kept for older YAML that only set enabled. */
+  enabled?: boolean;
   database?: {
     type: "sqlite" | "postgres";
     path?: string;

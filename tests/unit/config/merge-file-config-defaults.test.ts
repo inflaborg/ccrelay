@@ -136,6 +136,15 @@ describe("mergeFileConfigWithDefaults", () => {
     expect(merged.concurrency?.requestTimeout).toBe(0);
   });
 
+  it("keeps bundled storeBodies when user only has deprecated logging.enabled", () => {
+    const defaults = getDefaultConfig();
+    const merged = mergeFileConfigWithDefaults(defaults, {
+      logging: { enabled: false },
+    });
+    expect(merged.logging?.storeBodies).toBe(true);
+    expect(merged.logging?.enabled).toBe(false);
+  });
+
   it("deep-merges smartRouting from user config", () => {
     const defaults = mkDefaults();
     const merged = mergeFileConfigWithDefaults(defaults, {

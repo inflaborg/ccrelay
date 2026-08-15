@@ -215,7 +215,11 @@ export type DatabaseConfigInput = z.infer<typeof DatabaseConfigSchema>;
 
 // Logging configuration schema
 export const LoggingConfigSchema = z.object({
-  enabled: z.boolean().default(false),
+  /** Store request/response bodies in the Logs tab. Defaults to on when unset. */
+  storeBodies: z.boolean().optional(),
+  store_bodies: z.boolean().optional(),
+  /** @deprecated Use `storeBodies`. Read when the new field is absent. */
+  enabled: z.boolean().optional(),
   database: DatabaseConfigSchema.optional(),
 });
 
@@ -490,7 +494,8 @@ export interface RouterConfig {
   concurrency?: ConcurrencyConfig;
   routeQueues?: RouteQueueConfig[]; // Route-based queue configurations
   logging: {
-    enabled: boolean;
+    /** Effective body-storage flag (resolved from storeBodies / enabled). */
+    storeBodies: boolean;
     database?: DatabaseConfig;
   };
   /** UI language locale; undefined means not yet chosen. */

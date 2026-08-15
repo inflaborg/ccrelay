@@ -6,7 +6,7 @@
 
 import * as http from "http";
 import type { ProxyServer } from "../server/handler";
-import { getDefaultRoutingSettings } from "../config";
+import { getDefaultRoutingSettings, resolveLoggingStoreBodies } from "../config";
 import { sendJson, parseJsonBody } from "./index";
 
 let serverInstance: ProxyServer | null = null;
@@ -56,9 +56,14 @@ export function handleGetConfig(_req: http.IncomingMessage, res: http.ServerResp
   const configManager = serverInstance.getConfig();
   try {
     const raw = configManager.getConfigRawForApi();
+    const logging = (raw.logging as Record<string, unknown>) ?? {};
     const bundled = getDefaultRoutingSettings();
     sendJson(res, 200, {
       ...raw,
+      logging: {
+        ...logging,
+        storeBodies: resolveLoggingStoreBodies(logging),
+      },
       routingDefaults: { forward: bundled.forward, block: bundled.block },
     });
   } catch (err) {

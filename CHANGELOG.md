@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+**Config**
+
+- Request/response body logging is on by default via `logging.storeBodies`. Existing configs that lack this field get `true` on startup; the older `logging.enabled` key is still used when the new field is absent.
+
 **UI**
 
 - Provider cards: click to select a routing source, then **Apply** in the header to switch. Toolbar **Select** is for export and delete.
