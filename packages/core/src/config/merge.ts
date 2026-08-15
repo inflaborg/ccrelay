@@ -254,10 +254,10 @@ export function mergeFileConfigWithDefaults(
     concurrency: mergeConcurrencyInputs(defaults.concurrency, file.concurrency),
     logging:
       (defaults.logging ?? file.logging)
-        ? (deepMerge(
+        ? deepMerge(
             (defaults.logging ?? {}) as Record<string, unknown>,
             (file.logging ?? {}) as Record<string, unknown>
-          ) as unknown as FileConfigInput["logging"])
+          )
         : undefined,
     webSearch: file.webSearch ?? file.web_search ?? defaults.webSearch,
     smartRouting:

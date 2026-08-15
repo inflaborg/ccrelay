@@ -531,10 +531,12 @@ Use the **Smart Routing** tab for settings (alias prefix, bare model id fallback
 
 ### Logging
 
-| Setting                 | Default    | Description                |
-| ----------------------- | ---------- | -------------------------- |
-| `logging.enabled`       | `false`    | Enable request logging     |
-| `logging.database.type` | `"sqlite"` | `"sqlite"` or `"postgres"` |
+| Setting                  | Default    | Description                                                                                          |
+| ------------------------ | ---------- | ---------------------------------------------------------------------------------------------------- |
+| `logging.storeBodies`    | `true`     | Store request/response bodies in the Logs tab. Token and performance metrics are recorded separately |
+| `logging.database.type`  | `"sqlite"` | `"sqlite"` or `"postgres"`                                                                           |
+
+`logging.enabled` is deprecated. If `storeBodies` is unset, `enabled` is used as a fallback.
 
 **SQLite:**
 
@@ -678,7 +680,7 @@ concurrency:
   requestTimeout: 0
 
 logging:
-  enabled: true
+  storeBodies: true
   database:
     type: "sqlite"
     path: ""

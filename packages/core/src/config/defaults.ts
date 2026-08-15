@@ -172,7 +172,7 @@ concurrency:
 
 # ==================== Logging Storage ====================
 logging:
-  enabled: false                # Enable request log storage
+  storeBodies: true             # Store request/response bodies in the Logs tab
 
   database:
     type: "sqlite"              # sqlite | postgres

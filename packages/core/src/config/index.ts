@@ -40,8 +40,10 @@ import { buildDatabaseConfig } from "./builders/database";
 import { buildWebSearchConfig } from "./builders/web-search";
 import { buildSmartRoutingConfig } from "./builders/smart-routing";
 import { buildClientVersionDetectionConfig } from "./builders/client-version-detection";
+import { resolveLoggingStoreBodies } from "./logging";
 
 export { getDefaultRoutingSettings } from "./defaults";
+export { resolveLoggingStoreBodies, DEFAULT_LOGGING_STORE_BODIES } from "./logging";
 export { expandEnvVarsInObject } from "./env";
 export { mergeFileConfigWithDefaults } from "./merge";
 export {
@@ -425,7 +427,7 @@ export class ConfigManager {
       concurrency,
       routeQueues,
       logging: {
-        enabled: merged.logging?.enabled ?? false,
+        storeBodies: resolveLoggingStoreBodies(merged.logging),
         database,
       },
       locale: merged.server?.locale,
@@ -532,7 +534,7 @@ export class ConfigManager {
   }
 
   get enableLogStorage(): boolean {
-    return this.config.logging.enabled;
+    return this.config.logging.storeBodies;
   }
 
   get webSearchConfig(): WebSearchGlobalConfig | undefined {

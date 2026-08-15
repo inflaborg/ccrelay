@@ -199,12 +199,12 @@ export class ProxyServer {
   }
 
   /**
-   * Open persisted storage on the leader (metrics always; body logs when logging.enabled).
+   * Open persisted storage on the leader (metrics always; body logs when logging.storeBodies).
    */
   private async ensureLeaderLogStorage(): Promise<void> {
     const logsEnabled = this.config.enableLogStorage;
     this.log.info(
-      `[Server:${this.instanceId}] Initializing database (leader). logging.enabled=${logsEnabled}`
+      `[Server:${this.instanceId}] Initializing database (leader). logging.storeBodies=${logsEnabled}`
     );
     const dbStart = Date.now();
     await this.database.initialize(true, logsEnabled);

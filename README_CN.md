@@ -532,10 +532,12 @@ CCRelay 使用 `~/.ccrelay/config.yaml`（首次启动时自动创建）。启�
 
 ### 日志
 
-| 设置                    | 默认值     | 描述                       |
-| ----------------------- | ---------- | -------------------------- |
-| `logging.enabled`       | `false`    | 启用请求日志               |
-| `logging.database.type` | `"sqlite"` | `"sqlite"` 或 `"postgres"` |
+| 设置                     | 默认值     | 描述                                                                 |
+| ------------------------ | ---------- | -------------------------------------------------------------------- |
+| `logging.storeBodies`    | `true`     | 在 Logs 页保存请求/响应正文。Token 与性能指标另行记录，不受此开关影响 |
+| `logging.database.type`  | `"sqlite"` | `"sqlite"` 或 `"postgres"`                                           |
+
+`logging.enabled` 已弃用。未设置 `storeBodies` 时回退到 `enabled`。
 
 **SQLite：**
 
@@ -679,7 +681,7 @@ concurrency:
   requestTimeout: 0
 
 logging:
-  enabled: true
+  storeBodies: true
   database:
     type: "sqlite"
     path: ""

@@ -254,7 +254,7 @@ export class LogDatabase {
   }
 
   /**
-   * Toggle body logging at runtime (e.g. when logging.enabled changes in config).
+   * Toggle body logging at runtime (e.g. when logging.storeBodies changes in config).
    */
   setLogsEnabled(enabled: boolean): void {
     this._logsEnabled = enabled;

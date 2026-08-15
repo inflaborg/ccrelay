@@ -18,7 +18,7 @@ function mockConfig(
     defaultProvider: "auto",
     providers,
     routing: { forward: [], block: [] },
-    logging: { enabled: false },
+    logging: { storeBodies: false },
     smartRouting: {
       enabled: true,
       aliasPrefix: "claude-",

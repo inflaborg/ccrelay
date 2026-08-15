@@ -54,7 +54,7 @@ export class MockConfig {
       concurrency: this.concurrency,
       routeQueues: this.routeQueues,
       logging: {
-        enabled: false,
+        storeBodies: false,
       },
     };
   }

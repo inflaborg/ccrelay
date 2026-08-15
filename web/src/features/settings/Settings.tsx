@@ -1207,12 +1207,13 @@ function LoggingSection({ data }: { data: LoggingSettings }) {
   });
 
   const db = form.database ?? { type: "sqlite" as const };
+  const storeBodies = form.storeBodies ?? form.enabled ?? true;
 
   return (
     <Section title={t("settings.logging.title")}>
       <Toggle
-        checked={form.enabled}
-        onChange={v => setForm(f => ({ ...f, enabled: v }))}
+        checked={storeBodies}
+        onChange={v => setForm(f => ({ ...f, storeBodies: v, enabled: undefined }))}
         label={t("settings.logging.enable")}
       />
       <p className="text-[11px] text-muted-foreground -mt-1">{t("settings.logging.enableHint")}</p>
@@ -1303,7 +1304,15 @@ function LoggingSection({ data }: { data: LoggingSettings }) {
           </div>
         </div>
       )}
-      <SaveBar mutation={mutation} onSave={() => mutation.mutate(form)} />
+      <SaveBar
+        mutation={mutation}
+        onSave={() =>
+          mutation.mutate({
+            storeBodies,
+            database: form.database,
+          })
+        }
+      />
     </Section>
   );
 }
