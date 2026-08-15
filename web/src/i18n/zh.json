@@ -782,24 +782,26 @@
       "addRule": "添加规则",
       "add": "添加",
       "evaluationOrder": "匹配顺序",
+      "evaluationHelp": "匹配顺序与 YAML 从上到下一致。分组卡片按该组最早出现的规则排序——分组只是标签，不会形成并行流水线。首个匹配生效。「auto」表示当前启用的提供商，详见「路由与 404」；未知路径返回 404。",
+      "blockHelp": "在转发规则之前执行。每行一条规则。「条件」针对仪表盘当前提供商，只能选择「仅当」列表或「除非」列表之一（界面中不可同时设置）。",
       "autoLiteral": "auto",
       "routingAnd404": "路由与 404",
       "saveRouting": "保存路由",
       "unsavedChanges": "有未保存的更改",
       "matchesConfig": "与已保存配置一致",
       "group": {
-        "anthropicMessages": "Anthropic . Messages API",
-        "anthropicMessagesHint": "/v1/messages, /v1/messages/count_tokens, /anthropic/v1/messages",
-        "openaiChat": "OpenAI . Chat Completions",
+        "anthropicMessages": "Anthropic · Messages API",
+        "anthropicMessagesHint": "/v1/messages, /v1/messages/count_tokens, /anthropic/v1/messages …",
+        "openaiChat": "OpenAI · Chat Completions",
         "openaiChatHint": "/v1/chat/completions, /openai/chat/completions",
-        "openaiResponses": "OpenAI . Responses API",
+        "openaiResponses": "OpenAI · Responses API",
         "openaiResponsesHint": "/v1/responses, /openai/responses",
-        "openaiModels": "OpenAI . 模型列表",
+        "openaiModels": "OpenAI · 模型列表",
         "openaiModelsHint": "/v1/models, /openai/models",
-        "anthropicModels": "Anthropic . 模型列表",
+        "anthropicModels": "Anthropic · 模型列表",
         "anthropicModelsHint": "/anthropic/v1/models",
         "custom": "自定义路径",
-        "customHint": "其他模式；通过「添加」创建的行会出现在此处，直到匹配到上方的分组。"
+        "customHint": "其他路径模式；通过「添加规则」新建的行会先出现在这里，直到路径匹配到上方分组。"
       },
       "placeholder": {
         "forwardPath": "/my/custom/route",
@@ -817,22 +819,24 @@
         "clearUnless": "清空下方「除非…」的所有条目后才能编辑此部分。",
         "noProvidersLoaded": "未加载提供商",
         "allSelected": "已选择所有提供商",
-        "addProviderId": "添加提供商 ID...",
+        "addProviderId": "添加提供商 ID…",
         "unlessLabel": "排除提供商",
+        "unlessWhen": "除非当前提供商为",
         "unlessYaml": "（YAML condition.providerNot）",
-        "clearOnlyWhen": "清空上方「仅当…」的所有条目后才能编辑此部分。"
+        "clearOnlyWhen": "清空上方「仅当…」的所有条目后才能编辑此部分。",
+        "removeProvider": "移除 {{id}}"
       },
       "blockConditionModal": {
         "title": "拦截条件（提供商）",
-        "description": "每次只能使用一种模式：设置「仅当」以限制为特定提供商，或设置「除非」以排除特定提供商。两者互斥 — 填写一个会禁用另一个。"
+        "description": "每次只能使用一种模式：「仅当」（condition.providers）或「除非」（condition.providerNot）。填写其中一个会清空另一个。两者都留空表示不过滤提供商。若 YAML 中同时存在两者，此对话框会保留「除非」并丢弃「仅当」。"
       },
       "helpBox": {
         "title": "路由与 404",
-        "description": "规则按顺序匹配，首个匹配生效。提供商为「auto」时表示使用当前默认提供商。未匹配的路径将透传到代理，如果没有提供商处理则可能返回 404。"
+        "description": "规则按顺序匹配：先匹配拦截规则（首个命中生效），再匹配转发规则（首个命中生效）。未匹配任何转发规则的路径会返回 HTTP 404，没有隐式的兜底转发。"
       },
       "restore": "恢复默认路由",
       "restoreTooltipEnabled": "将内置默认值加载到编辑器中（使用「保存」写入 config.yaml）",
-      "restoreTooltipDisabled": "服务器不可用的默认路由模板",
+      "restoreTooltipDisabled": "服务器未提供默认路由模板",
       "restoreDialog": {
         "title": "恢复默认路由？",
         "description": "这会将编辑器中的转发和拦截列表替换为 CCRelay 的内置默认值。在点击「保存路由」之前不会写入磁盘。",
@@ -855,7 +859,8 @@
     },
     "logging": {
       "title": "日志",
-      "enable": "启用请求日志存储",
+      "enable": "启用请求/响应正文日志",
+      "enableHint": "当数据库可用时，始终会记录 Token 用量与性能指标。此开关仅控制是否在日志页保存完整的请求与响应正文。",
       "databaseType": "数据库类型",
       "databasePath": "数据库路径",
       "databasePathPlaceholder": "~/.ccrelay/logs.db（默认）",

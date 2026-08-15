@@ -782,21 +782,23 @@
       "addRule": "Add rule",
       "add": "Add",
       "evaluationOrder": "Evaluation order",
+      "evaluationHelp": "Evaluation order follows YAML top to bottom. Section cards are sorted by each group's earliest rule — groups are labels only, never a parallel pipeline. First match wins. \"auto\" means the active provider — see Routing and 404; unknown paths return 404.",
+      "blockHelp": "Runs before forward rules. One row per rule. Condition chooses either an only-when provider list or an unless list against the dashboard's active provider (not both in the UI).",
       "autoLiteral": "auto",
       "routingAnd404": "Routing and 404",
       "saveRouting": "Save routing",
       "unsavedChanges": "Unsaved changes",
       "matchesConfig": "Matches saved config",
       "group": {
-        "anthropicMessages": "Anthropic . Messages API",
-        "anthropicMessagesHint": "/v1/messages, /v1/messages/count_tokens, /anthropic/v1/messages",
-        "openaiChat": "OpenAI . Chat Completions",
+        "anthropicMessages": "Anthropic · Messages API",
+        "anthropicMessagesHint": "/v1/messages, /v1/messages/count_tokens, /anthropic/v1/messages …",
+        "openaiChat": "OpenAI · Chat Completions",
         "openaiChatHint": "/v1/chat/completions, /openai/chat/completions",
-        "openaiResponses": "OpenAI . Responses API",
+        "openaiResponses": "OpenAI · Responses API",
         "openaiResponsesHint": "/v1/responses, /openai/responses",
-        "openaiModels": "OpenAI . Models list",
+        "openaiModels": "OpenAI · Models list",
         "openaiModelsHint": "/v1/models, /openai/models",
-        "anthropicModels": "Anthropic . Models list",
+        "anthropicModels": "Anthropic · Models list",
         "anthropicModelsHint": "/anthropic/v1/models",
         "custom": "Custom paths",
         "customHint": "Any other patterns; rows from Add appear here until they match a group above."
@@ -814,21 +816,23 @@
         "onlyWhenLabel": "Only-when providers",
         "onlyWhen": "Only when current provider is",
         "onlyWhenYaml": "(YAML condition.providers)",
-        "clearUnless": "Clear all entries under \"Unless...\" below to edit this section.",
+        "clearUnless": "Clear all entries under \"Unless…\" below to edit this section.",
         "noProvidersLoaded": "No providers loaded",
         "allSelected": "All providers selected",
-        "addProviderId": "Add provider ID...",
+        "addProviderId": "Add provider ID…",
         "unlessLabel": "Unless providers",
+        "unlessWhen": "Unless current provider is",
         "unlessYaml": "(YAML condition.providerNot)",
-        "clearOnlyWhen": "Clear all entries under \"Only when...\" above to edit this section."
+        "clearOnlyWhen": "Clear all entries under \"Only when…\" above to edit this section.",
+        "removeProvider": "Remove {{id}}"
       },
       "blockConditionModal": {
         "title": "Block condition (provider)",
-        "description": "Pick one mode at a time: set Only-when to restrict to specific providers, or set Unless to exclude specific providers. They are mutually exclusive — filling one disables the other."
+        "description": "Pick one mode at a time: either Only-when (condition.providers) or Unless (condition.providerNot). Filling one clears the other. Leave both empty for no provider filter. If YAML had both, this dialog keeps Unless and drops Only-when."
       },
       "helpBox": {
         "title": "Routing and 404",
-        "description": "Rules are evaluated in order. The first match wins. Provider \"auto\" means use the current default provider. Unmatched paths fall through to the proxy and may return 404 if no provider handles them."
+        "description": "Rules are evaluated in order: matching block rules run first (first match wins), then matching forward rules (first match wins). Paths that never match any forward rule return HTTP 404; there is no implicit catch-all fallback for unlisted paths."
       },
       "restore": "Restore default routing",
       "restoreTooltipEnabled": "Load bundled defaults into the editor (use Save to write config.yaml)",
@@ -855,7 +859,8 @@
     },
     "logging": {
       "title": "Logging",
-      "enable": "Enable request log storage",
+      "enable": "Enable request/response body logging",
+      "enableHint": "Token usage and performance metrics are always recorded when the database is available. This toggle only controls storing full request and response bodies in the Logs tab.",
       "databaseType": "Database type",
       "databasePath": "Database path",
       "databasePathPlaceholder": "~/.ccrelay/logs.db (default)",
