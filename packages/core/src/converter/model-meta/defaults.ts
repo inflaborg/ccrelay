@@ -63,6 +63,8 @@ export const VENDOR_DEFAULT_META: Readonly<Record<ModelVendor, ModelMeta>> = {
       // Drop by default — Azure Hosted-on-Azure and most gateways reject these.
       supportsContextManagement: false,
       supportsStructuredOutputs: false,
+      supportsDeferLoading: false,
+      supportsToolReferenceBlocks: false,
     },
   },
   openai: {
