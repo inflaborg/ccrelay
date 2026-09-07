@@ -138,7 +138,17 @@ describe("resolveModelMeta", () => {
     expect(meta.anthropic?.supportsSystemRoleInMessages).toBe(true);
     expect(meta.anthropic?.supportsContextManagement).toBe(false);
     expect(meta.anthropic?.supportsStructuredOutputs).toBe(false);
+    expect(meta.anthropic?.supportsDeferLoading).toBe(false);
+    expect(meta.anthropic?.supportsToolReferenceBlocks).toBe(false);
     expect(meta.input.modalities).toContain("image");
+  });
+
+  it("matches OpenRouter stealth models without deferred tools", () => {
+    const meta = resolveModelMeta("stealth/ox-alpha");
+    expect(meta.id).toBe("stealth");
+    expect(meta.anthropic?.supportsDeferLoading).toBe(false);
+    expect(meta.anthropic?.supportsToolReferenceBlocks).toBe(false);
+    expect(meta.input.modalities).toEqual(["text", "image"]);
   });
 
   it("lists all registered families", () => {

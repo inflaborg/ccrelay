@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { resolveModelMeta } from "@/converter/model-meta/registry";
-import { sanitizeAnthropicRequestByMeta } from "@/converter/model-meta/sanitize-anthropic";
+import {
+  sanitizeAnthropicRequestByMeta,
+  sanitizeAnthropicRequestRecord,
+} from "@/converter/model-meta/sanitize-anthropic";
 
 /* eslint-disable @typescript-eslint/naming-convention -- Anthropic API bodies use snake_case */
 
@@ -155,6 +158,25 @@ describe("sanitizeAnthropicRequestByMeta", () => {
     expect(data.output_config).toEqual({ effort: "high", format });
   });
 
+  it("preserves deferred tools for Claude families", () => {
+    const data: Record<string, unknown> = {
+      model: "claude-sonnet-4-20250514",
+      tools: [
+        {
+          name: "Bash",
+          input_schema: { type: "object" },
+          defer_loading: true,
+        },
+      ],
+      messages: [{ role: "user", content: "hi" }],
+    };
+    const meta = resolveModelMeta("claude-sonnet-4-20250514", { vendor: "anthropic" });
+    const changes = sanitizeAnthropicRequestByMeta(data, meta);
+
+    expect(changes).not.toContain("tools.defer_loading");
+    expect((data.tools as { defer_loading?: boolean }[])[0].defer_loading).toBe(true);
+  });
+
   it("strips structured outputs for glm family", () => {
     const data: Record<string, unknown> = {
       model: "glm-4.7",
@@ -302,5 +324,86 @@ describe("sanitizeAnthropicRequestByMeta", () => {
     expect((userContent[1] as { cache_control?: { ttl?: string } }).cache_control).toEqual({
       type: "ephemeral",
     });
+  });
+
+  it("strips deferred tools for stealth/ox-alpha", () => {
+    const data: Record<string, unknown> = {
+      model: "stealth/ox-alpha",
+      tools: [
+        { name: "ToolSearch", input_schema: { type: "object" } },
+        {
+          name: "Bash",
+          input_schema: { type: "object" },
+          defer_loading: true,
+        },
+        {
+          name: "DeferredToolPlaceholder",
+          description: "placeholder",
+          input_schema: { type: "object" },
+          defer_loading: true,
+        },
+      ],
+      messages: [
+        { role: "user", content: "run ls" },
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: "call_1",
+              name: "ToolSearch",
+              input: { query: "select:Bash", max_results: 5 },
+            },
+          ],
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "call_1",
+              content: [{ type: "tool_reference", tool_name: "Bash" }],
+            },
+          ],
+        },
+      ],
+    };
+    const meta = resolveModelMeta("stealth/ox-alpha");
+    const changes = sanitizeAnthropicRequestByMeta(data, meta);
+
+    expect(meta.id).toBe("stealth");
+    expect(changes).toContain("tools.defer_loading");
+    expect(changes).toContain("tool_reference");
+    expect(data.tools).toHaveLength(2);
+    expect(
+      (data.tools as { name?: string; defer_loading?: boolean }[]).every(
+        t => t.defer_loading === undefined && t.name !== "DeferredToolPlaceholder"
+      )
+    ).toBe(true);
+    const userContent = (data.messages as { role: string; content: unknown[] }[])[2].content;
+    expect(userContent[0]).toEqual({
+      type: "tool_result",
+      tool_use_id: "call_1",
+      content: [{ type: "text", text: "Tool loaded: Bash." }],
+    });
+  });
+
+  it("strips deferred tools for unrecognized Anthropic-endpoint model ids", () => {
+    const data: Record<string, unknown> = {
+      model: "some-custom-gateway-model",
+      tools: [
+        {
+          name: "Bash",
+          input_schema: { type: "object" },
+          defer_loading: true,
+        },
+      ],
+      messages: [{ role: "user", content: "hi" }],
+    };
+    sanitizeAnthropicRequestRecord(data);
+
+    expect(
+      (data.tools as { name?: string; defer_loading?: boolean }[])[0].defer_loading
+    ).toBeUndefined();
   });
 });

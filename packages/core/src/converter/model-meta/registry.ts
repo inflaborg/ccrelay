@@ -9,6 +9,7 @@ import { KIMI_MODEL_FAMILIES } from "./families.kimi";
 import { LONGCAT_MODEL_FAMILIES } from "./families.longcat";
 import { MIMO_MODEL_FAMILIES } from "./families.mimo";
 import { OPENAI_MODEL_FAMILIES } from "./families.openai";
+import { STEALTH_MODEL_FAMILIES } from "./families.stealth";
 import type {
   ModelFamilyEntry,
   ModelInputModality,
@@ -18,6 +19,7 @@ import type {
 } from "./types";
 
 const ALL_FAMILIES: readonly ModelFamilyEntry[] = [
+  ...STEALTH_MODEL_FAMILIES,
   ...MIMO_MODEL_FAMILIES,
   ...LONGCAT_MODEL_FAMILIES,
   ...GROK_MODEL_FAMILIES,
