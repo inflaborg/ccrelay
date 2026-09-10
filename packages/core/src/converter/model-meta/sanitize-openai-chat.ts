@@ -37,15 +37,19 @@ export function sanitizeOpenAiChatRequestByMeta(
   if (!reasoning.supportsReasoningEffort && data.reasoning_effort !== undefined) {
     delete data.reasoning_effort;
     stripped.push("reasoning_effort");
-  } else if (
-    openaiChat?.dropReasoningEffortWhenTools &&
-    data.reasoning_effort !== undefined &&
-    chatRequestHasFunctionTools(data)
-  ) {
-    // gpt-5 / o-series: Chat Completions rejects tools + reasoning_effort together
-    // ("Please use /v1/responses instead"). Prefer keeping tools for Codex agent turns.
-    delete data.reasoning_effort;
-    stripped.push("reasoning_effort");
+  } else if (openaiChat?.dropReasoningEffortWhenTools && chatRequestHasFunctionTools(data)) {
+    // gpt-5.4+ / gpt-6 Chat Completions: tools only with reasoning_effort "none".
+    // Omitting the field still 400s because the model defaults to a non-none effort.
+    const current =
+      typeof data.reasoning_effort === "string" ? data.reasoning_effort.trim().toLowerCase() : "";
+    if (current !== "none") {
+      data.reasoning_effort = "none";
+      stripped.push("reasoning_effort=none");
+    }
+    if (data.reasoning !== undefined) {
+      delete data.reasoning;
+      stripped.push("reasoning");
+    }
   } else if (
     openaiChat?.validReasoningEfforts &&
     typeof data.reasoning_effort === "string" &&

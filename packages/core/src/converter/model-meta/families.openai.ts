@@ -4,11 +4,15 @@ import type { ModelFamilyEntry } from "./types";
 const OPENAI_REASONING_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh"] as const;
 const MULTIMODAL = inputMetaFromModalities(["text", "image"]);
 
+/** GPT-5 and later Chat Completions ids (gpt-5.4, gpt-6-astra, gpt-10, …). */
+const GPT5_PLUS_REGEX = /^gpt-(?:[5-9]|[1-9]\d+)/;
+
 export const OPENAI_MODEL_FAMILIES: readonly ModelFamilyEntry[] = [
   {
     id: "gpt-5",
     vendor: "openai",
-    match: "gpt-5*",
+    match: [],
+    matchRegex: GPT5_PLUS_REGEX,
     meta: {
       ...MULTIMODAL,
       reasoning: { enabled: true, supportsReasoningEffort: true },

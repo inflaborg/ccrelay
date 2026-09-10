@@ -46,9 +46,10 @@ export interface ModelOpenAiChatMeta {
   usesMaxCompletionTokens?: boolean;
   validReasoningEfforts?: readonly string[];
   /**
-   * OpenAI Chat Completions rejects `reasoning_effort` together with function tools
-   * for some reasoning models (e.g. gpt-5.*); Responses API still accepts both.
-   * When true, strip `reasoning_effort` if the request includes function tools.
+   * OpenAI Chat Completions rejects function tools with `reasoning_effort` other than
+   * `none` for gpt-5.4+ / gpt-6 / o-series; Responses API still accepts both.
+   * When true, force `reasoning_effort` to `none` if the request includes function tools
+   * (omitting the field is not enough — those models default to a non-none effort).
    */
   dropReasoningEffortWhenTools?: boolean;
 }

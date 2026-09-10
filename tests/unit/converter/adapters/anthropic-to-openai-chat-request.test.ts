@@ -416,6 +416,19 @@ describe("converter: anthropic-to-openai-chat-request", () => {
       expect(result.request.max_tokens).toBeUndefined();
     });
 
+    it("maps max_tokens to max_completion_tokens for gpt-6 models", () => {
+      const request: AnthropicMessageRequest = {
+        model: "gpt-6-astra",
+        max_tokens: 32000,
+        messages: [],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.max_completion_tokens).toBe(32000);
+      expect(result.request.max_tokens).toBeUndefined();
+    });
+
     it("maps max_tokens to max_completion_tokens for o-series models", () => {
       const request: AnthropicMessageRequest = {
         model: "o3",
