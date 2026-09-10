@@ -29,6 +29,23 @@ describe("resolveModelMeta", () => {
     expect(meta.openaiChat?.usesMaxCompletionTokens).toBe(true);
   });
 
+  it("matches gpt-6 and later as the gpt-5 family", () => {
+    for (const id of ["gpt-6-astra", "gpt-6", "GPT-6.1-MINI", "gpt-10"]) {
+      const meta = resolveModelMeta(id, { vendor: "openai" });
+      expect(meta.id).toBe("gpt-5");
+      expect(meta.openaiChat?.usesMaxCompletionTokens).toBe(true);
+      expect(meta.reasoning.supportsReasoningEffort).toBe(true);
+    }
+  });
+
+  it("keeps gpt-4 families off max_completion_tokens", () => {
+    expect(resolveModelMeta("gpt-4o", { vendor: "openai" }).id).toBe("gpt-4o");
+    expect(resolveModelMeta("gpt-4.1", { vendor: "openai" }).id).toBe("gpt-4");
+    expect(
+      resolveModelMeta("gpt-4o", { vendor: "openai" }).openaiChat?.usesMaxCompletionTokens
+    ).toBe(false);
+  });
+
   it("matches o-series via regex", () => {
     expect(resolveModelMeta("o3-mini", { vendor: "openai" }).id).toBe("o-series");
     expect(resolveModelMeta("o4-mini", { vendor: "openai" }).id).toBe("o-series");

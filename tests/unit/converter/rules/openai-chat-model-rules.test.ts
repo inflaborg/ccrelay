@@ -15,6 +15,8 @@ describe("openaiChatUsesMaxCompletionTokens", () => {
     expect(openaiChatUsesMaxCompletionTokens("gpt-5")).toBe(true);
     expect(openaiChatUsesMaxCompletionTokens("gpt-5.1")).toBe(true);
     expect(openaiChatUsesMaxCompletionTokens("GPT-5-MINI")).toBe(true);
+    expect(openaiChatUsesMaxCompletionTokens("gpt-6-astra")).toBe(true);
+    expect(openaiChatUsesMaxCompletionTokens("gpt-10")).toBe(true);
   });
 
   it("is true for o-series ids", () => {
@@ -79,6 +81,17 @@ describe("normalizeOpenAiChatMaxOutputFields", () => {
   it("maps max_tokens to max_completion_tokens for gpt-5 passthrough bodies", () => {
     const body: Record<string, unknown> = {
       model: "gpt-5.4",
+      messages: [],
+      max_tokens: 4096,
+    };
+    normalizeOpenAiChatMaxOutputFields(body);
+    expect(body.max_completion_tokens).toBe(4096);
+    expect(body.max_tokens).toBeUndefined();
+  });
+
+  it("maps max_tokens to max_completion_tokens for gpt-6 passthrough bodies", () => {
+    const body: Record<string, unknown> = {
+      model: "gpt-6-astra",
       messages: [],
       max_tokens: 4096,
     };

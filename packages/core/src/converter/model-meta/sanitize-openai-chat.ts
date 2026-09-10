@@ -42,7 +42,7 @@ export function sanitizeOpenAiChatRequestByMeta(
     data.reasoning_effort !== undefined &&
     chatRequestHasFunctionTools(data)
   ) {
-    // gpt-5 / o-series: Chat Completions rejects tools + reasoning_effort together
+    // gpt-5+ / o-series: Chat Completions rejects tools + reasoning_effort together
     // ("Please use /v1/responses instead"). Prefer keeping tools for Codex agent turns.
     delete data.reasoning_effort;
     stripped.push("reasoning_effort");
