@@ -16,6 +16,7 @@ import {
   stripBillingHeaderFromAnthropicBody,
   sanitizeAnthropicOutboundBody,
   rewriteEmbeddedModelAliasInAnthropicBody,
+  maybeUpgradeChatFunctionToolsToResponses,
   type ResponsesRequestEcho,
 } from "../../converter";
 import { looksLikeAliasWireId } from "../../shared/aliasHash";
@@ -371,12 +372,43 @@ export class BodyProcessor {
     }
 
     if (isOpenAiChatCompletionsTargetPath(routing.targetPath)) {
-      body = applyPlatformTransformsToOpenAiChatBody(
-        body,
-        routing.provider.baseUrl,
-        clientWireModel,
-        routing.provider.openaiCompat
-      );
+      // Full OpenAI upstreams (`providerType: openai`) speak Responses. Convert
+      // gpt-5.4+ / gpt-6 function-tool Chat bodies before Chat-only sanitization
+      // so reasoning_effort is not forced to none.
+      if (pt === "openai" && clientSurface === "anthropic" && body.length > 0) {
+        try {
+          const parsed = JSON.parse(body.toString("utf-8")) as Record<string, unknown>;
+          if (isOpenAIChatCompletionsRequest(parsed)) {
+            normalizeOpenAiChatMaxOutputFields(parsed, clientWireModel);
+            capOpenAiChatTools(parsed);
+            const upgraded = maybeUpgradeChatFunctionToolsToResponses(parsed);
+            if (upgraded) {
+              body = Buffer.from(JSON.stringify(upgraded.body), "utf-8");
+              routing.targetPath = upgraded.path;
+              routing.targetUrl = buildTargetUrl(
+                routing.provider.baseUrl,
+                upgraded.path,
+                routing.targetQuery
+              );
+              upstreamResponseFormat = upgraded.responseFormat;
+              log.info(
+                `[Router] Chat->Responses: path -> ${upgraded.path}, target="${routing.targetUrl}"`
+              );
+            }
+          }
+        } catch {
+          /* keep Chat */
+        }
+      }
+
+      if (isOpenAiChatCompletionsTargetPath(routing.targetPath)) {
+        body = applyPlatformTransformsToOpenAiChatBody(
+          body,
+          routing.provider.baseUrl,
+          clientWireModel,
+          routing.provider.openaiCompat
+        );
+      }
     }
 
     if (databaseEnabled && body && body.length > 0) {

@@ -12,6 +12,11 @@ import type {
   OpenAIToolChoice,
 } from "./anthropic-to-openai-chat-request";
 import { isOpenAIFunctionTool } from "./anthropic-to-openai-chat-request";
+import { resolveModelMeta } from "../model-meta/registry";
+import {
+  normalizeOpenAiChatReasoningEffort,
+  openAiChatRequestHasFunctionTools,
+} from "../model-meta/sanitize-openai-chat";
 
 export interface ChatToResponsesRequestResult {
   /** POST body for `/responses` */
@@ -86,7 +91,7 @@ function chatMessagesToResponsesInput(messages: OpenAIMessage[]): {
         input.push({
           type: "message",
           role: "assistant",
-          content: [{ type: "input_text", text }],
+          content: [{ type: "output_text", text }],
         });
       }
       continue;
@@ -181,12 +186,41 @@ export function convertOpenAIMessageRequestToResponsesRequest(
   }
 
   if (typeof chat.reasoning_effort === "string" && chat.reasoning_effort.trim() !== "") {
-    out.reasoning = { effort: chat.reasoning_effort };
+    const meta = resolveModelMeta(chat.model, { vendor: "openai" });
+    const effort = normalizeOpenAiChatReasoningEffort(chat.reasoning_effort, meta);
+    if (effort !== undefined) {
+      out.reasoning = { effort };
+    }
   }
 
   return {
     request: out,
     newPath: "/responses",
+  };
+}
+
+/**
+ * When the upstream speaks Responses, send function-tool requests for gpt-5.4+ / gpt-6
+ * to POST `/responses` so reasoning and tools can coexist.
+ */
+export function maybeUpgradeChatFunctionToolsToResponses(
+  chatBody: Record<string, unknown>
+): { body: Record<string, unknown>; path: string; responseFormat: "responses" } | null {
+  const model = typeof chatBody.model === "string" ? chatBody.model : "";
+  const meta = resolveModelMeta(model, { vendor: "openai" });
+  if (meta.openaiChat?.preferResponses !== true) {
+    return null;
+  }
+  if (!openAiChatRequestHasFunctionTools(chatBody)) {
+    return null;
+  }
+  const result = convertOpenAIMessageRequestToResponsesRequest(
+    chatBody as unknown as OpenAIMessageRequest
+  );
+  return {
+    body: result.request,
+    path: result.newPath,
+    responseFormat: "responses",
   };
 }
 

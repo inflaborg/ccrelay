@@ -29,11 +29,13 @@ describe("resolveModelMeta", () => {
     expect(meta.openaiChat?.usesMaxCompletionTokens).toBe(true);
   });
 
-  it("matches gpt-6 and later as the gpt-5 family", () => {
+  it("matches gpt-6 and later as their own family", () => {
     for (const id of ["gpt-6-astra", "gpt-6", "GPT-6.1-MINI", "gpt-10"]) {
       const meta = resolveModelMeta(id, { vendor: "openai" });
-      expect(meta.id).toBe("gpt-5");
+      expect(meta.id).toBe("gpt-6");
       expect(meta.openaiChat?.usesMaxCompletionTokens).toBe(true);
+      expect(meta.openaiChat?.preferResponses).toBe(true);
+      expect(meta.openaiChat?.validReasoningEfforts).toEqual(["low", "medium", "high", "xhigh"]);
       expect(meta.reasoning.supportsReasoningEffort).toBe(true);
     }
   });

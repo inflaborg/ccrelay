@@ -23,9 +23,18 @@ describe("sanitizeOpenAiChatRequestRecord", () => {
     expect(data.tools).toHaveLength(1);
   });
 
-  it("forces reasoning_effort none for gpt-6 tools even when the field is omitted", () => {
-    const data: Record<string, unknown> = {
+  it("maps gpt-6 none to low and does not force none when tools are present", () => {
+    const withNone: Record<string, unknown> = {
       model: "gpt-6-astra",
+      reasoning_effort: "none",
+      messages: [{ role: "user", content: "hi" }],
+    };
+    sanitizeOpenAiChatRequestRecord(withNone);
+    expect(withNone.reasoning_effort).toBe("low");
+
+    const withTools: Record<string, unknown> = {
+      model: "gpt-6-astra",
+      reasoning_effort: "high",
       tools: [
         {
           type: "function",
@@ -37,8 +46,8 @@ describe("sanitizeOpenAiChatRequestRecord", () => {
       ],
       messages: [{ role: "user", content: "?" }],
     };
-    sanitizeOpenAiChatRequestRecord(data);
-    expect(data.reasoning_effort).toBe("none");
+    sanitizeOpenAiChatRequestRecord(withTools);
+    expect(withTools.reasoning_effort).toBe("high");
   });
 
   it("keeps reasoning_effort for gpt-5 when there are no tools", () => {

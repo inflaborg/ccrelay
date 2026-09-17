@@ -74,6 +74,7 @@ export {
 export {
   convertOpenAIMessageRequestToResponsesRequest,
   convertOpenAiChatBodyBufferToResponsesRequest,
+  maybeUpgradeChatFunctionToolsToResponses,
   type ChatToResponsesRequestResult,
 } from "./adapters/openai-chat-to-responses-request";
 

@@ -46,12 +46,22 @@ export interface ModelOpenAiChatMeta {
   usesMaxCompletionTokens?: boolean;
   validReasoningEfforts?: readonly string[];
   /**
+   * Map unsupported Chat `reasoning_effort` strings onto a value in
+   * {@link validReasoningEfforts} (e.g. gpt-6 `none` → `low`).
+   */
+  reasoningEffortAliases?: Readonly<Record<string, string>>;
+  /**
    * OpenAI Chat Completions rejects function tools with `reasoning_effort` other than
-   * `none` for gpt-5.4+ / gpt-6 / o-series; Responses API still accepts both.
+   * `none` for gpt-5.4 / o-series; Responses API still accepts both.
    * When true, force `reasoning_effort` to `none` if the request includes function tools
-   * (omitting the field is not enough — those models default to a non-none effort).
+   * and `none` is in {@link validReasoningEfforts} **and** the upstream is Chat-only.
    */
   dropReasoningEffortWhenTools?: boolean;
+  /**
+   * When the provider speaks Responses (`providerType: openai`) and the request has
+   * function tools, send POST `/responses` instead of Chat Completions (gpt-5.4+ / gpt-6).
+   */
+  preferResponses?: boolean;
 }
 
 export interface ModelGeminiMeta {

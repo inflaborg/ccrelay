@@ -4,7 +4,7 @@ import type { ModelMeta } from "./types";
 
 const log = new ScopedLogger("ModelMeta");
 
-function chatRequestHasFunctionTools(data: Record<string, unknown>): boolean {
+export function openAiChatRequestHasFunctionTools(data: Record<string, unknown>): boolean {
   const tools = data.tools;
   if (!Array.isArray(tools) || tools.length === 0) {
     return false;
@@ -23,6 +23,61 @@ function chatRequestHasFunctionTools(data: Record<string, unknown>): boolean {
   });
 }
 
+function allowedReasoningEfforts(meta: ModelMeta): Set<string> | undefined {
+  const list = meta.openaiChat?.validReasoningEfforts;
+  if (!list || list.length === 0) {
+    return undefined;
+  }
+  return new Set(list.map(e => e.toLowerCase()));
+}
+
+/**
+ * Map a Chat Completions `reasoning_effort` onto a value the model accepts.
+ * Returns `undefined` when the field should be omitted.
+ */
+export function normalizeOpenAiChatReasoningEffort(
+  effort: string,
+  meta: ModelMeta
+): string | undefined {
+  const trimmed = effort.trim().toLowerCase();
+  if (!trimmed) {
+    return undefined;
+  }
+  const allowed = allowedReasoningEfforts(meta);
+  if (!allowed) {
+    return trimmed;
+  }
+  if (allowed.has(trimmed)) {
+    return trimmed;
+  }
+  const aliased = meta.openaiChat?.reasoningEffortAliases?.[trimmed]?.toLowerCase();
+  if (aliased && allowed.has(aliased)) {
+    return aliased;
+  }
+  return undefined;
+}
+
+function applyNormalizedReasoningEffort(
+  data: Record<string, unknown>,
+  meta: ModelMeta,
+  stripped: string[]
+): void {
+  if (typeof data.reasoning_effort !== "string") {
+    return;
+  }
+  const normalized = normalizeOpenAiChatReasoningEffort(data.reasoning_effort, meta);
+  const current = data.reasoning_effort.trim().toLowerCase();
+  if (normalized === undefined) {
+    delete data.reasoning_effort;
+    stripped.push("reasoning_effort");
+    return;
+  }
+  if (normalized !== current) {
+    data.reasoning_effort = normalized;
+    stripped.push(`reasoning_effort=${normalized}`);
+  }
+}
+
 /**
  * Strip OpenAI Chat Completions fields unsupported by the resolved model meta.
  */
@@ -33,13 +88,18 @@ export function sanitizeOpenAiChatRequestByMeta(
   const stripped: string[] = [];
   const reasoning = meta.reasoning;
   const openaiChat = meta.openaiChat;
+  const allowed = allowedReasoningEfforts(meta);
+  const noneAllowed = allowed?.has("none") === true;
 
   if (!reasoning.supportsReasoningEffort && data.reasoning_effort !== undefined) {
     delete data.reasoning_effort;
     stripped.push("reasoning_effort");
-  } else if (openaiChat?.dropReasoningEffortWhenTools && chatRequestHasFunctionTools(data)) {
-    // gpt-5.4+ / gpt-6 Chat Completions: tools only with reasoning_effort "none".
-    // Omitting the field still 400s because the model defaults to a non-none effort.
+  } else if (
+    openaiChat?.dropReasoningEffortWhenTools &&
+    noneAllowed &&
+    openAiChatRequestHasFunctionTools(data)
+  ) {
+    // gpt-5.4 / o-series Chat Completions: tools only with reasoning_effort "none".
     const current =
       typeof data.reasoning_effort === "string" ? data.reasoning_effort.trim().toLowerCase() : "";
     if (current !== "none") {
@@ -50,17 +110,8 @@ export function sanitizeOpenAiChatRequestByMeta(
       delete data.reasoning;
       stripped.push("reasoning");
     }
-  } else if (
-    openaiChat?.validReasoningEfforts &&
-    typeof data.reasoning_effort === "string" &&
-    data.reasoning_effort.trim() !== ""
-  ) {
-    const effort = data.reasoning_effort.trim().toLowerCase();
-    const allowed = new Set(openaiChat.validReasoningEfforts.map(e => e.toLowerCase()));
-    if (!allowed.has(effort)) {
-      delete data.reasoning_effort;
-      stripped.push("reasoning_effort");
-    }
+  } else {
+    applyNormalizedReasoningEffort(data, meta, stripped);
   }
 
   if (stripped.length > 0) {

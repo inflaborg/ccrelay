@@ -2,17 +2,35 @@ import { inputMetaFromModalities } from "./defaults";
 import type { ModelFamilyEntry } from "./types";
 
 const OPENAI_REASONING_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh"] as const;
+const GPT6_REASONING_EFFORTS = ["low", "medium", "high", "xhigh"] as const;
 const MULTIMODAL = inputMetaFromModalities(["text", "image"]);
 
-/** GPT-5 and later Chat Completions ids (gpt-5.4, gpt-6-astra, gpt-10, …). */
-const GPT5_PLUS_REGEX = /^gpt-(?:[5-9]|[1-9]\d+)/;
+/** GPT-6 and later (gpt-6-astra, gpt-10, …). Must be matched before gpt-5. */
+const GPT6_PLUS_REGEX = /^gpt-(?:[6-9]|[1-9]\d+)/;
+const GPT5_REGEX = /^gpt-5/;
 
 export const OPENAI_MODEL_FAMILIES: readonly ModelFamilyEntry[] = [
+  {
+    id: "gpt-6",
+    vendor: "openai",
+    match: [],
+    matchRegex: GPT6_PLUS_REGEX,
+    meta: {
+      ...MULTIMODAL,
+      reasoning: { enabled: true, supportsReasoningEffort: true },
+      openaiChat: {
+        usesMaxCompletionTokens: true,
+        validReasoningEfforts: GPT6_REASONING_EFFORTS,
+        reasoningEffortAliases: { none: "low", minimal: "low", max: "xhigh" },
+        preferResponses: true,
+      },
+    },
+  },
   {
     id: "gpt-5",
     vendor: "openai",
     match: [],
-    matchRegex: GPT5_PLUS_REGEX,
+    matchRegex: GPT5_REGEX,
     meta: {
       ...MULTIMODAL,
       reasoning: { enabled: true, supportsReasoningEffort: true },
@@ -20,6 +38,7 @@ export const OPENAI_MODEL_FAMILIES: readonly ModelFamilyEntry[] = [
         usesMaxCompletionTokens: true,
         validReasoningEfforts: OPENAI_REASONING_EFFORTS,
         dropReasoningEffortWhenTools: true,
+        preferResponses: true,
       },
     },
   },
@@ -35,6 +54,7 @@ export const OPENAI_MODEL_FAMILIES: readonly ModelFamilyEntry[] = [
         usesMaxCompletionTokens: true,
         validReasoningEfforts: OPENAI_REASONING_EFFORTS,
         dropReasoningEffortWhenTools: true,
+        preferResponses: true,
       },
     },
   },

@@ -33,8 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Protocol/Conversion**
 
-- OpenAI Chat Completions maps `max_tokens` to `max_completion_tokens` for gpt-6 and later (same gpt-5 family rules).
-- OpenAI Chat Completions with function tools forces `reasoning_effort` to `none` for gpt-5.4+ / gpt-6 (omitting the field still uses a default effort and is rejected).
+- OpenAI Chat Completions maps `max_tokens` to `max_completion_tokens` for gpt-6 and later.
+- gpt-5.4+ / gpt-6 function tools use `/v1/responses` when the provider is full OpenAI (`providerType: openai`), keeping reasoning. Chat-only upstreams stay on Chat Completions: gpt-5 forces `reasoning_effort` to `none`; gpt-6 remaps `none`/`minimal` to `low` (it does not accept `none`).
 - Cap OpenAI Chat Completions `tools` at 128 (API hard limit) on every Chat upstream path, including passthrough and cross-protocol conversion.
 - Claude Code mid-conversation system reminders keep their original order when forwarded to OpenAI Chat by merging into the adjacent user or tool message.
 - Anthropic deferred tools (ToolSearch / `defer_loading`) are stripped for OpenRouter stealth models and other unrecognized ids. Gateways that are not first-party Anthropic reject that feature.

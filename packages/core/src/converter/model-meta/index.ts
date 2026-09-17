@@ -26,6 +26,8 @@ export {
   sanitizeAnthropicRequestRecord,
 } from "./sanitize-anthropic";
 export {
+  normalizeOpenAiChatReasoningEffort,
+  openAiChatRequestHasFunctionTools,
   sanitizeOpenAiChatRequestByMeta,
   sanitizeOpenAiChatRequestRecord,
 } from "./sanitize-openai-chat";
