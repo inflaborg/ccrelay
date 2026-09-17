@@ -786,6 +786,29 @@ describe("converter: anthropic-to-openai-chat-request", () => {
       });
     });
 
+    it("maps hosted web_search tool_choice to { type: 'web_search' }, not function", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 4096,
+        tool_choice: { type: "tool", name: "web_search" },
+        tools: [
+          {
+            type: "web_search_20250305",
+            name: "web_search",
+            allowed_domains: [],
+            blocked_domains: [],
+            max_uses: 8,
+          },
+        ],
+        messages: [{ role: "user", content: "search" }],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.tools?.[0]).toMatchObject({ type: "web_search" });
+      expect(result.request.tool_choice).toEqual({ type: "web_search" });
+    });
+
     it("preserves tool_choice when only hosted/server tools exist", () => {
       const request: AnthropicMessageRequest = {
         model: "claude-3-5-sonnet-20241022",

@@ -78,7 +78,8 @@ function toolDisplayName(tool: Record<string, unknown>): string {
 
 function normalizeToolChoiceAfterDrop(
   toolChoice: unknown,
-  keptFunctionNames: Set<string>
+  keptFunctionNames: Set<string>,
+  keptTypes: Set<string>
 ): unknown {
   if (toolChoice === undefined || toolChoice === null) {
     return toolChoice;
@@ -102,6 +103,9 @@ function normalizeToolChoiceAfterDrop(
     if (keptFunctionNames.has(fnName)) {
       return { type: "function", function: { name: fnName } };
     }
+    return "auto";
+  }
+  if (tcType && tcType !== "function" && tcType !== "custom" && !keptTypes.has(tcType)) {
     return "auto";
   }
   return toolChoice;
@@ -128,6 +132,7 @@ export function openaiChatStrictToolsSanitize(
   const keeplist = new Set<string>(["function", ...Object.keys(rule.tools ?? {})]);
   const kept: Record<string, unknown>[] = [];
   const keptFunctionNames = new Set<string>();
+  const keptTypes = new Set<string>();
 
   for (const entry of rawTools) {
     if (!entry || typeof entry !== "object") {
@@ -140,6 +145,7 @@ export function openaiChatStrictToolsSanitize(
       kept.push(tool);
       const fnName = (tool.function as Record<string, unknown>).name as string;
       keptFunctionNames.add(fnName);
+      keptTypes.add("function");
       continue;
     }
 
@@ -152,6 +158,7 @@ export function openaiChatStrictToolsSanitize(
 
     if (keeplist.has(typ)) {
       kept.push(tool);
+      keptTypes.add(typ);
       const name = toolDisplayName(tool);
       if (name) {
         keptFunctionNames.add(name);
@@ -170,7 +177,7 @@ export function openaiChatStrictToolsSanitize(
   }
 
   if (body.tool_choice !== undefined) {
-    body.tool_choice = normalizeToolChoiceAfterDrop(body.tool_choice, keptFunctionNames);
+    body.tool_choice = normalizeToolChoiceAfterDrop(body.tool_choice, keptFunctionNames, keptTypes);
   }
 }
 
@@ -197,14 +204,19 @@ export function capOpenAiChatTools(
   }
 
   const keptFunctionNames = new Set<string>();
+  const keptTypes = new Set<string>();
   for (const entry of kept) {
     if (!entry || typeof entry !== "object") {
       continue;
+    }
+    const typ = typeof entry.type === "string" ? entry.type : "";
+    if (typ) {
+      keptTypes.add(typ);
     }
     const name = toolDisplayName(entry);
     if (name) {
       keptFunctionNames.add(name);
     }
   }
-  body.tool_choice = normalizeToolChoiceAfterDrop(body.tool_choice, keptFunctionNames);
+  body.tool_choice = normalizeToolChoiceAfterDrop(body.tool_choice, keptFunctionNames, keptTypes);
 }

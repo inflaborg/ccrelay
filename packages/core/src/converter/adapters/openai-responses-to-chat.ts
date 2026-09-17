@@ -298,6 +298,8 @@ function mapResponsesToolChoice(tc: unknown): OpenAIToolChoice | undefined {
       if (n) {
         return { type: "function", function: { name: n } };
       }
+    } else if (typeof t === "string" && t.length > 0) {
+      return { type: t };
     }
   }
   return undefined;

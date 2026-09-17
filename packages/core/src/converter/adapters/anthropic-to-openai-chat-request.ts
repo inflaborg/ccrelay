@@ -17,7 +17,10 @@ import {
 } from "../../types";
 import { assignOpenAiChatMaxOutput } from "../rules/openai-chat-model-rules";
 import { mapAnthropicWirePathToOpenAiUpstream } from "../paths";
-import { anthropicServerToolDefToOpenAIHosted } from "../tool-schema-conversion";
+import {
+  anthropicServerToolDefToOpenAIHosted,
+  hostedChatTypeForToolChoiceName,
+} from "../tool-schema-conversion";
 
 /**
  * Claude Code mid-conversation system/developer reminder (Messages API beta).
@@ -94,6 +97,7 @@ export interface OpenAIMessageRequest {
   tools?: OpenAITool[];
   tool_choice?: OpenAIToolChoice;
   stop?: string | string[];
+  parallel_tool_calls?: boolean;
   /** Chat Completions wire: top-level string (OpenAI / Azure / Gemini compat). */
   reasoning_effort?: string;
 }
@@ -134,6 +138,7 @@ export interface OpenAIImageContent {
   type: "image_url";
   image_url: {
     url: string;
+    detail?: string;
   };
   media_type?: string;
 }
@@ -147,6 +152,7 @@ export interface OpenAIFunctionTool {
     name: string;
     description?: string;
     parameters: Record<string, unknown>;
+    strict?: boolean;
   };
 }
 
@@ -167,11 +173,25 @@ export function isOpenAIFunctionTool(t: OpenAITool): t is OpenAIFunctionTool {
 /**
  * OpenAI tool choice
  */
+export type OpenAIFunctionToolChoice = { type: "function"; function: { name: string } };
+
+/** Hosted tool_choice, e.g. `{ type: "web_search" }`. */
+export type OpenAIHostedToolChoice = { type: string };
+
 export type OpenAIToolChoice =
   | "auto"
   | "none"
   | "required"
-  | { type: "function"; function: { name: string } };
+  | OpenAIFunctionToolChoice
+  | OpenAIHostedToolChoice;
+
+export function isOpenAIFunctionToolChoice(tc: OpenAIToolChoice): tc is OpenAIFunctionToolChoice {
+  if (typeof tc !== "object" || tc === null || tc.type !== "function") {
+    return false;
+  }
+  const fn = (tc as OpenAIFunctionToolChoice).function;
+  return typeof fn?.name === "string" && fn.name.length > 0;
+}
 
 /**
  * OpenAI tool call in assistant message
@@ -291,7 +311,10 @@ export function convertRequestToOpenAI(
 
   // tool_choice (when any converted tools exist)
   if (anthropic.tool_choice && openai.tools && openai.tools.length > 0) {
-    openai.tool_choice = convertToolChoice(anthropic.tool_choice);
+    openai.tool_choice = convertToolChoice(anthropic.tool_choice, openai.tools);
+    if (anthropic.tool_choice.type !== "none" && anthropic.tool_choice.disable_parallel_tool_use) {
+      openai.parallel_tool_calls = false;
+    }
   }
 
   // stop_sequences -> stop
@@ -688,10 +711,15 @@ function convertTools(
 }
 
 /**
- * Convert tool_choice from Anthropic to OpenAI format
+ * Convert tool_choice from Anthropic to OpenAI format.
+ * Hosted tools (`web_search`, `code_interpreter`, …) must not be emitted as `function`.
  */
-function convertToolChoice(choice: AnthropicToolChoice): OpenAIToolChoice {
+function convertToolChoice(choice: AnthropicToolChoice, tools: OpenAITool[]): OpenAIToolChoice {
   if (choice.type === "tool" && choice.name) {
+    const hostedType = hostedChatTypeForToolChoiceName(choice.name, tools);
+    if (hostedType) {
+      return { type: hostedType };
+    }
     return {
       type: "function",
       function: {

@@ -11,12 +11,16 @@ import type {
   OpenAITool,
   OpenAIToolChoice,
 } from "./anthropic-to-openai-chat-request";
-import { isOpenAIFunctionTool } from "./anthropic-to-openai-chat-request";
+import {
+  isOpenAIFunctionTool,
+  isOpenAIFunctionToolChoice,
+} from "./anthropic-to-openai-chat-request";
 import { resolveModelMeta } from "../model-meta/registry";
 import {
   normalizeOpenAiChatReasoningEffort,
   openAiChatRequestHasFunctionTools,
 } from "../model-meta/sanitize-openai-chat";
+import { hostedChatTypeForToolChoiceName } from "../tool-schema-conversion";
 
 export interface ChatToResponsesRequestResult {
   /** POST body for `/responses` */
@@ -45,6 +49,66 @@ function messageTextContent(msg: OpenAIMessage): string {
   return parts.join("\n");
 }
 
+function imageUrlFromChatPart(block: {
+  type?: string;
+  image_url?: string | { url?: string; detail?: string };
+}): { url: string; detail?: string } | undefined {
+  if (block.type !== "image_url") {
+    return undefined;
+  }
+  if (typeof block.image_url === "string" && block.image_url.length > 0) {
+    return { url: block.image_url };
+  }
+  if (
+    block.image_url &&
+    typeof block.image_url === "object" &&
+    typeof block.image_url.url === "string" &&
+    block.image_url.url.length > 0
+  ) {
+    const detail =
+      typeof block.image_url.detail === "string" && block.image_url.detail.length > 0
+        ? block.image_url.detail
+        : undefined;
+    return { url: block.image_url.url, ...(detail ? { detail } : {}) };
+  }
+  return undefined;
+}
+
+/** User Chat content → Responses `input_text` / `input_image` parts. */
+function userMessageToResponsesContent(msg: OpenAIMessage): unknown[] {
+  const c = msg.content;
+  if (typeof c === "string") {
+    return c.length > 0 ? [{ type: "input_text", text: c }] : [];
+  }
+  if (!Array.isArray(c)) {
+    return [];
+  }
+  const parts: unknown[] = [];
+  for (const block of c) {
+    if (!block || typeof block !== "object") {
+      continue;
+    }
+    const b = block as {
+      type?: string;
+      text?: string;
+      image_url?: string | { url?: string; detail?: string };
+    };
+    if (b.type === "text" && typeof b.text === "string" && b.text.length > 0) {
+      parts.push({ type: "input_text", text: b.text });
+      continue;
+    }
+    const image = imageUrlFromChatPart(b);
+    if (image) {
+      parts.push({
+        type: "input_image",
+        image_url: image.url,
+        ...(image.detail ? { detail: image.detail } : {}),
+      });
+    }
+  }
+  return parts;
+}
+
 function chatMessagesToResponsesInput(messages: OpenAIMessage[]): {
   instructions?: string;
   input: unknown[];
@@ -62,12 +126,12 @@ function chatMessagesToResponsesInput(messages: OpenAIMessage[]): {
     }
 
     if (msg.role === "user") {
-      const text = messageTextContent(msg);
-      if (text.length > 0) {
+      const content = userMessageToResponsesContent(msg);
+      if (content.length > 0) {
         input.push({
           type: "message",
           role: "user",
-          content: [{ type: "input_text", text }],
+          content,
         });
       }
       continue;
@@ -75,15 +139,27 @@ function chatMessagesToResponsesInput(messages: OpenAIMessage[]): {
 
     if (msg.role === "assistant") {
       const text = messageTextContent(msg);
+      const reasoningText =
+        typeof msg.reasoning_content === "string" && msg.reasoning_content.length > 0
+          ? msg.reasoning_content
+          : typeof msg.thinking?.content === "string" && msg.thinking.content.length > 0
+            ? msg.thinking.content
+            : undefined;
+      if (reasoningText) {
+        input.push({
+          type: "reasoning",
+          summary: [{ type: "summary_text", text: reasoningText }],
+        });
+      }
       const toolCalls = msg.tool_calls;
       if (toolCalls && toolCalls.length > 0) {
         for (const tc of toolCalls) {
+          // Responses item `id` must be `fc_*`; Chat uses `call_*`. Pairing is `call_id`.
           input.push({
             type: "function_call",
             name: tc.function.name,
             arguments: tc.function.arguments,
             call_id: tc.id,
-            id: tc.id,
           });
         }
       }
@@ -114,29 +190,51 @@ function chatMessagesToResponsesInput(messages: OpenAIMessage[]): {
 
 function mapChatToolToResponsesTool(tool: OpenAITool): Record<string, unknown> {
   if (isOpenAIFunctionTool(tool)) {
-    return {
-      type: "function",
-      name: tool.function.name,
-      description: tool.function.description,
-      parameters: tool.function.parameters ?? { type: "object", properties: {} },
+    const fn = tool.function as {
+      name: string;
+      description?: string;
+      parameters?: Record<string, unknown>;
+      strict?: boolean;
     };
+    const out: Record<string, unknown> = {
+      type: "function",
+      name: fn.name,
+      parameters: fn.parameters ?? { type: "object", properties: {} },
+    };
+    if (typeof fn.description === "string" && fn.description.length > 0) {
+      out.description = fn.description;
+    }
+    if (typeof fn.strict === "boolean") {
+      out.strict = fn.strict;
+    }
+    return out;
   }
   const { type, ...rest } = tool as Record<string, unknown>;
   return { type, ...rest };
 }
 
-function mapChatToolChoiceToResponses(tc: OpenAIToolChoice | undefined): unknown {
+function mapChatToolChoiceToResponses(
+  tc: OpenAIToolChoice | undefined,
+  tools: OpenAITool[] | undefined
+): unknown {
   if (tc === undefined) {
     return undefined;
   }
   if (tc === "auto" || tc === "none" || tc === "required") {
     return tc;
   }
-  if (typeof tc === "object" && tc !== null && "type" in tc && tc.type === "function") {
+  if (isOpenAIFunctionToolChoice(tc)) {
+    const hostedType = hostedChatTypeForToolChoiceName(tc.function.name, tools);
+    if (hostedType) {
+      return { type: hostedType };
+    }
     return {
       type: "function",
       name: tc.function.name,
     };
+  }
+  if (typeof tc === "object" && typeof tc.type === "string" && tc.type.length > 0) {
+    return { type: tc.type };
   }
   return tc;
 }
@@ -180,9 +278,13 @@ export function convertOpenAIMessageRequestToResponsesRequest(
   if (chat.tools && chat.tools.length > 0) {
     out.tools = chat.tools.map(t => mapChatToolToResponsesTool(t));
   }
-  const mappedChoice = mapChatToolChoiceToResponses(chat.tool_choice);
+  const mappedChoice = mapChatToolChoiceToResponses(chat.tool_choice, chat.tools);
   if (mappedChoice !== undefined) {
     out.tool_choice = mappedChoice;
+  }
+
+  if (typeof chat.parallel_tool_calls === "boolean") {
+    out.parallel_tool_calls = chat.parallel_tool_calls;
   }
 
   if (typeof chat.reasoning_effort === "string" && chat.reasoning_effort.trim() !== "") {
@@ -200,18 +302,17 @@ export function convertOpenAIMessageRequestToResponsesRequest(
 }
 
 /**
- * When the upstream speaks Responses, send function-tool requests for gpt-5.4+ / gpt-6
- * to POST `/responses` so reasoning and tools can coexist.
+ * When the upstream speaks Responses, send function-tool or hosted-tool Chat bodies
+ * (gpt-5.4+ / gpt-6, and any hosted web_search) to POST `/responses`.
  */
 export function maybeUpgradeChatFunctionToolsToResponses(
   chatBody: Record<string, unknown>
 ): { body: Record<string, unknown>; path: string; responseFormat: "responses" } | null {
   const model = typeof chatBody.model === "string" ? chatBody.model : "";
   const meta = resolveModelMeta(model, { vendor: "openai" });
-  if (meta.openaiChat?.preferResponses !== true) {
-    return null;
-  }
-  if (!openAiChatRequestHasFunctionTools(chatBody)) {
+  const hasFunctionTools = openAiChatRequestHasFunctionTools(chatBody);
+  const hasHostedTools = chatRequestHasHostedTools(chatBody);
+  if (!hasHostedTools && (meta.openaiChat?.preferResponses !== true || !hasFunctionTools)) {
     return null;
   }
   const result = convertOpenAIMessageRequestToResponsesRequest(
@@ -222,6 +323,20 @@ export function maybeUpgradeChatFunctionToolsToResponses(
     path: result.newPath,
     responseFormat: "responses",
   };
+}
+
+function chatRequestHasHostedTools(data: Record<string, unknown>): boolean {
+  const tools = data.tools;
+  if (!Array.isArray(tools) || tools.length === 0) {
+    return false;
+  }
+  return tools.some(t => {
+    if (!t || typeof t !== "object") {
+      return false;
+    }
+    const typ = (t as { type?: unknown }).type;
+    return typeof typ === "string" && typ.length > 0 && typ !== "function";
+  });
 }
 
 /**

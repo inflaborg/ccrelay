@@ -101,6 +101,88 @@ describe("BodyProcessor Responses vs Chat-only for gpt-5/gpt-6 tools", () => {
     expect(parsed.input).toBeUndefined();
   });
 
+  it("forwards Anthropic user images as Responses input_image on gpt-6 tools", () => {
+    const routing = makeRouting(openai);
+    const body = Buffer.from(
+      JSON.stringify({
+        model: "gpt-6-astra",
+        max_tokens: 1024,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "" },
+              {
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: "image/jpeg",
+                  data: "abc",
+                },
+              },
+            ],
+          },
+          { role: "user", content: "what is this" },
+        ],
+        tools: [
+          {
+            name: "exec_command",
+            description: "Run a command",
+            input_schema: { type: "object", properties: {} },
+          },
+        ],
+      }),
+      "utf-8"
+    );
+    const out = new BodyProcessor().process(body, routing, false);
+    expect(out.upstreamResponseFormat).toBe("responses");
+    const parsed = JSON.parse(out.body.toString("utf-8")) as {
+      input: { role?: string; content?: { type?: string; image_url?: string; text?: string }[] }[];
+    };
+    expect(parsed.input[0]).toEqual({
+      type: "message",
+      role: "user",
+      content: [{ type: "input_image", image_url: "data:image/jpeg;base64,abc" }],
+    });
+    expect(parsed.input[1]?.content?.[0]).toEqual({ type: "input_text", text: "what is this" });
+  });
+
+  it("sends Anthropic hosted web_search tool_choice to Responses as type web_search", () => {
+    const routing = makeRouting(openai);
+    const body = Buffer.from(
+      JSON.stringify({
+        model: "gpt-6-astra",
+        max_tokens: 64000,
+        thinking: { type: "disabled" },
+        output_config: { effort: "medium" },
+        messages: [
+          {
+            role: "user",
+            content: [{ type: "text", text: "Perform a web search for the query: test" }],
+          },
+        ],
+        tools: [
+          {
+            type: "web_search_20250305",
+            name: "web_search",
+            allowed_domains: [],
+            blocked_domains: [],
+            max_uses: 8,
+          },
+        ],
+        tool_choice: { type: "tool", name: "web_search" },
+      }),
+      "utf-8"
+    );
+    const out = new BodyProcessor().process(body, routing, false);
+    expect(out.upstreamResponseFormat).toBe("responses");
+    expect(routing.targetPath).toBe("/responses");
+    const parsed = JSON.parse(out.body.toString("utf-8")) as Record<string, unknown>;
+    expect(parsed.tool_choice).toEqual({ type: "web_search" });
+    expect((parsed.tools as { type?: string }[])[0]?.type).toBe("web_search");
+    expect(parsed.reasoning).toBeUndefined();
+  });
+
   it("keeps Chat Completions on openai_chat and forces reasoning_effort none for gpt-5.4 tools", () => {
     const routing = makeRouting(openaiChatOnly);
     const out = new BodyProcessor().process(anthropicBody("gpt-5.4"), routing, false);

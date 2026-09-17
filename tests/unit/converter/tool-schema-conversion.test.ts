@@ -4,6 +4,7 @@ import { describe, it, expect } from "vitest";
 import {
   normalizeToolForProvider,
   anthropicServerToolDefToOpenAIHosted,
+  hostedChatTypeForToolChoiceName,
 } from "@/converter/tool-schema-conversion";
 
 const GLM_BASE = "https://api.z.ai/";
@@ -55,5 +56,21 @@ describe("anthropicServerToolDefToOpenAIHosted", () => {
       type: "web_search",
       max_uses: 9,
     });
+  });
+});
+
+describe("hostedChatTypeForToolChoiceName", () => {
+  it("returns web_search for hosted tools and not for a same-named function", () => {
+    expect(
+      hostedChatTypeForToolChoiceName("web_search", [{ type: "web_search", max_uses: 8 }])
+    ).toBe("web_search");
+    expect(
+      hostedChatTypeForToolChoiceName("web_search", [
+        {
+          type: "function",
+          function: { name: "web_search", parameters: { type: "object", properties: {} } },
+        },
+      ])
+    ).toBeUndefined();
   });
 });

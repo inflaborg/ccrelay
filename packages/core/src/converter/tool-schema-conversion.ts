@@ -71,6 +71,51 @@ export function anthropicServerToolDefToOpenAIHosted(
   return normalizeToolForProvider(raw, providerBaseUrl ?? "");
 }
 
+/**
+ * If `name` refers to a hosted Chat/Responses tool in `tools` (and not a function of
+ * the same name), return that hosted `type` for `tool_choice` (e.g. `web_search`).
+ */
+export function hostedChatTypeForToolChoiceName(
+  name: string,
+  tools: readonly unknown[] | undefined
+): string | undefined {
+  if (!name || !Array.isArray(tools) || tools.length === 0) {
+    return undefined;
+  }
+  const lower = name.toLowerCase();
+  let hostedType: string | undefined;
+  for (const t of tools) {
+    if (!t || typeof t !== "object") {
+      continue;
+    }
+    const o = t as Record<string, unknown>;
+    if (o.type === "function") {
+      const fn = o.function;
+      const fnName =
+        fn && typeof fn === "object" && typeof (fn as { name?: unknown }).name === "string"
+          ? (fn as { name: string }).name
+          : undefined;
+      if (fnName === name) {
+        return undefined;
+      }
+      continue;
+    }
+    const typ = typeof o.type === "string" ? o.type : "";
+    if (!typ) {
+      continue;
+    }
+    if (typ === name || typ.toLowerCase() === lower) {
+      hostedType = typ;
+      continue;
+    }
+    const mapped = CHAT_HOSTED_TOOL_TO_ANTHROPIC[typ];
+    if (mapped && (mapped.name === name || mapped.name.toLowerCase() === lower)) {
+      hostedType = typ;
+    }
+  }
+  return hostedType;
+}
+
 /** Map Chat-hosted `type` + extra fields → Anthropic `AnthropicServerToolDef`. */
 export function openAIHostedToolToAnthropicServerToolDef(
   tool: Record<string, unknown>

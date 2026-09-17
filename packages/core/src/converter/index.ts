@@ -99,6 +99,7 @@ export {
   anthropicToolBaseToChatHostedType,
   CHAT_HOSTED_TOOL_TO_ANTHROPIC,
   anthropicServerToolDefToOpenAIHosted,
+  hostedChatTypeForToolChoiceName,
   openAIHostedToolToAnthropicServerToolDef,
   normalizeToolForProvider,
   normalizeToolsForProvider,
