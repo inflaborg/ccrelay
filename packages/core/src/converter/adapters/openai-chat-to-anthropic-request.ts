@@ -16,7 +16,10 @@ import {
   type OpenAITool,
 } from "./anthropic-to-openai-chat-request";
 import { mapOpenAiWirePathToAnthropicUpstream } from "../paths";
-import { openAIHostedToolToAnthropicServerToolDef } from "../tool-schema-conversion";
+import {
+  CHAT_HOSTED_TOOL_TO_ANTHROPIC,
+  openAIHostedToolToAnthropicServerToolDef,
+} from "../tool-schema-conversion";
 import { resolveModelMeta } from "../model-meta/registry";
 
 export interface OpenAIToAnthropicRequestResult {
@@ -354,6 +357,10 @@ function convertToolChoiceFromOpenAI(
     const o = choice as { type: string; function?: { name: string } };
     if (o.type === "function" && o.function?.name) {
       return { type: "tool", name: o.function.name };
+    }
+    if (typeof o.type === "string" && o.type.length > 0 && o.type !== "function") {
+      const mapped = CHAT_HOSTED_TOOL_TO_ANTHROPIC[o.type];
+      return { type: "tool", name: mapped?.name ?? o.type };
     }
   }
   return { type: "auto" };
