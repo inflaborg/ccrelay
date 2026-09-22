@@ -13,7 +13,8 @@ export interface SmartRoutingModelRuleMatch {
 export function matchSmartRoutingModelRules(
   model: string,
   rules: SmartRoutingModelRule[] | undefined,
-  getProvider: (providerId: string) => Provider | undefined
+  getProvider: (providerId: string) => Provider | undefined,
+  allowTarget?: (match: SmartRoutingModelRuleMatch) => boolean
 ): SmartRoutingModelRuleMatch | null {
   if (!rules?.length) {
     return null;
@@ -35,7 +36,11 @@ export function matchSmartRoutingModelRules(
     if (!provider || provider.enabled === false) {
       continue;
     }
-    return { providerId: rule.provider, upstreamModelId: rule.model };
+    const match = { providerId: rule.provider, upstreamModelId: rule.model };
+    if (allowTarget && !allowTarget(match)) {
+      continue;
+    }
+    return match;
   }
 
   return null;

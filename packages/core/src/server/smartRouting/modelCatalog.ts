@@ -188,11 +188,19 @@ export class ModelCatalog {
         return null;
       }
       const publicId = buildPublicModelId(providerId, upstreamModelId);
-      return this.publicIdIndex.get(publicId) ?? null;
+      const entry = this.publicIdIndex.get(publicId);
+      if (!entry || !this.isEntryVisible(entry)) {
+        return null;
+      }
+      return entry;
     }
 
     if (looksLikeAliasWireId(trimmed, this.smartRouting.aliasPrefix)) {
-      return this.aliasIndex.get(trimmed) ?? null;
+      const entry = this.aliasIndex.get(trimmed);
+      if (!entry || !this.isEntryVisible(entry)) {
+        return null;
+      }
+      return entry;
     }
 
     if (this.smartRouting.bareModelFallback.mode === "first-match") {
@@ -200,6 +208,54 @@ export class ModelCatalog {
     }
 
     return null;
+  }
+
+  /**
+   * True when this provider+model is in the catalog and filtered out by include/exclude.
+   * Unknown ids (not in the catalog) are not excluded.
+   */
+  isExcludedTarget(providerId: string, upstreamModelId: string): boolean {
+    const entry = this.publicIdIndex.get(buildPublicModelId(providerId, upstreamModelId));
+    return !!entry && !this.isEntryVisible(entry);
+  }
+
+  /**
+   * True when the client wire id names a catalog entry that fails include/exclude.
+   * A bare id is excluded only when every provider copy is filtered out.
+   */
+  isExcludedWireId(model: string): boolean {
+    const trimmed = model.trim();
+    if (!trimmed) {
+      return false;
+    }
+
+    const colon = trimmed.indexOf(":");
+    if (colon > 0) {
+      const providerId = trimmed.slice(0, colon);
+      const upstreamModelId = trimmed.slice(colon + 1);
+      if (!upstreamModelId) {
+        return false;
+      }
+      return this.isExcludedTarget(providerId, upstreamModelId);
+    }
+
+    if (looksLikeAliasWireId(trimmed, this.smartRouting.aliasPrefix)) {
+      const entry = this.aliasIndex.get(trimmed);
+      return !!entry && !this.isEntryVisible(entry);
+    }
+
+    let any = false;
+    for (const provider of this.enabledProvidersInOrder()) {
+      const hit = this.publicIdIndex.get(buildPublicModelId(provider.id, trimmed));
+      if (!hit) {
+        continue;
+      }
+      any = true;
+      if (this.isEntryVisible(hit)) {
+        return false;
+      }
+    }
+    return any;
   }
 
   private async doRefreshAll(): Promise<void> {

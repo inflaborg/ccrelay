@@ -171,6 +171,50 @@ describe("ModelCatalog", () => {
         .map(e => e.publicId)
         .sort()
     ).toEqual(["cn:glm-5.1", "cn:glm-5.2"]);
+    expect(catalog.resolveModelWireId("cn:glm-5.1")).toBeNull();
+    expect(catalog.resolveModelWireId("glm-5.1")).toBeNull();
+    expect(catalog.isExcludedWireId("cn:glm-5.1")).toBe(true);
+    expect(catalog.isExcludedWireId("glm-5.1")).toBe(true);
+    expect(catalog.resolveModelWireId("glm-5.2")?.upstreamModelId).toBe("glm-5.2");
+    const alias = catalog.getManageableEntries().find(e => e.publicId === "cn:glm-5.1")?.aliasHash;
+    expect(alias).toBeDefined();
+    expect(catalog.resolveModelWireId(alias!)).toBeNull();
+    expect(catalog.isExcludedWireId(alias!)).toBe(true);
+  });
+
+  it("bare id skips excluded copies and uses the next visible provider", async () => {
+    const providers = {
+      cn: {
+        id: "cn",
+        name: "CN",
+        baseUrl: "https://cn.example.com",
+        mode: "inject" as const,
+        providerType: "anthropic" as const,
+        enabled: true,
+        useCustomModelsList: true,
+        customModelsList: ["glm-5.1"],
+      },
+      global: {
+        id: "global",
+        name: "Global",
+        baseUrl: "https://global.example.com",
+        mode: "inject" as const,
+        providerType: "anthropic" as const,
+        enabled: true,
+        useCustomModelsList: true,
+        customModelsList: ["glm-5.1"],
+      },
+    };
+    const manager = mockConfig(providers);
+    manager.configValue.smartRouting = {
+      ...manager.configValue.smartRouting!,
+      exclude: ["cn:glm-5.1"],
+    };
+    const catalog = new ModelCatalog(manager);
+    await catalog.refreshAll();
+    expect(catalog.resolveModelWireId("glm-5.1")?.providerId).toBe("global");
+    expect(catalog.resolveModelWireId("cn:glm-5.1")).toBeNull();
+    expect(catalog.isExcludedWireId("glm-5.1")).toBe(false);
   });
 
   it("includes official provider when not in passthrough mode", async () => {

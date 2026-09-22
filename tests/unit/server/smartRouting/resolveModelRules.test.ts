@@ -70,4 +70,22 @@ describe("matchSmartRoutingModelRules", () => {
   it("returns null when nothing matches", () => {
     expect(matchSmartRoutingModelRules("unknown", rules, getProvider)).toBeNull();
   });
+
+  it("skips targets rejected by allowTarget and continues", () => {
+    expect(
+      matchSmartRoutingModelRules("gpt-foo", rules, getProvider, match => match.providerId !== "b")
+    ).toBeNull();
+    const withFallback: SmartRoutingModelRule[] = [
+      { pattern: "gpt-*", provider: "b", model: "gpt-4o" },
+      { pattern: "gpt-*", provider: "a", model: "fallback" },
+    ];
+    expect(
+      matchSmartRoutingModelRules(
+        "gpt-foo",
+        withFallback,
+        getProvider,
+        match => match.providerId !== "b"
+      )
+    ).toEqual({ providerId: "a", upstreamModelId: "fallback" });
+  });
 });
