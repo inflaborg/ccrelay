@@ -505,7 +505,7 @@ Use the **Smart Routing** tab for settings (alias prefix, bare model id fallback
 | -------------------------------- | --------------- | ---------------------------------------------------------------------------------------------- |
 | `smartRouting.enabled`           | `false`         | Enable on the Providers tab. Aggregate provider models and route by `<providerId>:<modelId>`   |
 | `smartRouting.aliasPrefix`       | `"claude-"`     | Prefix for canonical alias ids (`claude-{8 hex}`) when client sends `x-ccrelay-model-alias`       |
-| `smartRouting.exclude`           | —               | Wildcard list of public model ids to hide from `/v1/models`                                    |
+| `smartRouting.exclude`           | —               | Wildcard list of public model ids left out of `/v1/models` and not routed. Requests that would use an excluded id are rejected |
 | `smartRouting.include`           | —               | When set, only matching public ids are exposed (mutually exclusive with exclude)               |
 | `smartRouting.modelsCache.ttlSeconds` | `600`      | Upstream models list cache TTL for non-custom providers                                        |
 | `smartRouting.bareModelFallback.mode` | `first-match` | When client sends a bare model id (no prefix), match first provider in YAML order or reject |

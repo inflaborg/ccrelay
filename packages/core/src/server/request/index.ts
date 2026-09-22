@@ -241,6 +241,17 @@ export class RequestHandler {
     // Stage 3: Body processing - smart routing, model mapping, protocol conversion
     const clientBody = rawBody;
     const smartRouted = this.smartRoutingStage.process(routing, rawBody);
+    if (smartRouted.rejected) {
+      const writer = new ResponseWriter(res);
+      writer.writeRaw(
+        smartRouted.rejected.statusCode,
+        // HTTP header name
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        { "Content-Type": "application/json" },
+        smartRouted.rejected.body
+      );
+      return;
+    }
     const bodyResult = this.bodyProcessor.process(
       smartRouted.body,
       smartRouted.routing,

@@ -506,7 +506,7 @@ CCRelay 使用 `~/.ccrelay/config.yaml`（首次启动时自动创建）。启�
 | ------------------------------------- | --------------- | ------------------------------------------------------------------------------------ |
 | `smartRouting.enabled`                | `false`         | 在供应商页面启用。聚合各 provider 模型，按 `<providerId>:<modelId>` 路由             |
 | `smartRouting.aliasPrefix`            | `"claude-"`     | canonical alias id 前缀（客户端带 `x-ccrelay-model-alias` 时返回 `claude-{8 hex}`）     |
-| `smartRouting.exclude`                | —               | 从 `/v1/models` 隐藏的 public id 通配符列表                                          |
+| `smartRouting.exclude`                | —               | 从 `/v1/models` 隐藏、且不参与路由的 public id 通配符列表。命中被排除的 id 时请求会被拒绝 |
 | `smartRouting.include`                | —               | 白名单（与 exclude 互斥）                                                            |
 | `smartRouting.modelsCache.ttlSeconds` | `600`           | 非自定义 models list 的上游缓存 TTL（秒）                                            |
 | `smartRouting.bareModelFallback.mode` | `first-match`   | 裸 model id（无前缀）时按 provider 排序首个匹配，或 reject                           |

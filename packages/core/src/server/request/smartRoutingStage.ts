@@ -1,3 +1,4 @@
+import type { ApiSurface } from "../../types";
 import type { ConfigManager } from "../../config";
 import type { Router } from "../router";
 import type { RoutingContext } from "./context";
@@ -8,6 +9,7 @@ import {
   isModelsListUpstreamPath,
   isModelDetailUpstreamPath,
 } from "../../converter/models-fallback";
+import { containsImageContent, mappedModelId } from "./modelMapping";
 import { ScopedLogger } from "../../utils/logger";
 
 const log = new ScopedLogger("SmartRoutingStage");
@@ -37,6 +39,54 @@ function rewriteBodyModel(rawBody: Buffer, upstreamModelId: string): Buffer {
   }
 }
 
+export interface SmartRoutingRejection {
+  statusCode: number;
+  body: string;
+  model: string;
+}
+
+export interface SmartRoutingStageResult {
+  routing: RoutingContext;
+  body: Buffer;
+  /** Set when the request targets an excluded model and must not be forwarded. */
+  rejected?: SmartRoutingRejection;
+}
+
+function excludedModelResponse(model: string, surface: ApiSurface): SmartRoutingRejection {
+  const message = `Model "${model}" is excluded from smart routing`;
+  if (surface === "anthropic") {
+    return {
+      statusCode: 404,
+      model,
+      body: JSON.stringify({
+        type: "error",
+        error: { type: "not_found_error", message },
+      }),
+    };
+  }
+  return {
+    statusCode: 404,
+    model,
+    body: JSON.stringify({
+      error: { message, type: "invalid_request_error", code: "model_not_found" },
+    }),
+  };
+}
+
+function mappedUpstreamModel(rawBody: Buffer, routing: RoutingContext): string | undefined {
+  const model = readModelFromBody(rawBody);
+  if (!model) {
+    return undefined;
+  }
+  let hasImages = false;
+  try {
+    hasImages = containsImageContent(JSON.parse(rawBody.toString("utf-8")));
+  } catch {
+    hasImages = false;
+  }
+  return mappedModelId(model, routing.provider, hasImages);
+}
+
 function withSmartRoutingModelsContext(routing: RoutingContext): RoutingContext {
   return {
     ...routing,
@@ -54,7 +104,7 @@ export class SmartRoutingStage {
     private readonly catalog: ModelCatalog
   ) {}
 
-  process(routing: RoutingContext, rawBody: Buffer): { routing: RoutingContext; body: Buffer } {
+  process(routing: RoutingContext, rawBody: Buffer): SmartRoutingStageResult {
     if (!this.catalog.isEnabled() || routing.blocked) {
       return { routing, body: rawBody };
     }
@@ -76,14 +126,37 @@ export class SmartRoutingStage {
     }
 
     const modelRules = this.config.configValue.smartRouting?.modelRules;
-    const customMatch = matchSmartRoutingModelRules(model, modelRules, id =>
-      this.config.getProvider(id)
+    let excludedRuleBlocked = false;
+    const customMatch = matchSmartRoutingModelRules(
+      model,
+      modelRules,
+      id => this.config.getProvider(id),
+      match => {
+        if (this.catalog.isExcludedTarget(match.providerId, match.upstreamModelId)) {
+          excludedRuleBlocked = true;
+          return false;
+        }
+        return true;
+      }
     );
     const catalogEntry = customMatch ? null : this.catalog.resolveModelWireId(model);
     const providerId = customMatch?.providerId ?? catalogEntry?.providerId;
     const upstreamModelId = customMatch?.upstreamModelId ?? catalogEntry?.upstreamModelId;
 
     if (!providerId || !upstreamModelId) {
+      const mapped = mappedUpstreamModel(rawBody, routing) ?? model;
+      const excluded =
+        this.catalog.isExcludedWireId(model) ||
+        excludedRuleBlocked ||
+        this.catalog.isExcludedTarget(routing.provider.id, mapped);
+      if (excluded) {
+        log.warn(`[route] rejected excluded model "${model}"`);
+        return {
+          routing,
+          body: rawBody,
+          rejected: excludedModelResponse(model, routing.clientSurface),
+        };
+      }
       log.warn(`[route] unresolved model "${model}"`);
       return { routing, body: rawBody };
     }
@@ -111,11 +184,4 @@ export class SmartRoutingStage {
 
     return { routing, body: nextBody };
   }
-}
-
-export function smartRoutingModelErrorBody(message: string): string {
-  return JSON.stringify({
-    type: "error",
-    error: { type: "invalid_request_error", message },
-  });
 }

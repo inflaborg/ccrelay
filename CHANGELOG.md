@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**Routing**
+
+- Excluded smart-routing models are no longer forwarded. A request is rejected when the client sends an excluded id, or when a custom rule or the current provider's model map would send it there.
+
 **UI**
 
 - Provider endpoint test status now shows the protocol type (Anthropic / OpenAI / OpenAI Chat), not the last hyphen segment of the provider name.
