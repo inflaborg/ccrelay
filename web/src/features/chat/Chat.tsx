@@ -46,6 +46,7 @@ import {
   titleFromFirstUserMessage,
 } from "./chatStorage";
 import { defaultProtocolForProvider, fetchProxyModels, streamChat } from "./chatProxy";
+import { resolveChatActiveProvider } from "./activeProvider";
 import { modelsFromProvider } from "./models";
 import type {
   ChatImageAttachment,
@@ -120,12 +121,10 @@ export default function Chat() {
     queryFn: () => api.getProviders(),
   });
 
-  const activeProvider = useMemo(() => {
-    if (!providersData) {
-      return null;
-    }
-    return providersData.providers.find(p => p.id === providersData.current) ?? null;
-  }, [providersData]);
+  const activeProvider = useMemo(
+    () => resolveChatActiveProvider(providersData, t("nav.smartRouting")),
+    [providersData, t]
+  );
 
   const configModels = useMemo(() => modelsFromProvider(activeProvider), [activeProvider]);
 

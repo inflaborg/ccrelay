@@ -30,7 +30,7 @@ describe("resolveModelMeta", () => {
   });
 
   it("matches gpt-6 and later as their own family", () => {
-    for (const id of ["gpt-6-astra", "gpt-6", "GPT-6.1-MINI", "gpt-10"]) {
+    for (const id of ["gpt-6-astra", "gpt-6-luna-1", "gpt-6", "GPT-6.1-MINI", "gpt-10"]) {
       const meta = resolveModelMeta(id, { vendor: "openai" });
       expect(meta.id).toBe("gpt-6");
       expect(meta.openaiChat?.usesMaxCompletionTokens).toBe(true);

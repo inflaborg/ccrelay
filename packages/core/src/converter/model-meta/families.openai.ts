@@ -22,6 +22,7 @@ export const OPENAI_MODEL_FAMILIES: readonly ModelFamilyEntry[] = [
         usesMaxCompletionTokens: true,
         validReasoningEfforts: GPT6_REASONING_EFFORTS,
         reasoningEffortAliases: { none: "low", minimal: "low", max: "xhigh" },
+        dropReasoningEffortWhenTools: true,
         preferResponses: true,
       },
     },
