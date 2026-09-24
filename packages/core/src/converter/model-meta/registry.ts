@@ -7,8 +7,10 @@ import { GLM_MODEL_FAMILIES } from "./families.glm";
 import { GROK_MODEL_FAMILIES } from "./families.grok";
 import { KIMI_MODEL_FAMILIES } from "./families.kimi";
 import { LONGCAT_MODEL_FAMILIES } from "./families.longcat";
+import { META_MODEL_FAMILIES } from "./families.meta";
 import { MIMO_MODEL_FAMILIES } from "./families.mimo";
 import { OPENAI_MODEL_FAMILIES } from "./families.openai";
+import { QWEN_MODEL_FAMILIES } from "./families.qwen";
 import { STEALTH_MODEL_FAMILIES } from "./families.stealth";
 import type {
   ModelFamilyEntry,
@@ -22,9 +24,11 @@ const ALL_FAMILIES: readonly ModelFamilyEntry[] = [
   ...STEALTH_MODEL_FAMILIES,
   ...MIMO_MODEL_FAMILIES,
   ...LONGCAT_MODEL_FAMILIES,
+  ...META_MODEL_FAMILIES,
   ...GROK_MODEL_FAMILIES,
   ...GLM_MODEL_FAMILIES,
   ...KIMI_MODEL_FAMILIES,
+  ...QWEN_MODEL_FAMILIES,
   ...ANTHROPIC_MODEL_FAMILIES,
   ...OPENAI_MODEL_FAMILIES,
   ...GEMINI_MODEL_FAMILIES,
@@ -134,10 +138,29 @@ function resolveFromFamilies(modelId: string, vendor?: ModelVendor): ModelMeta |
  * Resolve static capability metadata for a wire model id (after provider model mapping).
  * Safe for browser bundles (no Node logger dependency).
  */
+/** Smart-routing wire ids are `providerId:upstreamModelId`. Family rules match the upstream id. */
+function upstreamModelId(modelId: string): string | null {
+  const colon = modelId.indexOf(":");
+  if (colon <= 0 || colon >= modelId.length - 1) {
+    return null;
+  }
+  return modelId.slice(colon + 1);
+}
+
 export function resolveModelMeta(modelId: string, options?: ResolveModelMetaOptions): ModelMeta {
   const normalized = modelId.trim().toLowerCase();
   if (!normalized) {
     return cloneModelMeta(GLOBAL_UNKNOWN_MODEL_META);
+  }
+
+  // `provider:model` must use the model segment. A provider id like
+  // `glm-intl-openai` would otherwise match the text-only `glm-*` family.
+  const bare = upstreamModelId(normalized);
+  if (bare) {
+    const fromUpstream = resolveFromFamilies(bare, options?.vendor);
+    if (fromUpstream) {
+      return fromUpstream;
+    }
   }
 
   const fromFamily = resolveFromFamilies(normalized, options?.vendor);

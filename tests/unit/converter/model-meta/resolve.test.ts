@@ -29,6 +29,15 @@ describe("resolveModelMeta", () => {
     expect(meta.openaiChat?.usesMaxCompletionTokens).toBe(true);
   });
 
+  it("matches the upstream model id in a smart-routing provider:model id", () => {
+    for (const id of ["llm-router-dev:gpt-6-luna", "router:gpt-5.6-terra"]) {
+      const meta = resolveModelMeta(id);
+      expect(meta.input.modalities).toContain("image");
+    }
+    expect(resolveModelMeta("llm-router-dev:gpt-6-luna").id).toBe("gpt-6");
+    expect(resolveModelMeta("router:gpt-5.6-terra").id).toBe("gpt-5");
+  });
+
   it("matches gpt-6 and later as their own family", () => {
     for (const id of ["gpt-6-astra", "gpt-6-luna-1", "gpt-6", "GPT-6.1-MINI", "gpt-10"]) {
       const meta = resolveModelMeta(id, { vendor: "openai" });
@@ -83,6 +92,38 @@ describe("resolveModelMeta", () => {
     expect(meta.anthropic?.supportsSystemRoleInMessages).toBe(false);
     expect(meta.anthropic?.supportsDeferLoading).toBe(false);
     expect(meta.input.modalities).toEqual(["text"]);
+  });
+
+  it("matches glm-5.3-flash and later flash names as multimodal", () => {
+    for (const id of ["glm-5.3-flash", "glm-5.10-flash", "glm-6-flash", "glm-10.1-flash"]) {
+      const meta = resolveModelMeta(id);
+      expect(meta.id).toBe("glm-flash");
+      expect(meta.input.modalities).toEqual(["text", "image"]);
+    }
+    expect(resolveModelMeta("glm-5.2-flash").id).toBe("glm");
+    expect(resolveModelMeta("glm-5.2-flash").input.modalities).toEqual(["text"]);
+    expect(resolveModelMeta("router:glm-5.3-flash").input.modalities).toEqual(["text", "image"]);
+    expect(resolveModelMeta("glm-intl-openai:glm-5.3-flash").id).toBe("glm-flash");
+    expect(resolveModelMeta("glm-intl-openai:glm-5.3-flash").input.modalities).toEqual([
+      "text",
+      "image",
+    ]);
+  });
+
+  it("matches claude-fable and muse-spark as multimodal", () => {
+    const fable = resolveModelMeta("claude-fable-5");
+    expect(fable.id).toBe("claude-fable");
+    expect(fable.vendor).toBe("anthropic");
+    expect(fable.input.modalities).toEqual(["text", "image"]);
+
+    const muse = resolveModelMeta("muse-spark-1.3");
+    expect(muse.id).toBe("muse-spark");
+    expect(muse.input.modalities).toEqual(["text", "image"]);
+
+    const qwen = resolveModelMeta("qwen3-vl-plus");
+    expect(qwen.id).toBe("qwen3");
+    expect(qwen.input.modalities).toEqual(["text", "image"]);
+    expect(resolveModelMeta("Qwen3-235B-A22B").id).toBe("qwen3");
   });
 
   it("matches glm-5v-turbo as vision multimodal", () => {
