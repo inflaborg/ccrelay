@@ -23,7 +23,7 @@ describe("sanitizeOpenAiChatRequestRecord", () => {
     expect(data.tools).toHaveLength(1);
   });
 
-  it("maps gpt-6 none to low and does not force none when tools are present", () => {
+  it("maps gpt-6 none to low, and forces none when function tools stay on Chat", () => {
     const withNone: Record<string, unknown> = {
       model: "gpt-6-astra",
       reasoning_effort: "none",
@@ -32,22 +32,24 @@ describe("sanitizeOpenAiChatRequestRecord", () => {
     sanitizeOpenAiChatRequestRecord(withNone);
     expect(withNone.reasoning_effort).toBe("low");
 
-    const withTools: Record<string, unknown> = {
-      model: "gpt-6-astra",
-      reasoning_effort: "high",
-      tools: [
-        {
-          type: "function",
-          function: {
-            name: "exec_command",
-            parameters: { type: "object", properties: {} },
+    for (const model of ["gpt-6-astra", "gpt-6-luna-1", "gpt-10"]) {
+      const withTools: Record<string, unknown> = {
+        model,
+        reasoning_effort: "high",
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "exec_command",
+              parameters: { type: "object", properties: {} },
+            },
           },
-        },
-      ],
-      messages: [{ role: "user", content: "?" }],
-    };
-    sanitizeOpenAiChatRequestRecord(withTools);
-    expect(withTools.reasoning_effort).toBe("high");
+        ],
+        messages: [{ role: "user", content: "?" }],
+      };
+      sanitizeOpenAiChatRequestRecord(withTools);
+      expect(withTools.reasoning_effort).toBe("none");
+    }
   });
 
   it("keeps reasoning_effort for gpt-5 when there are no tools", () => {

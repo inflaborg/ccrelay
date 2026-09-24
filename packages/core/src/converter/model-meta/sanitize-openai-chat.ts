@@ -88,18 +88,11 @@ export function sanitizeOpenAiChatRequestByMeta(
   const stripped: string[] = [];
   const reasoning = meta.reasoning;
   const openaiChat = meta.openaiChat;
-  const allowed = allowedReasoningEfforts(meta);
-  const noneAllowed = allowed?.has("none") === true;
-
   if (!reasoning.supportsReasoningEffort && data.reasoning_effort !== undefined) {
     delete data.reasoning_effort;
     stripped.push("reasoning_effort");
-  } else if (
-    openaiChat?.dropReasoningEffortWhenTools &&
-    noneAllowed &&
-    openAiChatRequestHasFunctionTools(data)
-  ) {
-    // gpt-5.4 / o-series Chat Completions: tools only with reasoning_effort "none".
+  } else if (openaiChat?.dropReasoningEffortWhenTools && openAiChatRequestHasFunctionTools(data)) {
+    // gpt-5.4+ / gpt-6 Chat Completions: function tools only with reasoning_effort "none".
     const current =
       typeof data.reasoning_effort === "string" ? data.reasoning_effort.trim().toLowerCase() : "";
     if (current !== "none") {

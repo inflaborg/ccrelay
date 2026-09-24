@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**UI**
+
+- Chat stays available when smart routing is on, instead of showing that there is no active provider.
+- gpt-6 and later Chat Completions requests that include function tools set reasoning effort to none, so names like gpt-6-luna-1 are not rejected. Full OpenAI upstreams still move those requests to Responses.
+
 **Config**
 
 - Codex model catalog entries accept image input, so pasting an image is no longer rejected for models listed there.

@@ -51,10 +51,9 @@ export interface ModelOpenAiChatMeta {
    */
   reasoningEffortAliases?: Readonly<Record<string, string>>;
   /**
-   * OpenAI Chat Completions rejects function tools with `reasoning_effort` other than
-   * `none` for gpt-5.4 / o-series; Responses API still accepts both.
-   * When true, force `reasoning_effort` to `none` if the request includes function tools
-   * and `none` is in {@link validReasoningEfforts} **and** the upstream is Chat-only.
+   * OpenAI Chat Completions rejects function tools unless `reasoning_effort` is `none`
+   * (gpt-5.4+, gpt-6 and later, o-series). Responses still accepts a real effort.
+   * When true, force `none` on Chat bodies that still include function tools.
    */
   dropReasoningEffortWhenTools?: boolean;
   /**
