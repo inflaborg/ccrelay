@@ -3,7 +3,7 @@
   "displayName": "CCRelay",
   "icon": "assets/icon-128.png",
   "description": "Use third-party models (GLM, Kimi, DeepSeek, Gemini, Qwen, any OpenAI/Anthropic-compatible API) in Claude Code, Claude Desktop, ChatGPT and Codex. Local proxy with automatic Anthropic/OpenAI conversion; also ships as a macOS/Windows desktop app.",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "publisher": "inflab",
   "license": "MIT",
   "repository": {
