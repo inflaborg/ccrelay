@@ -7,29 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-23
+
+Logs can be exported, and the dashboard shows per-provider usage. Provider switching and endpoint tests follow the form you are editing. gpt-6 and Claude Code forwarding are more reliable, and the Codex model catalog advertises reasoning levels.
+
 ### Added
 
 **UI**
 
-- Logs: multi-select rows and export a zip of per-id folders (converted/original JSON, headers, and analysis markdown).
-- Quick fill custom models can map `claude-haiku-*`, `claude-sonnet-*`, and `claude-opus-*` to a chosen model (defaults to the first). Catch-all `claude-*` and `gpt-*` still map to the first model.
+- Logs: multi-select rows and export a zip of per-id folders (converted request, original request, headers, and analysis).
+- Quick fill can map Haiku, Sonnet, and Opus patterns to a chosen model (defaults to the first). Catch-all Claude and GPT patterns still map to the first model.
+- Provider rows in the dashboard breakdown open model and daily token charts, including non-cache input, cache, and output.
 
 ### Changed
 
 **Config**
 
-- Request/response body logging is on by default via `logging.storeBodies`. Existing configs that lack this field get `true` on startup; the older `logging.enabled` key is still used when the new field is absent.
+- Request and response body logging is on by default. Existing configs that never set this get it turned on at startup; an older logging switch is still honored when the new field is absent.
 
 **UI**
 
-- Provider cards: click to select a routing source, then **Apply** in the header to switch. Toolbar **Select** is for export and delete.
-- Provider endpoint test uses the current unsaved form as a temporary provider, so mapping and extra headers are included. The probe no longer sends a one-token output limit.
+- Provider cards: click a card to select the routing source, then **Apply** in the header to switch. Toolbar **Select** is for export and delete.
+- Provider endpoint test uses the current unsaved form, so mapping and extra headers are included. The probe no longer limits the reply to one token.
+- Add, edit, and wizard dialogs always show the endpoint test control. It stays disabled, with a reason, when a test cannot run. Cancel and submit stay on the right.
+- Routing, concurrency, and logging settings follow the UI language.
 
 ### Fixed
 
 **Config**
 
-- Codex model catalog now lists reasoning levels (low through xhigh, default high) so the thinking picker is not stuck on Medium, and requests include the selected effort.
+- The Codex model catalog lists reasoning levels from low through extra-high, defaulting to high, so the thinking picker is not stuck on Medium and requests include the selected effort.
 
 **Routing**
 
@@ -37,21 +44,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **UI**
 
-- Provider endpoint test status now shows the protocol type (Anthropic / OpenAI / OpenAI Chat), not the last hyphen segment of the provider name.
+- Provider endpoint test status shows the protocol (Anthropic, OpenAI, or OpenAI Chat) instead of the last part of the provider name.
 
 **Protocol/Conversion**
 
-- OpenAI Chat Completions maps `max_tokens` to `max_completion_tokens` for gpt-6 and later.
-- gpt-5.4+ / gpt-6 function tools use `/v1/responses` when the provider is full OpenAI (`providerType: openai`), keeping reasoning. Chat-only upstreams stay on Chat Completions: gpt-5 forces `reasoning_effort` to `none`; gpt-6 remaps `none`/`minimal` to `low` (it does not accept `none`).
-- Images, image detail, prior-turn reasoning text, and function `strict` are kept when Chat is upgraded to `/v1/responses`. Chat tool-call ids are no longer reused as Responses item ids (those must start with `fc`).
-- Anthropic hosted `web_search` with `tool_choice` set to that tool is sent as Responses `{ type: "web_search" }`, not as a missing function tool. Hosted web search on full OpenAI also uses `/v1/responses`.
-- Cap OpenAI Chat Completions `tools` at 128 (API hard limit) on every Chat upstream path, including passthrough and cross-protocol conversion.
-- Claude Code mid-conversation system reminders keep their original order when forwarded to OpenAI Chat by merging into the adjacent user or tool message.
-- Anthropic deferred tools (ToolSearch / `defer_loading`) are stripped for OpenRouter stealth models and other unrecognized ids. Gateways that are not first-party Anthropic reject that feature.
-
-## [0.3.1] - 2026-08-02 (pre-release)
-
-Pre-release line for 0.3.1.
+- On full OpenAI, gpt-5.4 and later function-calling uses the Responses API and keeps reasoning. Chat-only upstreams stay on Chat Completions: gpt-5 turns reasoning off when tools are present; gpt-6 raises `none` and `minimal` to `low`.
+- Chat traffic upgraded to Responses keeps images, image detail, prior-turn reasoning text, and strict function tools. Chat tool-call ids are no longer reused as Responses item ids.
+- gpt-6 and later Chat Completions use the completion token limit field. Chat `tools` are capped at 128 on every Chat upstream path.
+- Anthropic hosted web search is forwarded as Responses web search, including when the client forces that tool. Hosted web search on full OpenAI also uses Responses.
+- Claude Code system reminders keep their original order when forwarded to OpenAI Chat.
+- Deferred tool loading is stripped for OpenRouter stealth models and other unrecognized ids, which those gateways reject.
+- Synthetic Anthropic streaming now sends tool arguments as deltas, so Claude Code no longer sees empty tool inputs.
 
 ## [0.3.0] - 2026-07-27
 
