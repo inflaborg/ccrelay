@@ -276,7 +276,7 @@ name = "CCRelay"
 base_url = "http://localhost:7575/openai"
 ```
 
-Apply writes `~/.codex/ccrelay-model-catalog.json` from the **active provider’s** custom models (or exact `modelMap` entries) so Codex `/model` can list them. Set `model` to one of those ids. Restart Codex after Apply or a provider switch so the catalog reloads.
+Apply writes `~/.codex/ccrelay-model-catalog.json` from the **active provider’s** custom models (or exact `modelMap` entries) so Codex `/model` can list them. Each entry advertises reasoning levels low, medium, high, and xhigh, with high as the default. Set `model` to one of those ids. Restart Codex after Apply or a provider switch so the catalog reloads. Override the level with `model_reasoning_effort` in `config.toml` or `/model`.
 
 ---
 

@@ -277,7 +277,7 @@ name = "CCRelay"
 base_url = "http://localhost:7575/openai"
 ```
 
-应用配置时会根据**当前激活供应商**的自定义模型列表（或精确的 `modelMap` 条目）生成 `~/.codex/ccrelay-model-catalog.json`，供 Codex `/model` 列出可选模型。将 `model` 设为其中某个 id。Apply 或切换供应商后请重启 Codex 以重新加载目录。
+应用配置时会根据**当前激活供应商**的自定义模型列表（或精确的 `modelMap` 条目）生成 `~/.codex/ccrelay-model-catalog.json`，供 Codex `/model` 列出可选模型。每个条目会声明推理档位 low、medium、high、xhigh，默认 high。将 `model` 设为其中某个 id。Apply 或切换供应商后请重启 Codex 以重新加载目录。可在 `config.toml` 用 `model_reasoning_effort` 或在 `/model` 里覆盖档位。
 
 ---
 
