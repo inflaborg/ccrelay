@@ -2,7 +2,7 @@
   "name": "ccrelay-vscode",
   "displayName": "CCRelay",
   "icon": "assets/icon-128.png",
-  "description": "VSCode extension with built-in API proxy server - switch between AI providers seamlessly",
+  "description": "Use third-party models (GLM, Kimi, DeepSeek, Gemini, Qwen, any OpenAI/Anthropic-compatible API) in Claude Code, Claude Desktop, ChatGPT and Codex. Local proxy with automatic Anthropic/OpenAI conversion; also ships as a macOS/Windows desktop app.",
   "version": "0.3.2",
   "publisher": "inflab",
   "license": "MIT",
@@ -13,12 +13,31 @@
   "bugs": {
     "url": "https://github.com/inflaborg/ccrelay/issues"
   },
-  "homepage": "https://github.com/inflaborg/ccrelay#readme",
+  "homepage": "https://ccrelay.inflab.org",
   "engines": {
     "vscode": "^1.80.0"
   },
   "categories": [
+    "AI",
+    "Chat",
     "Other"
+  ],
+  "keywords": [
+    "claude-code",
+    "claude-desktop",
+    "claude-cowork",
+    "codex",
+    "chatgpt",
+    "third-party models",
+    "llm proxy",
+    "model switcher",
+    "anthropic",
+    "openai",
+    "glm",
+    "kimi",
+    "deepseek",
+    "gemini",
+    "qwen"
   ],
   "activationEvents": [
     "onStartupFinished"

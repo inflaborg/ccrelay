@@ -1,25 +1,31 @@
 # CCRelay
 
-[![VSCode Extension](https://img.shields.io/badge/VSCode-Extension-blue)](https://code.visualstudio.com/)
+[![Latest release](https://img.shields.io/github/v/release/inflaborg/ccrelay)](https://github.com/inflaborg/ccrelay/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/inflaborg/ccrelay/total)](https://github.com/inflaborg/ccrelay/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**CCRelay** is a VS Code extension — with optional **Electron** and **Tauri** desktop apps — that bundles a local API proxy so you can seamlessly switch between AI providers (Anthropic, OpenAI, Gemini, etc.) without losing conversation context. Designed for **Claude Code**, **Claude Cowork**, and **OpenAI Codex**.
+**Use third-party models in Claude Code, Claude Desktop, and the ChatGPT desktop app (ChatGPT Work and Codex).**
 
-**Website**: [https://ccrelay.inflab.org](https://ccrelay.inflab.org)
+**CCRelay** is a free, open-source desktop app for macOS and Windows. It lets **Claude Code**, **Claude Desktop** (third-party inference and Cowork), the **ChatGPT desktop app** (ChatGPT Work and Codex), and **Codex CLI** use third-party models such as GLM, Kimi, DeepSeek, Gemini, Qwen, MiniMax, and Xiaomi MiMo, or any OpenAI- or Anthropic-compatible API. Keep the client you already use and switch models from one place. A local proxy converts between Anthropic and OpenAI formats automatically. A VS Code extension is also available.
 
-**[中文文档](./README_CN.md)**
+**Download**: [Latest release](https://github.com/inflaborg/ccrelay/releases/latest) — macOS `.dmg` (Apple Silicon, Intel) · Windows `.exe` (x64, arm64) · VS Code extension on [Marketplace](https://marketplace.visualstudio.com/items?itemName=infLab.ccrelay-vscode) and [Open VSX](https://open-vsx.org/extension/infLab/ccrelay-vscode)
+
+**Website**: [https://ccrelay.inflab.org](https://ccrelay.inflab.org) · **[中文文档](./README_CN.md)**
+
+![CCRelay desktop app — provider list](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-desktop-2.webp)
 
 ---
 
 ## Table of Contents
 
+- [Supported clients](#supported-clients)
+- [Get started in 3 steps](#get-started-in-3-steps)
 - [Core Features](#core-features)
-- [Verified upstreams (by host)](#verified-upstreams-by-host)
-- [Requirements](#requirements)
+- [FAQ](#faq)
+- [Privacy and local data](#privacy-and-local-data)
+- [Supported providers](#supported-providers)
 - [Installation](#installation)
-- [Desktop App (Electron)](#desktop-app-electron)
-- [Desktop App (Tauri)](#desktop-app-tauri)
-- [Quick Start](#quick-start)
+- [Manual configuration](#manual-configuration)
 - [Client Integrations](#client-integrations)
 - [Usage Guide](#usage-guide)
   - [Multi-Instance Mode](#multi-instance-mode)
@@ -38,37 +44,106 @@
 
 ---
 
+## Supported clients
+
+| Client                                                 | How to connect                                                                         |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| **Claude Code** (CLI and IDE extensions)               | Client configuration → Claude Code → Apply                                             |
+| **Claude Desktop** (third-party inference, Cowork)     | Client configuration → Claude Desktop → Apply, then restart Claude Desktop             |
+| **Codex CLI**                                          | Client configuration → Codex → Apply, then restart Codex                               |
+| **ChatGPT desktop app** (ChatGPT Work, Codex)          | Same `~/.codex/config.toml` as Codex CLI: Apply, then restart the ChatGPT desktop app  |
+| Any tool that accepts a custom Anthropic or OpenAI URL | `http://127.0.0.1:7575/anthropic` or `http://127.0.0.1:7575/openai`                    |
+
+Details for each client: [Client Integrations](#client-integrations).
+
+---
+
+## Get started in 3 steps
+
+1. **Install the desktop app.** Download it from [Releases](https://github.com/inflaborg/ccrelay/releases/latest) and open it. The local proxy starts on `http://127.0.0.1:7575`.
+2. **Add a provider.** Open **Providers → Add provider**, pick a preset (GLM, Xiaomi MiMo, DeepSeek, MiniMax, Gemini, Azure OpenAI, Meituan LongCat, Astraflow) or enter any base URL, paste your API key, run the built-in test, and create it.
+3. **Connect your client.** Open **Client configuration**, choose Claude Code, Claude Desktop, or Codex, and click **Apply**. Restart the client if the table above says so.
+
+To switch models later, select another provider card and click **Apply**, or turn on **Smart Routing** to list models from every provider at once and pick one inside the client. **Restore** on the Client configuration page undoes the client changes.
+
+![Client configuration](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-setup-1.webp)
+
+Prefer editing files? See [Manual configuration](#manual-configuration).
+
+---
+
 ## Core Features
 
-**Proxy & Routing**
+**Use any model in the client you already have**
 
-- Built-in HTTP proxy (default `http://127.0.0.1:7575`) with path-based routing — forward to a provider, block with a custom response, or return 404
-- Multi-protocol: accepts **Anthropic**, **OpenAI Chat Completions**, and **OpenAI Responses API** (`/v1/responses`) on the same port
-- Automatic cross-protocol conversion when client and upstream wire formats differ
-- URL prefixes `/openai/...` and `/anthropic/v1/...` let different clients target the right protocol explicitly
+- One local address serves Claude Code, Claude Desktop, Codex CLI, and the ChatGPT desktop app.
+- Requests are converted automatically between Anthropic Messages, OpenAI Chat Completions, and OpenAI Responses.
+- Model names are mapped with wildcards, and Claude Desktop gets Claude-style aliases it accepts.
+- Smart Routing lists models from every provider in one catalog and routes each request by model.
 
-**Client Integrations**
+**Set up without editing files**
 
-- First-class support for **Claude Code** (`ANTHROPIC_BASE_URL`), **Claude Cowork**, and **OpenAI Codex** (`~/.codex/config.toml`)
-- Web dashboard **Client configuration** tab writes the right env vars for you
+- The provider wizard has presets for popular vendors and a built-in endpoint test.
+- Client configuration writes each client's settings in one click, and Restore undoes it.
+- Config changes apply without a restart; `~/.ccrelay/config.yaml` stays available for manual edits.
+- Providers can be exported and imported as JSON.
 
-**Operations**
+**See what is happening**
 
-- Multi-instance coordination (Leader/Follower) across VS Code windows and the desktop app
-- Config hot-reload — edits to `config.yaml` are picked up automatically
-- Optional request/response logging (SQLite or PostgreSQL) with a built-in log viewer, token tracking, and performance metrics (TTFB, output TPS, P50/P90 latency)
-- Concurrency control with per-route queue limits
+- The Logs tab shows each request's headers and bodies, and exports selected rows as a zip.
+- The Dashboard shows token usage, cache hit rate, time to first token, output speed, and per-provider charts.
+- The Chat tab tests any provider without opening another client.
+- Optional local web search (Tavily or Parallel) serves providers that lack their own.
 
-**Desktop & UI**
+**Runs where you work**
 
-- Optional Electron or Tauri desktop app — run CCRelay without VS Code
-- Electron packaged builds auto-check for updates and can install them from the tray menu
-- Web dashboard with provider management, settings, and i18n (English + Chinese)
-- Provider import/export as JSON
+- The desktop app runs on macOS (Apple Silicon, Intel) and Windows (x64, arm64) and updates itself.
+- The VS Code extension shares the same config and proxy as the desktop app.
 
-**External web search**
+---
 
-- Optional local handling of Anthropic-style **web search** tool traffic for provider IDs you allowlist, using **Tavily** or **Parallel** as the retrieval backend; configure in `config.yaml` or the dashboard **Capabilities** tab
+## FAQ
+
+**How do I use GLM, Kimi, or DeepSeek in Claude Desktop?**
+Add the provider in CCRelay, then click **Client configuration → Claude Desktop → Apply** and restart Claude Desktop. CCRelay switches Claude Desktop to third-party inference and gives each model a Claude-style alias, because Claude Desktop rejects model names that contain `glm`, `kimi`, `deepseek`, and similar keywords.
+
+**How do I use third-party models in the ChatGPT desktop app (ChatGPT Work or Codex)?**
+Click **Client configuration → Codex → Apply**. CCRelay writes `~/.codex/config.toml` and a model catalog, which Codex CLI and the ChatGPT desktop app both read. Restart the ChatGPT app, then pick a model from the list in ChatGPT Work or Codex.
+
+**Is there a desktop tool so I don't have to edit `settings.json` or `config.toml` by hand?**
+Yes. The CCRelay desktop app writes the settings for Claude Code, Claude Desktop, and Codex when you click **Apply**, and **Restore** puts them back.
+
+**My provider only has an OpenAI-compatible API. Can Claude Code use it?**
+Yes. CCRelay converts Claude Code's Anthropic requests to OpenAI Chat Completions or Responses and converts the replies back, including tool calls.
+
+**Do I need to restart the client after switching providers?**
+Claude Code uses the new provider on its next request. Codex CLI and the ChatGPT desktop app need a restart to reload the model list. Claude Desktop may need a restart to refresh its model list.
+
+**Are my conversations stored?**
+Yes, on your computer only, and you can turn it off. See [Privacy and local data](#privacy-and-local-data).
+
+**Is CCRelay free?**
+Yes. CCRelay is open source under the MIT License.
+
+---
+
+## Privacy and local data
+
+| Topic                | What CCRelay does                                                                                                                            |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Where it runs        | On your computer. The proxy listens on `127.0.0.1` by default.                                                                               |
+| Outbound traffic     | Requests go to the providers you configure. Tavily or Parallel are contacted only if you enable web search. Update checks use GitHub Releases. |
+| Telemetry            | None.                                                                                                                                        |
+| Request logs         | Request and response bodies are saved by default in `~/.ccrelay/logs.db` so you can inspect them in Logs.                                    |
+| Turning logs off     | Set `logging.storeBodies: false` or switch it off in Settings. Token and speed stats are kept separately.                                   |
+| Deleting data        | **Clear All** on the Logs tab removes saved bodies; **Reset stats** on the Dashboard removes usage numbers.                                  |
+| API keys             | Stored in `~/.ccrelay/config.yaml`. Use `${ENV_VAR}` to keep keys out of the file. Keys are masked in logged headers.                        |
+
+---
+
+## Supported providers
+
+The provider wizard includes presets for Z.ai GLM, Xiaomi MiMo, DeepSeek, MiniMax, Google Gemini, Azure OpenAI, Meituan LongCat, and Astraflow (UCloud). Any other OpenAI- or Anthropic-compatible API (for example Kimi, Qwen, OpenRouter, or a self-hosted gateway) works with a custom base URL.
 
 ### Verified upstreams (by host)
 
@@ -95,22 +170,25 @@ Relaying uses the **provider `baseUrl` hostname**. The rows below are **upstream
 
 ---
 
-## Requirements
-
-- VS Code 1.80.0 or higher
-- Node.js (for development)
-
----
-
 ## Installation
 
-### Install from VSIX
+### Desktop app (recommended)
 
-1. Download the latest `.vsix` from [Releases](https://github.com/inflaborg/ccrelay/releases)
-2. In VS Code: `Cmd+Shift+P` (macOS) or `Ctrl+Shift+P` → `Extensions: Install from VSIX...`
-3. Select the downloaded file
+- Download from [GitHub Releases](https://github.com/inflaborg/ccrelay/releases/latest):
+  - **macOS**: `CCRelay-<version>-darwin-arm64.dmg` (Apple Silicon) or `-darwin-x64.dmg` (Intel)
+  - **Windows**: `CCRelay-<version>-win32-x64.exe` or `-win32-arm64.exe`
+- The app lives in the tray (menu bar on macOS). Tray → **Open Dashboard** opens the dashboard; **Open Logs Folder** opens runtime diagnostics under `~/.ccrelay/logs/`.
+- Updates are checked about 15 seconds after launch and then every 24 hours. Tray → **Check for Updates…** checks immediately; confirming downloads the update and restarts the app.
+- Tray → **Update Channel** switches between **Stable** and **Dev** builds.
+- The desktop app shares `~/.ccrelay/` config and the running proxy with the VS Code extension.
 
-### Build from Source
+### VS Code extension
+
+- Install **CCRelay** from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=infLab.ccrelay-vscode) or [Open VSX](https://open-vsx.org/extension/infLab/ccrelay-vscode), or download the `.vsix` from [Releases](https://github.com/inflaborg/ccrelay/releases) and run `Extensions: Install from VSIX...`.
+- Requires VS Code 1.80.0 or higher.
+- Switch providers from the CCRelay status bar item or `CCRelay: Switch Provider`; open the dashboard with `CCRelay: Open Dashboard`.
+
+### Build from source
 
 ```bash
 git clone https://github.com/inflaborg/ccrelay.git
@@ -120,44 +198,11 @@ npm run build
 npm run package        # produces dists/ccrelay-vscode-*.vsix
 ```
 
-### Development Mode
+Desktop builds: see [Development](#development).
 
-```bash
-npm install
-npm run compile        # or npm run watch
-# Press F5 in VS Code to launch Extension Development Host
-```
+### Tauri build (experimental)
 
----
-
-## Desktop App (Electron)
-
-An optional Electron desktop app (`packages/desktop`) runs the same core as the VS Code extension:
-
-- Shares `~/.ccrelay/` config, state, and Leader election with the extension
-- Stores request logs with in-process SQLite (no system `sqlite3` binary required for the default desktop build)
-- Tray menu → **Open Dashboard** loads the web UI in an app window; **Open Logs Folder** opens runtime diagnostics under `~/.ccrelay/logs/`
-- Packaged builds check for updates automatically (about 15 seconds after launch, then once every 24 hours). Use the tray menu → **Check for Updates…** to check immediately. Confirming an update downloads it and restarts the app to install. Auto-update is not available when running from source.
-- Tray → **Update Channel** switches between **Stable** (`channel-prod`) and **Dev** (`channel-dev`). Default follows the install (dev builds → Dev, stable builds → Stable). A tray choice is stored under the app user data directory and overrides that default.
-- Packaged dashboard uses a frameless window: macOS keeps native traffic lights; Windows/Linux show minimize / maximize / close in the header. Drag the empty header area to move the window.
-- Download from [GitHub Releases](https://github.com/inflaborg/ccrelay/releases):
-  - **macOS**: `CCRelay-<version>-darwin-arm64.dmg` or `-darwin-x64.dmg`
-  - **Windows**: `CCRelay-<version>-win32-x64.exe` or `-win32-arm64.exe`
-
----
-
-## Desktop App (Tauri)
-
-A lightweight Tauri desktop app (`packages/desktop-tauri`) runs the same core as the VS Code extension and Electron app:
-
-- Shares `~/.ccrelay/` config, state, and Leader election with all other instances
-- **Sidecar layout**: the Rust shell starts a **bundled Node.js runtime** shipped inside the installer (server scripts and native SQLite support live in app resources). End users do not install Node separately.
-- Same in-process SQLite request logging as the Electron desktop app
-- Tray menu with Start/Stop Server, **Open Dashboard**, and **Open Logs Folder**
-- Download from [GitHub Releases](https://github.com/inflaborg/ccrelay/releases):
-  - Installer names follow the Electron desktop pattern (`CCRelay-<version>-<platform>-<arch>.<ext>`) with **`tauri`** added after the version (for example `CCRelay-0.2.4-tauri-darwin-arm64.dmg`, `CCRelay-0.2.4-tauri-win32-x64.exe`). Windows ships **NSIS `.exe`** only (no MSI).
-
-### Development
+A lighter Tauri desktop variant (`packages/desktop-tauri`) runs the same core with a bundled Node.js runtime. Tauri installers are not included in current releases; build it from source with Node.js 22:
 
 ```bash
 npm install
@@ -166,11 +211,11 @@ npm run tauri:pack:mac    # Production macOS installer
 npm run tauri:pack:win    # Production Windows installer
 ```
 
-`npm run tauri:build` (run automatically before pack/dev) bundles the sidecar JavaScript, copies the native SQLite module, and places a Node binary next to the Tauri external sidecar slot. Use **Node.js 22** when building from source (matches CI).
-
 ---
 
-## Quick Start
+## Manual configuration
+
+Everything in the dashboard is stored in `~/.ccrelay/config.yaml`. Use these steps if you prefer editing files.
 
 ### 1. Add a provider
 
@@ -230,8 +275,9 @@ You can also set these from the Web dashboard: **Client configuration** tab.
 
 ### 3. Switch providers
 
-- Click the CCRelay icon in the VS Code status bar
-- Or Command Palette: `CCRelay: Switch Provider`
+- Desktop app or dashboard: select a provider card on **Providers**, then click **Apply**
+- VS Code: click the CCRelay status bar item, or run `CCRelay: Switch Provider`
+- File: change `defaultProvider` in `config.yaml` (picked up automatically)
 
 ---
 
@@ -239,17 +285,17 @@ You can also set these from the Web dashboard: **Client configuration** tab.
 
 CCRelay exposes both **Anthropic** and **OpenAI** compatible routes on the same port (default **7575**). Use URL prefixes to pick the right protocol:
 
-| Client            | Protocol  | Base URL                          |
-| ----------------- | --------- | --------------------------------- |
-| **Claude Code**   | Anthropic | `http://127.0.0.1:7575/anthropic` |
-| **Claude Cowork** | Anthropic | `http://127.0.0.1:7575/anthropic` |
-| **Codex**         | OpenAI    | `http://127.0.0.1:7575/openai`    |
+| Client                                   | Protocol  | Base URL                          |
+| ---------------------------------------- | --------- | --------------------------------- |
+| **Claude Code**                          | Anthropic | `http://127.0.0.1:7575/anthropic` |
+| **Claude Desktop** (3P inference/Cowork) | Anthropic | `http://127.0.0.1:7575/anthropic` |
+| **Codex CLI / ChatGPT desktop app**      | OpenAI    | `http://127.0.0.1:7575/openai`    |
 
 Legacy `/v1/...` paths still work when pointed at `http://127.0.0.1:7575` directly.
 
 ### Claude Code
 
-See [Quick Start](#quick-start) for the recommended `~/.claude/settings.json` config.
+Use **Client configuration → Claude Code → Apply**, or see [Manual configuration](#manual-configuration) for the `~/.claude/settings.json` entries.
 
 Quick test (current shell only):
 
@@ -258,13 +304,15 @@ export ANTHROPIC_BASE_URL=http://127.0.0.1:7575/anthropic
 claude
 ```
 
-### Claude Cowork
+### Claude Desktop (third-party inference and Cowork)
 
-Set the app's **Anthropic Base URL** to `http://127.0.0.1:7575/anthropic`. Switch providers via the CCRelay extension or `config.yaml`.
+**Client configuration → Claude Desktop → Apply** (macOS and Windows) switches Claude Desktop to third-party inference through CCRelay: gateway URL `http://127.0.0.1:7575/anthropic`, a placeholder API key, and the `x-ccrelay-model-alias` header. Restart Claude Desktop afterwards. **Restore** switches Claude Desktop back to first-party mode.
 
-### Codex
+To set it up by hand, open **Configure third-party inference** in Claude Desktop, set the gateway URL above, enter any API key, and add the `x-ccrelay-model-alias` header. Third-party model names need Claude-style aliases; see [Claude Desktop / Cowork Model ID Restrictions](#claude-desktop--cowork-model-id-restrictions).
 
-Create or edit `~/.codex/config.toml` (or use **Client configuration → Codex → Apply** in the dashboard):
+### Codex CLI and the ChatGPT desktop app
+
+Codex CLI and the ChatGPT desktop app (both ChatGPT Work and Codex) read the same `~/.codex/config.toml`. Use **Client configuration → Codex → Apply**, or create the file yourself:
 
 ```toml
 model = "gpt-5.4-mini"
@@ -276,7 +324,7 @@ name = "CCRelay"
 base_url = "http://localhost:7575/openai"
 ```
 
-Apply writes `~/.codex/ccrelay-model-catalog.json` from the **active provider’s** custom models (or exact `modelMap` entries) so Codex `/model` can list them. Each entry advertises reasoning levels low, medium, high, and xhigh, with high as the default. Set `model` to one of those ids. Restart Codex after Apply or a provider switch so the catalog reloads. Override the level with `model_reasoning_effort` in `config.toml` or `/model`.
+Apply writes `~/.codex/ccrelay-model-catalog.json` so Codex `/model` can list your models. The catalog comes from the **active provider’s** custom models (or exact `modelMap` entries); with Smart Routing on, it lists routed models from every provider. Each entry advertises reasoning levels low, medium, high, and xhigh, with high as the default. Set `model` to one of those ids. Restart Codex CLI or the ChatGPT desktop app after Apply or a provider switch so the catalog reloads. Override the level with `model_reasoning_effort` in `config.toml` or `/model`.
 
 ---
 
@@ -798,4 +846,4 @@ This project is **100% AI-generated code**. Special thanks to:
 
 [MIT License](LICENSE)
 
-Copyright (c) 2026 [inflab.org](https://inflab.org)
+Copyright (c) 2026 [infLab](https://github.com/inflaborg)
