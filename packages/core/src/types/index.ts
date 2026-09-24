@@ -93,7 +93,7 @@ export const ServerConfigSchema = z.object({
   /** Local HTTP API Bearer; auto-written when omitted (see ConfigManager). */
   apiBearerToken: z.string().optional(),
   /** UI language locale; undefined means not yet chosen (triggers language modal). */
-  locale: z.enum(["en", "zh"]).optional(),
+  locale: z.enum(["en", "zh", "ja", "ko"]).optional(),
 });
 
 export type ServerConfigInput = z.infer<typeof ServerConfigSchema>;
@@ -499,7 +499,7 @@ export interface RouterConfig {
     database?: DatabaseConfig;
   };
   /** UI language locale; undefined means not yet chosen. */
-  locale?: "en" | "zh";
+  locale?: "en" | "zh" | "ja" | "ko";
   /** Global web search config (Tavily API key, etc.) shared across providers. */
   webSearch?: WebSearchGlobalConfig;
   /** Aggregated model routing across providers. */

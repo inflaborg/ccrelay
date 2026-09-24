@@ -10,7 +10,7 @@
 
 **下载**：[最新版本](https://github.com/inflaborg/ccrelay/releases/latest) —— macOS `.dmg`（Apple 芯片、Intel）· Windows `.exe`（x64、arm64）· VS Code 扩展见 [Marketplace](https://marketplace.visualstudio.com/items?itemName=infLab.ccrelay-vscode) 与 [Open VSX](https://open-vsx.org/extension/infLab/ccrelay-vscode)
 
-**项目官网**：[https://ccrelay.inflab.org](https://ccrelay.inflab.org) · **[English Documentation](./README.md)**
+**项目官网**：[https://ccrelay.inflab.org](https://ccrelay.inflab.org) · **[English Documentation](./README.md)** · **[日本語](./README_JA.md)** · **[한국어](./README_KO.md)**
 
 ![CCRelay 桌面应用 —— 提供商列表](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-desktop-2.webp)
 
@@ -518,7 +518,7 @@ CCRelay 使用 `~/.ccrelay/config.yaml`（首次启动时自动创建）。启�
 | `server.port`      | `7575`      | 代理服务器端口                                                |
 | `server.host`      | `127.0.0.1` | 绑定地址                                                      |
 | `server.autoStart` | `true`      | 扩展加载时自动启动服务器                                      |
-| `server.locale`    | `""`        | Web UI 语言（`"en"` 或 `"zh"`）。未设置时首次访问弹出选择器。 |
+| `server.locale`    | `""`        | Web UI 语言（`"en"`、`"zh"`、`"ja"` 或 `"ko"`）。未设置时首次访问弹出选择器。 |
 
 ### 提供商
 

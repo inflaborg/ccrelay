@@ -55,7 +55,7 @@
     "rebuild:native-tests": "npm rebuild better-sqlite3",
     "test:watch": "vitest tests/unit",
     "test:coverage": "vitest run tests/unit --coverage",
-    "package:vscode": "npm run vscode:prepublish && node scripts/sync-vscode-pack-deps.mjs && npx shx cp README.md README_CN.md CHANGELOG.md LICENSE packages/vscode/ && npx shx mkdir -p dists && cd packages/vscode && npx vsce package --no-dependencies --out ../../dists && npx shx rm -f README.md README_CN.md CHANGELOG.md LICENSE",
+    "package:vscode": "npm run vscode:prepublish && node scripts/sync-vscode-pack-deps.mjs && npx shx cp README.md README_CN.md README_JA.md README_KO.md CHANGELOG.md LICENSE packages/vscode/ && npx shx mkdir -p dists && cd packages/vscode && npx vsce package --no-dependencies --out ../../dists && npx shx rm -f README.md README_CN.md README_JA.md README_KO.md CHANGELOG.md LICENSE",
     "package": "npm run package:vscode",
     "package:dev": "./scripts/package.sh dev",
     "package:prod": "./scripts/package.sh prod",

@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
-import { applyAppLocale } from "@/i18n";
+import { APP_LOCALES, applyAppLocale, type AppLocale } from "@/i18n";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import { Button } from "./ui/button";
 
@@ -15,7 +15,7 @@ export function LanguageModal({
   const { t } = useTranslation();
   const queryClient = useQueryClient();
 
-  const handleSelect = async (locale: "en" | "zh") => {
+  const handleSelect = async (locale: AppLocale) => {
     await applyAppLocale(locale);
     try {
       await api.patchConfig({ section: "server", data: { locale } });
@@ -34,20 +34,16 @@ export function LanguageModal({
           <DialogDescription>{t("language.description")}</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-2 pt-2">
-          <Button
-            variant="outline"
-            className="w-full justify-start"
-            onClick={() => void handleSelect("en")}
-          >
-            {t("language.en")}
-          </Button>
-          <Button
-            variant="outline"
-            className="w-full justify-start"
-            onClick={() => void handleSelect("zh")}
-          >
-            {t("language.zh")}
-          </Button>
+          {APP_LOCALES.map(locale => (
+            <Button
+              key={locale}
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => void handleSelect(locale)}
+            >
+              {t(`language.${locale}`)}
+            </Button>
+          ))}
         </div>
       </DialogContent>
     </Dialog>

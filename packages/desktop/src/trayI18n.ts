@@ -3,10 +3,13 @@
  * Kept separate from the web i18n bundle (main process cannot import it).
  */
 
-export type TrayLocale = "en" | "zh";
+export type TrayLocale = "en" | "zh" | "ja" | "ko";
 
 export function resolveTrayLocale(value: string | undefined): TrayLocale {
-  return value === "zh" ? "zh" : "en";
+  if (value === "zh" || value === "ja" || value === "ko") {
+    return value;
+  }
+  return "en";
 }
 
 type TrayStrings = {
@@ -73,6 +76,48 @@ const STRINGS: Record<TrayLocale, TrayStrings> = {
     openLogsFolder: "打开日志文件夹",
     quit: "退出",
     tooltipStopped: "已停止",
+  },
+  ja: {
+    stopped: "停止",
+    providerPrefix: "プロバイダー",
+    smartRouting: "スマートルーティング",
+    na: "なし",
+    openDashboard: "ダッシュボードを開く",
+    checkForUpdates: "アップデートを確認…",
+    updateUnavailableTooltip: "自動アップデートはパッケージ版でのみ利用できます",
+    updateChannel: "アップデートチャンネル",
+    updateChannelUnavailableTooltip: "アップデートチャンネルはパッケージ版でのみ利用できます",
+    channelStable: "Stable",
+    channelDev: "Dev",
+    startServer: "サーバーを起動",
+    stopServer: "サーバーを停止",
+    switchProvider: "プロバイダーを切り替え",
+    openAtLogin: "ログイン時に開く",
+    openConfigFile: "設定ファイルを開く",
+    openLogsFolder: "ログフォルダを開く",
+    quit: "終了",
+    tooltipStopped: "停止中",
+  },
+  ko: {
+    stopped: "중지됨",
+    providerPrefix: "제공자",
+    smartRouting: "스마트 라우팅",
+    na: "없음",
+    openDashboard: "대시보드 열기",
+    checkForUpdates: "업데이트 확인…",
+    updateUnavailableTooltip: "자동 업데이트는 패키지된 빌드에서만 사용할 수 있습니다",
+    updateChannel: "업데이트 채널",
+    updateChannelUnavailableTooltip: "업데이트 채널은 패키지된 빌드에서만 사용할 수 있습니다",
+    channelStable: "Stable",
+    channelDev: "Dev",
+    startServer: "서버 시작",
+    stopServer: "서버 중지",
+    switchProvider: "제공자 전환",
+    openAtLogin: "로그인 시 열기",
+    openConfigFile: "설정 파일 열기",
+    openLogsFolder: "로그 폴더 열기",
+    quit: "종료",
+    tooltipStopped: "중지됨",
   },
 };
 

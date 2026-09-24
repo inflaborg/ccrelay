@@ -1,0 +1,949 @@
+{
+  "common": {
+    "cancel": "キャンセル",
+    "save": "保存",
+    "refresh": "更新",
+    "na": "なし",
+    "upToDate": "最新です",
+    "apply": "適用",
+    "delete": "削除"
+  },
+  "serverOffline": {
+    "title": "サーバーが起動していません",
+    "description": "利用できる CCRelay インスタンスがありません。デスクトップのトレイ、または拡張機能メニューからサーバーを起動してください。",
+    "checking": "サーバーを確認しています…",
+    "waiting": "サーバーの復帰を待っています…",
+    "hint": "サーバーに再び接続できると、ダッシュボードは自動的に開きます。"
+  },
+  "nav": {
+    "chat": "チャット",
+    "clientConfig": "クライアント設定",
+    "dashboard": "ダッシュボード",
+    "smartRouting": "スマートルーティング",
+    "providers": "プロバイダー",
+    "capabilities": "機能",
+    "logs": "ログ",
+    "settings": "設定",
+    "menu": "ナビゲーション"
+  },
+  "chat": {
+    "loading": "読み込み中…",
+    "noProviderTitle": "有効なプロバイダーがありません",
+    "noProviderHint": "先にプロバイダーを追加して有効にしてから、チャットで CCRelay 経由のテストリクエストを送ってください。",
+    "activeProvider": "プロバイダー: {{name}}",
+    "newSession": "新規",
+    "deleteSession": "セッションを削除",
+    "clearAll": "すべて消去",
+    "clearAllTitle": "すべてのチャットを消去しますか？",
+    "clearAllDesc": "このブラウザに保存されているローカルのチャットセッションと履歴がすべて削除されます。",
+    "clearMessages": "消去",
+    "clearMessagesTitle": "このチャットを消去しますか？",
+    "clearMessagesDesc": "現在のセッションのメッセージをすべて削除します。セッション自体は残ります。",
+    "protocolLabel": "プロトコル",
+    "modelLabel": "モデル",
+    "noModels": "モデルなし",
+    "emptyHint": "メッセージを送ると、CCRelay 経由で現在のプロバイダーをテストできます。",
+    "emptyHintAgent": "何でも質問できます。CCRelay のトラフィックはログ用ツールで調べるか、通常の会話もできます。",
+    "inputPlaceholder": "メッセージ…",
+    "inputPlaceholderAgent": "ログについて質問…",
+    "inputPlaceholderWithImage": "メッセージ…（画像の貼り付けまたは添付）",
+    "enterHint": "Enter で送信 · Shift+Enter で改行",
+    "enterHintAgent": "Enter で送信 · Shift+Enter で改行 · ツールがループで実行されることがあります",
+    "enterHintWithImage": "Enter で送信 · Shift+Enter で改行 · Ctrl+V で画像を貼り付け",
+    "addImage": "画像を追加",
+    "removeImage": "画像を削除",
+    "imageMessageTitle": "画像",
+    "imageOmitted": "画像（未保存）",
+    "imageHistoryHint": "履歴には画像は保存されません。",
+    "send": "送信",
+    "stop": "停止",
+    "stopped": "停止しました",
+    "edit": "編集",
+    "saveEdit": "保存して再試行",
+    "cancelEdit": "キャンセル",
+    "copy": "コピー",
+    "copied": "コピーしました",
+    "modeAgent": "Agent",
+    "modePlayground": "Playground",
+    "modeLabel": "モード",
+    "memoryTitle": "メモリ",
+    "memoryEmpty": "メモリはまだありません。",
+    "toolRunning": "実行中",
+    "toolDone": "完了",
+    "toolError": "エラー",
+    "protocol": {
+      "openaiChat": "OpenAI Chat",
+      "openaiResponses": "OpenAI Responses",
+      "anthropic": "Anthropic"
+    }
+  },
+  "app": {
+    "footer": {
+      "project": "Project CCRelay"
+    }
+  },
+  "update": {
+    "pending": "チェック予定",
+    "checkNowHint": "クリックして今すぐ確認",
+    "upToDate": "最新です",
+    "recheckHint": "クリックして再確認",
+    "checking": "確認中…",
+    "available": "アップデートがあります",
+    "modalTitle": "新しいバージョン {{version}}",
+    "download": "GitHub でリリースを見る",
+    "current": "現在のバージョン: {{version}}",
+    "noNotes": "リリースノートはありません。",
+    "channelStable": "Stable",
+    "channelDev": "Dev",
+    "channelHint": "更新チャネル（トレイ → Update Channel で変更）"
+  },
+  "language": {
+    "title": "言語を選択",
+    "description": "インターフェースの言語を選んでください。",
+    "en": "English",
+    "zh": "中文",
+    "ja": "日本語",
+    "ko": "한국어"
+  },
+  "dashboard": {
+    "title": "ダッシュボード",
+    "subtitle": "CCRelay サーバーの状態と性能を監視します",
+    "serverStatus": {
+      "title": "サーバー状態",
+      "running": "稼働中",
+      "stopped": "停止"
+    },
+    "currentProvider": {
+      "title": "現在のプロバイダー",
+      "none": "なし"
+    },
+    "totalRequests": {
+      "title": "リクエスト総数",
+      "success": "成功",
+      "errors": "エラー"
+    },
+    "performance": {
+      "title": "性能",
+      "avgResponseTime": "平均応答時間",
+      "successRate": "成功率",
+      "providersUsed": "使用プロバイダー数",
+      "p50Latency": "P50 レイテンシ",
+      "p90Latency": "P90 レイテンシ",
+      "avgTtfb": "平均 TTFB",
+      "avgTtfbTooltip": "上流リクエスト送信 → 最初の応答バイト（段階時間がある行のみ）",
+      "avgQueueWait": "平均キュー待ち",
+      "avgQueueWaitTooltip": "上流の実行が始まるまでキューで待った時間",
+      "outputTps": "出力 TPS",
+      "outputTpsTooltip": "ヘッダー後の生成時間を使った出力トークン/秒（生成時間 > 500ms）"
+    },
+    "tokens": {
+      "title": "トークン使用量",
+      "input": "入力",
+      "output": "出力",
+      "cache": "キャッシュ",
+      "cacheHitRate": "キャッシュヒット率"
+    },
+    "timeRange": {
+      "1d": "1日",
+      "7d": "7日",
+      "30d": "30日",
+      "all": "すべて"
+    },
+    "resetStats": {
+      "action": "統計をリセット",
+      "title": "ダッシュボードの統計をリセット",
+      "description": "ダッシュボードのトークン使用量と性能指標をすべて消去します。ログタブのリクエストごとのトークン表示は残ります。",
+      "confirm": "統計をリセット",
+      "resetting": "リセット中…"
+    },
+    "dbUnavailable": {
+      "title": "統計を利用できません",
+      "description": "ローカルデータベースを開けませんでした。トークンと性能の指標は記録も表示もできません。PATH に sqlite3 を入れるか、内蔵データベースエンジンを含む Desktop アプリを使ってください。"
+    },
+    "providerBreakdown": {
+      "title": "プロバイダー内訳",
+      "provider": "プロバイダー",
+      "requests": "リクエスト",
+      "tokens": "トークン",
+      "nonCacheInput": "非キャッシュ入力",
+      "cacheHitRate": "キャッシュヒット率"
+    },
+    "providerDetail": {
+      "title": "プロバイダー使用量",
+      "loading": "プロバイダー統計を読み込み中…",
+      "empty": "選択した期間に、このプロバイダーの使用データはありません。",
+      "error": "プロバイダー統計の読み込みに失敗しました。",
+      "modelChart": "モデル別リクエスト",
+      "dailyChart": "日次使用量",
+      "dailyRequestsChart": "日次リクエスト",
+      "dailyTokensChart": "日次トークン（非キャッシュ入力 / キャッシュ / 出力）",
+      "modelTable": "モデル内訳",
+      "model": "モデル",
+      "unknownModel": "不明",
+      "clickHint": "クリックで詳細"
+    },
+    "queue": {
+      "title": "同時実行キュー",
+      "loading": "キュー状態を読み込み中…",
+      "disabled": "同時実行キューは無効です",
+      "noQueues": "キューは設定されていません",
+      "defaultQueue": "デフォルト",
+      "saturated": "飽和",
+      "workers": "{{active}} / {{max}} ワーカー",
+      "processing": "処理中",
+      "waiting": "待機中",
+      "avgWait": "平均待ち",
+      "avgProcess": "平均処理",
+      "taskId": "タスク",
+      "taskState": "状態",
+      "elapsed": "経過",
+      "stateProcessing": "処理中",
+      "stateQueued": "キュー待ち",
+      "noActiveTasks": "処理中またはキュー待ちのタスクはありません"
+    }
+  },
+  "clientConfig": {
+    "title": "クライアント設定",
+    "pageSubtitle": "Claude Desktop、Claude Code、Codex をこの CCRelay インスタンスに向けます",
+    "description": "Claude Desktop、Claude Code（{{claudePath}}）、Codex（{{codexPath}}）の設定が、この CCRelay インスタンス（ポート {{port}}）を指しているか確認します。",
+    "copyPath": "パスをコピー",
+    "status": {
+      "ok": "OK",
+      "notSet": "未設定",
+      "otherHost": "別のホスト",
+      "invalidFile": "無効なファイル"
+    },
+    "diff": {
+      "allConfigured": "すべての項目を設定済み",
+      "expandAll": "すべての項目を表示",
+      "expandOk": "OK の項目を表示",
+      "collapse": "折りたたむ",
+      "collapseOk": "OK の項目を隠す",
+      "expectedLabel": "期待値:",
+      "currentLabel": "現在:",
+      "notSetCurrent": "（未設定）"
+    },
+    "rules": {
+      "nonEmpty": "空でない任意の値",
+      "positiveNumber": "任意の正の数",
+      "truthy": "真値（1、\"1\"、または true）",
+      "absent": "存在してはいけません",
+      "anyNonEmpty": "空でない任意の値",
+      "currentProviderModels": "現在のプロバイダーのモデル一覧にあるモデル id",
+      "nonEmptyArrayIncludingStar": "\"*\" を含む空でない配列",
+      "aliasHeaderNonEmpty": "値が空でない x-ccrelay-model-alias ヘッダー（キーは大文字小文字を区別しない）"
+    },
+    "fields": {
+      "ANTHROPIC_BASE_URL": "Anthropic ベース URL",
+      "ANTHROPIC_AUTH_TOKEN": "Anthropic 認証トークン",
+      "API_TIMEOUT_MS": "API タイムアウト（ms）",
+      "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "不要なトラフィックを無効化",
+      "model_provider": "モデルプロバイダー",
+      "model_providers.ccrelay.base_url": "CCRelay ベース URL",
+      "model": "モデル",
+      "model_catalog_json": "モデルカタログ JSON",
+      "inferenceGatewayBaseUrl": "ゲートウェイ ベース URL",
+      "inferenceProvider": "推論プロバイダー",
+      "inferenceGatewayApiKey": "ゲートウェイ API キー",
+      "coworkEgressAllowedHosts": "Cowork の送信許可ホスト",
+      "inferenceCustomHeaders": "ゲートウェイのカスタムヘッダー",
+      "inferenceGatewayHeaders": "ゲートウェイヘッダー（旧）",
+      "disableEssentialTelemetry": "必須テレメトリを無効化",
+      "disableNonessentialTelemetry": "任意テレメトリを無効化",
+      "deploymentMode": "デプロイモード"
+    },
+    "claudeCode": {
+      "name": "Claude Code",
+      "envVarLabel": "ANTHROPIC_BASE_URL:",
+      "expected": "期待値:",
+      "optionalModels": {
+        "title": "任意のデフォルトモデル名",
+        "description": "（通常は CCRelay の modelMap で足ります。Claude Code に特定の id を要求させたい場合だけ設定してください。）",
+        "notSet": "settings.json では未設定です。",
+        "suggested": "推奨:"
+      },
+      "configureModels": "デフォルトモデルを設定",
+      "restore": "復元",
+      "upToDate": "最新です",
+      "apply": "CCRelay 設定を適用"
+    },
+    "claudeDesktop": {
+      "name": "Claude Desktop",
+      "restore": "復元",
+      "upToDate": "最新です",
+      "apply": "CCRelay 設定を適用"
+    },
+    "codex": {
+      "name": "Codex",
+      "expected": "期待値:",
+      "model": {
+        "label": "モデル",
+        "description": "（config.toml の model に書き込まれます）",
+        "notSet": "未設定です。",
+        "default": "デフォルト:",
+        "bannerTitle": "Codex のモデルを更新する必要があります",
+        "needsUpdate": "現在のモデルは有効なプロバイダーの一覧にありません。プロバイダーを切り替えたら更新してください。",
+        "vision": "Vision",
+        "textOnly": "テキストのみ"
+      },
+      "vision": {
+        "all": "すべてのモデルを Vision として扱う",
+        "allHint": "カタログ内のすべてのモデルで画像の貼り付けを許可します。外すと、画像を受け付けるモデルを選べます。",
+        "pick": "Vision モデル",
+        "tab": "Vision"
+      },
+      "exclude": {
+        "tab": "除外",
+        "hint": "除外したモデルは Codex のカタログに入りません。プロトコルで除外すると、その種類のモデルは後からスマートルーティングで追加されたものも含めてすべて外れます。",
+        "protocols": "プロトコルで除外",
+        "anthropic": "Anthropic",
+        "openai": "OpenAI",
+        "openai_chat": "Chat のみ",
+        "models": "個別のモデルを除外"
+      },
+      "configureModel": "モデルを設定",
+      "restore": "復元",
+      "upToDate": "最新です",
+      "apply": "CCRelay テンプレートを適用",
+      "restartHint": "適用またはプロバイダー切り替えのあと Codex を再起動すると、/model がカタログを読み込みます。"
+    },
+    "version": {
+      "desktopBundles": "インストール済みバンドル",
+      "native": "Native",
+      "vm": "VM",
+      "notInstalled": "未インストール",
+      "cliVersion": "CLI バージョン",
+      "cliNotDetected": "未検出",
+      "cliDisabled": "設定で検出が無効です",
+      "detectionToggle": "Claude CLI のバージョンを検出",
+      "detectionToggleHint": "（バックグラウンドで `claude --version` を実行）",
+      "refresh": "バージョンを更新"
+    },
+    "dialog": {
+      "overwrite": {
+        "title": "Claude Code の設定を上書きしますか？",
+        "invalidJson": "無効な JSON は、マージした env ブロックを持つ新しいオブジェクトに置き換えられます。",
+        "action": "上書き"
+      },
+      "replaceCodex": {
+        "title": "Codex の設定を置き換えますか？"
+      },
+      "replaceClaudeDesktop": {
+        "title": "Claude Desktop の設定を上書きしますか？"
+      },
+      "restore": {
+        "title": "{{name}} の設定を復元しますか？",
+        "claudeDescription": "settings.json から CCRelay が注入したキー（ANTHROPIC_BASE_URL、ANTHROPIC_AUTH_TOKEN など）を削除します。その他の設定は残ります。",
+        "codexDescription": "config.toml から CCRelay のモデルプロバイダー節とモデルカタログを削除し、model をデフォルトに戻します。",
+        "claudeDesktopDescription": "Claude-3p ディレクトリから CCRelay の設定ファイルを削除し、deploymentMode を 1p に戻して developer_settings.json を削除します。",
+        "action": "復元"
+      }
+    },
+    "codexModelModal": {
+      "title": "Codex モデル",
+      "description": "~/.codex/config.toml の model に書き込まれ、CCRelay のモデルカタログにも載ります。空にするとデフォルトを使います。",
+      "label": "モデル",
+      "pickFromProvider": "現在のプロバイダーから",
+      "orType": "またはモデル id を入力",
+      "saveAndApply": "保存して適用"
+    },
+    "modelsModal": {
+      "title": "Claude Code のデフォルトモデル名",
+      "description": "settings.json の env.ANTHROPIC_DEFAULT_*_MODEL に書き込まれます。空のまま保存するとそのキーを削除します。3つとも空にすると CCRelay のマッピングだけに依存します。",
+      "opus": "Opus",
+      "sonnet": "Sonnet",
+      "haiku": "Haiku",
+      "useDefaults": "推奨デフォルトを使う",
+      "clearFields": "項目をクリア",
+      "removeAll": "ファイルからすべて削除"
+    }
+  },
+  "smartRouting": {
+    "title": "スマートルーティング",
+    "subtitle": "プロバイダーのモデル一覧を集約し、モデル id でリクエストを振り分けます",
+    "refreshAll": "キャッシュを更新",
+    "disabledHint": "スマートルーティングは有効になっていません。プロバイダーページで有効にすると、モデルを集約してモデル id で振り分けます。",
+    "goToProviders": "プロバイダーへ",
+    "settings": {
+      "title": "設定",
+      "aliasPrefix": "エイリアス接頭辞",
+      "bareFallback": "素のモデル id のフォールバック",
+      "firstMatch": "最初の一致（プロバイダー順）",
+      "reject": "拒否",
+      "unsaved": "未保存の変更"
+    },
+    "customRules": {
+      "title": "カスタムルーティング規則",
+      "subtitle": "集約カタログより先に照合されます。パターンは /v1/models には出ません。クライアントはリクエスト本文で送る必要があります。* と ? のワイルドカードに対応し、最初の一致が使われます。",
+      "pattern": "入力パターン",
+      "patternHelp": "クライアントのモデル id（完全一致またはワイルドカード）",
+      "targetProvider": "対象プロバイダー",
+      "targetModel": "対象モデル",
+      "enabled": "有効",
+      "order": "順序",
+      "add": "規則を追加",
+      "empty": "カスタム規則はありません。特定のモデル id でカタログの振り分けを上書きする規則を追加できます。",
+      "moveUp": "上へ",
+      "moveDown": "下へ",
+      "remove": "削除"
+    },
+    "catalog": {
+      "title": "集約モデル",
+      "models": "モデル",
+      "statsBadge": "{{providers}} プロバイダー · {{models}} モデル",
+      "previewHint": "プレビューのみです。スマートルーティングはまだ有効ではありません。プロバイダータブで有効にしてください。",
+      "empty": "カタログにモデルはまだありません。キャッシュを更新するか、プロバイダーを設定してください。",
+      "emptyWithErrors": "モデルが集約されていません。上のプロバイダー取得エラーを直してからキャッシュを更新してください。",
+      "publicId": "公開 ID",
+      "aliasHash": "エイリアスハッシュ",
+      "protocol": "プロトコル",
+      "source": "ソース",
+      "excluded": "除外",
+      "reload": "表示を再読み込み",
+      "validate": "エイリアスを検証",
+      "validating": "検証中",
+      "allAligned": "すべてのエイリアスが一致"
+    },
+    "providerErrors": {
+      "title": "一部のプロバイダーでモデル取得に失敗しました",
+      "editProvider": "プロバイダーで編集",
+      "auth": "{{providerId}}: 認証に失敗しました",
+      "missing_key": "{{providerId}}: API キーがありません",
+      "network": "{{providerId}}: ネットワークエラー",
+      "format": "{{providerId}}: 応答またはベース URL が無効です"
+    },
+    "aliasDrift": {
+      "title": "エイリアスハッシュのずれ",
+      "description": "一部のカスタムモデルエイリアスが正規ハッシュと異なります。プロバイダー間の衝突を避けるため更新してください。",
+      "keep": "維持",
+      "update": "更新",
+      "updateAll": "すべて更新",
+      "keepAllNonCollision": "衝突しないものを維持",
+      "collisionWarning": "次とエイリアスが重複しています: {{peers}}。維持すると、このエイリアスは最初の一致による振り分けに戻ることがあります。"
+    }
+  },
+  "providers": {
+    "title": "プロバイダー",
+    "subtitle": "プロバイダーを選び、適用してルーティング元を切り替えます",
+    "section": {
+      "smartRouting": "スマートルーティング",
+      "upstream": "プロバイダー"
+    },
+    "smartRoutingCard": {
+      "summary": "{{providers}} プロバイダー · {{models}} モデル",
+      "summaryDisabled": "{{providers}} プロバイダー · {{models}} モデルを集約します。クリックして有効化。",
+      "enable": "有効化",
+      "disable": "無効化",
+      "active": "使用中",
+      "lastRefreshed": "最終更新: {{time}}"
+    },
+    "reloadConfig": "設定を再読み込み",
+    "add": "追加",
+    "protocol": {
+      "anthropic": "Anthropic",
+      "openai": "OpenAI",
+      "openaiChat": "OpenAI Chat"
+    },
+    "contextMenu": {
+      "use": "使用",
+      "edit": "編集",
+      "duplicate": "複製",
+      "delete": "削除"
+    },
+    "badge": {
+      "mappingOff": "マッピングオフ",
+      "disabled": "無効",
+      "active": "使用中"
+    },
+    "badgeShort": {
+      "mappingOff": "マップ",
+      "disabled": "オフ",
+      "active": "使用中",
+      "selected": "選択中"
+    },
+    "card": {
+      "id": "ID",
+      "mode": "モード",
+      "protocol": "プロトコル",
+      "baseUrl": "ベース URL"
+    },
+    "emptyState": "プロバイダーは未設定です。「追加」をクリックして作成してください。",
+    "modal": {
+      "editTitle": "プロバイダーを編集",
+      "addTitle": "プロバイダーを追加",
+      "providerId": "プロバイダー ID",
+      "providerIdHelp": "一意の識別子（英数字、アンダースコア、ハイフン）",
+      "enabled": "有効",
+      "alwaysOn": "（常にオン）",
+      "alwaysOnTooltip": "公式プロバイダーは有効のままにする必要があります。",
+      "name": "名前",
+      "baseUrl": "API ベース URL",
+      "type": "種類",
+      "typeOpenaiFull": "OpenAI（フル）",
+      "typeOpenaiChatOnly": "OpenAI（Chat のみ）",
+      "azureChatCompat": "Azure Chat 互換",
+      "azureChatCompatHelp": "カスタムドメインの Azure OpenAI または Azure 互換ルーターで有効にします（developer→system、カスタムツールのシム）。公式の *.cognitiveservices.azure.com ホストは自動検出されます。",
+      "modePassthrough": "パススルー",
+      "modeInject": "注入",
+      "apiKey": "API キー",
+      "apiKeyNotSet": "（未設定）",
+      "apiKeyHelpEdit": "編集ボタンをクリックすると API キーを変更できます。",
+      "apiKeyHelpAdd": "${ENV_VAR} 構文に対応します。作成後は変更できません。",
+      "editField": "編集",
+      "editIdTitle": "プロバイダー ID を変更",
+      "editApiKeyTitle": "API キーを変更",
+      "saveConfirmTitle": "機密の変更を確認",
+      "saveConfirmIdChanged": "プロバイダー ID が変更されます。",
+      "saveConfirmApiKeyChanged": "API キーが変更されます。",
+      "saveConfirmBoth": "プロバイダー ID と API キーが変更されます。",
+      "idTaken": "この ID はすでに使われています。",
+      "idCannotBeOfficial": "ID「official」は予約されています。",
+      "useCustomModelsList": "カスタムモデル一覧を使う",
+      "customModelsListHelp": "有効にすると、GET /models はこの一覧からローカルに応答します（上流へは問い合わせません）。各行は実モデル id、または realId;表示名、または realId;表示名;エイリアスです（表示名が id と同じときは realId;;エイリアス）。HTTP ヘッダー x-ccrelay-model-alias がない場合、一覧と詳細は実 id を返します。そのヘッダーがある場合、公開される id はエイリアス部分です。任意のクエリ limit は返却ページを切り詰めます。Anthropic 形式の応答では has_more がそれに応じて設定されます。",
+      "modelIds": "モデル id（1行に1つ。realId、または realId;表示、または realId;表示;エイリアス）",
+      "enableModelMapping": "モデルマッピングを有効化",
+      "modelMappingHelp": "オフのとき、下の YAML は設定に残りますが適用されません（リクエスト、モデル一覧、応答のモデルはマッピングされません）。",
+      "modelMap": "モデルマップ（YAML）",
+      "modelMapHelp": "任意です。空にすると、モデル名を書き換えずに通します。",
+      "submitAdd": "プロバイダーを追加",
+      "coworkHelper": "カスタムモデルをすばやく入力",
+      "coworkHelperDesc": "上流のモデル ID と任意の表示名を入力します。カスタムモデル一覧と対応するモデルマップを一度に生成します。",
+      "coworkHelperRealId": "実モデル ID",
+      "coworkHelperDisplayName": "表示名（任意）",
+      "coworkHelperAdd": "行を追加",
+      "coworkHelperPreview": "プレビュー",
+      "coworkHelperApply": "適用",
+      "coworkHelperRemoveRow": "行を削除",
+      "coworkHelperRequiresId": "エイリアスを生成する前に、プロバイダー ID とプロトコルを入力してください。",
+      "coworkHelperFamilyMaps": "Claude ファミリーのマッピング",
+      "coworkHelperFamilyMapsDesc": "既定では一覧の最初のモデルです。フォールバックの claude-* と gpt-* も最初のモデルにマップされます。",
+      "coworkHelperFamilyMapsPlaceholder": "モデルを選択",
+      "rebuildModelMap": "モデルマップを再構築",
+      "rebuildModelMapHelp": "カスタムモデル一覧から正確なエイリアス規則を再構築し、ワイルドカードは残します。"
+    },
+    "validation": {
+      "mustBeYamlArray": "YAML 配列である必要があります",
+      "patternModelRequired": "各項目には 'pattern' と 'model' が必要です",
+      "invalidYaml": "YAML の形式が無効です"
+    },
+    "placeholder": {
+      "id": "例: my_provider",
+      "name": "例: My Custom Provider",
+      "baseUrl": "例: https://api.example.com",
+      "apiKey": "例: ${API_KEY} または sk-...",
+      "customModelsList": "claude-sonnet-4-6;Claude Sonnet 4.6\ngpt-5.4;GPT 5.4;claude-abc001"
+    },
+    "deleteDialog": {
+      "title": "プロバイダーを削除しますか？",
+      "titleBulk": "{{count}} 件のプロバイダーを削除しますか？",
+      "description": "{{name}} は完全に削除されます。",
+      "descriptionBulk": "{{count}} 件のプロバイダーが完全に削除されます。",
+      "thisProvider": "このプロバイダー",
+      "cannotUndo": "この操作は元に戻せません。",
+      "action": "削除"
+    },
+    "duplicateModal": {
+      "title": "プロバイダーを複製",
+      "name": "名前",
+      "namePlaceholder": "新しいプロバイダーの表示名",
+      "newId": "新しいプロバイダー ID",
+      "idPlaceholder": "例: my-provider_copy",
+      "idHelp": "英数字、アンダースコア、ハイフンのみです。そのキーが既にあるとリクエストは失敗します。先に別の項目を削除または名前変更してください。",
+      "action": "複製"
+    },
+    "import": "インポート",
+    "export": "エクスポート",
+    "select": "選択",
+    "selectAll": "すべて選択",
+    "doneSelection": "完了",
+    "selectedCount": "{{count}} 件選択",
+    "selectModeHint": "エクスポートまたは削除するプロバイダーにチェックを入れます。有効なルーティング元は変わりません。",
+    "selectProvider": "{{name}} を選択",
+    "inUse": "使用中: {{name}}",
+    "pendingSelect": "選択: {{name}}",
+    "clickToSelect": "クリックしてこのプロバイダーを選択",
+    "clickToEdit": "クリックしてこのプロバイダーを編集"
+  },
+  "wizard": {
+    "title": "プロバイダーを追加",
+    "titleBrand": "{{brand}} — セットアップ",
+    "chooser": {
+      "genericSection": "汎用エンドポイント",
+      "customSection": "カスタム",
+      "custom": "手動セットアップ",
+      "customDesc": "YAML のモデルマップと詳細オプションを含む完全なプロバイダーフォームです。",
+      "partners": "パートナー"
+    },
+    "brand": {
+      "genericOpenaiChat": "OpenAI Chat",
+      "genericAnthropic": "Anthropic",
+      "tuningEngines": "Tuning Engines",
+      "glm": "智譜 GLM",
+      "xiaomi": "シャオミ MiMo",
+      "azure": "Azure OpenAI",
+      "minimax": "MiniMax",
+      "longcat": "美団 LongCat",
+      "geminiOpenai": "Gemini（OpenAI 互換）",
+      "deepseek": "DeepSeek",
+      "astraflow": "Astraflow（UCloud）"
+    },
+    "toggle": {
+      "off": "いいえ",
+      "on": "はい"
+    },
+    "option": {
+      "region": "リージョン",
+      "codingPlan": "Coding Plan",
+      "tokenPlan": "Token Plan"
+    },
+    "region": {
+      "international": "インターナショナル",
+      "china": "中国"
+    },
+    "field": {
+      "name": "表示名",
+      "apiKey": "API キー",
+      "baseUrl": "エンドポイント URL",
+      "models": "上流モデル ID",
+      "customModels": "カスタムモデル一覧",
+      "claudeSupport": "Claude Cowork / Claude Code / Codex に対応"
+    },
+    "models": {
+      "referenceTitle": "エンドポイントのモデル",
+      "loading": "エンドポイントからモデルを取得中…",
+      "fetchingHint": "エンドポイントのモデルを取得中…",
+      "fetchFailedHint": "エンドポイントのモデルを取得できません",
+      "success": "{{count}} 件のモデルを利用できます",
+      "authError": "認証に失敗しました（401/403）。API キーを確認してください。",
+      "networkError": "エンドポイントに到達できませんでした。URL を確認してください。",
+      "formatError": "/models エンドポイントの応答形式が想定と異なります。",
+      "empty": "エンドポイントはモデルを返しませんでした。"
+    },
+    "test": {
+      "button": "テスト",
+      "testing": "テスト中…",
+      "pass": "OK",
+      "fail": "失敗",
+      "incomplete": "テストするには必須項目を入力してください。",
+      "needAuth": "テストするには API キーを入力してください。",
+      "noModel": "テストするには上流モデル ID を1つ以上入力してください。",
+      "noProbeModels": "モデルはまだありません。エンドポイントの取得を待つか、カスタムモデル一覧を有効にしてください。",
+      "selectModel": "テストするモデルを選択",
+      "pickModelTitle": "テスト用のモデルを選択",
+      "pickModelDescription": "エンドポイントから複数のモデルが返されました。テストするモデルを1つ選んでください。",
+      "continueWithTest": "続行",
+      "networkError": "ネットワークエラー",
+      "authError": "認証失敗（{{status}}）",
+      "serverError": "サーバーエラー（{{status}}）",
+      "clientError": "リクエスト拒否（{{status}}）",
+      "htmlResponse": "HTML が返りました（プロキシの設定ミス？）",
+      "timeout": "タイムアウト（5秒）",
+      "formatError": "想定外の応答形式"
+    },
+    "placeholder": {
+      "models": "glm-5.1;GLM 5.1\nglm-4.7;GLM 4.7"
+    },
+    "help": {
+      "azureEndpoint": "Azure OpenAI のベース URL。例: https://…cognitiveservices.azure.com/openai/v1",
+      "customEndpoint": "上流のベース URL を貼り付けます（選んだプロトコルと一致させてください: OpenAI Chat または Anthropic Messages）。",
+      "presetEndpointDefault": "既定は公式 API の URL です。別のホストやプロキシを使う場合は編集してください。",
+      "models": "上流モデル id を1行に1つ。id;表示名 で表示名を指定できます（セミコロンで id と名前を分けます）。",
+      "claudeSupport": "Cowork クライアント向けのエイリアスマッピングを有効にします。各モデルはモデル一覧で claude-{hash} エイリアスを持ち、x-ccrelay-model-alias ヘッダーを送るクライアントには実 id の代わりにエイリアスが見えます。最初のモデルへマップする claude-* と gpt-* のワイルドカードも追加され、Claude Code と Codex で使われます。"
+    },
+    "confirm": {
+      "lead": "次のプロバイダーを作成します:",
+      "submit": "作成",
+      "back": "戻る",
+      "working": "作成中…"
+    },
+    "step": {
+      "next": "次へ",
+      "back": "戻る",
+      "cancel": "キャンセル"
+    }
+  },
+  "logs": {
+    "title": "リクエストログ",
+    "subtitle": "API リクエストログの表示と分析",
+    "clearAll": "すべて消去",
+    "export": "エクスポート",
+    "exporting": "エクスポート中…",
+    "selectedCount": "{{count}} 件選択",
+    "exportHint": "変換後/元の JSON、ヘッダー、分析 Markdown を zip で書き出します。",
+    "selectAllLoaded": "読み込み済みのログをすべて選択",
+    "selectRow": "ログ {{id}} を選択",
+    "exportFailed": "ログのエクスポートに失敗しました。",
+    "exportEmpty": "エクスポートできる一致ログはありません。",
+    "filter": {
+      "allProviders": "すべてのプロバイダー",
+      "allMethods": "すべてのメソッド",
+      "pathPlaceholder": "パスで絞り込み...",
+      "errorsOnly": "エラーのみ",
+      "logCount": "件のログ"
+    },
+    "table": {
+      "header": {
+        "id": "ID",
+        "method": "メソッド",
+        "type": "種類",
+        "model": "モデル → マップ先",
+        "tokens": "トークン",
+        "path": "パス",
+        "provider": "プロバイダー",
+        "status": "ステータス",
+        "duration": "所要時間",
+        "time": "時刻",
+        "ttfb": "TTFB",
+        "tps": "TPS"
+      },
+      "ttfbTooltip": "上流 TTFB（リクエスト送信 → 最初のバイト）",
+      "tpsTooltip": "出力トークン/秒（ヘッダー後の生成時間）",
+      "routeType": {
+        "block": "ブロック",
+        "pass": "通過",
+        "route": "ルート",
+        "service": "サービス",
+        "serviceHint": "登録済みの機能がローカルで処理しました（上流へはプロキシしていません）。"
+      },
+      "status": {
+        "pending": "保留",
+        "ok": "OK",
+        "err": "エラー"
+      }
+    },
+    "emptyMessage": "ログがありません。ログ保存が有効か確認してください。",
+    "detail": {
+      "title": "ログの詳細",
+      "id": "ID:",
+      "method": "メソッド",
+      "status": "ステータス",
+      "provider": "プロバイダー",
+      "duration": "所要時間",
+      "time": "時刻",
+      "path": "リクエストパス",
+      "serviceHandler": "サービスハンドラ",
+      "serviceMeta": "サービスメタデータ",
+      "targetUrl": "上流 URL",
+      "model": "モデル",
+      "tokens": "トークン",
+      "tokenIn": "入力",
+      "tokenOut": "出力",
+      "tokenCache": "キャッシュ",
+      "timingPhases": "時間の内訳",
+      "queueWait": "キュー待ち",
+      "upstreamTtfb": "上流 TTFB",
+      "generation": "生成",
+      "totalTime": "合計",
+      "ttfb": "TTFB",
+      "outputTps": "出力 TPS",
+      "error": "エラー",
+      "statusOk": "OK",
+      "statusErr": "エラー",
+      "statusPending": "保留",
+      "loadError": "ログの詳細を読み込めませんでした",
+      "requestBody": "リクエスト本文",
+      "responseBody": "レスポンス本文",
+      "requestHeaders": "リクエストヘッダー",
+      "responseHeaders": "レスポンスヘッダー",
+      "tab": {
+        "analysis": "分析",
+        "tools": "ツール",
+        "converted": "変換後",
+        "original": "元",
+        "raw": "生"
+      },
+      "chars": "文字",
+      "copy": "コピー",
+      "copied": "コピーしました"
+    },
+    "analysis": {
+      "system": "システム",
+      "user": "ユーザー",
+      "assistant": "アシスタント",
+      "imageAttached": "[画像あり]",
+      "toolUse": "ツール使用:",
+      "toolResult": "ツール結果",
+      "noContent": "解析できる内容がありません。",
+      "parseFailed": "内容を Markdown に解析できませんでした。"
+    },
+    "clearDialog": {
+      "title": "すべてのログを消去",
+      "description": "ログタブに保存されたリクエスト本文とレスポンス本文をすべて削除します。ダッシュボードのトークンと性能の統計には影響しません。",
+      "clearing": "消去中...",
+      "action": "すべて消去"
+    }
+  },
+  "settings": {
+    "title": "設定",
+    "subtitle": "サーバー、ルーティング、同時実行、ログの設定を管理します。",
+    "saved": "保存しました",
+    "restartRequired": "変更を保存しました。これらの設定を反映するにはサーバーの再起動が必要です。",
+    "loadError": "設定の読み込みに失敗しました。",
+    "server": {
+      "title": "サーバー",
+      "port": "ポート",
+      "host": "ホスト",
+      "autoStart": "拡張機能の有効化時にサーバーを自動起動",
+      "language": "言語",
+      "languageAutoSave": "変更するとすぐに適用されます。"
+    },
+    "routing": {
+      "title": "ルーティング",
+      "forwardRules": "転送ルール",
+      "blockRules": "ブロックルール",
+      "column": {
+        "path": "パス",
+        "provider": "プロバイダー",
+        "response": "レスポンス",
+        "code": "コード",
+        "condition": "条件"
+      },
+      "addRule": "ルールを追加",
+      "add": "追加",
+      "evaluationOrder": "評価順",
+      "evaluationHelp": "評価順は YAML の上から下です。セクションカードは各グループで最も早いルール順に並びます。グループはラベルだけで、並列パイプラインにはなりません。最初の一致が使われます。「auto」は有効なプロバイダーを意味します。ルーティングと 404 を参照してください。未知のパスは 404 を返します。",
+      "blockHelp": "転送ルールより先に実行されます。ルールは1行に1つです。条件は、ダッシュボードの有効なプロバイダーに対する「次のときのみ」一覧か「次を除く」一覧のどちらかです（UI では両方は選べません）。",
+      "autoLiteral": "auto",
+      "routingAnd404": "ルーティングと 404",
+      "saveRouting": "ルーティングを保存",
+      "unsavedChanges": "未保存の変更",
+      "matchesConfig": "保存済みの設定と一致",
+      "group": {
+        "anthropicMessages": "Anthropic · Messages API",
+        "anthropicMessagesHint": "/v1/messages, /v1/messages/count_tokens, /anthropic/v1/messages …",
+        "openaiChat": "OpenAI · Chat Completions",
+        "openaiChatHint": "/v1/chat/completions, /openai/chat/completions",
+        "openaiResponses": "OpenAI · Responses API",
+        "openaiResponsesHint": "/v1/responses, /openai/responses",
+        "openaiModels": "OpenAI · モデル一覧",
+        "openaiModelsHint": "/v1/models, /openai/models",
+        "anthropicModels": "Anthropic · モデル一覧",
+        "anthropicModelsHint": "/anthropic/v1/models",
+        "custom": "カスタムパス",
+        "customHint": "その他のパターンです。追加した行は、上のグループに一致するまでここに表示されます。"
+      },
+      "placeholder": {
+        "forwardPath": "/my/custom/route",
+        "blockPath": "/api/event_logging/*",
+        "blockResponse": "{\"ok\":true}"
+      },
+      "blockCondition": {
+        "anyProvider": "任意のプロバイダー",
+        "noConditionHint": "プロバイダー条件なし — クリックして「次のときのみ」/「次を除く」一覧を追加",
+        "only": "次のときのみ:",
+        "unless": "次を除く:",
+        "onlyWhenLabel": "次のときのみのプロバイダー",
+        "onlyWhen": "現在のプロバイダーが次のときのみ",
+        "onlyWhenYaml": "（YAML condition.providers）",
+        "clearUnless": "この欄を編集するには、下の「次を除く…」の項目をすべて消してください。",
+        "noProvidersLoaded": "プロバイダーが読み込まれていません",
+        "allSelected": "すべてのプロバイダーを選択済み",
+        "addProviderId": "プロバイダー ID を追加…",
+        "unlessLabel": "除外するプロバイダー",
+        "unlessWhen": "現在のプロバイダーが次の場合を除く",
+        "unlessYaml": "（YAML condition.providerNot）",
+        "clearOnlyWhen": "この欄を編集するには、上の「次のときのみ…」の項目をすべて消してください。",
+        "removeProvider": "{{id}} を削除"
+      },
+      "blockConditionModal": {
+        "title": "ブロック条件（プロバイダー）",
+        "description": "一度に1つのモードだけ選べます。「次のときのみ」（condition.providers）か「次を除く」（condition.providerNot）です。片方を入れるともう片方は消えます。両方空ならプロバイダーで絞り込みません。YAML に両方ある場合、このダイアログは「次を除く」を残し「次のときのみ」を捨てます。"
+      },
+      "helpBox": {
+        "title": "ルーティングと 404",
+        "description": "ルールは順に評価されます。まず一致するブロックルール（最初の一致）、次に一致する転送ルール（最初の一致）です。どの転送ルールにも一致しないパスは HTTP 404 を返します。一覧にないパスの暗黙のフォールバックはありません。"
+      },
+      "restore": "デフォルトのルーティングを復元",
+      "restoreTooltipEnabled": "同梱のデフォルトをエディタに読み込みます（保存で config.yaml に書き込み）",
+      "restoreTooltipDisabled": "サーバーからデフォルトのルーティングテンプレートを取得できません",
+      "restoreDialog": {
+        "title": "デフォルトのルーティングを復元しますか？",
+        "description": "エディタの転送リストとブロックリストを、CCRelay 同梱のデフォルトに置き換えます。「ルーティングを保存」を押すまでディスクには書き込まれません。",
+        "action": "復元"
+      }
+    },
+    "concurrency": {
+      "title": "同時実行",
+      "enable": "同時実行マネージャを有効化",
+      "maxWorkers": "最大ワーカー数",
+      "maxQueueSize": "最大キューサイズ",
+      "requestTimeout": "リクエストタイムアウト（秒、0 = 制限なし）",
+      "retry429": {
+        "title": "429 で再試行",
+        "enable": "429 再試行を有効化",
+        "maxRetries": "最大再試行回数",
+        "delay": "遅延（ms）"
+      },
+      "routeOverrides": "ルートごとの上書きが {{count}} 件設定されています。今は YAML で編集してください。"
+    },
+    "logging": {
+      "title": "ログ",
+      "enable": "リクエスト/レスポンス本文のログを有効化",
+      "enableHint": "データベースが使えるとき、トークン使用量と性能指標は常に記録されます。このスイッチは、ログタブにリクエスト本文とレスポンス本文の全文を保存するかどうかだけを制御します。",
+      "databaseType": "データベースの種類",
+      "databasePath": "データベースパス",
+      "databasePathPlaceholder": "~/.ccrelay/logs.db（デフォルト）",
+      "sqlite3Executable": "sqlite3 実行ファイル（任意）",
+      "sqlite3ExecutablePlaceholder": "空欄 = PATH から解決",
+      "host": "ホスト",
+      "port": "ポート",
+      "databaseName": "データベース名",
+      "user": "ユーザー",
+      "password": "パスワード",
+      "passwordPlaceholder": "${POSTGRES_PASSWORD}",
+      "ssl": "SSL"
+    },
+    "providerOption": {
+      "auto": "auto（現在）"
+    }
+  },
+  "capabilities": {
+    "title": "機能",
+    "subtitle": "プロバイダー向けの追加サービス機能を設定します",
+    "webSearch": {
+      "title": "Web 検索",
+      "description": "Claude Desktop と Claude Code 専用です。クライアントが組み込みの WebSearch ツールを呼ぶと、ccrelay がそのツール呼び出しを横取りし、下で設定したバックエンド（Tavily または Parallel）で検索します。",
+      "enable": "Web 検索を有効化",
+      "disabledHint": "Web 検索はオフです。プロバイダーの割り当てと検索設定は保持され、再びオンにすると適用されます。",
+      "searchBackend": "検索バックエンド",
+      "provider": "検索プロバイダー",
+      "apiKey": "API キー",
+      "apiKeyPlaceholder": "tvly-...",
+      "maxResults": "最大件数",
+      "searchDepth": "検索の深さ",
+      "depthBasic": "ベーシック",
+      "depthAdvanced": "アドバンスト",
+      "parallelApiKey": "Parallel API キー",
+      "parallelApiKeyPlaceholder": "pk_...",
+      "parallelMode": "検索モード",
+      "parallelModeTurbo": "Turbo",
+      "parallelModeBasic": "ベーシック",
+      "parallelModeAdvanced": "アドバンスト",
+      "parallelAdvanced": "詳細設定",
+      "parallelSourcePolicy": "ソースポリシー",
+      "parallelPublishedAfter": "公開日以降",
+      "parallelLocation": "地域",
+      "parallelLocationAuto": "自動",
+      "parallelLocationHint": "ISO 3166-1 alpha-2 コードです。未対応の地域は Parallel に無視されることがあります。",
+      "parallelIncludeDomains": "含めるドメイン",
+      "parallelIncludeDomainsPlaceholder": "例: arxiv.org, .edu",
+      "parallelExcludeDomains": "除外するドメイン",
+      "parallelExcludeDomainsPlaceholder": "例: example.com",
+      "parallelDomainsHint": "カンマ区切りのドメイン",
+      "parallelFetchPolicy": "取得ポリシー",
+      "parallelLiveFetch": "ライブ取得",
+      "parallelLiveFetchHint": "キャッシュが 10 分より古いとき、より新しい内容を取得します。レイテンシが増えます。",
+      "parallelMaxResultsPlaceholder": "デフォルト: 10",
+      "parallelMaxCharsPerResult": "結果あたりの最大文字数",
+      "parallelMaxCharsPerResultPlaceholder": "デフォルト: 20000",
+      "parallelMaxCharsPerResultHint": "URL ごとの抜粋サイズの任意の上限",
+      "providerAssignment": "プロバイダーの割り当て",
+      "providerAssignmentHint": "Web 検索を有効にする LLM プロバイダーを選んでください",
+      "selectAll": "すべて選択",
+      "invertSelection": "選択を反転",
+      "noProviders": "プロバイダーは設定されていません",
+      "savedAndReloaded": "設定を保存して再読み込みしました",
+      "unsavedChanges": "未保存の変更 — 保存をクリックして適用"
+    }
+  }
+}
