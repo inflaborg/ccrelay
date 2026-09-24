@@ -103,6 +103,11 @@ describe("resolveModelMeta", () => {
     expect(resolveModelMeta("glm-5.2-flash").id).toBe("glm");
     expect(resolveModelMeta("glm-5.2-flash").input.modalities).toEqual(["text"]);
     expect(resolveModelMeta("router:glm-5.3-flash").input.modalities).toEqual(["text", "image"]);
+    expect(resolveModelMeta("glm-intl-openai:glm-5.3-flash").id).toBe("glm-flash");
+    expect(resolveModelMeta("glm-intl-openai:glm-5.3-flash").input.modalities).toEqual([
+      "text",
+      "image",
+    ]);
   });
 
   it("matches claude-fable and muse-spark as multimodal", () => {

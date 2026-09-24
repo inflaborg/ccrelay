@@ -153,17 +153,19 @@ export function resolveModelMeta(modelId: string, options?: ResolveModelMetaOpti
     return cloneModelMeta(GLOBAL_UNKNOWN_MODEL_META);
   }
 
-  const fromFamily = resolveFromFamilies(normalized, options?.vendor);
-  if (fromFamily) {
-    return fromFamily;
-  }
-
+  // `provider:model` must use the model segment. A provider id like
+  // `glm-intl-openai` would otherwise match the text-only `glm-*` family.
   const bare = upstreamModelId(normalized);
   if (bare) {
     const fromUpstream = resolveFromFamilies(bare, options?.vendor);
     if (fromUpstream) {
       return fromUpstream;
     }
+  }
+
+  const fromFamily = resolveFromFamilies(normalized, options?.vendor);
+  if (fromFamily) {
+    return fromFamily;
   }
 
   if (options?.vendor && options.vendor !== "generic") {
