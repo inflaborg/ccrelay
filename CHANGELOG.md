@@ -641,7 +641,7 @@ Unified routing, Electron desktop tray, web i18n, config hot-reload, `providerTy
 
 - `uuid` override `^14.0.0` for transitive audit [GHSA-w5hq-g745-h8pq](https://github.com/advisories/GHSA-w5hq-g745-h8pq).
 
-## [0.1.5] - 2025-02-27
+## [0.1.5] - 2026-02-27
 
 ### Added
 
