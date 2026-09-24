@@ -101,7 +101,9 @@
     "title": "选择语言",
     "description": "请选择界面语言。",
     "en": "English",
-    "zh": "中文"
+    "zh": "中文",
+    "ja": "日本語",
+    "ko": "한국어"
   },
   "dashboard": {
     "title": "仪表盘",

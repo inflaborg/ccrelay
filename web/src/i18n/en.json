@@ -101,7 +101,9 @@
     "title": "Choose Language",
     "description": "Select your preferred language for the interface.",
     "en": "English",
-    "zh": "中文"
+    "zh": "中文",
+    "ja": "日本語",
+    "ko": "한국어"
   },
   "dashboard": {
     "title": "Dashboard",

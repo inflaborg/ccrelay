@@ -42,7 +42,7 @@ When editing README.md, README_CN.md, or CHANGELOG.md, follow these rules:
 
 - No emoji in documentation unless the user explicitly asks.
 - Short sentences. Prefer tables and bullet lists over paragraphs.
-- README_CN must stay in sync with README — same structure, same information, translated not paraphrased.
+- README_CN, README_JA, and README_KO must stay in sync with README — same structure, same information, translated not paraphrased.
 
 # Release Workflow
 

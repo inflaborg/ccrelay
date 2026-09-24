@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { api } from "@/api/client";
-import { applyAppLocale, parseAppLocale } from "@/i18n";
+import { APP_LOCALES, applyAppLocale, parseAppLocale } from "@/i18n";
 import type {
   LoggingSettings,
   ConcurrencySettings,
@@ -328,10 +328,10 @@ function LanguageSettingsSection({ locale }: { locale?: string }) {
       <div className="flex items-center gap-2">
         <SelectField
           value={value}
-          options={[
-            { value: "en", label: t("language.en") },
-            { value: "zh", label: t("language.zh") },
-          ]}
+          options={APP_LOCALES.map(locale => ({
+            value: locale,
+            label: t(`language.${locale}`),
+          }))}
           onChange={handleLocaleChange}
           className="h-8 flex-1 text-xs"
           disabled={localeMutation.isPending}

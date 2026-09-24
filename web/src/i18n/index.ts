@@ -1,14 +1,17 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 import en from "./en.json";
+import ja from "./ja.json";
+import ko from "./ko.json";
 import zh from "./zh.json";
 
-export type AppLocale = "en" | "zh";
+export const APP_LOCALES = ["en", "zh", "ja", "ko"] as const;
+export type AppLocale = (typeof APP_LOCALES)[number];
 
 const initialLocale = window.CCRELAY_LOCALE || undefined;
 
 export function parseAppLocale(locale: unknown): AppLocale | undefined {
-  return locale === "en" || locale === "zh" ? locale : undefined;
+  return APP_LOCALES.includes(locale as AppLocale) ? (locale as AppLocale) : undefined;
 }
 
 /** Apply UI language immediately and keep Electron/VS Code inject in sync. */
@@ -23,6 +26,8 @@ i18n.use(initReactI18next).init({
   resources: {
     en: { translation: en },
     zh: { translation: zh },
+    ja: { translation: ja },
+    ko: { translation: ko },
   },
   lng: parseAppLocale(initialLocale) || "en",
   fallbackLng: "en",

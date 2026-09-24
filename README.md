@@ -10,7 +10,7 @@
 
 **Download**: [Latest release](https://github.com/inflaborg/ccrelay/releases/latest) — macOS `.dmg` (Apple Silicon, Intel) · Windows `.exe` (x64, arm64) · VS Code extension on [Marketplace](https://marketplace.visualstudio.com/items?itemName=infLab.ccrelay-vscode) and [Open VSX](https://open-vsx.org/extension/infLab/ccrelay-vscode)
 
-**Website**: [https://ccrelay.inflab.org](https://ccrelay.inflab.org) · **[中文文档](./README_CN.md)**
+**Website**: [https://ccrelay.inflab.org](https://ccrelay.inflab.org) · **[中文文档](./README_CN.md)** · **[日本語](./README_JA.md)** · **[한국어](./README_KO.md)**
 
 ![CCRelay desktop app — provider list](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-desktop-2.webp)
 
@@ -518,7 +518,7 @@ CCRelay uses `~/.ccrelay/config.yaml` (auto-created on first launch). On startup
 | `server.port`      | `7575`      | Proxy server port                                                        |
 | `server.host`      | `127.0.0.1` | Bind address                                                             |
 | `server.autoStart` | `true`      | Auto-start server on extension load                                      |
-| `server.locale`    | `""`        | Web UI language (`"en"` or `"zh"`). First visit shows a picker if unset. |
+| `server.locale`    | `""`        | Web UI language (`"en"`, `"zh"`, `"ja"`, or `"ko"`). First visit shows a picker if unset. |
 
 ### Providers
 
