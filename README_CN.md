@@ -1,25 +1,31 @@
 # CCRelay
 
-[![VSCode Extension](https://img.shields.io/badge/VSCode-Extension-blue)](https://code.visualstudio.com/)
+[![Latest release](https://img.shields.io/github/v/release/inflaborg/ccrelay)](https://github.com/inflaborg/ccrelay/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/inflaborg/ccrelay/total)](https://github.com/inflaborg/ccrelay/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**CCRelay** 是一套 VS Code 扩展，并提供可选的 **Electron** 和 **Tauri** 桌面应用；内置 HTTP 代理，可在不同 AI 提供商（Anthropic、OpenAI、Gemini 等）之间平滑切换且不丢失会话上下文。支持 **Claude Code**、**Claude Cowork** 与 **OpenAI Codex**。
+**在 Claude Code、Claude Desktop 和 ChatGPT 桌面应用（ChatGPT Work 与 Codex）中使用第三方模型。**
 
-**项目官网**: [https://ccrelay.inflab.org](https://ccrelay.inflab.org)
+**CCRelay** 是免费开源的 macOS / Windows 桌面应用。它让 **Claude Code**、**Claude Desktop**（第三方推理与 Cowork）、**ChatGPT 桌面应用**（ChatGPT Work 与 Codex）以及 **Codex CLI** 使用 GLM、Kimi、DeepSeek、Gemini、Qwen、MiniMax、小米 MiMo 等第三方模型，或任意 OpenAI / Anthropic 兼容接口。继续用你熟悉的客户端，在一个地方切换模型。本地代理自动在 Anthropic 与 OpenAI 格式之间转换。另提供 VS Code 扩展。
 
-**[English Documentation](./README.md)**
+**下载**：[最新版本](https://github.com/inflaborg/ccrelay/releases/latest) —— macOS `.dmg`（Apple 芯片、Intel）· Windows `.exe`（x64、arm64）· VS Code 扩展见 [Marketplace](https://marketplace.visualstudio.com/items?itemName=infLab.ccrelay-vscode) 与 [Open VSX](https://open-vsx.org/extension/infLab/ccrelay-vscode)
+
+**项目官网**：[https://ccrelay.inflab.org](https://ccrelay.inflab.org) · **[English Documentation](./README.md)**
+
+![CCRelay 桌面应用 —— 提供商列表](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-desktop-2.webp)
 
 ---
 
 ## 目录
 
+- [支持的客户端](#支持的客户端)
+- [三步上手](#三步上手)
 - [核心特性](#核心特性)
-- [已验证上游（按主机）](#已验证上游按主机)
-- [系统要求](#系统要求)
+- [常见问题](#常见问题)
+- [隐私与本机数据](#隐私与本机数据)
+- [支持的提供商](#支持的提供商)
 - [安装](#安装)
-- [桌面应用（Electron）](#桌面应用electron)
-- [桌面应用（Tauri）](#桌面应用tauri)
-- [快速开始](#快速开始)
+- [手动配置](#手动配置)
 - [客户端对接](#客户端对接)
 - [使用指南](#使用指南)
   - [多实例模式](#多实例模式)
@@ -38,37 +44,106 @@
 
 ---
 
+## 支持的客户端
+
+| 客户端                                             | 接入方式                                                             |
+| -------------------------------------------------- | -------------------------------------------------------------------- |
+| **Claude Code**（CLI 与 IDE 扩展）                 | 客户端配置 → Claude Code → 应用                                      |
+| **Claude Desktop**（第三方推理、Cowork）           | 客户端配置 → Claude Desktop → 应用，然后重启 Claude Desktop          |
+| **Codex CLI**                                      | 客户端配置 → Codex → 应用，然后重启 Codex                            |
+| **ChatGPT 桌面应用**（ChatGPT Work、Codex）        | 与 Codex CLI 共用 `~/.codex/config.toml`：点应用，然后重启 ChatGPT 桌面应用 |
+| 任何可自定义 Anthropic 或 OpenAI 地址的工具        | `http://127.0.0.1:7575/anthropic` 或 `http://127.0.0.1:7575/openai`  |
+
+各客户端的详细说明见[客户端对接](#客户端对接)。
+
+---
+
+## 三步上手
+
+1. **安装桌面应用。** 从 [Releases](https://github.com/inflaborg/ccrelay/releases/latest) 下载并打开，本地代理会在 `http://127.0.0.1:7575` 启动。
+2. **添加提供商。** 打开 **提供商 → 添加提供商**，选择预设（GLM、小米 MiMo、DeepSeek、MiniMax、Gemini、Azure OpenAI、美团 LongCat、Astraflow）或填写任意 Base URL，粘贴 API Key，运行内置测试后创建。
+3. **连接客户端。** 打开 **客户端配置**，选择 Claude Code、Claude Desktop 或 Codex，点击 **应用**。若上表注明需要重启，请重启该客户端。
+
+之后要切换模型，选中另一张提供商卡片并点击 **应用**；或开启 **智能路由**，一次列出所有提供商的模型，直接在客户端里选择。客户端配置页的 **还原** 可撤销对客户端的修改。
+
+![客户端配置](https://raw.githubusercontent.com/inflaborg/ccrelay/main/docs/screenshot-ccrelay-setup-1.webp)
+
+习惯编辑配置文件？见[手动配置](#手动配置)。
+
+---
+
 ## 核心特性
 
-**代理与路由**
+**在现有客户端里用任意模型**
 
-- 内置 HTTP 代理（默认 `http://127.0.0.1:7575`），支持基于路径的路由——转发到提供商、拦截返回自定义响应、或返回 404
-- 多协议：同一端口同时接受 **Anthropic**、**OpenAI Chat Completions** 和 **OpenAI Responses API**（`/v1/responses`）
-- 客户端与上游协议不一致时自动进行跨协议转换
-- URL 前缀 `/openai/...` 和 `/anthropic/v1/...` 让不同客户端精确指定协议
+- 一个本地地址同时服务 Claude Code、Claude Desktop、Codex CLI 和 ChatGPT 桌面应用。
+- 请求在 Anthropic Messages、OpenAI Chat Completions 与 OpenAI Responses 之间自动转换。
+- 模型名支持通配符映射，并为 Claude Desktop 生成它能接受的 Claude 风格别名。
+- 智能路由把所有提供商的模型汇总到一个列表，按模型把每个请求路由到对应提供商。
 
-**客户端对接**
+**不用手改配置文件**
 
-- 原生支持 **Claude Code**（`ANTHROPIC_BASE_URL`）、**Claude Cowork** 和 **OpenAI Codex**（`~/.codex/config.toml`）
-- Web 面板 **Client configuration** 标签页可一键写入所需环境变量
+- 提供商向导内置常用厂商预设和接口测试。
+- 客户端配置一键写入各客户端的设置，「还原」可撤销。
+- 配置修改无需重启即可生效；仍可手动编辑 `~/.ccrelay/config.yaml`。
+- 提供商可导出、导入为 JSON。
 
-**运维**
+**看清每一次请求**
 
-- 多实例协调（Leader/Follower），跨 VS Code 窗口与桌面应用
-- 配置热重载——编辑 `config.yaml` 后自动生效
-- 可选请求/响应日志（SQLite 或 PostgreSQL），内置日志查看器，支持 Token 追踪和性能指标（TTFB、输出 TPS、P50/P90 延迟）
-- 并发控制，支持按路由设置队列限制
+- 日志页显示每个请求的请求头和正文，可多选导出为 zip。
+- 仪表盘显示 Token 用量、缓存命中率、首字延迟、输出速度和按提供商的图表。
+- Chat 页可直接测试任意提供商，无需打开其他客户端。
+- 可选本地联网搜索（Tavily 或 Parallel），为没有自带搜索的提供商补上。
 
-**桌面与 UI**
+**在你工作的地方运行**
 
-- 可选 Electron 或 Tauri 桌面应用——无需打开 VS Code 即可运行 CCRelay
-- Electron 正式安装包支持自动检查更新，并可从托盘菜单安装
-- Web 管理面板：提供商管理、设置、i18n（中英文）
-- Provider 导入/导出为 JSON 文件
+- 桌面应用支持 macOS（Apple 芯片、Intel）和 Windows（x64、arm64），并自动更新。
+- VS Code 扩展与桌面应用共用同一份配置和同一个代理。
 
-**外部联网搜索**
+---
 
-- 可选为指定提供商在本地代答 Anthropic 形态的 **web search** 工具请求，检索后端可选用 **Tavily** 或 **Parallel**；可在 `config.yaml` 或控制台 **Capabilities** 中配置
+## 常见问题
+
+**如何在 Claude Desktop 中使用 GLM、Kimi 或 DeepSeek？**
+在 CCRelay 中添加该提供商，然后点击 **客户端配置 → Claude Desktop → 应用**，并重启 Claude Desktop。CCRelay 会把 Claude Desktop 切换为第三方推理，并为每个模型生成 Claude 风格的别名，因为 Claude Desktop 会拒绝包含 `glm`、`kimi`、`deepseek` 等关键词的模型名。
+
+**如何让 ChatGPT 桌面应用（ChatGPT Work 或 Codex）使用第三方模型？**
+点击 **客户端配置 → Codex → 应用**。CCRelay 会写入 `~/.codex/config.toml` 和模型目录，Codex CLI 与 ChatGPT 桌面应用都读取这两个文件。重启 ChatGPT 应用后，在 ChatGPT Work 或 Codex 中从列表选择模型。
+
+**有没有桌面工具，不用手动编辑 `settings.json` 或 `config.toml`？**
+有。点击 **应用** 时，CCRelay 桌面应用会为 Claude Code、Claude Desktop 和 Codex 写好设置，**还原** 可撤销。
+
+**我的提供商只有 OpenAI 兼容接口，Claude Code 能用吗？**
+能。CCRelay 会把 Claude Code 的 Anthropic 请求转换为 OpenAI Chat Completions 或 Responses，再把回复转换回来，工具调用也包括在内。
+
+**切换提供商后需要重启客户端吗？**
+Claude Code 在下一次请求时就会使用新的提供商。Codex CLI 和 ChatGPT 桌面应用需要重启才能重新加载模型列表。Claude Desktop 可能需要重启才能刷新模型列表。
+
+**对话内容会被保存吗？**
+会，只保存在你的电脑上，并且可以关闭。见[隐私与本机数据](#隐私与本机数据)。
+
+**CCRelay 免费吗？**
+免费。CCRelay 基于 MIT 许可证开源。
+
+---
+
+## 隐私与本机数据
+
+| 项目         | CCRelay 的做法                                                                                     |
+| ------------ | -------------------------------------------------------------------------------------------------- |
+| 运行位置     | 在你的电脑上运行，代理默认只监听 `127.0.0.1`。                                                     |
+| 对外连接     | 请求只发往你配置的提供商。仅在开启联网搜索时才会访问 Tavily 或 Parallel。检查更新时访问 GitHub Releases。 |
+| 遥测         | 无。                                                                                               |
+| 请求日志     | 默认把请求与响应正文保存在 `~/.ccrelay/logs.db`，便于在日志页查看。                                |
+| 关闭日志     | 设置 `logging.storeBodies: false`，或在设置页关闭。Token 与速度统计单独保存，不受影响。            |
+| 删除数据     | 日志页的 **清空全部** 删除已保存的正文；仪表盘的 **复位统计** 删除用量数据。                       |
+| API Key      | 保存在 `~/.ccrelay/config.yaml`。可用 `${ENV_VAR}` 引用环境变量，避免明文写入文件。日志中的请求头会隐藏 Key。 |
+
+---
+
+## 支持的提供商
+
+提供商向导内置 Z.ai GLM、小米 MiMo、DeepSeek、MiniMax、Google Gemini、Azure OpenAI、美团 LongCat、Astraflow（UCloud）预设。其他任意 OpenAI / Anthropic 兼容接口（如 Kimi、Qwen、OpenRouter 或自建网关）填写自定义 Base URL 即可使用。
 
 ### 已验证上游（按主机）
 
@@ -95,21 +170,23 @@
 
 ---
 
-## 系统要求
-
-- VS Code 1.80.0 或更高版本
-- Node.js（开发时需要）
-
----
-
 ## 安装
 
-### 从 VSIX 安装
+### 桌面应用（推荐）
 
-1. 从 [Releases](https://github.com/inflaborg/ccrelay/releases) 下载最新的 `.vsix` 文件
-2. 在 VS Code 中按 `Cmd+Shift+P`（macOS）或 `Ctrl+Shift+P`（Windows/Linux）
-3. 输入 `Extensions: Install from VSIX...`
-4. 选择下载的文件
+- 从 [GitHub Releases](https://github.com/inflaborg/ccrelay/releases/latest) 下载：
+  - **macOS**：`CCRelay-<版本>-darwin-arm64.dmg`（Apple 芯片）或 `-darwin-x64.dmg`（Intel）
+  - **Windows**：`CCRelay-<版本>-win32-x64.exe` 或 `-win32-arm64.exe`
+- 应用常驻托盘（macOS 为菜单栏）。托盘 → **打开控制台** 打开管理界面；**打开日志目录** 打开 `~/.ccrelay/logs/` 下的运行诊断日志。
+- 启动约 15 秒后检查一次更新，之后每 24 小时检查一次。托盘 → **Check for Updates…** 可立即检查；确认后下载并重启应用完成更新。
+- 托盘 → **Update Channel** 可在 **Stable** 与 **Dev** 版本之间切换。
+- 桌面应用与 VS Code 扩展共用 `~/.ccrelay/` 配置和正在运行的代理。
+
+### VS Code 扩展
+
+- 在 [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=infLab.ccrelay-vscode) 或 [Open VSX](https://open-vsx.org/extension/infLab/ccrelay-vscode) 安装 **CCRelay**，或从 [Releases](https://github.com/inflaborg/ccrelay/releases) 下载 `.vsix` 后运行 `Extensions: Install from VSIX...`。
+- 需要 VS Code 1.80.0 或更高版本。
+- 通过 CCRelay 状态栏项或 `CCRelay: Switch Provider` 切换提供商；用 `CCRelay: Open Dashboard` 打开控制台。
 
 ### 从源码构建
 
@@ -121,44 +198,11 @@ npm run build
 npm run package        # 产出 dists/ccrelay-vscode-*.vsix
 ```
 
-### 开发模式
+桌面版构建见[开发](#开发)。
 
-```bash
-npm install
-npm run compile        # 或 npm run watch
-# 在 VS Code 中按 F5 打开扩展开发宿主窗口
-```
+### Tauri 构建（实验性）
 
----
-
-## 桌面应用（Electron）
-
-可选的 Electron 桌面应用（`packages/desktop`），与 VS Code 扩展共享同一核心：
-
-- 共用 `~/.ccrelay/` 配置、状态和 Leader 选举
-- 请求日志使用进程内 SQLite（默认桌面构建无需系统 `sqlite3` 命令）
-- 托盘菜单 → **打开控制台** 在应用窗口内加载 Web UI；**打开日志目录** 可打开 `~/.ccrelay/logs/` 下的运行诊断日志
-- 正式安装包会自动检查更新（启动约 15 秒后，以及之后每 24 小时）。也可在托盘菜单 → **Check for Updates…** 立即检查。确认后下载并重启以完成安装。从源码运行时不提供自动更新。
-- 托盘 → **Update Channel** 可在 **Stable**（`channel-prod`）与 **Dev**（`channel-dev`）之间切换。默认随安装包（dev 构建 → Dev，正式版 → Stable）。托盘选择保存在本机应用用户数据目录，并覆盖该默认值。
-- 正式版控制台为无边框窗口：macOS 保留原生红绿灯；Windows/Linux 在标题栏右侧提供最小化 / 最大化 / 关闭。在标题栏空白区域拖拽可移动窗口。
-- 从 [GitHub Releases](https://github.com/inflaborg/ccrelay/releases) 下载：
-  - **macOS**: `CCRelay-<版本>-darwin-arm64.dmg` 或 `-darwin-x64.dmg`
-  - **Windows**: `CCRelay-<版本>-win32-x64.exe` 或 `-win32-arm64.exe`
-
----
-
-## 桌面应用（Tauri）
-
-轻量级 Tauri 桌面应用（`packages/desktop-tauri`），与 VS Code 扩展和 Electron 应用共享同一核心：
-
-- 共用 `~/.ccrelay/` 配置、状态和 Leader 选举
-- **Sidecar 架构**：Rust 壳层启动安装包内自带的 **Node.js 运行时**（服务端脚本与原生 SQLite 模块随应用资源一并分发）。终端用户无需单独安装 Node。
-- 请求日志与 Electron 桌面版相同，使用进程内 SQLite
-- 托盘菜单支持启动/停止服务器、**打开控制台** 与 **打开日志目录**
-- 从 [GitHub Releases](https://github.com/inflaborg/ccrelay/releases) 下载：
-  - 安装包命名与 Electron 桌面版一致（`CCRelay-<版本>-<platform>-<arch>.<扩展名>`），在版本号后增加 **`tauri`**（例如 `CCRelay-0.2.4-tauri-darwin-arm64.dmg`、`CCRelay-0.2.4-tauri-win32-x64.exe`）。Windows 仅提供 **NSIS 安装包（`.exe`）**，不提供 MSI。
-
-### 开发
+更轻量的 Tauri 桌面版本（`packages/desktop-tauri`）使用同一核心，并自带 Node.js 运行时。当前 Release 不包含 Tauri 安装包，请使用 Node.js 22 从源码构建：
 
 ```bash
 npm install
@@ -167,11 +211,11 @@ npm run tauri:pack:mac    # 构建 macOS 安装包
 npm run tauri:pack:win    # 构建 Windows 安装包
 ```
 
-`npm run tauri:build`（在 pack/dev 前自动执行）会打包 sidecar 脚本、复制原生 SQLite 模块，并将 Node 二进制放入 Tauri 外部 sidecar 目录。从源码构建时请使用 **Node.js 22**（与 CI 一致）。
-
 ---
 
-## 快速开始
+## 手动配置
+
+控制台中的所有设置都保存在 `~/.ccrelay/config.yaml`。如果你习惯编辑文件，可按以下步骤操作。
 
 ### 1. 添加提供商
 
@@ -231,8 +275,9 @@ defaultProvider: "glm"
 
 ### 3. 切换提供商
 
-- 点击 VS Code 底部状态栏的 CCRelay 图标
-- 或使用命令面板：`CCRelay: Switch Provider`
+- 桌面应用或控制台：在 **提供商** 页选中提供商卡片，点击 **应用**
+- VS Code：点击 CCRelay 状态栏项，或运行 `CCRelay: Switch Provider`
+- 配置文件：修改 `config.yaml` 中的 `defaultProvider`（自动生效）
 
 ---
 
@@ -240,17 +285,17 @@ defaultProvider: "glm"
 
 CCRelay 在同一端口（默认 **7575**）上提供 **Anthropic** 和 **OpenAI** 兼容路由。通过 URL 前缀选择协议：
 
-| 客户端            | 协议      | Base URL                          |
-| ----------------- | --------- | --------------------------------- |
-| **Claude Code**   | Anthropic | `http://127.0.0.1:7575/anthropic` |
-| **Claude Cowork** | Anthropic | `http://127.0.0.1:7575/anthropic` |
-| **Codex**         | OpenAI    | `http://127.0.0.1:7575/openai`    |
+| 客户端                                   | 协议      | Base URL                          |
+| ---------------------------------------- | --------- | --------------------------------- |
+| **Claude Code**                          | Anthropic | `http://127.0.0.1:7575/anthropic` |
+| **Claude Desktop**（第三方推理 / Cowork）| Anthropic | `http://127.0.0.1:7575/anthropic` |
+| **Codex CLI / ChatGPT 桌面应用**         | OpenAI    | `http://127.0.0.1:7575/openai`    |
 
 直接使用 `http://127.0.0.1:7575` 时，legacy `/v1/...` 路径仍然有效。
 
 ### Claude Code
 
-推荐的 `~/.claude/settings.json` 配置见[快速开始](#快速开始)。
+使用 **客户端配置 → Claude Code → 应用**，或参考[手动配置](#手动配置)中的 `~/.claude/settings.json` 配置项。
 
 快速测试（仅当前终端）：
 
@@ -259,13 +304,15 @@ export ANTHROPIC_BASE_URL=http://127.0.0.1:7575/anthropic
 claude
 ```
 
-### Claude Cowork
+### Claude Desktop（第三方推理与 Cowork）
 
-将应用中的 **Anthropic Base URL** 设为 `http://127.0.0.1:7575/anthropic`。通过 CCRelay 扩展或 `config.yaml` 切换提供商。
+**客户端配置 → Claude Desktop → 应用**（macOS 与 Windows）会把 Claude Desktop 切换为经 CCRelay 的第三方推理：网关地址 `http://127.0.0.1:7575/anthropic`、占位 API Key，以及 `x-ccrelay-model-alias` 请求头。完成后请重启 Claude Desktop。**还原** 会把 Claude Desktop 切回官方模式。
 
-### Codex
+如需手动设置，在 Claude Desktop 中打开 **Configure third-party inference**，填入上述网关地址和任意 API Key，并添加 `x-ccrelay-model-alias` 请求头。第三方模型名需要 Claude 风格的别名，见 [Claude Desktop / Cowork 模型 ID 限制](#claude-desktop--cowork-模型-id-限制)。
 
-创建或编辑 `~/.codex/config.toml`（或在仪表盘使用 **客户端配置 → Codex → 应用**）：
+### Codex CLI 与 ChatGPT 桌面应用
+
+Codex CLI 与 ChatGPT 桌面应用（ChatGPT Work 与 Codex）读取同一份 `~/.codex/config.toml`。使用 **客户端配置 → Codex → 应用**，或自行创建该文件：
 
 ```toml
 model = "gpt-5.4-mini"
@@ -277,7 +324,7 @@ name = "CCRelay"
 base_url = "http://localhost:7575/openai"
 ```
 
-应用配置时会根据**当前激活供应商**的自定义模型列表（或精确的 `modelMap` 条目）生成 `~/.codex/ccrelay-model-catalog.json`，供 Codex `/model` 列出可选模型。每个条目会声明推理档位 low、medium、high、xhigh，默认 high。将 `model` 设为其中某个 id。Apply 或切换供应商后请重启 Codex 以重新加载目录。可在 `config.toml` 用 `model_reasoning_effort` 或在 `/model` 里覆盖档位。
+应用配置时会生成 `~/.codex/ccrelay-model-catalog.json`，供 Codex `/model` 列出可选模型。目录来自**当前激活供应商**的自定义模型列表（或精确的 `modelMap` 条目）；开启智能路由时，列出所有提供商中已路由的模型。每个条目会声明推理档位 low、medium、high、xhigh，默认 high。将 `model` 设为其中某个 id。Apply 或切换供应商后请重启 Codex CLI 或 ChatGPT 桌面应用以重新加载目录。可在 `config.toml` 用 `model_reasoning_effort` 或在 `/model` 里覆盖档位。
 
 ---
 
