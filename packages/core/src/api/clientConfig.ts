@@ -22,12 +22,17 @@ import {
   CCRELAY_CODEX_MODEL_CATALOG_FILENAME,
   catalogFileExists,
   collectCodexModelsFromProvider,
+  collectCodexModelsFromSmartRouting,
   ensureCodexModelCatalogJsonField,
   isCcrelayCatalogPointer,
+  readCodexCatalogExclude,
+  readCodexCatalogVision,
   removeCodexModelCatalog,
   removeOwnedCodexModelCatalogJsonField,
   writeCodexModelCatalog,
+  type CodexCatalogExclude,
   type CodexCatalogModelRef,
+  type CodexCatalogVision,
 } from "./codexModelCatalog";
 
 function sendJson(res: http.ServerResponse, status: number, data: unknown): void {
@@ -168,6 +173,17 @@ export interface ClaudeDefaultModels {
 export interface CodexAvailableModel {
   id: string;
   displayName: string;
+  protocol?: "anthropic" | "openai" | "openai_chat";
+}
+
+export interface CodexVisionConfig {
+  all: boolean;
+  modelIds: string[];
+}
+
+export interface CodexExcludeConfig {
+  protocols: Array<"anthropic" | "openai" | "openai_chat">;
+  modelIds: string[];
 }
 
 export interface ClientConfigGetResponse {
@@ -179,6 +195,10 @@ export interface ClientConfigGetResponse {
   codex: ClientConfigItem;
   /** Models from the current provider for Codex Apply / Configure model UI */
   codexAvailableModels: CodexAvailableModel[];
+  /** Image-input selection written into the Codex catalog. `all` is the default. */
+  codexVision: CodexVisionConfig;
+  /** Protocols and model ids omitted from the Codex catalog. */
+  codexExclude: CodexExcludeConfig;
   /** Parsed from settings.json env when file is readable */
   claudeDefaultModels: ClaudeDefaultModels;
   claudeDesktopBundles: ClaudeDesktopBundleVersions;
@@ -377,15 +397,119 @@ base_url = "http://127.0.0.1:${port}/openai"
 `;
 }
 
-function resolveCurrentProviderModels(fallbackModel?: string): CodexCatalogModelRef[] {
+/**
+ * Point Codex at CCRelay without replacing the rest of config.toml.
+ * Updates model, model_provider, model_catalog_json, and [model_providers.ccrelay].
+ */
+export function patchCodexConfigContent(existing: string, port: number, model: string): string {
+  if (!existing.trim()) {
+    return buildCodexTemplate(port, model);
+  }
+  const baseUrl = `http://127.0.0.1:${port}/openai`;
+  const lines = existing.split(/\r?\n/);
+  let section = "";
+  let sawModel = false;
+  let sawProvider = false;
+  let sawCatalog = false;
+  let sawCcrelaySection = false;
+  let sawName = false;
+  let sawBase = false;
+  const out = lines.map(line => {
+    const trimmed = line.trim();
+    const sectionMatch = trimmed.match(/^\[([^\]]+)\]$/);
+    if (sectionMatch) {
+      section = sectionMatch[1];
+      if (section === "model_providers.ccrelay") {
+        sawCcrelaySection = true;
+      }
+      return line;
+    }
+    if (!section) {
+      if (/^\s*model\s*=/.test(line)) {
+        sawModel = true;
+        return `model = "${model}"`;
+      }
+      if (/^\s*model_provider\s*=/.test(line)) {
+        sawProvider = true;
+        return `model_provider = "ccrelay"`;
+      }
+      if (/^\s*model_catalog_json\s*=/.test(line)) {
+        sawCatalog = true;
+        return `model_catalog_json = "${CCRELAY_CODEX_MODEL_CATALOG_FILENAME}"`;
+      }
+      return line;
+    }
+    if (section === "model_providers.ccrelay") {
+      if (/^\s*name\s*=/.test(line)) {
+        sawName = true;
+        return `name = "CCRelay"`;
+      }
+      if (/^\s*base_url\s*=/.test(line)) {
+        sawBase = true;
+        return `base_url = "${baseUrl}"`;
+      }
+    }
+    return line;
+  });
+
+  const topInserts: string[] = [];
+  if (!sawModel) {
+    topInserts.push(`model = "${model}"`);
+  }
+  if (!sawProvider) {
+    topInserts.push(`model_provider = "ccrelay"`);
+  }
+  if (!sawCatalog) {
+    topInserts.push(`model_catalog_json = "${CCRELAY_CODEX_MODEL_CATALOG_FILENAME}"`);
+  }
+  if (topInserts.length > 0) {
+    const firstSection = out.findIndex(line => /^\s*\[/.test(line));
+    const at = firstSection >= 0 ? firstSection : out.length;
+    const block = firstSection >= 0 ? [...topInserts, ""] : topInserts;
+    out.splice(at, 0, ...block);
+  }
+
+  if (!sawCcrelaySection) {
+    if (out.length > 0 && out[out.length - 1] !== "") {
+      out.push("");
+    }
+    out.push("[model_providers.ccrelay]", `name = "CCRelay"`, `base_url = "${baseUrl}"`);
+  } else if (!sawName || !sawBase) {
+    const header = out.findIndex(line => /^\s*\[model_providers\.ccrelay\]\s*$/.test(line));
+    const inserts: string[] = [];
+    if (!sawName) {
+      inserts.push(`name = "CCRelay"`);
+    }
+    if (!sawBase) {
+      inserts.push(`base_url = "${baseUrl}"`);
+    }
+    out.splice(header + 1, 0, ...inserts);
+  }
+
+  const joined = out.join("\n");
+  return existing.endsWith("\n") || existing.endsWith("\r\n") ? `${joined}\n` : joined;
+}
+
+async function resolveCurrentProviderModels(
+  fallbackModel?: string
+): Promise<CodexCatalogModelRef[]> {
+  const catalog = serverInstance?.getModelCatalog();
+  if (catalog?.isEnabled()) {
+    await catalog.ensureReady();
+    return collectCodexModelsFromSmartRouting(catalog.getAll(), fallbackModel);
+  }
   const provider = serverInstance?.getRouter()?.getCurrentProvider() ?? null;
   return collectCodexModelsFromProvider(provider, fallbackModel);
 }
 
-function writeCatalogForCurrentProvider(fallbackModel?: string): CodexCatalogModelRef[] {
-  const models = resolveCurrentProviderModels(fallbackModel);
+async function writeCatalogForCurrentProvider(
+  fallbackModel?: string,
+  vision?: CodexCatalogVision,
+  exclude?: CodexCatalogExclude
+): Promise<CodexCatalogModelRef[]> {
+  const models = await resolveCurrentProviderModels(fallbackModel);
   if (models.length > 0) {
-    writeCodexModelCatalog(models);
+    writeCodexModelCatalog(models, undefined, vision, exclude);
   }
   return models;
 }
@@ -812,7 +936,7 @@ export async function handleGetClientConfig(
   const claudePath = CLAUDE_SETTINGS();
   const detectionEnabled = routerConfig.clientVersionDetection?.enabled !== false;
   const claudeCli = await detectClaudeCliVersion({ enabled: detectionEnabled });
-  const availableModels = resolveCurrentProviderModels();
+  const availableModels = await resolveCurrentProviderModels();
   const availableModelIds = availableModels.map(m => m.slug);
   const body: ClientConfigGetResponse = {
     expectedAnthropicBase,
@@ -824,7 +948,10 @@ export async function handleGetClientConfig(
     codexAvailableModels: availableModels.map(m => ({
       id: m.slug,
       displayName: m.displayName,
+      ...(m.protocol ? { protocol: m.protocol } : {}),
     })),
+    codexVision: readCodexCatalogVision(),
+    codexExclude: readCodexCatalogExclude(),
     claudeDefaultModels: readClaudeDefaultModelsFromFile(claudePath),
     claudeDesktopBundles: scanClaudeDesktopBundles(claudeDesktopDir()),
     claudeCli,
@@ -833,6 +960,46 @@ export async function handleGetClientConfig(
 }
 
 type ApplyTarget = "claudeCode" | "codex" | "claudeDesktop";
+
+function codexExcludeFromBody(
+  raw:
+    | {
+        protocols?: string[];
+        modelIds?: string[];
+      }
+    | undefined
+): CodexCatalogExclude | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  const protocols = Array.isArray(raw.protocols)
+    ? raw.protocols.filter(
+        (protocol): protocol is CodexCatalogExclude["protocols"][number] =>
+          protocol === "anthropic" || protocol === "openai" || protocol === "openai_chat"
+      )
+    : [];
+  const modelIds = Array.isArray(raw.modelIds)
+    ? raw.modelIds.map(id => id.trim()).filter(Boolean)
+    : [];
+  return { protocols, modelIds };
+}
+
+function codexVisionFromBody(
+  raw:
+    | {
+        all?: boolean;
+        modelIds?: string[];
+      }
+    | undefined
+): CodexCatalogVision | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  const modelIds = Array.isArray(raw.modelIds)
+    ? raw.modelIds.map(id => id.trim()).filter(Boolean)
+    : [];
+  return { all: raw.all !== false, modelIds };
+}
 
 /**
  * POST /ccrelay/api/client-config/apply
@@ -850,7 +1017,7 @@ export async function handleApplyClientConfig(
   const claudePath = CLAUDE_SETTINGS();
   const codexPath = CODEX_CONFIG();
   const existingClaude = detectClaude(claudePath, port);
-  const availableModelIds = resolveCurrentProviderModels().map(m => m.slug);
+  const availableModelIds = (await resolveCurrentProviderModels()).map(m => m.slug);
   const existingCodex = detectCodex(codexPath, port, availableModelIds);
 
   try {
@@ -862,6 +1029,8 @@ export async function handleApplyClientConfig(
       patchClaudeModelsOnly?: boolean;
       patchCodexModelOnly?: boolean;
       claudeDefaultModels?: { opus?: string; sonnet?: string; haiku?: string };
+      codexVision?: { all?: boolean; modelIds?: string[] };
+      codexExclude?: { protocols?: string[]; modelIds?: string[] };
     }>(req);
     const target = body.target;
     const overwrite = Boolean(body.overwrite);
@@ -1063,7 +1232,11 @@ export async function handleApplyClientConfig(
       const raw = fs.readFileSync(codexPath, "utf-8");
       const nextModel = m || CODEX_DEFAULT_MODEL;
       let updated = raw.replace(/^model\s*=\s*".*"$/m, `model = "${nextModel}"`);
-      writeCatalogForCurrentProvider(nextModel);
+      await writeCatalogForCurrentProvider(
+        nextModel,
+        codexVisionFromBody(body.codexVision),
+        codexExcludeFromBody(body.codexExclude)
+      );
       updated = ensureCodexModelCatalogJsonField(updated);
       fs.writeFileSync(codexPath, updated, "utf-8");
       sendJson(res, 200, { status: "ok", message: `Updated model in ${codexPath}` });
@@ -1115,7 +1288,7 @@ export async function handleApplyClientConfig(
           status: "error",
           code: "NEEDS_OVERWRITE",
           message:
-            "Codex config points elsewhere. Confirm overwrite to replace with the CCRelay template.",
+            "Codex config points elsewhere. Confirm overwrite to point model_provider at CCRelay.",
         });
         return;
       }
@@ -1127,8 +1300,13 @@ export async function handleApplyClientConfig(
         typeof body.model === "string" && body.model.trim()
           ? body.model.trim()
           : CODEX_DEFAULT_MODEL;
-      writeCatalogForCurrentProvider(codexModel);
-      fs.writeFileSync(codexPath, buildCodexTemplate(port, codexModel), "utf-8");
+      await writeCatalogForCurrentProvider(
+        codexModel,
+        codexVisionFromBody(body.codexVision),
+        codexExcludeFromBody(body.codexExclude)
+      );
+      const existing = fs.existsSync(codexPath) ? fs.readFileSync(codexPath, "utf-8") : "";
+      fs.writeFileSync(codexPath, patchCodexConfigContent(existing, port, codexModel), "utf-8");
       sendJson(res, 200, { status: "ok", message: `Updated ${codexPath}` });
       return;
     }

@@ -356,12 +356,23 @@ export interface ClientConfigItem {
 export interface CodexAvailableModel {
   id: string;
   displayName: string;
+  protocol?: "anthropic" | "openai" | "openai_chat";
 }
 
 export interface ClaudeDefaultModels {
   opus?: string;
   sonnet?: string;
   haiku?: string;
+}
+
+export interface CodexVisionConfig {
+  all: boolean;
+  modelIds: string[];
+}
+
+export interface CodexExcludeConfig {
+  protocols: Array<"anthropic" | "openai" | "openai_chat">;
+  modelIds: string[];
 }
 
 export interface ClientConfigGetResponse {
@@ -372,6 +383,8 @@ export interface ClientConfigGetResponse {
   claudeCode: ClientConfigItem;
   codex: ClientConfigItem;
   codexAvailableModels?: CodexAvailableModel[];
+  codexVision?: CodexVisionConfig;
+  codexExclude?: CodexExcludeConfig;
   claudeDefaultModels: ClaudeDefaultModels;
   claudeDesktopBundles: ClaudeDesktopBundleVersions;
   claudeCli: ClaudeCliVersionInfo;

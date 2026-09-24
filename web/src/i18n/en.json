@@ -280,7 +280,24 @@
         "notSet": "Not set.",
         "default": "Default:",
         "bannerTitle": "Codex model needs update",
-        "needsUpdate": "Current model is not in the active provider's list. Update it after switching providers."
+        "needsUpdate": "Current model is not in the active provider's list. Update it after switching providers.",
+        "vision": "Vision",
+        "textOnly": "Text only"
+      },
+      "vision": {
+        "all": "Treat every model as vision",
+        "allHint": "Image paste is allowed for all models in the catalog. Uncheck to choose which models accept images.",
+        "pick": "Vision models",
+        "tab": "Vision"
+      },
+      "exclude": {
+        "tab": "Exclude",
+        "hint": "Excluded models are left out of the Codex catalog. Protocol filters drop every model of that type, including ones added later by smart routing.",
+        "protocols": "Exclude by protocol",
+        "anthropic": "Anthropic",
+        "openai": "OpenAI",
+        "openai_chat": "Chat only",
+        "models": "Exclude individual models"
       },
       "configureModel": "Configure model",
       "restore": "Restore",

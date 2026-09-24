@@ -280,7 +280,24 @@
         "notSet": "未设置。",
         "default": "默认：",
         "bannerTitle": "Codex 模型需要更新",
-        "needsUpdate": "当前模型不在激活供应商的列表中。切换供应商后请更新模型。"
+        "needsUpdate": "当前模型不在激活供应商的列表中。切换供应商后请更新模型。",
+        "vision": "Vision",
+        "textOnly": "仅文本"
+      },
+      "vision": {
+        "all": "全部模型都支持图片",
+        "allHint": "目录里的模型都可以粘贴图片。取消勾选后，再指定哪些模型接受图片。",
+        "pick": "Vision 模型",
+        "tab": "Vision"
+      },
+      "exclude": {
+        "tab": "排除",
+        "hint": "被排除的模型不会写入 Codex 目录。按协议排除会去掉该协议下的全部模型，包括之后智能路由新加入的。",
+        "protocols": "按协议排除",
+        "anthropic": "Anthropic",
+        "openai": "OpenAI",
+        "openai_chat": "仅 Chat",
+        "models": "逐个排除模型"
       },
       "configureModel": "配置模型",
       "restore": "还原",

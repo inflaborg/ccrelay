@@ -15,7 +15,10 @@ import {
   SMART_ROUTING_PROVIDER_ID,
 } from "../server/smartRouting/virtualProvider";
 import { sendJson, parseJsonBody } from "./index";
-import { syncCodexCatalogIfConfigured } from "./codexModelCatalog";
+import {
+  collectCodexModelsFromSmartRouting,
+  syncCodexCatalogIfConfigured,
+} from "./codexModelCatalog";
 
 let serverInstance: ProxyServer | null = null;
 
@@ -25,6 +28,20 @@ function syncCodexCatalogForCurrentProviderIfNeeded(providerId: string): void {
     return;
   }
   const router = serverInstance.getRouter();
+  const catalog = serverInstance.getModelCatalog();
+  if (catalog.isEnabled()) {
+    void catalog
+      .ensureReady()
+      .then(() => {
+        syncCodexCatalogIfConfigured(null, {
+          models: collectCodexModelsFromSmartRouting(catalog.getAll()),
+        });
+      })
+      .catch(() => {
+        // Best-effort; Codex catalog sync must not fail provider save.
+      });
+    return;
+  }
   if (router.getCurrentProviderId() !== providerId) {
     return;
   }
