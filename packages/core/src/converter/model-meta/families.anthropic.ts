@@ -44,4 +44,14 @@ export const ANTHROPIC_MODEL_FAMILIES: readonly ModelFamilyEntry[] = [
       anthropic: { ...ANTHROPIC_COMPAT_DEFAULTS },
     },
   },
+  {
+    id: "claude-fable",
+    vendor: "anthropic",
+    match: "claude-fable-*",
+    meta: {
+      ...MULTIMODAL,
+      reasoning: { ...REASONING_CAPABLE },
+      anthropic: { ...ANTHROPIC_COMPAT_DEFAULTS },
+    },
+  },
 ];

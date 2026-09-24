@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **UI**
 
 - Chat stays available when smart routing is on, instead of showing that there is no active provider.
+- Model capability checks use the model id after the smart-routing provider prefix, so names like gpt-6-luna and gpt-5.6 are recognized as image-capable in Chat.
+- glm-5.3-flash and newer flash models, claude-fable, muse-spark, and qwen3 are recognized as image-capable.
 - gpt-6 and later Chat Completions requests that include function tools set reasoning effort to none, so names like gpt-6-luna-1 are not rejected. Full OpenAI upstreams still move those requests to Responses.
 
 **Config**
