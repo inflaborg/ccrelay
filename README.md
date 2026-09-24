@@ -835,10 +835,10 @@ Issues and Pull Requests are welcome!
 
 ## Acknowledgments
 
-This project is **100% AI-generated code**. Special thanks to:
-
-- **[Cursor](https://cursor.com)** and **[Claude Code](https://claude.ai/code)** — AI coding assistants
-- **[GLM](https://z.ai/model-api)** and **[Xiaomi MiMo](https://platform.xiaomimimo.com/token-plan)** — model APIs used as development backends
+CCRelay is developed with AI coding assistants ([Cursor](https://cursor.com) and
+[Claude Code](https://claude.ai/code)), with [GLM](https://z.ai/model-api) and
+[Xiaomi MiMo](https://platform.xiaomimimo.com/token-plan) as model backends.
+The maintainers design, review, and test every release.
 
 ---
 

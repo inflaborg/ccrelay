@@ -835,10 +835,9 @@ ccrelay/
 
 ## 致谢
 
-本项目代码 **100% 由 AI 生成**。特别感谢：
-
-- **[Cursor](https://cursor.com)** 与 **[Claude Code](https://claude.ai/code)** — AI 编程助手
-- **[GLM](https://z.ai/model-api)** 与 **[小米 MiMo](https://platform.xiaomimimo.com/token-plan)** — 开发阶段使用的模型后端
+CCRelay 借助 AI 编程助手（[Cursor](https://cursor.com) 与 [Claude Code](https://claude.ai/code)）开发，
+模型后端使用 [GLM](https://z.ai/model-api) 与 [小米 MiMo](https://platform.xiaomimimo.com/token-plan)。
+每个版本都由维护者设计、审查并测试。
 
 ---
 
