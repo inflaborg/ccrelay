@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-09-23 (pre-release)
+
+Pre-release line for 0.3.2.
+
 ## [0.3.1] - 2026-09-23
 
 Logs can be exported, and the dashboard shows per-provider usage. Provider switching and endpoint tests follow the form you are editing. gpt-6 and Claude Code forwarding are more reliable, and the Codex model catalog advertises reasoning levels.
