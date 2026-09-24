@@ -11,6 +11,7 @@ import {
   buildClaudeCodeFields,
   buildClaudeDesktopFields,
   buildCodexFields,
+  patchCodexConfigContent,
 } from "@/api/clientConfig";
 import { CCRELAY_MODEL_ALIAS_HEADER } from "@/converter/models-fallback";
 
@@ -268,19 +269,26 @@ base_url = "http://127.0.0.1:7575/openai"
     expect(fields.find(f => f.key === "model")?.ok).toBe(true);
   });
 
-  it("marks the catalog stale when its schema version is older", () => {
-    const toml = parseTomlLite(`model = "deepseek-v4-flash"
-model_provider = "ccrelay"
-model_catalog_json = "ccrelay-model-catalog.json"
-[model_providers.ccrelay]
-base_url = "http://127.0.0.1:7575/openai"
-`);
-    const stale = buildCodexFields(toml, 7575, ["deepseek-v4-flash"], 0);
-    const schema = stale.find(f => f.key === "catalog_schema_version");
-    expect(schema?.ok).toBe(false);
-    expect(schema?.current).toBe("0");
+  it("patchCodexConfigContent keeps unrelated settings", () => {
+    const existing = `model = "old"
+model_provider = "openai"
+notify = ["turn-ended"]
 
-    const current = buildCodexFields(toml, 7575, ["deepseek-v4-flash"], 3);
-    expect(current.find(f => f.key === "catalog_schema_version")?.ok).toBe(true);
+[desktop]
+localeOverride = "zh-CN"
+
+[model_providers.ccrelay]
+name = "Other"
+base_url = "http://127.0.0.1:1/openai"
+`;
+    const patched = patchCodexConfigContent(existing, 7575, "gpt-6-sol");
+    expect(patched).toContain('model = "gpt-6-sol"');
+    expect(patched).toContain('model_provider = "ccrelay"');
+    expect(patched).toContain('model_catalog_json = "ccrelay-model-catalog.json"');
+    expect(patched).toContain('base_url = "http://127.0.0.1:7575/openai"');
+    expect(patched).toContain('name = "CCRelay"');
+    expect(patched).toContain('localeOverride = "zh-CN"');
+    expect(patched).toContain('notify = ["turn-ended"]');
+    expect(patched).not.toContain('model = "old"');
   });
 });

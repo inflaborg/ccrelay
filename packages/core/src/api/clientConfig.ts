@@ -19,7 +19,6 @@ import {
   type ClaudeDesktopBundleVersions,
 } from "./clientVersion";
 import {
-  CCRELAY_CODEX_CATALOG_SCHEMA_VERSION,
   CCRELAY_CODEX_MODEL_CATALOG_FILENAME,
   catalogFileExists,
   collectCodexModelsFromProvider,
@@ -27,7 +26,6 @@ import {
   ensureCodexModelCatalogJsonField,
   isCcrelayCatalogPointer,
   readCodexCatalogExclude,
-  readCodexCatalogSchemaVersion,
   readCodexCatalogVision,
   removeCodexModelCatalog,
   removeOwnedCodexModelCatalogJsonField,
@@ -399,6 +397,99 @@ base_url = "http://127.0.0.1:${port}/openai"
 `;
 }
 
+/**
+ * Point Codex at CCRelay without replacing the rest of config.toml.
+ * Updates model, model_provider, model_catalog_json, and [model_providers.ccrelay].
+ */
+export function patchCodexConfigContent(existing: string, port: number, model: string): string {
+  if (!existing.trim()) {
+    return buildCodexTemplate(port, model);
+  }
+  const baseUrl = `http://127.0.0.1:${port}/openai`;
+  const lines = existing.split(/\r?\n/);
+  let section = "";
+  let sawModel = false;
+  let sawProvider = false;
+  let sawCatalog = false;
+  let sawCcrelaySection = false;
+  let sawName = false;
+  let sawBase = false;
+  const out = lines.map(line => {
+    const trimmed = line.trim();
+    const sectionMatch = trimmed.match(/^\[([^\]]+)\]$/);
+    if (sectionMatch) {
+      section = sectionMatch[1];
+      if (section === "model_providers.ccrelay") {
+        sawCcrelaySection = true;
+      }
+      return line;
+    }
+    if (!section) {
+      if (/^\s*model\s*=/.test(line)) {
+        sawModel = true;
+        return `model = "${model}"`;
+      }
+      if (/^\s*model_provider\s*=/.test(line)) {
+        sawProvider = true;
+        return `model_provider = "ccrelay"`;
+      }
+      if (/^\s*model_catalog_json\s*=/.test(line)) {
+        sawCatalog = true;
+        return `model_catalog_json = "${CCRELAY_CODEX_MODEL_CATALOG_FILENAME}"`;
+      }
+      return line;
+    }
+    if (section === "model_providers.ccrelay") {
+      if (/^\s*name\s*=/.test(line)) {
+        sawName = true;
+        return `name = "CCRelay"`;
+      }
+      if (/^\s*base_url\s*=/.test(line)) {
+        sawBase = true;
+        return `base_url = "${baseUrl}"`;
+      }
+    }
+    return line;
+  });
+
+  const topInserts: string[] = [];
+  if (!sawModel) {
+    topInserts.push(`model = "${model}"`);
+  }
+  if (!sawProvider) {
+    topInserts.push(`model_provider = "ccrelay"`);
+  }
+  if (!sawCatalog) {
+    topInserts.push(`model_catalog_json = "${CCRELAY_CODEX_MODEL_CATALOG_FILENAME}"`);
+  }
+  if (topInserts.length > 0) {
+    const firstSection = out.findIndex(line => /^\s*\[/.test(line));
+    const at = firstSection >= 0 ? firstSection : out.length;
+    const block = firstSection >= 0 ? [...topInserts, ""] : topInserts;
+    out.splice(at, 0, ...block);
+  }
+
+  if (!sawCcrelaySection) {
+    if (out.length > 0 && out[out.length - 1] !== "") {
+      out.push("");
+    }
+    out.push("[model_providers.ccrelay]", `name = "CCRelay"`, `base_url = "${baseUrl}"`);
+  } else if (!sawName || !sawBase) {
+    const header = out.findIndex(line => /^\s*\[model_providers\.ccrelay\]\s*$/.test(line));
+    const inserts: string[] = [];
+    if (!sawName) {
+      inserts.push(`name = "CCRelay"`);
+    }
+    if (!sawBase) {
+      inserts.push(`base_url = "${baseUrl}"`);
+    }
+    out.splice(header + 1, 0, ...inserts);
+  }
+
+  const joined = out.join("\n");
+  return existing.endsWith("\n") || existing.endsWith("\r\n") ? `${joined}\n` : joined;
+}
+
 async function resolveCurrentProviderModels(
   fallbackModel?: string
 ): Promise<CodexCatalogModelRef[]> {
@@ -526,8 +617,7 @@ function detectClaude(claudePath: string, port: number): ClientConfigItem {
 export function buildCodexFields(
   toml: ParsedTomlLite,
   port: number,
-  availableModelIds?: readonly string[],
-  catalogSchemaVersion?: number | null
+  availableModelIds?: readonly string[]
 ): ClientConfigField[] {
   const expectedBase = `http://127.0.0.1:${port}/openai`;
   const modelProvider = toml.top.model_provider;
@@ -571,18 +661,6 @@ export function buildCodexFields(
       current: catalogJson,
       ok: catalogOk,
     },
-    ...(isCcrelayCatalogPointer(catalogJson) &&
-    catalogSchemaVersion !== undefined &&
-    catalogSchemaVersion !== null
-      ? [
-          {
-            key: "catalog_schema_version",
-            expected: String(CCRELAY_CODEX_CATALOG_SCHEMA_VERSION),
-            current: String(catalogSchemaVersion),
-            ok: catalogSchemaVersion === CCRELAY_CODEX_CATALOG_SCHEMA_VERSION,
-          },
-        ]
-      : []),
   ];
 }
 
@@ -605,10 +683,7 @@ function detectCodex(
   const toml = parseTomlLite(raw);
   const modelProvider = toml.top.model_provider;
   const model = toml.top.model;
-  const catalogSchemaVersion = isCcrelayCatalogPointer(toml.top.model_catalog_json)
-    ? readCodexCatalogSchemaVersion(path.dirname(codexPath))
-    : null;
-  const fields = buildCodexFields(toml, port, availableModelIds, catalogSchemaVersion);
+  const fields = buildCodexFields(toml, port, availableModelIds);
   const baseUrl = modelProvider
     ? toml.sections[`model_providers.${modelProvider}`]?.base_url
     : undefined;
@@ -1213,7 +1288,7 @@ export async function handleApplyClientConfig(
           status: "error",
           code: "NEEDS_OVERWRITE",
           message:
-            "Codex config points elsewhere. Confirm overwrite to replace with the CCRelay template.",
+            "Codex config points elsewhere. Confirm overwrite to point model_provider at CCRelay.",
         });
         return;
       }
@@ -1230,7 +1305,8 @@ export async function handleApplyClientConfig(
         codexVisionFromBody(body.codexVision),
         codexExcludeFromBody(body.codexExclude)
       );
-      fs.writeFileSync(codexPath, buildCodexTemplate(port, codexModel), "utf-8");
+      const existing = fs.existsSync(codexPath) ? fs.readFileSync(codexPath, "utf-8") : "";
+      fs.writeFileSync(codexPath, patchCodexConfigContent(existing, port, codexModel), "utf-8");
       sendJson(res, 200, { status: "ok", message: `Updated ${codexPath}` });
       return;
     }

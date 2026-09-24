@@ -300,10 +300,6 @@
         "models": "Exclude individual models"
       },
       "configureModel": "Configure model",
-      "catalog": {
-        "bannerTitle": "Codex catalog is out of date",
-        "needsReapply": "The model catalog on disk was written by an older CCRelay. Apply the template again so reasoning levels and image input match this version."
-      },
       "restore": "Restore",
       "upToDate": "Up to date",
       "apply": "Apply CCRelay template",

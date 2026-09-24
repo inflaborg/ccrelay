@@ -582,12 +582,6 @@ export default function ClientConfigStatus() {
     data.codex.fields?.some(f => f.key === "model" && !f.ok)
   );
 
-  const catalogNeedsReapply = Boolean(
-    data?.codex &&
-    data.codex.status !== "invalid" &&
-    data.codex.fields?.some(f => f.key === "catalog_schema_version" && !f.ok)
-  );
-
   const openCodexModelConfigure = () => {
     setCodexModalMode("configure");
     setCodexModel(data?.codex?.model ?? "");
@@ -644,34 +638,6 @@ export default function ClientConfigStatus() {
               >
                 <SlidersHorizontal className={actionIcon} />
                 {t("clientConfig.codex.configureModel")}
-              </Button>
-            </div>
-          )}
-          {catalogNeedsReapply && (
-            <div
-              role="alert"
-              className="rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div className="flex items-start gap-2 min-w-0">
-                <TriangleAlert className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                <div className="min-w-0 space-y-0.5">
-                  <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
-                    {t("clientConfig.codex.catalog.bannerTitle")}
-                  </p>
-                  <p className="text-xs text-amber-700/90 dark:text-amber-400/90">
-                    {t("clientConfig.codex.catalog.needsReapply")}
-                  </p>
-                </div>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                className={`${actionButton} shrink-0 bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-500 dark:text-amber-950 dark:hover:bg-amber-400`}
-                disabled={applyMutation.isPending || codexModelPatchMutation.isPending}
-                onClick={() => onConfigureClick("codex")}
-              >
-                <FileCode2 className={actionIcon} />
-                {t("clientConfig.codex.apply")}
               </Button>
             </div>
           )}

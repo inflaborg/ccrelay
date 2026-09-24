@@ -300,10 +300,6 @@
         "models": "逐个排除模型"
       },
       "configureModel": "配置模型",
-      "catalog": {
-        "bannerTitle": "Codex 模型目录是旧版本",
-        "needsReapply": "磁盘上的模型目录由旧版 CCRelay 生成。请重新应用一次模板，推理档位和图片输入才会按当前版本生效。"
-      },
       "restore": "还原",
       "upToDate": "已是最新",
       "apply": "应用 CCRelay 模板",
