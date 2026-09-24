@@ -273,6 +273,11 @@ export const api = {
     patchClaudeModelsOnly?: boolean;
     patchCodexModelOnly?: boolean;
     claudeDefaultModels?: { opus?: string; sonnet?: string; haiku?: string };
+    codexVision?: { all: boolean; modelIds: string[] };
+    codexExclude?: {
+      protocols: Array<"anthropic" | "openai" | "openai_chat">;
+      modelIds: string[];
+    };
   }) => {
     const response = await fetch(`${API_BASE}/client-config/apply`, {
       method: "POST",

@@ -321,6 +321,12 @@ function ClientConfigSection({
   );
 }
 
+const CODEX_PROTOCOL_OPTIONS = ["anthropic", "openai", "openai_chat"] as const;
+
+function isCodexProtocol(value: string): value is (typeof CODEX_PROTOCOL_OPTIONS)[number] {
+  return (CODEX_PROTOCOL_OPTIONS as readonly string[]).includes(value);
+}
+
 export default function ClientConfigStatus() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -339,6 +345,23 @@ export default function ClientConfigStatus() {
   const [codexModalMode, setCodexModalMode] = useState<"apply" | "configure">("apply");
   const [codexModel, setCodexModel] = useState("");
   const [pendingCodexModel, setPendingCodexModel] = useState<string | undefined>(undefined);
+  const [visionAll, setVisionAll] = useState(true);
+  const [visionIds, setVisionIds] = useState<string[]>([]);
+  const [settingsTab, setSettingsTab] = useState<"vision" | "exclude">("vision");
+  const [excludeProtocols, setExcludeProtocols] = useState<
+    Array<"anthropic" | "openai" | "openai_chat">
+  >([]);
+  const [excludeModelIds, setExcludeModelIds] = useState<string[]>([]);
+  const [pendingVision, setPendingVision] = useState<
+    { all: boolean; modelIds: string[] } | undefined
+  >(undefined);
+  const [pendingExclude, setPendingExclude] = useState<
+    | {
+        protocols: Array<"anthropic" | "openai" | "openai_chat">;
+        modelIds: string[];
+      }
+    | undefined
+  >(undefined);
   const [restoreTarget, setRestoreTarget] = useState<
     "claudeCode" | "codex" | "claudeDesktop" | null
   >(null);
@@ -367,8 +390,16 @@ export default function ClientConfigStatus() {
   });
 
   const applyMutation = useMutation({
-    mutationFn: (args: { target: "claudeCode" | "codex" | "claudeDesktop"; overwrite: boolean }) =>
-      api.applyClientConfig(args),
+    mutationFn: (args: {
+      target: "claudeCode" | "codex" | "claudeDesktop";
+      overwrite: boolean;
+      model?: string;
+      codexVision?: { all: boolean; modelIds: string[] };
+      codexExclude?: {
+        protocols: Array<"anthropic" | "openai" | "openai_chat">;
+        modelIds: string[];
+      };
+    }) => api.applyClientConfig(args),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clientConfig"] });
       setConfirmOpen(false);
@@ -393,11 +424,20 @@ export default function ClientConfigStatus() {
   });
 
   const codexModelPatchMutation = useMutation({
-    mutationFn: (model: string) =>
+    mutationFn: (args: {
+      model: string;
+      codexVision: { all: boolean; modelIds: string[] };
+      codexExclude: {
+        protocols: Array<"anthropic" | "openai" | "openai_chat">;
+        modelIds: string[];
+      };
+    }) =>
       api.applyClientConfig({
         target: "codex",
         patchCodexModelOnly: true,
-        model,
+        model: args.model,
+        codexVision: args.codexVision,
+        codexExclude: args.codexExclude,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clientConfig"] });
@@ -421,10 +461,73 @@ export default function ClientConfigStatus() {
   const runApply = (
     target: "claudeCode" | "codex" | "claudeDesktop",
     overwrite: boolean,
-    model?: string
+    model?: string,
+    codexVision?: { all: boolean; modelIds: string[] },
+    codexExclude?: {
+      protocols: Array<"anthropic" | "openai" | "openai_chat">;
+      modelIds: string[];
+    }
   ) => {
     setApplyingTo(target);
-    applyMutation.mutate({ target, overwrite, ...(model ? { model } : {}) });
+    applyMutation.mutate({
+      target,
+      overwrite,
+      ...(model ? { model } : {}),
+      ...(codexVision ? { codexVision } : {}),
+      ...(codexExclude ? { codexExclude } : {}),
+    });
+  };
+
+  const visionPayload = () => ({
+    all: visionAll,
+    modelIds: visionAll ? [] : visionIds,
+  });
+
+  const excludePayload = () => ({
+    protocols: excludeProtocols,
+    modelIds: excludeModelIds,
+  });
+
+  const loadVisionDraft = () => {
+    setVisionAll(data?.codexVision?.all !== false);
+    setVisionIds(data?.codexVision?.modelIds ?? []);
+    setExcludeProtocols(data?.codexExclude?.protocols ?? []);
+    setExcludeModelIds(data?.codexExclude?.modelIds ?? []);
+  };
+
+  const modelIsExcluded = (model: { id: string; protocol?: string }) =>
+    excludeModelIds.includes(model.id) ||
+    (model.protocol !== undefined &&
+      isCodexProtocol(model.protocol) &&
+      excludeProtocols.includes(model.protocol));
+
+  const catalogModels = (data?.codexAvailableModels ?? []).filter(model => !modelIsExcluded(model));
+
+  const draftModelIsVision = (id: string) => visionAll || visionIds.includes(id);
+
+  const submitCodexModal = () => {
+    const effectiveModel = codexModel.trim() || CODEX_DEFAULT_MODEL;
+    const vision = visionPayload();
+    const exclude = excludePayload();
+    if (codexModalMode === "configure") {
+      codexModelPatchMutation.mutate({
+        model: effectiveModel,
+        codexVision: vision,
+        codexExclude: exclude,
+      });
+      return;
+    }
+    const codexItem = data?.codex;
+    setCodexModelModalOpen(false);
+    if (codexItem && needsOverwriteBeforeApply(codexItem)) {
+      setPendingCodexModel(effectiveModel);
+      setPendingVision(vision);
+      setPendingExclude(exclude);
+      setPendingTarget("codex");
+      setConfirmOpen(true);
+      return;
+    }
+    runApply("codex", false, effectiveModel, vision, exclude);
   };
 
   const onConfigureClick = (target: "claudeCode" | "codex" | "claudeDesktop") => {
@@ -443,6 +546,7 @@ export default function ClientConfigStatus() {
     if (target === "codex") {
       setCodexModalMode("apply");
       setCodexModel("");
+      loadVisionDraft();
       setCodexModelModalOpen(true);
       return;
     }
@@ -457,7 +561,9 @@ export default function ClientConfigStatus() {
   const onConfirmOverwrite = () => {
     if (pendingTarget) {
       const model = pendingTarget === "codex" ? pendingCodexModel : undefined;
-      runApply(pendingTarget, true, model);
+      const vision = pendingTarget === "codex" ? pendingVision : undefined;
+      const exclude = pendingTarget === "codex" ? pendingExclude : undefined;
+      runApply(pendingTarget, true, model, vision, exclude);
     }
   };
 
@@ -476,10 +582,24 @@ export default function ClientConfigStatus() {
     data.codex.fields?.some(f => f.key === "model" && !f.ok)
   );
 
+  const catalogNeedsReapply = Boolean(
+    data?.codex &&
+    data.codex.status !== "invalid" &&
+    data.codex.fields?.some(f => f.key === "catalog_schema_version" && !f.ok)
+  );
+
   const openCodexModelConfigure = () => {
     setCodexModalMode("configure");
     setCodexModel(data?.codex?.model ?? "");
+    loadVisionDraft();
     setCodexModelModalOpen(true);
+  };
+
+  const savedModelIsVision = (id: string | undefined) => {
+    if (!id || data?.codexVision?.all !== false) {
+      return true;
+    }
+    return data.codexVision.modelIds.includes(id);
   };
 
   return (
@@ -524,6 +644,34 @@ export default function ClientConfigStatus() {
               >
                 <SlidersHorizontal className={actionIcon} />
                 {t("clientConfig.codex.configureModel")}
+              </Button>
+            </div>
+          )}
+          {catalogNeedsReapply && (
+            <div
+              role="alert"
+              className="rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="flex items-start gap-2 min-w-0">
+                <TriangleAlert className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div className="min-w-0 space-y-0.5">
+                  <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+                    {t("clientConfig.codex.catalog.bannerTitle")}
+                  </p>
+                  <p className="text-xs text-amber-700/90 dark:text-amber-400/90">
+                    {t("clientConfig.codex.catalog.needsReapply")}
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                className={`${actionButton} shrink-0 bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-500 dark:text-amber-950 dark:hover:bg-amber-400`}
+                disabled={applyMutation.isPending || codexModelPatchMutation.isPending}
+                onClick={() => onConfigureClick("codex")}
+              >
+                <FileCode2 className={actionIcon} />
+                {t("clientConfig.codex.apply")}
               </Button>
             </div>
           )}
@@ -777,7 +925,14 @@ export default function ClientConfigStatus() {
                     onConfigure={openCodexModelConfigure}
                   >
                     {data.codex.model ? (
-                      <p className={monoValue}>{data.codex.model}</p>
+                      <p className={`${monoValue} flex items-center gap-2`}>
+                        <span>{data.codex.model}</span>
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                          {savedModelIsVision(data.codex.model)
+                            ? t("clientConfig.codex.model.vision")
+                            : t("clientConfig.codex.model.textOnly")}
+                        </Badge>
+                      </p>
                     ) : (
                       <p className={metaText}>
                         <span className="italic">{t("clientConfig.codex.model.notSet")}</span>{" "}
@@ -918,7 +1073,7 @@ export default function ClientConfigStatus() {
 
       {codexModelModalOpen && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
-          <Card className="w-full max-w-[360px] flex flex-col">
+          <Card className="w-full max-w-md flex flex-col max-h-[85vh]">
             <CardHeader className="border-b p-3 flex-shrink-0">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm">{t("clientConfig.codexModelModal.title")}</CardTitle>
@@ -934,17 +1089,15 @@ export default function ClientConfigStatus() {
               </div>
               <p className={`${metaText} pt-1`}>{t("clientConfig.codexModelModal.description")}</p>
             </CardHeader>
-            <CardContent className="p-4 space-y-3">
-              {(data?.codexAvailableModels?.length ?? 0) > 0 && (
+            <CardContent className="p-4 space-y-3 overflow-y-auto">
+              {catalogModels.length > 0 && (
                 <div className="space-y-1">
                   <Label className="text-xs font-medium">
                     {t("clientConfig.codexModelModal.pickFromProvider")}
                   </Label>
                   <select
                     className="flex h-8 w-full rounded-md border border-input bg-background px-2 font-mono text-xs"
-                    value={
-                      data?.codexAvailableModels?.some(m => m.id === codexModel) ? codexModel : ""
-                    }
+                    value={catalogModels.some(m => m.id === codexModel) ? codexModel : ""}
                     onChange={e => {
                       if (e.target.value) {
                         setCodexModel(e.target.value);
@@ -952,7 +1105,7 @@ export default function ClientConfigStatus() {
                     }}
                   >
                     <option value="">{t("clientConfig.codexModelModal.orType")}</option>
-                    {data?.codexAvailableModels?.map(m => (
+                    {catalogModels.map(m => (
                       <option key={m.id} value={m.id}>
                         {m.displayName !== m.id ? `${m.displayName} (${m.id})` : m.id}
                       </option>
@@ -973,31 +1126,170 @@ export default function ClientConfigStatus() {
                   placeholder={CODEX_DEFAULT_MODEL}
                   onKeyDown={e => {
                     if (e.key === "Enter") {
-                      if (codexModalMode === "configure") {
-                        codexModelPatchMutation.mutate(codexModel.trim() || CODEX_DEFAULT_MODEL);
-                      } else {
-                        const effectiveModel = codexModel.trim() || CODEX_DEFAULT_MODEL;
-                        const codexItem = data?.codex;
-                        setCodexModelModalOpen(false);
-                        if (codexItem && needsOverwriteBeforeApply(codexItem)) {
-                          setPendingCodexModel(effectiveModel);
-                          setPendingTarget("codex");
-                          setConfirmOpen(true);
-                        } else {
-                          runApply("codex", false, effectiveModel);
-                        }
-                      }
+                      submitCodexModal();
                     }
                   }}
                 />
-                {(data?.codexAvailableModels?.length ?? 0) > 0 && (
+                {codexModel.trim() !== "" && (
+                  <p className="text-xs text-muted-foreground">
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 mr-1.5">
+                      {draftModelIsVision(codexModel.trim())
+                        ? t("clientConfig.codex.model.vision")
+                        : t("clientConfig.codex.model.textOnly")}
+                    </Badge>
+                    {codexModel.trim()}
+                  </p>
+                )}
+                {catalogModels.length > 0 && (
                   <datalist id="ccrelay-codex-available-models">
-                    {data?.codexAvailableModels?.map(m => (
+                    {catalogModels.map(m => (
                       <option key={m.id} value={m.id}>
                         {m.displayName}
                       </option>
                     ))}
                   </datalist>
+                )}
+              </div>
+              <div className="space-y-2 rounded-md border border-border p-2.5">
+                <div role="tablist" className="flex gap-1 rounded-md bg-muted p-0.5">
+                  {(["vision", "exclude"] as const).map(tab => (
+                    <button
+                      key={tab}
+                      type="button"
+                      role="tab"
+                      aria-selected={settingsTab === tab}
+                      className={`flex-1 rounded-sm px-2 py-1 text-xs ${
+                        settingsTab === tab
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground"
+                      }`}
+                      onClick={() => setSettingsTab(tab)}
+                    >
+                      {t(`clientConfig.codex.${tab}.tab`)}
+                    </button>
+                  ))}
+                </div>
+                {settingsTab === "vision" ? (
+                  <>
+                    <div className="flex items-start gap-2">
+                      <Checkbox
+                        id="codex-vision-all"
+                        checked={visionAll}
+                        onCheckedChange={checked => setVisionAll(checked === true)}
+                      />
+                      <Label
+                        htmlFor="codex-vision-all"
+                        className="text-xs font-medium leading-snug"
+                      >
+                        {t("clientConfig.codex.vision.all")}
+                      </Label>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {t("clientConfig.codex.vision.allHint")}
+                    </p>
+                    {!visionAll && catalogModels.length > 0 && (
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto pt-1">
+                        <p className="text-xs font-medium">{t("clientConfig.codex.vision.pick")}</p>
+                        {catalogModels.map((m, index) => (
+                          <div key={m.id} className="flex items-start gap-2">
+                            <Checkbox
+                              id={`codex-vision-${index}`}
+                              checked={visionIds.includes(m.id)}
+                              onCheckedChange={checked => {
+                                setVisionIds(prev =>
+                                  checked === true
+                                    ? prev.includes(m.id)
+                                      ? prev
+                                      : [...prev, m.id]
+                                    : prev.filter(id => id !== m.id)
+                                );
+                              }}
+                            />
+                            <Label
+                              htmlFor={`codex-vision-${index}`}
+                              className="text-xs font-mono leading-snug"
+                            >
+                              {m.displayName !== m.id ? `${m.displayName} (${m.id})` : m.id}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs text-muted-foreground">
+                      {t("clientConfig.codex.exclude.hint")}
+                    </p>
+                    <p className="text-xs font-medium">
+                      {t("clientConfig.codex.exclude.protocols")}
+                    </p>
+                    <div className="space-y-1.5">
+                      {CODEX_PROTOCOL_OPTIONS.map(protocol => (
+                        <div key={protocol} className="flex items-start gap-2">
+                          <Checkbox
+                            id={`codex-exclude-${protocol}`}
+                            checked={excludeProtocols.includes(protocol)}
+                            onCheckedChange={checked => {
+                              setExcludeProtocols(prev =>
+                                checked === true
+                                  ? prev.includes(protocol)
+                                    ? prev
+                                    : [...prev, protocol]
+                                  : prev.filter(item => item !== protocol)
+                              );
+                            }}
+                          />
+                          <Label
+                            htmlFor={`codex-exclude-${protocol}`}
+                            className="text-xs leading-snug"
+                          >
+                            {t(`clientConfig.codex.exclude.${protocol}`)}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                    {(data?.codexAvailableModels?.length ?? 0) > 0 && (
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto pt-1">
+                        <p className="text-xs font-medium">
+                          {t("clientConfig.codex.exclude.models")}
+                        </p>
+                        {data?.codexAvailableModels?.map((m, index) => (
+                          <div key={m.id} className="flex items-start gap-2">
+                            <Checkbox
+                              id={`codex-exclude-model-${index}`}
+                              checked={
+                                excludeModelIds.includes(m.id) ||
+                                (m.protocol !== undefined &&
+                                  isCodexProtocol(m.protocol) &&
+                                  excludeProtocols.includes(m.protocol))
+                              }
+                              disabled={
+                                m.protocol !== undefined &&
+                                isCodexProtocol(m.protocol) &&
+                                excludeProtocols.includes(m.protocol)
+                              }
+                              onCheckedChange={checked => {
+                                setExcludeModelIds(prev =>
+                                  checked === true
+                                    ? prev.includes(m.id)
+                                      ? prev
+                                      : [...prev, m.id]
+                                    : prev.filter(id => id !== m.id)
+                                );
+                              }}
+                            />
+                            <Label
+                              htmlFor={`codex-exclude-model-${index}`}
+                              className="text-xs font-mono leading-snug"
+                            >
+                              {m.displayName !== m.id ? `${m.displayName} (${m.id})` : m.id}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
               {applyMutation.isError && (
@@ -1016,20 +1308,7 @@ export default function ClientConfigStatus() {
                 className={actionButton}
                 disabled={applyMutation.isPending || codexModelPatchMutation.isPending}
                 onClick={() => {
-                  if (codexModalMode === "configure") {
-                    codexModelPatchMutation.mutate(codexModel.trim() || CODEX_DEFAULT_MODEL);
-                  } else {
-                    const effectiveModel = codexModel.trim() || CODEX_DEFAULT_MODEL;
-                    const codexItem = data?.codex;
-                    setCodexModelModalOpen(false);
-                    if (codexItem && needsOverwriteBeforeApply(codexItem)) {
-                      setPendingCodexModel(effectiveModel);
-                      setPendingTarget("codex");
-                      setConfirmOpen(true);
-                    } else {
-                      runApply("codex", false, effectiveModel);
-                    }
-                  }
+                  submitCodexModal();
                 }}
               >
                 {applyMutation.isPending || codexModelPatchMutation.isPending ? (

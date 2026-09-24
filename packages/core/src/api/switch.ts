@@ -8,7 +8,10 @@ import type { ProxyServer } from "../server/handler";
 import type { SwitchResponse } from "../types";
 import { sendJson, parseJsonBody } from "./index";
 import { ScopedLogger } from "../utils/logger";
-import { syncCodexCatalogIfConfigured } from "./codexModelCatalog";
+import {
+  syncCodexCatalogIfConfigured,
+  collectCodexModelsFromSmartRouting,
+} from "./codexModelCatalog";
 
 const log = new ScopedLogger("API:Switch");
 
@@ -55,7 +58,15 @@ export async function handleSwitchProvider(
       const provider = router.getCurrentProvider();
       log.info(`Switched to provider: ${providerId} (${provider?.name})`);
       try {
-        syncCodexCatalogIfConfigured(provider);
+        const catalog = serverInstance.getModelCatalog();
+        if (catalog.isEnabled()) {
+          await catalog.ensureReady();
+          syncCodexCatalogIfConfigured(provider, {
+            models: collectCodexModelsFromSmartRouting(catalog.getAll()),
+          });
+        } else {
+          syncCodexCatalogIfConfigured(provider);
+        }
       } catch (syncErr) {
         log.warn(
           `Codex catalog sync after switch failed: ${syncErr instanceof Error ? syncErr.message : String(syncErr)}`

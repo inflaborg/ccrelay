@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+**Config**
+
+- Codex model catalog entries accept image input, so pasting an image is no longer rejected for models listed there.
+- Client configuration warns when the Codex model catalog was written by an older CCRelay and asks you to apply the template again.
+- With smart routing on, the Codex model catalog lists the routed models (including every provider), not only the selected provider.
+- Codex configuration treats every catalog model as vision by default. Uncheck that option to choose which models accept images. The same dialog can exclude models by protocol (Anthropic, OpenAI, or Chat only) or one by one, so other protocols in smart routing stay out of the Codex catalog.
+
 ## [0.3.2] - 2026-09-23 (pre-release)
 
 Pre-release line for 0.3.2.

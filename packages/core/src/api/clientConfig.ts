@@ -19,15 +19,22 @@ import {
   type ClaudeDesktopBundleVersions,
 } from "./clientVersion";
 import {
+  CCRELAY_CODEX_CATALOG_SCHEMA_VERSION,
   CCRELAY_CODEX_MODEL_CATALOG_FILENAME,
   catalogFileExists,
   collectCodexModelsFromProvider,
+  collectCodexModelsFromSmartRouting,
   ensureCodexModelCatalogJsonField,
   isCcrelayCatalogPointer,
+  readCodexCatalogExclude,
+  readCodexCatalogSchemaVersion,
+  readCodexCatalogVision,
   removeCodexModelCatalog,
   removeOwnedCodexModelCatalogJsonField,
   writeCodexModelCatalog,
+  type CodexCatalogExclude,
   type CodexCatalogModelRef,
+  type CodexCatalogVision,
 } from "./codexModelCatalog";
 
 function sendJson(res: http.ServerResponse, status: number, data: unknown): void {
@@ -168,6 +175,17 @@ export interface ClaudeDefaultModels {
 export interface CodexAvailableModel {
   id: string;
   displayName: string;
+  protocol?: "anthropic" | "openai" | "openai_chat";
+}
+
+export interface CodexVisionConfig {
+  all: boolean;
+  modelIds: string[];
+}
+
+export interface CodexExcludeConfig {
+  protocols: Array<"anthropic" | "openai" | "openai_chat">;
+  modelIds: string[];
 }
 
 export interface ClientConfigGetResponse {
@@ -179,6 +197,10 @@ export interface ClientConfigGetResponse {
   codex: ClientConfigItem;
   /** Models from the current provider for Codex Apply / Configure model UI */
   codexAvailableModels: CodexAvailableModel[];
+  /** Image-input selection written into the Codex catalog. `all` is the default. */
+  codexVision: CodexVisionConfig;
+  /** Protocols and model ids omitted from the Codex catalog. */
+  codexExclude: CodexExcludeConfig;
   /** Parsed from settings.json env when file is readable */
   claudeDefaultModels: ClaudeDefaultModels;
   claudeDesktopBundles: ClaudeDesktopBundleVersions;
@@ -377,15 +399,26 @@ base_url = "http://127.0.0.1:${port}/openai"
 `;
 }
 
-function resolveCurrentProviderModels(fallbackModel?: string): CodexCatalogModelRef[] {
+async function resolveCurrentProviderModels(
+  fallbackModel?: string
+): Promise<CodexCatalogModelRef[]> {
+  const catalog = serverInstance?.getModelCatalog();
+  if (catalog?.isEnabled()) {
+    await catalog.ensureReady();
+    return collectCodexModelsFromSmartRouting(catalog.getAll(), fallbackModel);
+  }
   const provider = serverInstance?.getRouter()?.getCurrentProvider() ?? null;
   return collectCodexModelsFromProvider(provider, fallbackModel);
 }
 
-function writeCatalogForCurrentProvider(fallbackModel?: string): CodexCatalogModelRef[] {
-  const models = resolveCurrentProviderModels(fallbackModel);
+async function writeCatalogForCurrentProvider(
+  fallbackModel?: string,
+  vision?: CodexCatalogVision,
+  exclude?: CodexCatalogExclude
+): Promise<CodexCatalogModelRef[]> {
+  const models = await resolveCurrentProviderModels(fallbackModel);
   if (models.length > 0) {
-    writeCodexModelCatalog(models);
+    writeCodexModelCatalog(models, undefined, vision, exclude);
   }
   return models;
 }
@@ -493,7 +526,8 @@ function detectClaude(claudePath: string, port: number): ClientConfigItem {
 export function buildCodexFields(
   toml: ParsedTomlLite,
   port: number,
-  availableModelIds?: readonly string[]
+  availableModelIds?: readonly string[],
+  catalogSchemaVersion?: number | null
 ): ClientConfigField[] {
   const expectedBase = `http://127.0.0.1:${port}/openai`;
   const modelProvider = toml.top.model_provider;
@@ -537,6 +571,18 @@ export function buildCodexFields(
       current: catalogJson,
       ok: catalogOk,
     },
+    ...(isCcrelayCatalogPointer(catalogJson) &&
+    catalogSchemaVersion !== undefined &&
+    catalogSchemaVersion !== null
+      ? [
+          {
+            key: "catalog_schema_version",
+            expected: String(CCRELAY_CODEX_CATALOG_SCHEMA_VERSION),
+            current: String(catalogSchemaVersion),
+            ok: catalogSchemaVersion === CCRELAY_CODEX_CATALOG_SCHEMA_VERSION,
+          },
+        ]
+      : []),
   ];
 }
 
@@ -559,7 +605,10 @@ function detectCodex(
   const toml = parseTomlLite(raw);
   const modelProvider = toml.top.model_provider;
   const model = toml.top.model;
-  const fields = buildCodexFields(toml, port, availableModelIds);
+  const catalogSchemaVersion = isCcrelayCatalogPointer(toml.top.model_catalog_json)
+    ? readCodexCatalogSchemaVersion(path.dirname(codexPath))
+    : null;
+  const fields = buildCodexFields(toml, port, availableModelIds, catalogSchemaVersion);
   const baseUrl = modelProvider
     ? toml.sections[`model_providers.${modelProvider}`]?.base_url
     : undefined;
@@ -812,7 +861,7 @@ export async function handleGetClientConfig(
   const claudePath = CLAUDE_SETTINGS();
   const detectionEnabled = routerConfig.clientVersionDetection?.enabled !== false;
   const claudeCli = await detectClaudeCliVersion({ enabled: detectionEnabled });
-  const availableModels = resolveCurrentProviderModels();
+  const availableModels = await resolveCurrentProviderModels();
   const availableModelIds = availableModels.map(m => m.slug);
   const body: ClientConfigGetResponse = {
     expectedAnthropicBase,
@@ -824,7 +873,10 @@ export async function handleGetClientConfig(
     codexAvailableModels: availableModels.map(m => ({
       id: m.slug,
       displayName: m.displayName,
+      ...(m.protocol ? { protocol: m.protocol } : {}),
     })),
+    codexVision: readCodexCatalogVision(),
+    codexExclude: readCodexCatalogExclude(),
     claudeDefaultModels: readClaudeDefaultModelsFromFile(claudePath),
     claudeDesktopBundles: scanClaudeDesktopBundles(claudeDesktopDir()),
     claudeCli,
@@ -833,6 +885,46 @@ export async function handleGetClientConfig(
 }
 
 type ApplyTarget = "claudeCode" | "codex" | "claudeDesktop";
+
+function codexExcludeFromBody(
+  raw:
+    | {
+        protocols?: string[];
+        modelIds?: string[];
+      }
+    | undefined
+): CodexCatalogExclude | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  const protocols = Array.isArray(raw.protocols)
+    ? raw.protocols.filter(
+        (protocol): protocol is CodexCatalogExclude["protocols"][number] =>
+          protocol === "anthropic" || protocol === "openai" || protocol === "openai_chat"
+      )
+    : [];
+  const modelIds = Array.isArray(raw.modelIds)
+    ? raw.modelIds.map(id => id.trim()).filter(Boolean)
+    : [];
+  return { protocols, modelIds };
+}
+
+function codexVisionFromBody(
+  raw:
+    | {
+        all?: boolean;
+        modelIds?: string[];
+      }
+    | undefined
+): CodexCatalogVision | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  const modelIds = Array.isArray(raw.modelIds)
+    ? raw.modelIds.map(id => id.trim()).filter(Boolean)
+    : [];
+  return { all: raw.all !== false, modelIds };
+}
 
 /**
  * POST /ccrelay/api/client-config/apply
@@ -850,7 +942,7 @@ export async function handleApplyClientConfig(
   const claudePath = CLAUDE_SETTINGS();
   const codexPath = CODEX_CONFIG();
   const existingClaude = detectClaude(claudePath, port);
-  const availableModelIds = resolveCurrentProviderModels().map(m => m.slug);
+  const availableModelIds = (await resolveCurrentProviderModels()).map(m => m.slug);
   const existingCodex = detectCodex(codexPath, port, availableModelIds);
 
   try {
@@ -862,6 +954,8 @@ export async function handleApplyClientConfig(
       patchClaudeModelsOnly?: boolean;
       patchCodexModelOnly?: boolean;
       claudeDefaultModels?: { opus?: string; sonnet?: string; haiku?: string };
+      codexVision?: { all?: boolean; modelIds?: string[] };
+      codexExclude?: { protocols?: string[]; modelIds?: string[] };
     }>(req);
     const target = body.target;
     const overwrite = Boolean(body.overwrite);
@@ -1063,7 +1157,11 @@ export async function handleApplyClientConfig(
       const raw = fs.readFileSync(codexPath, "utf-8");
       const nextModel = m || CODEX_DEFAULT_MODEL;
       let updated = raw.replace(/^model\s*=\s*".*"$/m, `model = "${nextModel}"`);
-      writeCatalogForCurrentProvider(nextModel);
+      await writeCatalogForCurrentProvider(
+        nextModel,
+        codexVisionFromBody(body.codexVision),
+        codexExcludeFromBody(body.codexExclude)
+      );
       updated = ensureCodexModelCatalogJsonField(updated);
       fs.writeFileSync(codexPath, updated, "utf-8");
       sendJson(res, 200, { status: "ok", message: `Updated model in ${codexPath}` });
@@ -1127,7 +1225,11 @@ export async function handleApplyClientConfig(
         typeof body.model === "string" && body.model.trim()
           ? body.model.trim()
           : CODEX_DEFAULT_MODEL;
-      writeCatalogForCurrentProvider(codexModel);
+      await writeCatalogForCurrentProvider(
+        codexModel,
+        codexVisionFromBody(body.codexVision),
+        codexExcludeFromBody(body.codexExclude)
+      );
       fs.writeFileSync(codexPath, buildCodexTemplate(port, codexModel), "utf-8");
       sendJson(res, 200, { status: "ok", message: `Updated ${codexPath}` });
       return;

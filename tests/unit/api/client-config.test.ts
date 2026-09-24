@@ -267,4 +267,20 @@ base_url = "http://127.0.0.1:7575/openai"
     const fields = buildCodexFields(toml, 7575, ["deepseek-v4-flash", "deepseek-v4-pro"]);
     expect(fields.find(f => f.key === "model")?.ok).toBe(true);
   });
+
+  it("marks the catalog stale when its schema version is older", () => {
+    const toml = parseTomlLite(`model = "deepseek-v4-flash"
+model_provider = "ccrelay"
+model_catalog_json = "ccrelay-model-catalog.json"
+[model_providers.ccrelay]
+base_url = "http://127.0.0.1:7575/openai"
+`);
+    const stale = buildCodexFields(toml, 7575, ["deepseek-v4-flash"], 0);
+    const schema = stale.find(f => f.key === "catalog_schema_version");
+    expect(schema?.ok).toBe(false);
+    expect(schema?.current).toBe("0");
+
+    const current = buildCodexFields(toml, 7575, ["deepseek-v4-flash"], 3);
+    expect(current.find(f => f.key === "catalog_schema_version")?.ok).toBe(true);
+  });
 });
