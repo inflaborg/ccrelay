@@ -7,25 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-09-23
+
+The Codex catalog accepts images, lists smart-routing models, and can leave other protocols out. Applying the Codex template keeps language, plugins, and other local settings. Chat stays available with smart routing on, and more models are recognized as image-capable.
+
 ### Fixed
-
-**UI**
-
-- Chat stays available when smart routing is on, instead of showing that there is no active provider.
-- Model capability checks use the model id after the smart-routing provider prefix, so names like gpt-6-luna and gpt-5.6 are recognized as image-capable in Chat.
-- glm-5.3-flash and newer flash models, claude-fable, muse-spark, and qwen3 are recognized as image-capable.
-- gpt-6 and later Chat Completions requests that include function tools set reasoning effort to none, so names like gpt-6-luna-1 are not rejected. Full OpenAI upstreams still move those requests to Responses.
 
 **Config**
 
 - Codex model catalog entries accept image input, so pasting an image is no longer rejected for models listed there.
-- Applying the Codex template updates only the proxy fields in config.toml, so language, plugins, and other local settings stay in place.
-- With smart routing on, the Codex model catalog lists the routed models (including every provider), not only the selected provider.
+- With smart routing on, the Codex model catalog lists the routed models from every provider, not only the selected provider.
 - Codex configuration treats every catalog model as vision by default. Uncheck that option to choose which models accept images. The same dialog can exclude models by protocol (Anthropic, OpenAI, or Chat only) or one by one, so other protocols in smart routing stay out of the Codex catalog.
+- Applying the Codex template updates only the proxy fields in config.toml, so language, plugins, and other local settings stay in place.
 
-## [0.3.2] - 2026-09-23 (pre-release)
+**UI**
 
-Pre-release line for 0.3.2.
+- Chat stays available when smart routing is on, instead of showing that there is no active provider.
+- Chat recognizes image input from the model id after a smart-routing provider prefix. A provider name that itself looks like a model family, such as glm-intl-openai, no longer hides the real model. gpt-6-luna, gpt-5.6, glm-5.3-flash and newer flash models, claude-fable, muse-spark, and qwen3 are image-capable in Playground.
+
+**Protocol/Conversion**
+
+- gpt-6 and later Chat Completions requests that include function tools set reasoning effort to none, so names like gpt-6-luna-1 are not rejected. Full OpenAI upstreams still move those requests to Responses.
 
 ## [0.3.1] - 2026-09-23
 
