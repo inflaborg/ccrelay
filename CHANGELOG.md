@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**Config**
+
+- Codex model catalog now lists reasoning levels (low through xhigh, default high) so the thinking picker is not stuck on Medium, and requests include the selected effort.
+
 **Routing**
 
 - Excluded smart-routing models are no longer forwarded. A request is rejected when the client sends an excluded id, or when a custom rule or the current provider's model map would send it there.

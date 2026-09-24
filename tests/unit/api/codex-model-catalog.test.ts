@@ -75,7 +75,18 @@ describe("buildCodexModelCatalogJson", () => {
     expect(entry.visibility).toBe("list");
     expect(entry.shell_type).toBe("shell_command");
     expect(typeof entry.base_instructions).toBe("string");
-    expect(Array.isArray(entry.supported_reasoning_levels)).toBe(true);
+    expect(entry.default_reasoning_level).toBe("high");
+    expect(entry.supported_reasoning_levels).toEqual([
+      { effort: "low", description: "Fast responses with lighter reasoning" },
+      {
+        effort: "medium",
+        description: "Balances speed and reasoning depth for everyday tasks",
+      },
+      { effort: "high", description: "Greater reasoning depth for complex problems" },
+      { effort: "xhigh", description: "Extra high reasoning depth for complex problems" },
+    ]);
+    expect(entry.supports_reasoning_summaries).toBe(true);
+    expect(entry.default_reasoning_summary).toBe("none");
     expect(entry.input_modalities).toEqual(["text"]);
     expect(entry.truncation_policy).toEqual({ mode: "tokens", limit: 10000 });
   });

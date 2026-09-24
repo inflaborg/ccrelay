@@ -35,6 +35,18 @@ const DEFAULT_CONTEXT_WINDOW = 128_000;
 const BASE_INSTRUCTIONS =
   "You are Codex, a coding agent. You and the user share the same workspace and collaborate to achieve the user's goals.";
 
+/**
+ * Efforts Codex can offer in `/model`. An empty list makes the picker fall back
+ * to the client default (Medium) and hides `default_reasoning_level`.
+ * `max` / `ultra` are omitted: they imply OpenAI multi-agent delegation.
+ */
+const CODEX_REASONING_LEVELS: ReadonlyArray<{ effort: string; description: string }> = [
+  { effort: "low", description: "Fast responses with lighter reasoning" },
+  { effort: "medium", description: "Balances speed and reasoning depth for everyday tasks" },
+  { effort: "high", description: "Greater reasoning depth for complex problems" },
+  { effort: "xhigh", description: "Extra high reasoning depth for complex problems" },
+];
+
 /** Minimal Codex catalog entry fields required for /model listing. */
 function catalogEntryTemplate(slug: string, displayName: string, priority: number): object {
   /* eslint-disable @typescript-eslint/naming-convention -- Codex catalog JSON uses snake_case */
@@ -44,12 +56,14 @@ function catalogEntryTemplate(slug: string, displayName: string, priority: numbe
     description: displayName,
     base_instructions: BASE_INSTRUCTIONS,
     default_reasoning_level: "high",
-    supported_reasoning_levels: [],
+    supported_reasoning_levels: CODEX_REASONING_LEVELS.map(level => ({ ...level })),
     shell_type: "shell_command",
     visibility: "list",
     supported_in_api: true,
     priority: 1000 + priority,
-    supports_reasoning_summaries: false,
+    // Older Codex gates the whole `reasoning` object (including effort) on this flag.
+    // `default_reasoning_summary: none` still omits `reasoning.summary` on the wire.
+    supports_reasoning_summaries: true,
     default_reasoning_summary: "none",
     support_verbosity: false,
     supports_parallel_tool_calls: false,
