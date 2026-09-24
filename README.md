@@ -846,4 +846,4 @@ This project is **100% AI-generated code**. Special thanks to:
 
 [MIT License](LICENSE)
 
-Copyright (c) 2026 [inflab.org](https://inflab.org)
+Copyright (c) 2026 [infLab](https://github.com/inflaborg)
