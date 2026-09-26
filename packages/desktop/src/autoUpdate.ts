@@ -13,7 +13,7 @@
  * instance lock.
  */
 
-import { BrowserWindow, app, dialog } from "electron";
+import { BrowserWindow, app, dialog, ipcMain } from "electron";
 import type { AppUpdater, UpdateInfo } from "electron-updater";
 import { Logger } from "@ccrelay/core";
 import {
@@ -27,7 +27,7 @@ import {
 const log = Logger.getInstance();
 
 const STARTUP_CHECK_DELAY_MS = 15_000;
-const DAILY_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const CHECK_INTERVAL_MS = 30 * 60 * 1000;
 const BEFORE_QUIT_TIMEOUT_MS = 5_000;
 
 export interface AutoUpdateOptions {
@@ -40,10 +40,39 @@ let updater: AppUpdater | null = null;
 let manualCheck = false;
 let checking = false;
 let startupTimer: ReturnType<typeof setTimeout> | null = null;
-let dailyInterval: ReturnType<typeof setInterval> | null = null;
+let checkInterval: ReturnType<typeof setInterval> | null = null;
 /** Resolved channel after init (preference or version default). */
 let activeChannel: UpdateChannel | null = null;
 let beforeQuitForUpdate: (() => Promise<void>) | null = null;
+let progressIpcRegistered = false;
+
+export interface UpdateDownloadProgress {
+  percent: number;
+  transferred: number;
+  total: number;
+  bytesPerSecond: number;
+}
+
+let downloadProgress: UpdateDownloadProgress | null = null;
+
+const UPDATE_DOWNLOAD_PROGRESS_CHANNEL = "desktop:update-download-progress";
+
+function publishDownloadProgress(progress: UpdateDownloadProgress | null): void {
+  downloadProgress = progress;
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send(UPDATE_DOWNLOAD_PROGRESS_CHANNEL, progress);
+    }
+  }
+}
+
+function registerDownloadProgressIpc(): void {
+  if (progressIpcRegistered) {
+    return;
+  }
+  progressIpcRegistered = true;
+  ipcMain.handle(UPDATE_DOWNLOAD_PROGRESS_CHANNEL, () => downloadProgress);
+}
 
 function resolveUpdateChannel(): UpdateChannel {
   return loadUpdateChannel() ?? defaultUpdateChannelFromVersion(app.getVersion());
@@ -222,6 +251,7 @@ export async function requestUpdateCheck(manual: boolean): Promise<void> {
  */
 export function initAutoUpdate(options?: AutoUpdateOptions): void {
   beforeQuitForUpdate = options?.beforeQuitForUpdate ?? null;
+  registerDownloadProgressIpc();
   const channel = resolveUpdateChannel();
   applyUpdateChannel(channel);
 
@@ -260,11 +290,22 @@ export function initAutoUpdate(options?: AutoUpdateOptions): void {
       });
     });
 
+    autoUpdater.on("download-progress", info => {
+      publishDownloadProgress({
+        percent: info.percent,
+        transferred: info.transferred,
+        total: info.total,
+        bytesPerSecond: info.bytesPerSecond,
+      });
+    });
+
     autoUpdater.on("update-downloaded", (info: UpdateInfo) => {
+      publishDownloadProgress(null);
       void promptInstall(info);
     });
 
     autoUpdater.on("error", (err: Error) => {
+      publishDownloadProgress(null);
       log.warn(`[autoUpdater] ${err?.message || err}`);
       if (manualCheck) {
         void showInfoBox({
@@ -281,9 +322,9 @@ export function initAutoUpdate(options?: AutoUpdateOptions): void {
       void requestUpdateCheck(false);
     }, STARTUP_CHECK_DELAY_MS);
 
-    dailyInterval = setInterval(() => {
+    checkInterval = setInterval(() => {
       void requestUpdateCheck(false);
-    }, DAILY_INTERVAL_MS);
+    }, CHECK_INTERVAL_MS);
   } catch (e) {
     log.warn(`[autoUpdater] init skipped: ${e instanceof Error ? e.message : String(e)}`);
   }
@@ -294,8 +335,8 @@ export function cancelAutoUpdate(): void {
     clearTimeout(startupTimer);
     startupTimer = null;
   }
-  if (dailyInterval !== null) {
-    clearInterval(dailyInterval);
-    dailyInterval = null;
+  if (checkInterval !== null) {
+    clearInterval(checkInterval);
+    checkInterval = null;
   }
 }

@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Pre-release line for 0.3.3.
 
+### Changed
+
+**Desktop**
+
+- The packaged app checks for updates every 30 minutes. A newer version still opens the download prompt.
+- While an update is downloading, the dashboard footer shows progress next to the version.
+
 ### Fixed
 
 **Desktop**

@@ -20,4 +20,27 @@ contextBridge.exposeInMainWorld("ccrelayDesktop", {
       ipcRenderer.removeListener("desktop:window-maximized", handler);
     };
   },
+  getUpdateDownloadProgress: (): Promise<UpdateDownloadProgress | null> =>
+    ipcRenderer.invoke("desktop:update-download-progress"),
+  onUpdateDownloadProgress: (
+    callback: (progress: UpdateDownloadProgress | null) => void
+  ): (() => void) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      progress: UpdateDownloadProgress | null
+    ): void => {
+      callback(progress);
+    };
+    ipcRenderer.on("desktop:update-download-progress", handler);
+    return () => {
+      ipcRenderer.removeListener("desktop:update-download-progress", handler);
+    };
+  },
 });
+
+interface UpdateDownloadProgress {
+  percent: number;
+  transferred: number;
+  total: number;
+  bytesPerSecond: number;
+}

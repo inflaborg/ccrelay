@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
-import { api } from "@/api/client";
+import { api, type UpdateDownloadProgress } from "@/api/client";
 import type { UpdateCheckResponse, UpdateCheckStatus } from "@/types/api";
 import { UpdateAvailableModal } from "./UpdateAvailableModal";
 
@@ -22,6 +22,21 @@ function statusTitleKey(status: UpdateCheckStatus): string {
   }
 }
 
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "0 B";
+  }
+  const units = ["B", "KB", "MB", "GB"] as const;
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  const digits = unit === 0 || value >= 10 ? 0 : 1;
+  return `${value.toFixed(digits)} ${units[unit]}`;
+}
+
 function readInjectedUpdateChannel(): "prod" | "dev" | null {
   if (typeof window === "undefined") {
     return null;
@@ -37,6 +52,7 @@ export function VersionFooter() {
   const [updateChannel, setUpdateChannel] = useState<"prod" | "dev" | null>(
     readInjectedUpdateChannel
   );
+  const [downloadProgress, setDownloadProgress] = useState<UpdateDownloadProgress | null>(null);
   const [updateCheck, setUpdateCheck] = useState<UpdateCheckResponse | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [manualChecking, setManualChecking] = useState(false);
@@ -77,6 +93,29 @@ export function VersionFooter() {
       .then(v => setVersion(v.version))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!nativeUpdater) {
+      return;
+    }
+    const desktop = window.ccrelayDesktop;
+    if (!desktop?.onUpdateDownloadProgress) {
+      return;
+    }
+    let cancelled = false;
+    void desktop.getUpdateDownloadProgress?.().then(progress => {
+      if (!cancelled) {
+        setDownloadProgress(progress);
+      }
+    });
+    const unsubscribe = desktop.onUpdateDownloadProgress(progress => {
+      setDownloadProgress(progress);
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [nativeUpdater]);
 
   useEffect(() => {
     const onChannel = (event: Event): void => {
@@ -172,10 +211,39 @@ export function VersionFooter() {
     </>
   );
 
+  const downloadPercent = downloadProgress
+    ? Math.round(Math.max(0, Math.min(100, downloadProgress.percent)))
+    : null;
+
   if (nativeUpdater) {
     return (
       <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
         {versionAndChannel}
+        {downloadProgress && downloadPercent !== null && (
+          <span
+            className="inline-flex items-center gap-1.5"
+            title={t("update.downloadProgressHint", {
+              transferred: formatBytes(downloadProgress.transferred),
+              total: formatBytes(downloadProgress.total),
+              speed: `${formatBytes(downloadProgress.bytesPerSecond)}/s`,
+            })}
+          >
+            <span
+              className="relative h-1 w-14 overflow-hidden rounded-full bg-muted"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={downloadPercent}
+              aria-label={t("update.downloading", { percent: downloadPercent })}
+            >
+              <span
+                className="absolute inset-y-0 left-0 bg-primary"
+                style={{ width: `${downloadPercent}%` }}
+              />
+            </span>
+            <span>{t("update.downloading", { percent: downloadPercent })}</span>
+          </span>
+        )}
       </div>
     );
   }
