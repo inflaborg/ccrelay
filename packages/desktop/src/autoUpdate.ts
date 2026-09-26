@@ -39,6 +39,8 @@ let updater: AppUpdater | null = null;
 /** Manual tray check should surface "up to date" / errors; startup check is quiet. */
 let manualCheck = false;
 let checking = false;
+/** True from the start of downloadUpdate until it settles. Blocks another check. */
+let downloading = false;
 let startupTimer: ReturnType<typeof setTimeout> | null = null;
 let checkInterval: ReturnType<typeof setInterval> | null = null;
 /** Resolved channel after init (preference or version default). */
@@ -110,6 +112,11 @@ async function showInfoBox(
 }
 
 async function promptDownload(info: UpdateInfo): Promise<void> {
+  // A check that was already in flight can still emit update-available after
+  // the user starts a download. Do not stack a second download dialog.
+  if (downloading) {
+    return;
+  }
   const version = info.version || "a newer version";
   const { response } = await showInfoBox({
     type: "info",
@@ -120,9 +127,10 @@ async function promptDownload(info: UpdateInfo): Promise<void> {
     defaultId: 0,
     cancelId: 1,
   });
-  if (response !== 0 || !updater) {
+  if (response !== 0 || !updater || downloading) {
     return;
   }
+  downloading = true;
   try {
     await updater.downloadUpdate();
   } catch (e) {
@@ -132,6 +140,8 @@ async function promptDownload(info: UpdateInfo): Promise<void> {
       message: "Could not download the update.",
       detail: e instanceof Error ? e.message : String(e),
     });
+  } finally {
+    downloading = false;
   }
 }
 
@@ -220,6 +230,10 @@ export async function requestUpdateCheck(manual: boolean): Promise<void> {
         message: "Auto-update is only available in packaged builds.",
       });
     }
+    return;
+  }
+  if (downloading) {
+    log.info("[autoUpdater] skip check; a download is already in progress");
     return;
   }
   if (checking) {
