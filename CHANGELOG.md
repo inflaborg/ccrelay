@@ -23,6 +23,7 @@ Pre-release line for 0.3.3.
 **Desktop**
 
 - Windows auto-update now closes the running CCRelay, replaces the install, and starts the new version. Previously the update could fail because the app was still running, or finish without restarting.
+- While an update is downloading, further update checks are ignored, so the download prompt does not open again.
 
 ## [0.3.2] - 2026-09-23
 
