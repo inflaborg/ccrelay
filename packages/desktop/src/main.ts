@@ -129,7 +129,9 @@ void app.whenReady().then(async () => {
     }
   }
 
-  initAutoUpdate();
+  initAutoUpdate({
+    beforeQuitForUpdate: () => server.stop(),
+  });
   createTray(server, configManager);
   showDashboardWindow(server, configManager);
 });
