@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Pre-release line for 0.3.3.
 
+### Changed
+
+**Desktop**
+
+- The packaged app checks for updates every 30 minutes. A newer version still opens the download prompt.
+- While an update is downloading, the dashboard footer shows progress next to the version.
+
+### Fixed
+
+**Desktop**
+
+- Windows auto-update now closes the running CCRelay, replaces the install, and starts the new version. Previously the update could fail because the app was still running, or finish without restarting.
+
 ## [0.3.2] - 2026-09-23
 
 The Codex catalog accepts images, lists smart-routing models, and can leave other protocols out. Applying the Codex template keeps language, plugins, and other local settings. Chat stays available with smart routing on, and more models are recognized as image-capable.

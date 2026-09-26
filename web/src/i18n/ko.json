@@ -95,7 +95,9 @@
     "noNotes": "릴리스 노트가 없습니다.",
     "channelStable": "Stable",
     "channelDev": "Dev",
-    "channelHint": "업데이트 채널 (트레이 → Update Channel에서 변경)"
+    "channelHint": "업데이트 채널 (트레이 → Update Channel에서 변경)",
+    "downloading": "다운로드 중 {{percent}}%",
+    "downloadProgressHint": "{{transferred}} / {{total}} · {{speed}}"
   },
   "language": {
     "title": "언어 선택",

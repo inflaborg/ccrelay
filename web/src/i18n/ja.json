@@ -95,7 +95,9 @@
     "noNotes": "リリースノートはありません。",
     "channelStable": "Stable",
     "channelDev": "Dev",
-    "channelHint": "更新チャネル（トレイ → Update Channel で変更）"
+    "channelHint": "更新チャネル（トレイ → Update Channel で変更）",
+    "downloading": "ダウンロード中 {{percent}}%",
+    "downloadProgressHint": "{{transferred}} / {{total}} · {{speed}}"
   },
   "language": {
     "title": "言語を選択",

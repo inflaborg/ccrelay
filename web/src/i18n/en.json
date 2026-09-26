@@ -95,7 +95,9 @@
     "noNotes": "No release notes provided.",
     "channelStable": "Stable",
     "channelDev": "Dev",
-    "channelHint": "Update channel (change from tray → Update Channel)"
+    "channelHint": "Update channel (change from tray → Update Channel)",
+    "downloading": "Downloading {{percent}}%",
+    "downloadProgressHint": "{{transferred}} of {{total}} · {{speed}}"
   },
   "language": {
     "title": "Choose Language",

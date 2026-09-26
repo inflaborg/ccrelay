@@ -39,6 +39,13 @@ import { fetchServerStatus } from "./serverReachability";
 // Re-export types for convenience
 export type { LogEntry, LogsQuery };
 
+export interface UpdateDownloadProgress {
+  percent: number;
+  transferred: number;
+  total: number;
+  bytesPerSecond: number;
+}
+
 // Extend Window interface for custom property
 declare global {
   interface Window {
@@ -53,7 +60,7 @@ declare global {
     CCRELAY_DESKTOP_PLATFORM?: string;
     /** Injected by Electron desktop: update feed channel (`prod` | `dev`) */
     CCRELAY_UPDATE_CHANNEL?: string;
-    /** Preload bridge for frameless window controls */
+    /** Preload bridge for frameless window controls and native update progress */
     ccrelayDesktop?: {
       platform: string;
       minimize: () => Promise<void>;
@@ -61,6 +68,10 @@ declare global {
       close: () => Promise<void>;
       isMaximized: () => Promise<boolean>;
       onMaximizedChange: (callback: (maximized: boolean) => void) => () => void;
+      getUpdateDownloadProgress?: () => Promise<UpdateDownloadProgress | null>;
+      onUpdateDownloadProgress?: (
+        callback: (progress: UpdateDownloadProgress | null) => void
+      ) => () => void;
     };
   }
 }

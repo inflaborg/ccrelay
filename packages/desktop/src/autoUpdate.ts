@@ -5,9 +5,15 @@
  * is stored in userData. Manifest filenames are always latest-mac.yml /
  * latest.yml (`publish.channel: latest`) so prerelease app versions like
  * 0.2.9-dev.N do not request missing dev-mac.yml files.
+ *
+ * Windows must quit the tray runtime first, then install silently and relaunch
+ * (`quitAndInstall(true, true)`). A plain quit leaves the proxy, the unpacked
+ * database worker, or a sqlite3 child holding files, so the installer reports
+ * that CCRelay cannot be closed and the new instance never gets the single-
+ * instance lock.
  */
 
-import { BrowserWindow, app, dialog } from "electron";
+import { BrowserWindow, app, dialog, ipcMain } from "electron";
 import type { AppUpdater, UpdateInfo } from "electron-updater";
 import { Logger } from "@ccrelay/core";
 import {
@@ -21,16 +27,52 @@ import {
 const log = Logger.getInstance();
 
 const STARTUP_CHECK_DELAY_MS = 15_000;
-const DAILY_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const CHECK_INTERVAL_MS = 30 * 60 * 1000;
+const BEFORE_QUIT_TIMEOUT_MS = 5_000;
+
+export interface AutoUpdateOptions {
+  /** Stop the proxy and child processes before the installer replaces files. */
+  beforeQuitForUpdate?: () => Promise<void>;
+}
 
 let updater: AppUpdater | null = null;
 /** Manual tray check should surface "up to date" / errors; startup check is quiet. */
 let manualCheck = false;
 let checking = false;
 let startupTimer: ReturnType<typeof setTimeout> | null = null;
-let dailyInterval: ReturnType<typeof setInterval> | null = null;
+let checkInterval: ReturnType<typeof setInterval> | null = null;
 /** Resolved channel after init (preference or version default). */
 let activeChannel: UpdateChannel | null = null;
+let beforeQuitForUpdate: (() => Promise<void>) | null = null;
+let progressIpcRegistered = false;
+
+export interface UpdateDownloadProgress {
+  percent: number;
+  transferred: number;
+  total: number;
+  bytesPerSecond: number;
+}
+
+let downloadProgress: UpdateDownloadProgress | null = null;
+
+const UPDATE_DOWNLOAD_PROGRESS_CHANNEL = "desktop:update-download-progress";
+
+function publishDownloadProgress(progress: UpdateDownloadProgress | null): void {
+  downloadProgress = progress;
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send(UPDATE_DOWNLOAD_PROGRESS_CHANNEL, progress);
+    }
+  }
+}
+
+function registerDownloadProgressIpc(): void {
+  if (progressIpcRegistered) {
+    return;
+  }
+  progressIpcRegistered = true;
+  ipcMain.handle(UPDATE_DOWNLOAD_PROGRESS_CHANNEL, () => downloadProgress);
+}
 
 function resolveUpdateChannel(): UpdateChannel {
   return loadUpdateChannel() ?? defaultUpdateChannelFromVersion(app.getVersion());
@@ -105,7 +147,37 @@ async function promptInstall(info: UpdateInfo): Promise<void> {
     cancelId: 1,
   });
   if (response === 0 && updater) {
-    updater.quitAndInstall();
+    await stopRuntimeBeforeUpdate();
+    // Windows NSIS: silent (/S) + relaunch. An interactive installer, or a
+    // quit that leaves the tray process running, deadlocks on file locks.
+    if (process.platform === "win32") {
+      updater.quitAndInstall(true, true);
+    } else {
+      updater.quitAndInstall();
+    }
+  }
+}
+
+async function stopRuntimeBeforeUpdate(): Promise<void> {
+  if (!beforeQuitForUpdate) {
+    return;
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      beforeQuitForUpdate(),
+      new Promise<void>(resolve => {
+        timer = setTimeout(resolve, BEFORE_QUIT_TIMEOUT_MS);
+      }),
+    ]);
+  } catch (e) {
+    log.warn(
+      `[autoUpdater] stop before update failed: ${e instanceof Error ? e.message : String(e)}`
+    );
+  } finally {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
   }
 }
 
@@ -177,7 +249,9 @@ export async function requestUpdateCheck(manual: boolean): Promise<void> {
  * Resolve channel (and wire electron-updater when packaged). Call once from
  * `app.whenReady()` before building the tray so the menu matches reality.
  */
-export function initAutoUpdate(): void {
+export function initAutoUpdate(options?: AutoUpdateOptions): void {
+  beforeQuitForUpdate = options?.beforeQuitForUpdate ?? null;
+  registerDownloadProgressIpc();
   const channel = resolveUpdateChannel();
   applyUpdateChannel(channel);
 
@@ -216,11 +290,22 @@ export function initAutoUpdate(): void {
       });
     });
 
+    autoUpdater.on("download-progress", info => {
+      publishDownloadProgress({
+        percent: info.percent,
+        transferred: info.transferred,
+        total: info.total,
+        bytesPerSecond: info.bytesPerSecond,
+      });
+    });
+
     autoUpdater.on("update-downloaded", (info: UpdateInfo) => {
+      publishDownloadProgress(null);
       void promptInstall(info);
     });
 
     autoUpdater.on("error", (err: Error) => {
+      publishDownloadProgress(null);
       log.warn(`[autoUpdater] ${err?.message || err}`);
       if (manualCheck) {
         void showInfoBox({
@@ -237,9 +322,9 @@ export function initAutoUpdate(): void {
       void requestUpdateCheck(false);
     }, STARTUP_CHECK_DELAY_MS);
 
-    dailyInterval = setInterval(() => {
+    checkInterval = setInterval(() => {
       void requestUpdateCheck(false);
-    }, DAILY_INTERVAL_MS);
+    }, CHECK_INTERVAL_MS);
   } catch (e) {
     log.warn(`[autoUpdater] init skipped: ${e instanceof Error ? e.message : String(e)}`);
   }
@@ -250,8 +335,8 @@ export function cancelAutoUpdate(): void {
     clearTimeout(startupTimer);
     startupTimer = null;
   }
-  if (dailyInterval !== null) {
-    clearInterval(dailyInterval);
-    dailyInterval = null;
+  if (checkInterval !== null) {
+    clearInterval(checkInterval);
+    checkInterval = null;
   }
 }

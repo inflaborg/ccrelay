@@ -90,7 +90,8 @@
     "nsis": {
       "oneClick": true,
       "perMachine": false,
-      "buildUniversalInstaller": false
+      "buildUniversalInstaller": false,
+      "include": "packaging/nsis-hooks.nsh"
     }
   }
 }
