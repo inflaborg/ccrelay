@@ -324,7 +324,7 @@ name = "CCRelay"
 base_url = "http://localhost:7575/openai"
 ```
 
-Apply writes `~/.codex/ccrelay-model-catalog.json` so Codex `/model` can list your models. The catalog comes from the **active provider’s** custom models (or exact `modelMap` entries); with Smart Routing on, it lists routed models from every provider. Each entry advertises reasoning levels low, medium, high, and xhigh, with high as the default. Set `model` to one of those ids. Restart Codex CLI or the ChatGPT desktop app after Apply or a provider switch so the catalog reloads. Override the level with `model_reasoning_effort` in `config.toml` or `/model`.
+Apply writes `~/.codex/ccrelay-model-catalog.json` so Codex `/model` can list your models. The catalog comes from the **active provider’s** custom models (or exact `modelMap` entries); with Smart Routing on, it lists routed models from every provider. Each entry advertises reasoning levels low, medium, high, and xhigh, with high as the default. gpt-5.6 and gpt-6 entries also include max. Set `model` to one of those ids. Restart Codex CLI or the ChatGPT desktop app after Apply or a provider switch so the catalog reloads. Override the level with `model_reasoning_effort` in `config.toml` or `/model`.
 
 ---
 

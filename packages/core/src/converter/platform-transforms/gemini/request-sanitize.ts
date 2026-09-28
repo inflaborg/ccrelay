@@ -5,6 +5,7 @@
 /* eslint-disable @typescript-eslint/naming-convention -- Gemini OpenAI-compat wire uses snake_case */
 
 import { canGeminiDisableThinking, isGemini25Model } from "../../model-meta";
+import { canonicalClientEffort } from "../../model-meta/effort";
 
 export { canGeminiDisableThinking, isGemini25Model };
 
@@ -24,6 +25,7 @@ export function getGeminiThinkingBudget(effort: string): number | undefined {
       return 8192;
     case "high":
     case "xhigh":
+    case "max":
       return 24576;
     default:
       return undefined;
@@ -35,7 +37,7 @@ export function getGeminiThinkingBudget(effort: string): number | undefined {
  */
 export function getGeminiThinkingLevel(effort: string): string | undefined {
   const e = effort.toLowerCase();
-  if (e === "xhigh") {
+  if (e === "xhigh" || e === "max") {
     return "high";
   }
   if (e === "minimal" || e === "low" || e === "medium" || e === "high") {
@@ -49,8 +51,11 @@ export function getGeminiThinkingLevel(effort: string): string | undefined {
  * to omit the field (Gemini model default).
  */
 export function normalizeGeminiEffort(effort: string, model: string): string | undefined {
-  const e = effort.toLowerCase();
-  if (e === "xhigh") {
+  const e = canonicalClientEffort(effort);
+  if (e === undefined) {
+    return undefined;
+  }
+  if (e === "xhigh" || e === "max") {
     return "high";
   }
   if (e === "none") {

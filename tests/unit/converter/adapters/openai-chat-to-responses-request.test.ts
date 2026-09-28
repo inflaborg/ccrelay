@@ -117,6 +117,16 @@ describe("convertOpenAIMessageRequestToResponsesRequest", () => {
     ]);
   });
 
+  it("keeps gpt-6 max reasoning_effort on Responses", () => {
+    const chat: OpenAIMessageRequest = {
+      model: "gpt-6-astra",
+      messages: [{ role: "user", content: "Hi" }],
+      reasoning_effort: "max",
+    };
+    const r = convertOpenAIMessageRequestToResponsesRequest(chat);
+    expect(r.request.reasoning).toEqual({ effort: "max" });
+  });
+
   it("maps gpt-6 none reasoning_effort to Responses low", () => {
     const chat: OpenAIMessageRequest = {
       model: "gpt-6-astra",

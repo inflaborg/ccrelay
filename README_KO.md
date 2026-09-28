@@ -324,7 +324,7 @@ name = "CCRelay"
 base_url = "http://localhost:7575/openai"
 ```
 
-적용은 `~/.codex/ccrelay-model-catalog.json`을 써서 Codex `/model`이 모델을 나열할 수 있게 합니다. 카탈로그는 **활성 제공자**의 사용자 지정 모델(또는 정확한 `modelMap` 항목)에서 옵니다. 스마트 라우팅이 켜져 있으면 모든 제공자의 라우팅된 모델을 나열합니다. 각 항목은 추론 수준 low, medium, high, xhigh를 알리며 기본값은 high입니다. `model`을 그 id 중 하나로 설정합니다. 적용 후 또는 제공자를 바꾼 뒤에는 카탈로그를 다시 읽도록 Codex CLI 또는 ChatGPT 데스크톱 앱을 다시 시작합니다. 수준은 `config.toml`의 `model_reasoning_effort` 또는 `/model`로 덮어씁니다.
+적용은 `~/.codex/ccrelay-model-catalog.json`을 써서 Codex `/model`이 모델을 나열할 수 있게 합니다. 카탈로그는 **활성 제공자**의 사용자 지정 모델(또는 정확한 `modelMap` 항목)에서 옵니다. 스마트 라우팅이 켜져 있으면 모든 제공자의 라우팅된 모델을 나열합니다. 각 항목은 추론 수준 low, medium, high, xhigh를 알리며 기본값은 high입니다. gpt-5.6과 gpt-6 항목에는 max도 포함됩니다. `model`을 그 id 중 하나로 설정합니다. 적용 후 또는 제공자를 바꾼 뒤에는 카탈로그를 다시 읽도록 Codex CLI 또는 ChatGPT 데스크톱 앱을 다시 시작합니다. 수준은 `config.toml`의 `model_reasoning_effort` 또는 `/model`로 덮어씁니다.
 
 ---
 

@@ -324,7 +324,7 @@ name = "CCRelay"
 base_url = "http://localhost:7575/openai"
 ```
 
-应用配置时会生成 `~/.codex/ccrelay-model-catalog.json`，供 Codex `/model` 列出可选模型。目录来自**当前激活供应商**的自定义模型列表（或精确的 `modelMap` 条目）；开启智能路由时，列出所有提供商中已路由的模型。每个条目会声明推理档位 low、medium、high、xhigh，默认 high。将 `model` 设为其中某个 id。Apply 或切换供应商后请重启 Codex CLI 或 ChatGPT 桌面应用以重新加载目录。可在 `config.toml` 用 `model_reasoning_effort` 或在 `/model` 里覆盖档位。
+应用配置时会生成 `~/.codex/ccrelay-model-catalog.json`，供 Codex `/model` 列出可选模型。目录来自**当前激活供应商**的自定义模型列表（或精确的 `modelMap` 条目）；开启智能路由时，列出所有提供商中已路由的模型。每个条目会声明推理档位 low、medium、high、xhigh，默认 high。gpt-5.6 和 gpt-6 还会包含 max。将 `model` 设为其中某个 id。Apply 或切换供应商后请重启 Codex CLI 或 ChatGPT 桌面应用以重新加载目录。可在 `config.toml` 用 `model_reasoning_effort` 或在 `/model` 里覆盖档位。
 
 ---
 

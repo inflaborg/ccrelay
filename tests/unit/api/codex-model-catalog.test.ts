@@ -106,7 +106,7 @@ describe("buildCodexModelCatalogJson", () => {
       { slug: "m1", displayName: "Model One" },
       { slug: "m2", displayName: "Model Two" },
     ]);
-    expect(catalog.catalog_schema_version).toBe(3);
+    expect(catalog.catalog_schema_version).toBe(4);
     const entry = catalog.models[0] as Record<string, unknown>;
     expect(entry.slug).toBe("m1");
     expect(entry.display_name).toBe("Model One");
@@ -123,6 +123,23 @@ describe("buildCodexModelCatalogJson", () => {
       { effort: "high", description: "Greater reasoning depth for complex problems" },
       { effort: "xhigh", description: "Extra high reasoning depth for complex problems" },
     ]);
+    const gpt6 = buildCodexModelCatalogJson([
+      { slug: "gpt-6-astra", displayName: "gpt-6-astra" },
+      { slug: "llm-router:gpt-5.6-sol", displayName: "gpt-5.6-sol" },
+      { slug: "gpt-5.4", displayName: "gpt-5.4" },
+    ]);
+    const levels = (slug: string) => {
+      const model = gpt6.models.find(m => (m as { slug: string }).slug === slug) as Record<
+        string,
+        unknown
+      >;
+      const supported = model["supported_reasoning_levels"] as { effort: string }[];
+      return supported.map(level => level.effort);
+    };
+    expect(levels("gpt-6-astra")).toEqual(["low", "medium", "high", "xhigh", "max"]);
+    expect(levels("llm-router:gpt-5.6-sol")).toEqual(["low", "medium", "high", "xhigh", "max"]);
+    expect(levels("gpt-5.4")).toEqual(["low", "medium", "high", "xhigh"]);
+
     expect(entry.supports_reasoning_summaries).toBe(true);
     expect(entry.default_reasoning_summary).toBe("none");
     expect(entry.input_modalities).toEqual(["text", "image"]);

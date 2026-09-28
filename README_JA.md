@@ -324,7 +324,7 @@ name = "CCRelay"
 base_url = "http://localhost:7575/openai"
 ```
 
-適用は `~/.codex/ccrelay-model-catalog.json` を書き込み、Codex の `/model` がモデルを一覧できるようにします。カタログは **アクティブなプロバイダー** のカスタムモデル（または完全一致の `modelMap` エントリ）から作られます。スマートルーティングがオンのときは、全プロバイダーのルーティング対象モデルを一覧します。各エントリは推論レベル low、medium、high、xhigh を通知し、デフォルトは high です。`model` をそれらの id のいずれかに設定します。適用後またはプロバイダー切り替え後は、カタログを再読み込みするため Codex CLI または ChatGPT デスクトップアプリを再起動します。レベルは `config.toml` の `model_reasoning_effort` または `/model` で上書きします。
+適用は `~/.codex/ccrelay-model-catalog.json` を書き込み、Codex の `/model` がモデルを一覧できるようにします。カタログは **アクティブなプロバイダー** のカスタムモデル（または完全一致の `modelMap` エントリ）から作られます。スマートルーティングがオンのときは、全プロバイダーのルーティング対象モデルを一覧します。各エントリは推論レベル low、medium、high、xhigh を通知し、デフォルトは high です。gpt-5.6 と gpt-6 には max も含まれます。`model` をそれらの id のいずれかに設定します。適用後またはプロバイダー切り替え後は、カタログを再読み込みするため Codex CLI または ChatGPT デスクトップアプリを再起動します。レベルは `config.toml` の `model_reasoning_effort` または `/model` で上書きします。
 
 ---
 

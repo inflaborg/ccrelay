@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+**Protocol/Conversion**
+
+- ChatGPT and Codex can select max thinking on gpt-5.6 and gpt-6, and that level is forwarded upstream.
+- Claude Code effort levels xhigh, max, ultracode, and auto map to the matching reasoning setting when the request is converted.
+
 ## [0.3.3] - 2026-09-24 (pre-release)
 
 Pre-release line for 0.3.3.

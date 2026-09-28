@@ -1,4 +1,5 @@
 import { ScopedLogger } from "../../utils/logger";
+import { resolveClientEffort } from "./effort";
 import { hoistInlineSystemMessagesToAnthropicSystem } from "./normalize-anthropic-system";
 import { resolveModelMeta } from "./registry";
 import type { ModelMeta } from "./types";
@@ -28,6 +29,35 @@ function sanitizeOutputConfig(
   if (Object.keys(out).length === 0) {
     delete data.output_config;
     changes.push("output_config");
+  }
+}
+
+/** Rewrite Claude Code picker names that are not Messages API effort values. */
+function normalizeAnthropicEffortValue(data: Record<string, unknown>, changes: string[]): void {
+  const oc = data.output_config;
+  if (!oc || typeof oc !== "object" || Array.isArray(oc)) {
+    return;
+  }
+  const out = oc as Record<string, unknown>;
+  if (typeof out.effort !== "string") {
+    return;
+  }
+  const resolved = resolveClientEffort(out.effort);
+  if (!resolved.specified) {
+    return;
+  }
+  if (!resolved.effort) {
+    delete out.effort;
+    changes.push("output_config.effort");
+    if (Object.keys(out).length === 0) {
+      delete data.output_config;
+      changes.push("output_config");
+    }
+    return;
+  }
+  if (resolved.effort !== out.effort.trim().toLowerCase()) {
+    out.effort = resolved.effort;
+    changes.push(`output_config.effort=${resolved.effort}`);
   }
 }
 
@@ -312,6 +342,9 @@ export function sanitizeAnthropicRequestByMeta(
       },
       changes
     );
+  }
+  if (reasoning.supportsEffort) {
+    normalizeAnthropicEffortValue(data, changes);
   }
 
   normalizeThinkingForMeta(data, meta, changes);

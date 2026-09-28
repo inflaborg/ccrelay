@@ -90,8 +90,11 @@ describe("canGeminiDisableThinking", () => {
 });
 
 describe("normalizeGeminiEffort", () => {
-  it("maps xhigh to high", () => {
+  it("maps xhigh, max, and ultracode to high, and omits auto", () => {
     expect(normalizeGeminiEffort("xhigh", "gemini-2.5-flash")).toBe("high");
+    expect(normalizeGeminiEffort("max", "gemini-3-flash")).toBe("high");
+    expect(normalizeGeminiEffort("ultracode", "gemini-3-flash")).toBe("high");
+    expect(normalizeGeminiEffort("auto", "gemini-3-flash")).toBeUndefined();
   });
 
   it("passes none for flash models", () => {
