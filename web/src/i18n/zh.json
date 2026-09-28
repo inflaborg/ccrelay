@@ -347,6 +347,9 @@
       "label": "模型",
       "pickFromProvider": "从当前供应商选择",
       "orType": "或手动输入模型 id",
+      "primaryModel": "Codex 列表第一个模型",
+      "primaryModelDefault": "默认顺序",
+      "primaryModelHint": "Codex 会用第一个模型处理后台任务，例如生成对话标题和自动化。",
       "saveAndApply": "保存并应用"
     },
     "modelsModal": {
@@ -369,6 +372,7 @@
     "settings": {
       "title": "设置",
       "aliasPrefix": "别名前缀",
+      "catalogProviderPrefix": "目录显示名包含供应商",
       "bareFallback": "裸 model id 兜底",
       "firstMatch": "首个匹配（按 provider 排序）",
       "reject": "拒绝",

@@ -385,6 +385,7 @@ export interface ClientConfigGetResponse {
   codexAvailableModels?: CodexAvailableModel[];
   codexVision?: CodexVisionConfig;
   codexExclude?: CodexExcludeConfig;
+  codexPrimaryModel?: string;
   claudeDefaultModels: ClaudeDefaultModels;
   claudeDesktopBundles: ClaudeDesktopBundleVersions;
   claudeCli: ClaudeCliVersionInfo;
@@ -437,6 +438,8 @@ export interface SmartRoutingModelRule {
 export interface SmartRoutingSettings {
   enabled?: boolean;
   aliasPrefix?: string;
+  /** When false, catalog display names omit the provider prefix. Default true. */
+  catalogProviderPrefix?: boolean;
   modelsCache?: {
     ttlSeconds?: number;
     refreshOnStart?: boolean;

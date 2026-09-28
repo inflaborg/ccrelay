@@ -295,6 +295,8 @@ export const SmartRoutingConfigSchema = z.object({
   enabled: z.boolean().optional(),
   modelsCache: SmartRoutingModelsCacheSchema.optional(),
   aliasPrefix: z.string().optional(),
+  /** When true, catalog display names are `provider · model`. When false, the model name only. */
+  catalogProviderPrefix: z.boolean().optional(),
   exclude: z.array(z.string()).optional(),
   include: z.array(z.string()).optional(),
   bareModelFallback: SmartRoutingBareModelFallbackSchema.optional(),
@@ -324,6 +326,8 @@ export interface SmartRoutingConfig {
   enabled: boolean;
   modelsCache: SmartRoutingModelsCacheConfig;
   aliasPrefix: string;
+  /** Catalog display names include the provider label when true. */
+  catalogProviderPrefix: boolean;
   exclude?: string[];
   include?: string[];
   bareModelFallback: SmartRoutingBareModelFallbackConfig;

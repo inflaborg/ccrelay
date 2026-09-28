@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Router } from "@/server/router";
 import type { ConfigManager } from "@/config";
 import type { BlockRule, ForwardRule, Provider } from "@/types";
+import { SMART_ROUTING_PROVIDER_ID } from "@/server/smartRouting/virtualProvider";
 
 const providers: Record<string, Provider> = {
   official: {
@@ -23,17 +24,62 @@ const providers: Record<string, Provider> = {
 function makeRouter(
   currentId: string,
   blockRules: BlockRule[],
-  forwardRules: ForwardRule[]
+  forwardRules: ForwardRule[],
+  smartRoutingEnabled = false
 ): Router {
   const config = {
     blockRules,
     forwardRules,
     getCurrentProviderId: () => currentId,
+    getCurrentProvider: () => providers[currentId],
     getProvider: (id: string) => providers[id],
     providers,
+    configValue: { smartRouting: { enabled: smartRoutingEnabled } },
   };
   return new Router(config as unknown as ConfigManager);
 }
+
+describe("Router.resolve with smart routing", () => {
+  it("defers auto rules to smart routing instead of the current provider", () => {
+    const fwd: ForwardRule = { path: "/v1/messages", provider: "auto" };
+    const r = makeRouter("other", [], [fwd], true).resolve("/v1/messages");
+    expect(r.type).toBe("forward");
+    if (r.type === "forward") {
+      expect(r.provider.id).toBe(SMART_ROUTING_PROVIDER_ID);
+      expect(r.forwardRuleProvider).toBe("auto");
+    }
+  });
+
+  it("keeps auto on the current provider when smart routing is off", () => {
+    const fwd: ForwardRule = { path: "/v1/messages", provider: "auto" };
+    const r = makeRouter("other", [], [fwd]).resolve("/v1/messages");
+    expect(r.type === "forward" && r.provider.id).toBe("other");
+  });
+
+  it("keeps explicitly pinned rules on their provider", () => {
+    const fwd: ForwardRule = { path: "/v1/messages/count_tokens", provider: "official" };
+    const r = makeRouter("other", [], [fwd], true).resolve("/v1/messages/count_tokens");
+    expect(r.type === "forward" && r.provider.id).toBe("official");
+  });
+
+  it("evaluates block conditions against smart-routing, not the current provider", () => {
+    const blk: BlockRule = {
+      path: "/v1/users/*",
+      condition: { providerNot: ["official"] },
+      response: "",
+      code: 200,
+    };
+    expect(makeRouter("official", [blk], [], true).resolve("/v1/users/a").type).toBe("block");
+    const onlySmart: BlockRule = {
+      path: "/x/*",
+      condition: { providers: [SMART_ROUTING_PROVIDER_ID] },
+      response: "",
+      code: 200,
+    };
+    expect(makeRouter("other", [onlySmart], [], true).resolve("/x/1").type).toBe("block");
+    expect(makeRouter("other", [onlySmart], []).resolve("/x/1").type).toBe("not_found");
+  });
+});
 
 describe("Router.resolve providerNot", () => {
   const userBlock: BlockRule = {

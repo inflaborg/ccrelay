@@ -5,6 +5,10 @@
 import type { Provider } from "../types";
 import { ConfigManager } from "../config";
 import { minimatch } from "../utils/helpers";
+import {
+  SMART_ROUTING_PROVIDER_ID,
+  SMART_ROUTING_VIRTUAL_PROVIDER,
+} from "./smartRouting/virtualProvider";
 
 // Callback type for provider changes
 type ProviderChangeCallback = (providerId: string) => void;
@@ -86,13 +90,23 @@ export class Router {
     }
   }
 
+  isSmartRoutingActive(): boolean {
+    return this.config.configValue?.smartRouting?.enabled === true;
+  }
+
+  /** Current route id for rule conditions: `smart-routing` while smart routing is on. */
+  getEffectiveProviderId(): string {
+    return this.isSmartRoutingActive() ? SMART_ROUTING_PROVIDER_ID : this.getCurrentProviderId();
+  }
+
   /**
    * Unified routing: block → forward → not_found.
-   * Block uses path glob plus optional filters on current provider id:
-   * - condition.providers: when non-empty, require current id to be listed (skip otherwise).
-   * - condition.providerNot: skip when current id is listed.
-   * Forward matches first rule; provider="auto" uses current provider.
-   * Unmatched paths return not_found (404).
+   * Block uses path glob plus optional filters on the effective provider id:
+   * - condition.providers: when non-empty, require the id to be listed (skip otherwise).
+   * - condition.providerNot: skip when the id is listed.
+   * Forward matches first rule. provider="auto" defers to smart routing when it is on
+   * (the placeholder provider is replaced once the request model is known); otherwise
+   * it uses the current provider. Unmatched paths return not_found (404).
    */
   resolve(path: string): RouteResult {
     const normalizedPath = path.startsWith("/") ? path : `/${path}`;
@@ -102,7 +116,7 @@ export class Router {
       if (!minimatch(normalizedPath, rule.path)) {
         continue;
       }
-      const currentId = this.getCurrentProviderId();
+      const currentId = this.getEffectiveProviderId();
       const cond = rule.condition;
       if (cond?.providers && cond.providers.length > 0) {
         if (!cond.providers.includes(currentId)) {
@@ -143,6 +157,9 @@ export class Router {
    */
   private resolveProvider(providerId: string): Provider | undefined {
     if (providerId === "auto") {
+      if (this.isSmartRoutingActive()) {
+        return SMART_ROUTING_VIRTUAL_PROVIDER;
+      }
       return this.getCurrentProvider() ?? this.getOfficialProvider() ?? this.getFirstProvider();
     }
     return (

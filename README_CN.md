@@ -324,7 +324,7 @@ name = "CCRelay"
 base_url = "http://localhost:7575/openai"
 ```
 
-应用配置时会生成 `~/.codex/ccrelay-model-catalog.json`，供 Codex `/model` 列出可选模型。目录来自**当前激活供应商**的自定义模型列表（或精确的 `modelMap` 条目）；开启智能路由时，列出所有提供商中已路由的模型。每个条目会声明推理档位 low、medium、high、xhigh，默认 high。gpt-5.6 和 gpt-6 还会包含 max。将 `model` 设为其中某个 id。Apply 或切换供应商后请重启 Codex CLI 或 ChatGPT 桌面应用以重新加载目录。可在 `config.toml` 用 `model_reasoning_effort` 或在 `/model` 里覆盖档位。
+应用配置时会生成 `~/.codex/ccrelay-model-catalog.json`，供 Codex `/model` 列出可选模型。目录来自**当前激活供应商**的自定义模型列表（或精确的 `modelMap` 条目）；开启智能路由时，列出所有提供商中已路由的模型。每个条目会声明推理档位 low、medium、high、xhigh，默认 high。gpt-5.6 和 gpt-6 还会包含 max。将 `model` 设为其中某个 id。Apply 或切换供应商后请重启 Codex CLI 或 ChatGPT 桌面应用以重新加载目录。可在 `config.toml` 用 `model_reasoning_effort` 或在 `/model` 里覆盖档位。Codex 会用目录中的第一个模型处理后台任务（例如生成对话标题），可在 Codex 模型对话框的 **Codex 列表第一个模型** 中指定。
 
 ---
 
@@ -564,7 +564,7 @@ CCRelay 使用 `~/.ccrelay/config.yaml`（首次启动时自动创建）。启�
 | 设置              | 默认值                                 | 描述                                                                                                   |
 | ----------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | `configVersion`   | `"0.2.5"`                              | 配置架构版本。低于该版本的配置在启动时自动升级。                                                         |
-| `routing.forward` | `[{path, provider}]`                   | 转发规则——首条匹配生效。`provider: "auto"` = 当前提供商。未匹配 → 404。                                |
+| `routing.forward` | `[{path, provider}]`                   | 转发规则——首条匹配生效。`provider: "auto"` = 开启智能路由时走智能路由（未知模型 → 404），否则为当前提供商。未匹配 → 404。 |
 | `routing.block`   | `[{path, response, code, condition?}]` | 拦截规则——返回自定义响应。可选 `condition.providers`（白名单）和 `condition.providerNot`（排除列表）。 |
 
 ### 并发控制

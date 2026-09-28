@@ -347,6 +347,9 @@
       "label": "모델",
       "pickFromProvider": "현재 제공자에서",
       "orType": "또는 모델 id 입력",
+      "primaryModel": "Codex 목록의 첫 번째 모델",
+      "primaryModelDefault": "기본 순서",
+      "primaryModelHint": "Codex는 스레드 제목 생성, 자동화 같은 백그라운드 작업에 첫 번째 모델을 사용합니다.",
       "saveAndApply": "저장 후 적용"
     },
     "modelsModal": {
@@ -369,6 +372,7 @@
     "settings": {
       "title": "설정",
       "aliasPrefix": "별칭 접두사",
+      "catalogProviderPrefix": "카탈로그 표시 이름에 제공자 표시",
       "bareFallback": "순수 모델 id 대체",
       "firstMatch": "첫 일치 (제공자 순서)",
       "reject": "거부",

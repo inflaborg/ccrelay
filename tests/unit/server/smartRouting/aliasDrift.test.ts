@@ -6,6 +6,7 @@ import { computeCanonicalAliasHash } from "@/server/smartRouting/aliasHash";
 const sr: SmartRoutingConfig = {
   enabled: true,
   aliasPrefix: "claude-",
+  catalogProviderPrefix: true,
   modelsCache: { ttlSeconds: 600, refreshOnStart: true, onUpstreamFail: "stale" },
   bareModelFallback: { mode: "first-match" },
 };

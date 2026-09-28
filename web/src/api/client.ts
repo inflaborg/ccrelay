@@ -289,6 +289,7 @@ export const api = {
       protocols: Array<"anthropic" | "openai" | "openai_chat">;
       modelIds: string[];
     };
+    codexPrimaryModel?: string;
   }) => {
     const response = await fetch(`${API_BASE}/client-config/apply`, {
       method: "POST",

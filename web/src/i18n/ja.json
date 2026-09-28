@@ -347,6 +347,9 @@
       "label": "モデル",
       "pickFromProvider": "現在のプロバイダーから",
       "orType": "またはモデル id を入力",
+      "primaryModel": "Codex リストの先頭モデル",
+      "primaryModelDefault": "デフォルトの順序",
+      "primaryModelHint": "Codex はスレッドタイトル生成や自動化などのバックグラウンド処理に先頭のモデルを使います。",
       "saveAndApply": "保存して適用"
     },
     "modelsModal": {
@@ -369,6 +372,7 @@
     "settings": {
       "title": "設定",
       "aliasPrefix": "エイリアス接頭辞",
+      "catalogProviderPrefix": "カタログの表示名にプロバイダーを付ける",
       "bareFallback": "素のモデル id のフォールバック",
       "firstMatch": "最初の一致（プロバイダー順）",
       "reject": "拒否",

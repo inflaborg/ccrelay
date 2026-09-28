@@ -185,7 +185,8 @@ export function collectCodexModelsFromProvider(
  */
 export function collectCodexModelsFromSmartRouting(
   entries: readonly SmartRoutingCatalogEntry[],
-  fallbackModel?: string
+  fallbackModel?: string,
+  options?: { includeProviderPrefix?: boolean }
 ): CodexCatalogModelRef[] {
   const seen = new Set<string>();
   const out: CodexCatalogModelRef[] = [];
@@ -201,7 +202,13 @@ export function collectCodexModelsFromSmartRouting(
   };
 
   for (const entry of entries) {
-    push(entry.publicId, buildSmartRoutingModelDisplayName(entry), entry.protocol);
+    push(
+      entry.publicId,
+      buildSmartRoutingModelDisplayName(entry, {
+        includeProviderPrefix: options?.includeProviderPrefix,
+      }),
+      entry.protocol
+    );
   }
 
   const fallback = fallbackModel?.trim();
@@ -230,6 +237,22 @@ export function applyCodexCatalogExclusions(
   });
 }
 
+/**
+ * Codex falls back to the lowest-priority catalog model for background work
+ * (thread titles, automations) when its built-in model slug is not listed.
+ */
+export function applyCodexCatalogPrimaryModel(
+  models: readonly CodexCatalogModelRef[],
+  primaryModelId: string | undefined
+): CodexCatalogModelRef[] {
+  const id = primaryModelId?.trim();
+  const index = id ? models.findIndex(m => m.slug === id) : -1;
+  if (index <= 0) {
+    return [...models];
+  }
+  return [models[index], ...models.slice(0, index), ...models.slice(index + 1)];
+}
+
 /* eslint-disable @typescript-eslint/naming-convention -- Codex catalog JSON uses snake_case */
 interface CodexCatalogFile {
   catalog_schema_version: number;
@@ -237,6 +260,7 @@ interface CodexCatalogFile {
   vision_model_ids: string[];
   exclude_protocols: ProviderType[];
   exclude_model_ids: string[];
+  primary_model_id?: string;
   models: object[];
 }
 /* eslint-enable @typescript-eslint/naming-convention */
@@ -245,15 +269,21 @@ interface CodexCatalogFile {
 export function buildCodexModelCatalogJson(
   models: CodexCatalogModelRef[],
   vision: CodexCatalogVision = DEFAULT_CODEX_CATALOG_VISION,
-  exclude: CodexCatalogExclude = DEFAULT_CODEX_CATALOG_EXCLUDE
+  exclude: CodexCatalogExclude = DEFAULT_CODEX_CATALOG_EXCLUDE,
+  primaryModelId?: string
 ): CodexCatalogFile {
-  const included = applyCodexCatalogExclusions(models, exclude);
+  const primary = primaryModelId?.trim() || undefined;
+  const included = applyCodexCatalogPrimaryModel(
+    applyCodexCatalogExclusions(models, exclude),
+    primary
+  );
   return {
     catalog_schema_version: CCRELAY_CODEX_CATALOG_SCHEMA_VERSION,
     vision_all: vision.all,
     vision_model_ids: vision.all ? [] : vision.modelIds,
     exclude_protocols: exclude.protocols,
     exclude_model_ids: exclude.modelIds,
+    ...(primary ? { primary_model_id: primary } : {}),
     models: included.map((m, i) =>
       catalogEntryTemplate(m.slug, m.displayName, i, codexModelSupportsVision(m.slug, vision))
     ),
@@ -321,6 +351,23 @@ export function readCodexCatalogExclude(codexDir: string = codexConfigDir()): Co
   }
 }
 
+/** Model pinned to the top of the Codex catalog, or undefined when none is set. */
+export function readCodexCatalogPrimaryModel(
+  codexDir: string = codexConfigDir()
+): string | undefined {
+  const catalogPath = codexModelCatalogPath(codexDir);
+  if (!fs.existsSync(catalogPath)) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(fs.readFileSync(catalogPath, "utf-8")) as Partial<CodexCatalogFile>;
+    const id = typeof parsed.primary_model_id === "string" ? parsed.primary_model_id.trim() : "";
+    return id || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function codexConfigDir(): string {
   return path.join(os.homedir(), ".codex");
 }
@@ -329,11 +376,16 @@ export function codexModelCatalogPath(codexDir: string = codexConfigDir()): stri
   return path.join(codexDir, CCRELAY_CODEX_MODEL_CATALOG_FILENAME);
 }
 
+/**
+ * Omitted vision, exclude, or primaryModelId keep the values already in the file.
+ * Pass an empty primaryModelId to clear the pinned model.
+ */
 export function writeCodexModelCatalog(
   models: CodexCatalogModelRef[],
   codexDir: string = codexConfigDir(),
   vision?: CodexCatalogVision,
-  exclude?: CodexCatalogExclude
+  exclude?: CodexCatalogExclude,
+  primaryModelId?: string
 ): string {
   if (!fs.existsSync(codexDir)) {
     fs.mkdirSync(codexDir, { recursive: true });
@@ -341,7 +393,8 @@ export function writeCodexModelCatalog(
   const catalogPath = codexModelCatalogPath(codexDir);
   const resolvedVision = vision ?? readCodexCatalogVision(codexDir);
   const resolvedExclude = exclude ?? readCodexCatalogExclude(codexDir);
-  const body = buildCodexModelCatalogJson(models, resolvedVision, resolvedExclude);
+  const resolvedPrimary = primaryModelId ?? readCodexCatalogPrimaryModel(codexDir);
+  const body = buildCodexModelCatalogJson(models, resolvedVision, resolvedExclude, resolvedPrimary);
   fs.writeFileSync(catalogPath, `${JSON.stringify(body, null, 2)}\n`, "utf-8");
   return catalogPath;
 }

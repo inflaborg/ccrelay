@@ -8,6 +8,10 @@ import * as http from "http";
 import type { ProxyServer } from "../server/handler";
 import { getDefaultRoutingSettings, resolveLoggingStoreBodies } from "../config";
 import { sendJson, parseJsonBody } from "./index";
+import {
+  collectCodexModelsFromSmartRouting,
+  syncCodexCatalogIfConfigured,
+} from "./codexModelCatalog";
 
 let serverInstance: ProxyServer | null = null;
 
@@ -145,6 +149,23 @@ export async function handlePatchConfig(
     if (!result.ok) {
       sendJson(res, 500, { status: "error", message: result.error });
       return;
+    }
+
+    if (section === "smartRouting") {
+      try {
+        const catalog = serverInstance.getModelCatalog();
+        if (catalog.isEnabled()) {
+          await catalog.ensureReady();
+          syncCodexCatalogIfConfigured(null, {
+            models: collectCodexModelsFromSmartRouting(catalog.getAll(), undefined, {
+              includeProviderPrefix:
+                serverInstance.getConfig().smartRoutingConfig?.catalogProviderPrefix !== false,
+            }),
+          });
+        }
+      } catch {
+        // Best-effort; catalog display names refresh on the next provider sync.
+      }
     }
 
     sendJson(res, 200, { status: "ok", restartRequired });

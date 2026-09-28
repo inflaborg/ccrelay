@@ -352,6 +352,8 @@ export default function ClientConfigStatus() {
     Array<"anthropic" | "openai" | "openai_chat">
   >([]);
   const [excludeModelIds, setExcludeModelIds] = useState<string[]>([]);
+  const [primaryModel, setPrimaryModel] = useState("");
+  const [pendingPrimaryModel, setPendingPrimaryModel] = useState<string | undefined>(undefined);
   const [pendingVision, setPendingVision] = useState<
     { all: boolean; modelIds: string[] } | undefined
   >(undefined);
@@ -399,6 +401,7 @@ export default function ClientConfigStatus() {
         protocols: Array<"anthropic" | "openai" | "openai_chat">;
         modelIds: string[];
       };
+      codexPrimaryModel?: string;
     }) => api.applyClientConfig(args),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clientConfig"] });
@@ -431,6 +434,7 @@ export default function ClientConfigStatus() {
         protocols: Array<"anthropic" | "openai" | "openai_chat">;
         modelIds: string[];
       };
+      codexPrimaryModel: string;
     }) =>
       api.applyClientConfig({
         target: "codex",
@@ -438,6 +442,7 @@ export default function ClientConfigStatus() {
         model: args.model,
         codexVision: args.codexVision,
         codexExclude: args.codexExclude,
+        codexPrimaryModel: args.codexPrimaryModel,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clientConfig"] });
@@ -466,7 +471,8 @@ export default function ClientConfigStatus() {
     codexExclude?: {
       protocols: Array<"anthropic" | "openai" | "openai_chat">;
       modelIds: string[];
-    }
+    },
+    codexPrimaryModel?: string
   ) => {
     setApplyingTo(target);
     applyMutation.mutate({
@@ -475,6 +481,7 @@ export default function ClientConfigStatus() {
       ...(model ? { model } : {}),
       ...(codexVision ? { codexVision } : {}),
       ...(codexExclude ? { codexExclude } : {}),
+      ...(codexPrimaryModel !== undefined ? { codexPrimaryModel } : {}),
     });
   };
 
@@ -493,6 +500,7 @@ export default function ClientConfigStatus() {
     setVisionIds(data?.codexVision?.modelIds ?? []);
     setExcludeProtocols(data?.codexExclude?.protocols ?? []);
     setExcludeModelIds(data?.codexExclude?.modelIds ?? []);
+    setPrimaryModel(data?.codexPrimaryModel ?? "");
   };
 
   const modelIsExcluded = (model: { id: string; protocol?: string }) =>
@@ -509,11 +517,13 @@ export default function ClientConfigStatus() {
     const effectiveModel = codexModel.trim() || CODEX_DEFAULT_MODEL;
     const vision = visionPayload();
     const exclude = excludePayload();
+    const primary = catalogModels.some(m => m.id === primaryModel) ? primaryModel : "";
     if (codexModalMode === "configure") {
       codexModelPatchMutation.mutate({
         model: effectiveModel,
         codexVision: vision,
         codexExclude: exclude,
+        codexPrimaryModel: primary,
       });
       return;
     }
@@ -523,11 +533,12 @@ export default function ClientConfigStatus() {
       setPendingCodexModel(effectiveModel);
       setPendingVision(vision);
       setPendingExclude(exclude);
+      setPendingPrimaryModel(primary);
       setPendingTarget("codex");
       setConfirmOpen(true);
       return;
     }
-    runApply("codex", false, effectiveModel, vision, exclude);
+    runApply("codex", false, effectiveModel, vision, exclude, primary);
   };
 
   const onConfigureClick = (target: "claudeCode" | "codex" | "claudeDesktop") => {
@@ -563,7 +574,8 @@ export default function ClientConfigStatus() {
       const model = pendingTarget === "codex" ? pendingCodexModel : undefined;
       const vision = pendingTarget === "codex" ? pendingVision : undefined;
       const exclude = pendingTarget === "codex" ? pendingExclude : undefined;
-      runApply(pendingTarget, true, model, vision, exclude);
+      const primary = pendingTarget === "codex" ? pendingPrimaryModel : undefined;
+      runApply(pendingTarget, true, model, vision, exclude, primary);
     }
   };
 
@@ -1116,6 +1128,31 @@ export default function ClientConfigStatus() {
                   </datalist>
                 )}
               </div>
+              {catalogModels.length > 0 && (
+                <div className="space-y-1">
+                  <Label htmlFor="codex-primary-model" className="text-xs font-medium">
+                    {t("clientConfig.codexModelModal.primaryModel")}
+                  </Label>
+                  <select
+                    id="codex-primary-model"
+                    className="flex h-8 w-full rounded-md border border-input bg-background px-2 font-mono text-xs"
+                    value={catalogModels.some(m => m.id === primaryModel) ? primaryModel : ""}
+                    onChange={e => setPrimaryModel(e.target.value)}
+                  >
+                    <option value="">
+                      {t("clientConfig.codexModelModal.primaryModelDefault")}
+                    </option>
+                    {catalogModels.map(m => (
+                      <option key={m.id} value={m.id}>
+                        {m.displayName !== m.id ? `${m.displayName} (${m.id})` : m.id}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    {t("clientConfig.codexModelModal.primaryModelHint")}
+                  </p>
+                </div>
+              )}
               <div className="space-y-2 rounded-md border border-border p-2.5">
                 <div role="tablist" className="flex gap-1 rounded-md bg-muted p-0.5">
                   {(["vision", "exclude"] as const).map(tab => (

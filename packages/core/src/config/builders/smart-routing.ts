@@ -31,6 +31,7 @@ export function buildSmartRoutingConfig(
       onUpstreamFail: parsed.modelsCache?.onUpstreamFail ?? "stale",
     },
     aliasPrefix: parsed.aliasPrefix ?? "claude-",
+    catalogProviderPrefix: parsed.catalogProviderPrefix !== false,
     ...(parsed.exclude?.length ? { exclude: [...parsed.exclude] } : {}),
     ...(parsed.include?.length ? { include: [...parsed.include] } : {}),
     bareModelFallback: {
