@@ -22,6 +22,7 @@ function mockConfig(
     smartRouting: {
       enabled: true,
       aliasPrefix: "claude-",
+      catalogProviderPrefix: true,
       modelsCache: { ttlSeconds: 600, refreshOnStart: false, onUpstreamFail: "stale" },
       bareModelFallback: { mode: "first-match" },
       ...smartRoutingExtra,

@@ -318,10 +318,12 @@ export class ProxyExecutor {
       const synthStart = Date.now();
       const useAlias = readUseModelAliasFromHeaders(taskHeaders);
       const entries = this.modelCatalog.getAll();
+      const includeProviderPrefix = this.modelCatalog.smartRouting.catalogProviderPrefix !== false;
       const bodyText = synthesizeSmartRoutingModelsListBody({
         clientSurface: task.clientSurface,
         entries,
         useAlias,
+        includeProviderPrefix,
       });
       const chunks = [Buffer.from(bodyText, "utf-8")];
       const duration = Date.now() - synthStart;
@@ -360,6 +362,7 @@ export class ProxyExecutor {
               clientSurface: task.clientSurface,
               modelId,
               entries,
+              includeProviderPrefix: this.modelCatalog.smartRouting.catalogProviderPrefix !== false,
             })
           : null;
       const duration = Date.now() - synthStart;

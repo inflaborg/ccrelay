@@ -32,6 +32,19 @@ describe("buildSmartRoutingModelDisplayName", () => {
     expect(label).toBe("CN Gateway · GLM 5.1");
   });
 
+  it("uses the model display name alone when the provider prefix is off", () => {
+    const label = buildSmartRoutingModelDisplayName(
+      entry({
+        providerId: "cn",
+        providerDisplayName: "CN Gateway",
+        upstreamModelId: "glm-5.1",
+        displayName: "GLM 5.1",
+      }),
+      { includeProviderPrefix: false }
+    );
+    expect(label).toBe("GLM 5.1");
+  });
+
   it("falls back to ids when display names match ids", () => {
     const label = buildSmartRoutingModelDisplayName(
       entry({
@@ -60,5 +73,23 @@ describe("synthesizeSmartRoutingModelsListBody", () => {
     const parsed = JSON.parse(body) as { data: Array<Record<string, unknown>> };
     expect(parsed.data[0]?.id).toBe("cn:glm-5.1");
     expect(parsed.data[0]?.display_name).toBe("CN · GLM 5.1");
+  });
+
+  it("omits the provider prefix from display_name when disabled", () => {
+    const body = synthesizeSmartRoutingModelsListBody({
+      clientSurface: "openai",
+      useAlias: false,
+      includeProviderPrefix: false,
+      entries: [
+        entry({
+          providerId: "cn",
+          providerDisplayName: "CN",
+          upstreamModelId: "glm-5.1",
+          displayName: "GLM 5.1",
+        }),
+      ],
+    });
+    const parsed = JSON.parse(body) as { data: Array<Record<string, unknown>> };
+    expect(parsed.data[0]?.display_name).toBe("GLM 5.1");
   });
 });

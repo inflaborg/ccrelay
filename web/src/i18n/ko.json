@@ -369,6 +369,7 @@
     "settings": {
       "title": "설정",
       "aliasPrefix": "별칭 접두사",
+      "catalogProviderPrefix": "카탈로그 표시 이름에 제공자 표시",
       "bareFallback": "순수 모델 id 대체",
       "firstMatch": "첫 일치 (제공자 순서)",
       "reject": "거부",

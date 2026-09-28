@@ -5,22 +5,37 @@ import {
   type OpenAIModelEntry,
 } from "../../converter/models-fallback";
 
+export interface SmartRoutingDisplayNameOptions {
+  /** When false, the catalog label is the model name only. Default true. */
+  includeProviderPrefix?: boolean;
+}
+
 /** Combine provider + model labels; omit redundant parts when label equals id. */
-export function buildSmartRoutingModelDisplayName(entry: SmartRoutingCatalogEntry): string {
-  const providerLabel =
-    entry.providerDisplayName && entry.providerDisplayName !== entry.providerId
-      ? entry.providerDisplayName
-      : entry.providerId;
+export function buildSmartRoutingModelDisplayName(
+  entry: SmartRoutingCatalogEntry,
+  options?: SmartRoutingDisplayNameOptions
+): string {
   const modelLabel =
     entry.displayName && entry.displayName !== entry.upstreamModelId
       ? entry.displayName
       : entry.upstreamModelId;
+  if (options?.includeProviderPrefix === false) {
+    return modelLabel;
+  }
+  const providerLabel =
+    entry.providerDisplayName && entry.providerDisplayName !== entry.providerId
+      ? entry.providerDisplayName
+      : entry.providerId;
   return `${providerLabel} · ${modelLabel}`;
 }
 
-function entryToOpenAiModel(entry: SmartRoutingCatalogEntry, wireId: string): OpenAIModelEntry {
+function entryToOpenAiModel(
+  entry: SmartRoutingCatalogEntry,
+  wireId: string,
+  options?: SmartRoutingDisplayNameOptions
+): OpenAIModelEntry {
   const now = Math.floor(Date.now() / 1000);
-  const displayName = buildSmartRoutingModelDisplayName(entry);
+  const displayName = buildSmartRoutingModelDisplayName(entry, options);
   return {
     id: wireId,
     object: "model",
@@ -40,11 +55,13 @@ export function synthesizeSmartRoutingModelsListBody(options: {
   clientSurface: ApiSurface;
   entries: SmartRoutingCatalogEntry[];
   useAlias: boolean;
+  includeProviderPrefix?: boolean;
 }): string {
+  const displayOptions = { includeProviderPrefix: options.includeProviderPrefix };
   const openaiPage = {
     object: "list" as const,
     data: options.entries.map(entry =>
-      entryToOpenAiModel(entry, options.useAlias ? entry.aliasHash : entry.publicId)
+      entryToOpenAiModel(entry, options.useAlias ? entry.aliasHash : entry.publicId, displayOptions)
     ),
   };
 
@@ -58,6 +75,7 @@ export function synthesizeSmartRoutingModelDetailBody(options: {
   clientSurface: ApiSurface;
   modelId: string;
   entries: SmartRoutingCatalogEntry[];
+  includeProviderPrefix?: boolean;
 }): string | null {
   const want = options.modelId;
   const hit = options.entries.find(
@@ -67,7 +85,9 @@ export function synthesizeSmartRoutingModelDetailBody(options: {
     return null;
   }
   const wireId = want;
-  const openaiEntry = entryToOpenAiModel(hit, wireId);
+  const openaiEntry = entryToOpenAiModel(hit, wireId, {
+    includeProviderPrefix: options.includeProviderPrefix,
+  });
   if (options.clientSurface === "anthropic") {
     return JSON.stringify(convertOpenAISingleModelToAnthropic(openaiEntry));
   }

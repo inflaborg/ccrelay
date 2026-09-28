@@ -369,6 +369,7 @@
     "settings": {
       "title": "设置",
       "aliasPrefix": "别名前缀",
+      "catalogProviderPrefix": "目录显示名包含供应商",
       "bareFallback": "裸 model id 兜底",
       "firstMatch": "首个匹配（按 provider 排序）",
       "reject": "拒绝",

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+**Config**
+
+- Smart Routing has a checkbox for catalog display names. Checked names include the provider; unchecked names use the model name only. Existing configs stay checked.
+
 ### Fixed
 
 **Protocol/Conversion**

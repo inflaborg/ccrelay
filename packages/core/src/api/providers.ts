@@ -34,7 +34,10 @@ function syncCodexCatalogForCurrentProviderIfNeeded(providerId: string): void {
       .ensureReady()
       .then(() => {
         syncCodexCatalogIfConfigured(null, {
-          models: collectCodexModelsFromSmartRouting(catalog.getAll()),
+          models: collectCodexModelsFromSmartRouting(catalog.getAll(), undefined, {
+            includeProviderPrefix:
+              serverInstance?.getConfig().smartRoutingConfig?.catalogProviderPrefix !== false,
+          }),
         });
       })
       .catch(() => {

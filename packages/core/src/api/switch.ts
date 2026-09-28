@@ -62,7 +62,10 @@ export async function handleSwitchProvider(
         if (catalog.isEnabled()) {
           await catalog.ensureReady();
           syncCodexCatalogIfConfigured(provider, {
-            models: collectCodexModelsFromSmartRouting(catalog.getAll()),
+            models: collectCodexModelsFromSmartRouting(catalog.getAll(), undefined, {
+              includeProviderPrefix:
+                serverInstance?.getConfig().smartRoutingConfig?.catalogProviderPrefix !== false,
+            }),
           });
         } else {
           syncCodexCatalogIfConfigured(provider);

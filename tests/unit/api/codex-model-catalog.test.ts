@@ -97,6 +97,28 @@ describe("collectCodexModelsFromSmartRouting", () => {
       "llm-router-su-gpt:gpt-6-sol",
       "gpt-6-sol",
     ]);
+    expect(models[0]?.displayName).toBe("llm-router-dev · gpt-6-astra");
+  });
+
+  it("uses the model display name when the provider prefix is off", () => {
+    const models = collectCodexModelsFromSmartRouting(
+      [
+        {
+          publicId: "llm-router-dev:gpt-6-astra",
+          aliasHash: "claude-9932558f",
+          providerId: "llm-router-dev",
+          providerDisplayName: "Dev Router",
+          protocol: "openai",
+          upstreamModelId: "gpt-6-astra",
+          displayName: "gpt-6-astra",
+          source: "custom",
+          fetchedAt: 0,
+        },
+      ],
+      undefined,
+      { includeProviderPrefix: false }
+    );
+    expect(models[0]?.displayName).toBe("gpt-6-astra");
   });
 });
 

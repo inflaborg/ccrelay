@@ -185,7 +185,8 @@ export function collectCodexModelsFromProvider(
  */
 export function collectCodexModelsFromSmartRouting(
   entries: readonly SmartRoutingCatalogEntry[],
-  fallbackModel?: string
+  fallbackModel?: string,
+  options?: { includeProviderPrefix?: boolean }
 ): CodexCatalogModelRef[] {
   const seen = new Set<string>();
   const out: CodexCatalogModelRef[] = [];
@@ -201,7 +202,13 @@ export function collectCodexModelsFromSmartRouting(
   };
 
   for (const entry of entries) {
-    push(entry.publicId, buildSmartRoutingModelDisplayName(entry), entry.protocol);
+    push(
+      entry.publicId,
+      buildSmartRoutingModelDisplayName(entry, {
+        includeProviderPrefix: options?.includeProviderPrefix,
+      }),
+      entry.protocol
+    );
   }
 
   const fallback = fallbackModel?.trim();

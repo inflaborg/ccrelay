@@ -496,7 +496,10 @@ async function resolveCurrentProviderModels(
   const catalog = serverInstance?.getModelCatalog();
   if (catalog?.isEnabled()) {
     await catalog.ensureReady();
-    return collectCodexModelsFromSmartRouting(catalog.getAll(), fallbackModel);
+    return collectCodexModelsFromSmartRouting(catalog.getAll(), fallbackModel, {
+      includeProviderPrefix:
+        serverInstance?.getConfig().smartRoutingConfig?.catalogProviderPrefix !== false,
+    });
   }
   const provider = serverInstance?.getRouter()?.getCurrentProvider() ?? null;
   return collectCodexModelsFromProvider(provider, fallbackModel);

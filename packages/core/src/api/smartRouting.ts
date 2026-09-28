@@ -151,7 +151,10 @@ export async function handleSmartRoutingAliasDriftApply(
     if (catalog.isEnabled()) {
       await catalog.ensureReady();
       syncCodexCatalogIfConfigured(null, {
-        models: collectCodexModelsFromSmartRouting(catalog.getAll()),
+        models: collectCodexModelsFromSmartRouting(catalog.getAll(), undefined, {
+          includeProviderPrefix:
+            serverInstance?.getConfig().smartRoutingConfig?.catalogProviderPrefix !== false,
+        }),
       });
     } else if (byProvider.has(serverInstance.getRouter().getCurrentProviderId())) {
       syncCodexCatalogIfConfigured(serverInstance.getRouter().getCurrentProvider());

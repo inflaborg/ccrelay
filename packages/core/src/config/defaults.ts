@@ -61,6 +61,8 @@ defaultProvider: "official"
 smartRouting:
   enabled: false
   aliasPrefix: "claude-"
+  # Catalog display names are "provider · model" when true, and the model name alone when false.
+  catalogProviderPrefix: true
   modelsCache:
     ttlSeconds: 600
     refreshOnStart: true

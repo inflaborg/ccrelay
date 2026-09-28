@@ -45,19 +45,28 @@ function driftKey(d: AliasDrift): string {
   return `${d.providerId}:${d.lineIndex}`;
 }
 
-function catalogDisplayLabels(row: SmartRoutingCatalogEntry): string[] {
-  const providerLabel =
-    row.providerDisplayName && row.providerDisplayName !== row.providerId
-      ? row.providerDisplayName
-      : row.providerId;
+function catalogDisplayLabels(
+  row: SmartRoutingCatalogEntry,
+  includeProviderPrefix: boolean
+): string[] {
   const modelLabel =
     row.displayName && row.displayName !== row.upstreamModelId
       ? row.displayName
       : row.upstreamModelId;
+  if (!includeProviderPrefix) {
+    return [modelLabel];
+  }
+  const providerLabel =
+    row.providerDisplayName && row.providerDisplayName !== row.providerId
+      ? row.providerDisplayName
+      : row.providerId;
   return [`${providerLabel} · ${modelLabel}`];
 }
 
-type CoreSettingsDraft = Pick<SmartRoutingSettings, "aliasPrefix" | "bareModelFallback">;
+type CoreSettingsDraft = Pick<
+  SmartRoutingSettings,
+  "aliasPrefix" | "bareModelFallback" | "catalogProviderPrefix"
+>;
 
 function buildCoreSettingsPayload(
   settings: CoreSettingsDraft,
@@ -66,6 +75,7 @@ function buildCoreSettingsPayload(
   return {
     enabled: savedEnabled,
     aliasPrefix: settings.aliasPrefix,
+    catalogProviderPrefix: settings.catalogProviderPrefix !== false,
     bareModelFallback: settings.bareModelFallback,
   };
 }
@@ -144,11 +154,14 @@ export default function SmartRouting() {
 
   const coreSettings: CoreSettingsDraft = settingsDraft ?? {
     aliasPrefix: savedSmartRouting?.aliasPrefix ?? "claude-",
+    catalogProviderPrefix: savedSmartRouting?.catalogProviderPrefix !== false,
     bareModelFallback: savedSmartRouting?.bareModelFallback ?? { mode: "first-match" },
   };
 
   const coreSettingsDirty =
     coreSettings.aliasPrefix !== (savedSmartRouting?.aliasPrefix ?? "claude-") ||
+    (coreSettings.catalogProviderPrefix !== false) !==
+      (savedSmartRouting?.catalogProviderPrefix !== false) ||
     (coreSettings.bareModelFallback?.mode ?? "first-match") !==
       (savedSmartRouting?.bareModelFallback?.mode ?? "first-match");
 
@@ -451,6 +464,21 @@ export default function SmartRouting() {
               />
             </div>
           </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="catalog-provider-prefix"
+              checked={coreSettings.catalogProviderPrefix !== false}
+              onCheckedChange={v =>
+                setSettingsDraft({
+                  ...coreSettings,
+                  catalogProviderPrefix: v === true,
+                })
+              }
+            />
+            <Label htmlFor="catalog-provider-prefix" className="text-xs font-normal">
+              {t("smartRouting.settings.catalogProviderPrefix")}
+            </Label>
+          </div>
           <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
             <div className="flex-1 min-w-0 min-h-[1.25rem] flex items-center justify-end text-right text-[10px]">
               {saveCoreSettingsMutation.isPending ? (
@@ -720,7 +748,10 @@ export default function SmartRouting() {
                 <tbody>
                   {sortedEntries.map(row => {
                     const excluded = matchesSmartRoutingExclude(row.publicId, exclude);
-                    const displayLabels = catalogDisplayLabels(row);
+                    const displayLabels = catalogDisplayLabels(
+                      row,
+                      coreSettings.catalogProviderPrefix !== false
+                    );
                     return (
                       <tr key={row.publicId} className="border-b border-border last:border-0">
                         <td className="py-1.5 pr-2 font-mono text-[10px] max-w-[180px] truncate">

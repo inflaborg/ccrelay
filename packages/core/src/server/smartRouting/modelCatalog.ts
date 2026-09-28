@@ -54,6 +54,7 @@ export class ModelCatalog {
         enabled: false,
         modelsCache: { ttlSeconds: 600, refreshOnStart: true, onUpstreamFail: "stale" },
         aliasPrefix: "claude-",
+        catalogProviderPrefix: true,
         bareModelFallback: { mode: "first-match" },
       }
     );
