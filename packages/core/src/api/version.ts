@@ -22,6 +22,19 @@ type GeneratedVersion = {
   PACKAGE_VERSION?: string;
 };
 
+/** Process that constructed the proxy server. Unset when core is started without a host app. */
+export type ServerHost = "vscode" | "electron" | "tauri";
+
+let serverHost: ServerHost | undefined;
+
+export function setServerHost(host: ServerHost | undefined): void {
+  serverHost = host;
+}
+
+export function getServerHost(): ServerHost | undefined {
+  return serverHost;
+}
+
 export type BuildVersionInfo = {
   version: string;
   packageVersion: string;
@@ -69,6 +82,7 @@ export function handleVersion(_req: http.IncomingMessage, res: http.ServerRespon
     date: info.date,
     hash: info.hash,
     gitHash: info.gitHash,
+    ...(serverHost ? { host: serverHost } : {}),
     features: {
       modelExtraction: true,
       logListWithoutBody: true,

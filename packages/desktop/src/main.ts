@@ -15,6 +15,7 @@ import {
   LeaderElection,
   Logger,
   ProxyServer,
+  setServerHost,
   loggingDatabaseConfigToDriver,
   setLogDatabaseDriverConfigResolver,
   setWebDistPath,
@@ -106,6 +107,7 @@ void app.whenReady().then(async () => {
   const leaderElection = new LeaderElection(configManager.port, configManager.host, () =>
     configManager.getApiBearerToken()
   );
+  setServerHost("electron");
   const server = new ProxyServer(configManager, leaderElection);
 
   registerLocalCcrelayRequestHeaders(configManager);
