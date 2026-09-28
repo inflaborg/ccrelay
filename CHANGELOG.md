@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-09-28
+
+The dashboard is available in Japanese and Korean. With Smart Routing on, auto routes follow the request model, and Codex can pin the model used for thread titles. The desktop app shows download progress and restarts into the new version on Windows.
+
+### Added
+
+**UI**
+
+- The dashboard and docs are available in Japanese and Korean, in addition to English and Chinese.
+
 ### Changed
 
 **Config**
@@ -16,8 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Routing**
 
-- With Smart Routing on, `auto` forward rules pick the provider from the request model, and the selected provider no longer affects them. Unknown, excluded, or missing models are rejected instead of falling back to the selected provider.
-- Request logs and web search use the final smart-routed provider. Block-rule provider conditions match `smart-routing` while it is on.
+- With Smart Routing on, auto forward rules pick the provider from the request model, and the selected provider no longer affects them. Unknown, excluded, or missing models are rejected instead of falling back to the selected provider.
+- Request logs show the provider Smart Routing selected. Web search uses that provider. Block rules that filter by provider match Smart Routing instead of the provider selected in the dashboard.
+
+**Desktop**
+
+- The packaged app checks for updates every 30 minutes. A newer version still opens the download prompt.
+- While an update is downloading, the dashboard footer shows progress next to the version.
 
 ### Fixed
 
@@ -29,19 +44,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - ChatGPT and Codex can select max thinking on gpt-5.6 and gpt-6, and that level is forwarded upstream.
 - Claude Code effort levels xhigh, max, ultracode, and auto map to the matching reasoning setting when the request is converted.
-
-## [0.3.3] - 2026-09-24 (pre-release)
-
-Pre-release line for 0.3.3.
-
-### Changed
-
-**Desktop**
-
-- The packaged app checks for updates every 30 minutes. A newer version still opens the download prompt.
-- While an update is downloading, the dashboard footer shows progress next to the version.
-
-### Fixed
 
 **Desktop**
 
