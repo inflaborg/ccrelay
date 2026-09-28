@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-09-28 (pre-release)
+
+Pre-release line for 0.3.4.
+
 ## [0.3.3] - 2026-09-28
 
 The dashboard is available in Japanese and Korean. With Smart Routing on, auto routes follow the request model, and Codex can pin the model used for thread titles. The desktop app shows download progress and restarts into the new version on Windows.
