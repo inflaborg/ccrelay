@@ -324,7 +324,7 @@ name = "CCRelay"
 base_url = "http://localhost:7575/openai"
 ```
 
-適用は `~/.codex/ccrelay-model-catalog.json` を書き込み、Codex の `/model` がモデルを一覧できるようにします。カタログは **アクティブなプロバイダー** のカスタムモデル（または完全一致の `modelMap` エントリ）から作られます。スマートルーティングがオンのときは、全プロバイダーのルーティング対象モデルを一覧します。各エントリは推論レベル low、medium、high、xhigh を通知し、デフォルトは high です。gpt-5.6 と gpt-6 には max も含まれます。`model` をそれらの id のいずれかに設定します。適用後またはプロバイダー切り替え後は、カタログを再読み込みするため Codex CLI または ChatGPT デスクトップアプリを再起動します。レベルは `config.toml` の `model_reasoning_effort` または `/model` で上書きします。
+適用は `~/.codex/ccrelay-model-catalog.json` を書き込み、Codex の `/model` がモデルを一覧できるようにします。カタログは **アクティブなプロバイダー** のカスタムモデル（または完全一致の `modelMap` エントリ）から作られます。スマートルーティングがオンのときは、全プロバイダーのルーティング対象モデルを一覧します。各エントリは推論レベル low、medium、high、xhigh を通知し、デフォルトは high です。gpt-5.6 と gpt-6 には max も含まれます。`model` をそれらの id のいずれかに設定します。適用後またはプロバイダー切り替え後は、カタログを再読み込みするため Codex CLI または ChatGPT デスクトップアプリを再起動します。レベルは `config.toml` の `model_reasoning_effort` または `/model` で上書きします。Codex はスレッドタイトル生成などのバックグラウンド処理にカタログ先頭のモデルを使います。Codex モデルダイアログの **Codex リストの先頭モデル** で指定できます。
 
 ---
 
@@ -564,7 +564,7 @@ CCRelay は `~/.ccrelay/config.yaml` を使います（初回起動時に自動�
 | 設定              | デフォルト                             | 説明                                                                                                                       |
 | ----------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `configVersion`   | `"0.2.5"`                              | 設定スキーマのバージョン。古い設定は起動時に自動アップグレードされます。                                                   |
-| `routing.forward` | `[{path, provider}]`                   | 転送ルール — 最初の一致が優先されます。`provider: "auto"` = 現在のプロバイダー。未一致 → 404。                             |
+| `routing.forward` | `[{path, provider}]`                   | 転送ルール — 最初の一致が優先されます。`provider: "auto"` = スマートルーティング有効時はスマートルーティング（未知のモデル → 404）、それ以外は現在のプロバイダー。未一致 → 404。 |
 | `routing.block`   | `[{path, response, code, condition?}]` | ブロックルール — カスタムレスポンスを返します。任意の `condition.providers`（許可リスト）と `condition.providerNot`（除外リスト）。 |
 
 ### 同時実行

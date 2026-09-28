@@ -1,13 +1,19 @@
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import { describe, it, expect } from "vitest";
 import type { Provider } from "@/types";
 import {
   buildCodexModelCatalogJson,
+  codexModelCatalogPath,
   collectCodexModelsFromProvider,
   collectCodexModelsFromSmartRouting,
   ensureCodexModelCatalogJsonField,
   isCcrelayCatalogPointer,
   isCodexPointingAtCcrelay,
+  readCodexCatalogPrimaryModel,
   removeOwnedCodexModelCatalogJsonField,
+  writeCodexModelCatalog,
   CCRELAY_CODEX_MODEL_CATALOG_FILENAME,
 } from "@/api/codexModelCatalog";
 
@@ -191,6 +197,65 @@ describe("buildCodexModelCatalogJson", () => {
     expect(excluded.models).toEqual([]);
     expect(excluded.exclude_protocols).toEqual(["anthropic", "openai_chat"]);
     expect(entry.truncation_policy).toEqual({ mode: "tokens", limit: 10000 });
+  });
+
+  it("lists the pinned model first and keeps the rest in order", () => {
+    const models = [
+      { slug: "glm:glm-5.3", displayName: "GLM 5.3" },
+      { slug: "dev:gpt-5.6-terra", displayName: "Terra" },
+      { slug: "dev:gpt-6-luna", displayName: "Luna" },
+    ];
+    const catalog = buildCodexModelCatalogJson(models, undefined, undefined, "dev:gpt-6-luna");
+    const entries = catalog.models as Array<Record<string, unknown>>;
+    expect(entries.map(e => e.slug)).toEqual([
+      "dev:gpt-6-luna",
+      "glm:glm-5.3",
+      "dev:gpt-5.6-terra",
+    ]);
+    expect(entries.map(e => e.priority)).toEqual([1000, 1001, 1002]);
+    expect(catalog.primary_model_id).toBe("dev:gpt-6-luna");
+  });
+
+  it("keeps the default order when the pinned model is missing or excluded", () => {
+    const models = [
+      { slug: "a", displayName: "A" },
+      { slug: "b", displayName: "B" },
+    ];
+    const missing = buildCodexModelCatalogJson(models, undefined, undefined, "zzz");
+    expect((missing.models as Array<Record<string, unknown>>).map(e => e.slug)).toEqual(["a", "b"]);
+    const excluded = buildCodexModelCatalogJson(
+      models,
+      undefined,
+      { protocols: [], modelIds: ["b"] },
+      "b"
+    );
+    expect((excluded.models as Array<Record<string, unknown>>).map(e => e.slug)).toEqual(["a"]);
+    expect(buildCodexModelCatalogJson(models).primary_model_id).toBeUndefined();
+  });
+});
+
+describe("writeCodexModelCatalog primary model", () => {
+  it("keeps the stored pinned model on rewrites until it is cleared", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ccrelay-codex-"));
+    try {
+      const models = [
+        { slug: "a", displayName: "A" },
+        { slug: "b", displayName: "B" },
+      ];
+      writeCodexModelCatalog(models, dir, undefined, undefined, "b");
+      expect(readCodexCatalogPrimaryModel(dir)).toBe("b");
+
+      writeCodexModelCatalog(models, dir);
+      const file = JSON.parse(fs.readFileSync(codexModelCatalogPath(dir), "utf-8")) as {
+        models: Array<{ slug: string }>;
+      };
+      expect(file.models.map(m => m.slug)).toEqual(["b", "a"]);
+
+      writeCodexModelCatalog(models, dir, undefined, undefined, "");
+      expect(readCodexCatalogPrimaryModel(dir)).toBeUndefined();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

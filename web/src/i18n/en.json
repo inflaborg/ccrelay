@@ -347,6 +347,9 @@
       "label": "Model",
       "pickFromProvider": "From current provider",
       "orType": "Or type a model id",
+      "primaryModel": "First model in the Codex list",
+      "primaryModelDefault": "Default order",
+      "primaryModelHint": "Codex uses the first model for background work such as thread titles and automations.",
       "saveAndApply": "Save & Apply"
     },
     "modelsModal": {

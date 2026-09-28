@@ -347,6 +347,9 @@
       "label": "モデル",
       "pickFromProvider": "現在のプロバイダーから",
       "orType": "またはモデル id を入力",
+      "primaryModel": "Codex リストの先頭モデル",
+      "primaryModelDefault": "デフォルトの順序",
+      "primaryModelHint": "Codex はスレッドタイトル生成や自動化などのバックグラウンド処理に先頭のモデルを使います。",
       "saveAndApply": "保存して適用"
     },
     "modelsModal": {

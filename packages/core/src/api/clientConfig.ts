@@ -26,6 +26,7 @@ import {
   ensureCodexModelCatalogJsonField,
   isCcrelayCatalogPointer,
   readCodexCatalogExclude,
+  readCodexCatalogPrimaryModel,
   readCodexCatalogVision,
   removeCodexModelCatalog,
   removeOwnedCodexModelCatalogJsonField,
@@ -199,6 +200,8 @@ export interface ClientConfigGetResponse {
   codexVision: CodexVisionConfig;
   /** Protocols and model ids omitted from the Codex catalog. */
   codexExclude: CodexExcludeConfig;
+  /** Model listed first in the Codex catalog; empty when the default order is used. */
+  codexPrimaryModel: string;
   /** Parsed from settings.json env when file is readable */
   claudeDefaultModels: ClaudeDefaultModels;
   claudeDesktopBundles: ClaudeDesktopBundleVersions;
@@ -508,11 +511,12 @@ async function resolveCurrentProviderModels(
 async function writeCatalogForCurrentProvider(
   fallbackModel?: string,
   vision?: CodexCatalogVision,
-  exclude?: CodexCatalogExclude
+  exclude?: CodexCatalogExclude,
+  primaryModelId?: string
 ): Promise<CodexCatalogModelRef[]> {
   const models = await resolveCurrentProviderModels(fallbackModel);
   if (models.length > 0) {
-    writeCodexModelCatalog(models, undefined, vision, exclude);
+    writeCodexModelCatalog(models, undefined, vision, exclude, primaryModelId);
   }
   return models;
 }
@@ -955,6 +959,7 @@ export async function handleGetClientConfig(
     })),
     codexVision: readCodexCatalogVision(),
     codexExclude: readCodexCatalogExclude(),
+    codexPrimaryModel: readCodexCatalogPrimaryModel() ?? "",
     claudeDefaultModels: readClaudeDefaultModelsFromFile(claudePath),
     claudeDesktopBundles: scanClaudeDesktopBundles(claudeDesktopDir()),
     claudeCli,
@@ -1004,6 +1009,11 @@ function codexVisionFromBody(
   return { all: raw.all !== false, modelIds };
 }
 
+/** undefined keeps the stored value; an empty string clears it. */
+function codexPrimaryModelFromBody(raw: unknown): string | undefined {
+  return typeof raw === "string" ? raw.trim() : undefined;
+}
+
 /**
  * POST /ccrelay/api/client-config/apply
  * Body: { target, overwrite?, patchClaudeModelsOnly?, claudeDefaultModels? }
@@ -1034,6 +1044,7 @@ export async function handleApplyClientConfig(
       claudeDefaultModels?: { opus?: string; sonnet?: string; haiku?: string };
       codexVision?: { all?: boolean; modelIds?: string[] };
       codexExclude?: { protocols?: string[]; modelIds?: string[] };
+      codexPrimaryModel?: string;
     }>(req);
     const target = body.target;
     const overwrite = Boolean(body.overwrite);
@@ -1238,7 +1249,8 @@ export async function handleApplyClientConfig(
       await writeCatalogForCurrentProvider(
         nextModel,
         codexVisionFromBody(body.codexVision),
-        codexExcludeFromBody(body.codexExclude)
+        codexExcludeFromBody(body.codexExclude),
+        codexPrimaryModelFromBody(body.codexPrimaryModel)
       );
       updated = ensureCodexModelCatalogJsonField(updated);
       fs.writeFileSync(codexPath, updated, "utf-8");
@@ -1306,7 +1318,8 @@ export async function handleApplyClientConfig(
       await writeCatalogForCurrentProvider(
         codexModel,
         codexVisionFromBody(body.codexVision),
-        codexExcludeFromBody(body.codexExclude)
+        codexExcludeFromBody(body.codexExclude),
+        codexPrimaryModelFromBody(body.codexPrimaryModel)
       );
       const existing = fs.existsSync(codexPath) ? fs.readFileSync(codexPath, "utf-8") : "";
       fs.writeFileSync(codexPath, patchCodexConfigContent(existing, port, codexModel), "utf-8");

@@ -5,6 +5,7 @@ import type { Router } from "@/server/router";
 import { SmartRoutingStage } from "@/server/request/smartRoutingStage";
 import type { RoutingContext } from "@/server/request/context";
 import { ModelCatalog } from "@/server/smartRouting/modelCatalog";
+import { SMART_ROUTING_VIRTUAL_PROVIDER } from "@/server/smartRouting/virtualProvider";
 
 function mockConfig(
   providers: Record<string, Provider>,
@@ -229,7 +230,7 @@ describe("SmartRoutingStage", () => {
     expect(parsedBody.model).toBe("gpt-5.6-luna");
   });
 
-  it("rejects when the current provider model map would land on an excluded model", async () => {
+  it("rejects an unknown model instead of falling back to the current provider", async () => {
     const currentId = "llm-router-su-gpt";
     const providers: Record<string, Provider> = {
       [currentId]: {
@@ -245,7 +246,7 @@ describe("SmartRoutingStage", () => {
         customModelsList: ["gpt-5.6-terra"],
       },
     };
-    const config = mockConfig(providers, { exclude: ["llm-router-su-gpt:gpt-5.6-terra"] });
+    const config = mockConfig(providers);
     const catalog = new ModelCatalog(config);
     await catalog.refreshAll();
     const router = {
@@ -255,10 +256,44 @@ describe("SmartRoutingStage", () => {
     const stage = new SmartRoutingStage(config, router, catalog);
     const body = Buffer.from(JSON.stringify({ model: "claude-sonnet-5" }), "utf-8");
 
-    const result = stage.process(makeRouting({ provider: providers[currentId] }), body);
+    const result = stage.process(
+      makeRouting({ provider: SMART_ROUTING_VIRTUAL_PROVIDER, clientSurface: "openai" }),
+      body
+    );
 
     expect(result.rejected?.statusCode).toBe(404);
-    expect(result.routing.provider.id).toBe(currentId);
+    expect(result.rejected?.body).toContain("not in the smart routing catalog");
+    expect(result.rejected?.body).toContain("model_not_found");
+    expect(result.routing.provider.id).toBe(SMART_ROUTING_VIRTUAL_PROVIDER.id);
+  });
+
+  it("rejects a request without a model", () => {
+    const config = mockConfig({});
+    const catalog = new ModelCatalog(config);
+    const router = {} as unknown as Router;
+    const stage = new SmartRoutingStage(config, router, catalog);
+
+    const result = stage.process(
+      makeRouting({ provider: SMART_ROUTING_VIRTUAL_PROVIDER }),
+      Buffer.from(JSON.stringify({ messages: [] }), "utf-8")
+    );
+
+    expect(result.rejected?.statusCode).toBe(400);
+    expect(result.rejected?.body).toContain("invalid_request_error");
+  });
+
+  it("leaves non-auto routes alone", () => {
+    const config = mockConfig({});
+    const catalog = new ModelCatalog(config);
+    const stage = new SmartRoutingStage(config, {} as unknown as Router, catalog);
+    const routing = makeRouting({ forwardRuleProvider: "anthropic-upstream" });
+    const body = Buffer.from(JSON.stringify({ model: "claude-sonnet-5" }), "utf-8");
+
+    const result = stage.process(routing, body);
+
+    expect(result.rejected).toBeUndefined();
+    expect(result.routing.provider.id).toBe("anthropic-upstream");
+    expect(result.body).toBe(body);
   });
 
   it("skips a custom rule whose target is excluded", async () => {

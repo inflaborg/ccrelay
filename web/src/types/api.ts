@@ -385,6 +385,7 @@ export interface ClientConfigGetResponse {
   codexAvailableModels?: CodexAvailableModel[];
   codexVision?: CodexVisionConfig;
   codexExclude?: CodexExcludeConfig;
+  codexPrimaryModel?: string;
   claudeDefaultModels: ClaudeDefaultModels;
   claudeDesktopBundles: ClaudeDesktopBundleVersions;
   claudeCli: ClaudeCliVersionInfo;

@@ -324,7 +324,7 @@ name = "CCRelay"
 base_url = "http://localhost:7575/openai"
 ```
 
-Apply writes `~/.codex/ccrelay-model-catalog.json` so Codex `/model` can list your models. The catalog comes from the **active provider’s** custom models (or exact `modelMap` entries); with Smart Routing on, it lists routed models from every provider. Each entry advertises reasoning levels low, medium, high, and xhigh, with high as the default. gpt-5.6 and gpt-6 entries also include max. Set `model` to one of those ids. Restart Codex CLI or the ChatGPT desktop app after Apply or a provider switch so the catalog reloads. Override the level with `model_reasoning_effort` in `config.toml` or `/model`.
+Apply writes `~/.codex/ccrelay-model-catalog.json` so Codex `/model` can list your models. The catalog comes from the **active provider’s** custom models (or exact `modelMap` entries); with Smart Routing on, it lists routed models from every provider. Each entry advertises reasoning levels low, medium, high, and xhigh, with high as the default. gpt-5.6 and gpt-6 entries also include max. Set `model` to one of those ids. Restart Codex CLI or the ChatGPT desktop app after Apply or a provider switch so the catalog reloads. Override the level with `model_reasoning_effort` in `config.toml` or `/model`. Codex uses the first catalog model for background work such as thread titles; pick it with **First model in the Codex list** in the Codex model dialog.
 
 ---
 
@@ -564,7 +564,7 @@ Use the **Smart Routing** tab for settings (alias prefix, bare model id fallback
 | Setting           | Default                                | Description                                                                                                                    |
 | ----------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `configVersion`   | `"0.2.5"`                              | Config schema version. Older configs auto-upgraded on startup.                                                                 |
-| `routing.forward` | `[{path, provider}]`                   | Forward rules — first match wins. `provider: "auto"` = current provider. Unmatched → 404.                                      |
+| `routing.forward` | `[{path, provider}]`                   | Forward rules — first match wins. `provider: "auto"` = Smart Routing when it is on (unknown models → 404), otherwise the current provider. Unmatched → 404. |
 | `routing.block`   | `[{path, response, code, condition?}]` | Block rules — return custom response. Optional `condition.providers` (allowlist) and `condition.providerNot` (exclusion list). |
 
 ### Concurrency

@@ -12,15 +12,29 @@ import type { LogDatabase } from "../../database";
 import type { RoutingContext, BodyProcessResult } from "./context";
 import { RouterStage } from "./routerStage";
 import { BodyProcessor } from "./bodyProcessor";
-import { SmartRoutingStage } from "./smartRoutingStage";
+import { SmartRoutingStage, type SmartRoutingStageResult } from "./smartRoutingStage";
 import { TaskExecutor } from "./taskExecutor";
 import type { ModelCatalog } from "../smartRouting/modelCatalog";
+import { SMART_ROUTING_PROVIDER_ID } from "../smartRouting/virtualProvider";
 import { ResponseWriter } from "../response";
 import type { ResponseLogger } from "../responseLogger";
 import type { InterceptorRegistry, InterceptResult } from "../interceptor";
 import { ScopedLogger } from "../../utils/logger";
 
 const log = new ScopedLogger("RequestHandler");
+
+function logRoute(routing: RoutingContext, label: "ROUTE" | "SMART_ROUTE"): void {
+  const tag = label === "ROUTE" && !routing.isRouted ? "PASSTHROUGH" : label;
+  const model = routing.smartRoutingClientModel
+    ? ` [model:${routing.smartRoutingClientModel}]`
+    : "";
+  log.info(
+    `${routing.method} ${routing.path} -> [${tag}] ${routing.provider.id} (${routing.provider.name})` +
+      model +
+      ` [client:${routing.clientSurface} upstream:${routing.provider.providerType}]` +
+      (routing.isOpenAIProvider ? " [OpenAI]" : "")
+  );
+}
 
 function buildRawBodyLogSnapshot(
   rawBody: Buffer,
@@ -104,11 +118,10 @@ export class RequestHandler {
       return;
     }
 
-    log.info(
-      `${routing.method} ${path} -> [${routing.isRouted ? "ROUTE" : "PASSTHROUGH"}] ${routing.provider.id} (${routing.provider.name})` +
-        ` [client:${routing.clientSurface} upstream:${routing.provider.providerType}]` +
-        (routing.isOpenAIProvider ? " [OpenAI]" : "")
-    );
+    // Smart routing picks the provider from the request model; log once it is known.
+    if (routing.provider.id !== SMART_ROUTING_PROVIDER_ID) {
+      logRoute(routing, "ROUTE");
+    }
 
     // Stage 2: Collect request body
     this.collectBody(req, routing, requestReceiveStart, res);
@@ -141,16 +154,36 @@ export class RequestHandler {
         );
       }
 
-      // Stage 2.5: Service interceptors (e.g. web search) — registry is generic; no capability names here
-      if (routing.method === "POST" && rawBody.length > 0) {
+      // Stage 2.5: Smart routing decides the provider before anything reads routing.provider
+      const smartRoutingPending = routing.provider.id === SMART_ROUTING_PROVIDER_ID;
+      const smartRouted = this.smartRoutingStage.process(routing, rawBody);
+      if (smartRouted.rejected) {
+        log.info(`${routing.method} ${routing.path} -> [SMART_ROUTE] rejected`);
+        const writer = new ResponseWriter(res);
+        writer.writeRaw(
+          smartRouted.rejected.statusCode,
+          // HTTP header name
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          { "Content-Type": "application/json" },
+          smartRouted.rejected.body
+        );
+        return;
+      }
+      if (smartRoutingPending) {
+        logRoute(smartRouted.routing, "SMART_ROUTE");
+      }
+      const finalRouting = smartRouted.routing;
+
+      // Stage 2.6: Service interceptors (e.g. web search) — registry is generic; no capability names here
+      if (finalRouting.method === "POST" && rawBody.length > 0) {
         void (async () => {
           try {
             const intercepted = await this.interceptorRegistry.tryIntercept(
               rawBody,
-              routing.clientSurface,
-              routing.provider.id,
-              routing.method,
-              routing.path
+              finalRouting.clientSurface,
+              finalRouting.provider.id,
+              finalRouting.method,
+              finalRouting.path
             );
             if (intercepted) {
               if (res.writableEnded) {
@@ -158,7 +191,7 @@ export class RequestHandler {
               }
               this.completeInterceptedRequest(
                 rawBody,
-                routing,
+                finalRouting,
                 requestReceiveStart,
                 res,
                 intercepted
@@ -176,12 +209,12 @@ export class RequestHandler {
             return;
           }
 
-          this.continueProcessing(rawBody, routing, requestReceiveStart, bodyReceiveTime, res);
+          this.continueProcessing(rawBody, smartRouted, requestReceiveStart, bodyReceiveTime, res);
         })();
         return;
       }
 
-      this.continueProcessing(rawBody, routing, requestReceiveStart, bodyReceiveTime, res);
+      this.continueProcessing(rawBody, smartRouted, requestReceiveStart, bodyReceiveTime, res);
     });
   }
 
@@ -232,26 +265,13 @@ export class RequestHandler {
    * Continue normal request processing after body collection (or interceptor fallback).
    */
   private continueProcessing(
-    rawBody: Buffer,
-    routing: RoutingContext,
+    clientBody: Buffer,
+    smartRouted: SmartRoutingStageResult,
     requestReceiveStart: number,
     bodyReceiveTime: number,
     res: http.ServerResponse
   ): void {
-    // Stage 3: Body processing - smart routing, model mapping, protocol conversion
-    const clientBody = rawBody;
-    const smartRouted = this.smartRoutingStage.process(routing, rawBody);
-    if (smartRouted.rejected) {
-      const writer = new ResponseWriter(res);
-      writer.writeRaw(
-        smartRouted.rejected.statusCode,
-        // HTTP header name
-        // eslint-disable-next-line @typescript-eslint/naming-convention
-        { "Content-Type": "application/json" },
-        smartRouted.rejected.body
-      );
-      return;
-    }
+    // Stage 3: Body processing - model mapping, protocol conversion
     const bodyResult = this.bodyProcessor.process(
       smartRouted.body,
       smartRouted.routing,

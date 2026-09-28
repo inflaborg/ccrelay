@@ -324,7 +324,7 @@ name = "CCRelay"
 base_url = "http://localhost:7575/openai"
 ```
 
-적용은 `~/.codex/ccrelay-model-catalog.json`을 써서 Codex `/model`이 모델을 나열할 수 있게 합니다. 카탈로그는 **활성 제공자**의 사용자 지정 모델(또는 정확한 `modelMap` 항목)에서 옵니다. 스마트 라우팅이 켜져 있으면 모든 제공자의 라우팅된 모델을 나열합니다. 각 항목은 추론 수준 low, medium, high, xhigh를 알리며 기본값은 high입니다. gpt-5.6과 gpt-6 항목에는 max도 포함됩니다. `model`을 그 id 중 하나로 설정합니다. 적용 후 또는 제공자를 바꾼 뒤에는 카탈로그를 다시 읽도록 Codex CLI 또는 ChatGPT 데스크톱 앱을 다시 시작합니다. 수준은 `config.toml`의 `model_reasoning_effort` 또는 `/model`로 덮어씁니다.
+적용은 `~/.codex/ccrelay-model-catalog.json`을 써서 Codex `/model`이 모델을 나열할 수 있게 합니다. 카탈로그는 **활성 제공자**의 사용자 지정 모델(또는 정확한 `modelMap` 항목)에서 옵니다. 스마트 라우팅이 켜져 있으면 모든 제공자의 라우팅된 모델을 나열합니다. 각 항목은 추론 수준 low, medium, high, xhigh를 알리며 기본값은 high입니다. gpt-5.6과 gpt-6 항목에는 max도 포함됩니다. `model`을 그 id 중 하나로 설정합니다. 적용 후 또는 제공자를 바꾼 뒤에는 카탈로그를 다시 읽도록 Codex CLI 또는 ChatGPT 데스크톱 앱을 다시 시작합니다. 수준은 `config.toml`의 `model_reasoning_effort` 또는 `/model`로 덮어씁니다. Codex는 스레드 제목 생성 같은 백그라운드 작업에 카탈로그의 첫 번째 모델을 사용합니다. Codex 모델 대화상자의 **Codex 목록의 첫 번째 모델**에서 지정할 수 있습니다.
 
 ---
 
@@ -564,7 +564,7 @@ CCRelay는 `~/.ccrelay/config.yaml`을 사용합니다(첫 실행 시 자동 생
 | 설정              | 기본값                                 | 설명                                                                                                                       |
 | ----------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `configVersion`   | `"0.2.5"`                              | 구성 스키마 버전. 더 오래된 구성은 시작 시 자동으로 올려집니다.                                                            |
-| `routing.forward` | `[{path, provider}]`                   | 전달 규칙 — 첫 일치가 우선합니다. `provider: "auto"` = 현재 제공자. 일치하지 않으면 → 404.                                 |
+| `routing.forward` | `[{path, provider}]`                   | 전달 규칙 — 첫 일치가 우선합니다. `provider: "auto"` = 스마트 라우팅이 켜져 있으면 스마트 라우팅(알 수 없는 모델 → 404), 아니면 현재 제공자. 일치하지 않으면 → 404. |
 | `routing.block`   | `[{path, response, code, condition?}]` | 차단 규칙 — 사용자 지정 응답을 반환합니다. 선택적 `condition.providers`(허용 목록)와 `condition.providerNot`(제외 목록).   |
 
 ### 동시성

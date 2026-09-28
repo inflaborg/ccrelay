@@ -347,6 +347,9 @@
       "label": "模型",
       "pickFromProvider": "从当前供应商选择",
       "orType": "或手动输入模型 id",
+      "primaryModel": "Codex 列表第一个模型",
+      "primaryModelDefault": "默认顺序",
+      "primaryModelHint": "Codex 会用第一个模型处理后台任务，例如生成对话标题和自动化。",
       "saveAndApply": "保存并应用"
     },
     "modelsModal": {

@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Config**
 
 - Smart Routing has a checkbox for catalog display names. Checked names include the provider; unchecked names use the model name only. Existing configs stay checked.
+- The Codex model dialog can pin one model to the top of the Codex list. Codex uses that model for background work such as thread titles, and the choice survives provider switches.
+
+**Routing**
+
+- With Smart Routing on, `auto` forward rules pick the provider from the request model, and the selected provider no longer affects them. Unknown, excluded, or missing models are rejected instead of falling back to the selected provider.
+- Request logs and web search use the final smart-routed provider. Block-rule provider conditions match `smart-routing` while it is on.
 
 ### Fixed
 

@@ -9,7 +9,6 @@ import {
   isModelsListUpstreamPath,
   isModelDetailUpstreamPath,
 } from "../../converter/models-fallback";
-import { containsImageContent, mappedModelId } from "./modelMapping";
 import { ScopedLogger } from "../../utils/logger";
 
 const log = new ScopedLogger("SmartRoutingStage");
@@ -52,8 +51,11 @@ export interface SmartRoutingStageResult {
   rejected?: SmartRoutingRejection;
 }
 
-function excludedModelResponse(model: string, surface: ApiSurface): SmartRoutingRejection {
-  const message = `Model "${model}" is excluded from smart routing`;
+function modelNotFoundResponse(
+  model: string,
+  message: string,
+  surface: ApiSurface
+): SmartRoutingRejection {
   if (surface === "anthropic") {
     return {
       statusCode: 404,
@@ -73,18 +75,25 @@ function excludedModelResponse(model: string, surface: ApiSurface): SmartRouting
   };
 }
 
-function mappedUpstreamModel(rawBody: Buffer, routing: RoutingContext): string | undefined {
-  const model = readModelFromBody(rawBody);
-  if (!model) {
-    return undefined;
+function missingModelResponse(surface: ApiSurface): SmartRoutingRejection {
+  const message = "Smart routing needs a model in the request body";
+  if (surface === "anthropic") {
+    return {
+      statusCode: 400,
+      model: "",
+      body: JSON.stringify({
+        type: "error",
+        error: { type: "invalid_request_error", message },
+      }),
+    };
   }
-  let hasImages = false;
-  try {
-    hasImages = containsImageContent(JSON.parse(rawBody.toString("utf-8")));
-  } catch {
-    hasImages = false;
-  }
-  return mappedModelId(model, routing.provider, hasImages);
+  return {
+    statusCode: 400,
+    model: "",
+    body: JSON.stringify({
+      error: { message, type: "invalid_request_error", code: "missing_model" },
+    }),
+  };
 }
 
 function withSmartRoutingModelsContext(routing: RoutingContext): RoutingContext {
@@ -105,10 +114,12 @@ export class SmartRoutingStage {
   ) {}
 
   process(routing: RoutingContext, rawBody: Buffer): SmartRoutingStageResult {
-    if (!this.catalog.isEnabled() || routing.blocked) {
+    if (routing.blocked) {
       return { routing, body: rawBody };
     }
-    if (routing.forwardRuleProvider !== "auto") {
+    // The router's placeholder has no upstream, so it must always be resolved here.
+    const pending = routing.provider.id === SMART_ROUTING_VIRTUAL_PROVIDER.id;
+    if (!pending && (!this.catalog.isEnabled() || routing.forwardRuleProvider !== "auto")) {
       return { routing, body: rawBody };
     }
 
@@ -120,9 +131,10 @@ export class SmartRoutingStage {
       return { routing: withSmartRoutingModelsContext(routing), body: rawBody };
     }
 
-    const model = readModelFromBody(rawBody);
+    const model = readModelFromBody(rawBody)?.trim();
     if (!model) {
-      return { routing, body: rawBody };
+      log.warn(`[route] rejected ${routing.method} ${routing.path}: no model in request body`);
+      return { routing, body: rawBody, rejected: missingModelResponse(routing.clientSurface) };
     }
 
     const modelRules = this.config.configValue.smartRouting?.modelRules;
@@ -144,26 +156,33 @@ export class SmartRoutingStage {
     const upstreamModelId = customMatch?.upstreamModelId ?? catalogEntry?.upstreamModelId;
 
     if (!providerId || !upstreamModelId) {
-      const mapped = mappedUpstreamModel(rawBody, routing) ?? model;
-      const excluded =
-        this.catalog.isExcludedWireId(model) ||
-        excludedRuleBlocked ||
-        this.catalog.isExcludedTarget(routing.provider.id, mapped);
-      if (excluded) {
-        log.warn(`[route] rejected excluded model "${model}"`);
-        return {
-          routing,
-          body: rawBody,
-          rejected: excludedModelResponse(model, routing.clientSurface),
-        };
-      }
-      log.warn(`[route] unresolved model "${model}"`);
-      return { routing, body: rawBody };
+      const excluded = this.catalog.isExcludedWireId(model) || excludedRuleBlocked;
+      log.warn(`[route] rejected ${excluded ? "excluded" : "unknown"} model "${model}"`);
+      return {
+        routing,
+        body: rawBody,
+        rejected: modelNotFoundResponse(
+          model,
+          excluded
+            ? `Model "${model}" is excluded from smart routing`
+            : `Model "${model}" is not in the smart routing catalog`,
+          routing.clientSurface
+        ),
+      };
     }
 
     const provider = this.config.getProvider(providerId);
     if (!provider) {
-      return { routing, body: rawBody };
+      log.warn(`[route] rejected model "${model}": provider "${providerId}" is not configured`);
+      return {
+        routing,
+        body: rawBody,
+        rejected: modelNotFoundResponse(
+          model,
+          `Model "${model}" routes to provider "${providerId}", which is not configured`,
+          routing.clientSurface
+        ),
+      };
     }
 
     const routeSource = customMatch ? "custom-rule" : "catalog";
