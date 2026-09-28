@@ -20,6 +20,7 @@ import {
   CHAT_HOSTED_TOOL_TO_ANTHROPIC,
   openAIHostedToolToAnthropicServerToolDef,
 } from "../tool-schema-conversion";
+import { canonicalClientEffort } from "../model-meta/effort";
 import { resolveModelMeta } from "../model-meta/registry";
 
 export interface OpenAIToAnthropicRequestResult {
@@ -86,7 +87,10 @@ export function convertOpenAIRequestToAnthropic(
       } else if (effortStr !== undefined && meta.reasoning.supportsAdaptiveThinking) {
         out.thinking = { type: "adaptive" };
         if (meta.reasoning.supportsEffort) {
-          out.output_config = { effort: mapOpenAIEffortToAnthropic(effortStr) };
+          const mapped = mapOpenAIEffortToAnthropic(effortStr);
+          if (mapped) {
+            out.output_config = { effort: mapped };
+          }
         }
       }
     }
@@ -114,16 +118,15 @@ function resolveMaxTokens(
   return 4096;
 }
 
-/** Map OpenAI `reasoning_effort` to Anthropic `output_config.effort` (adaptive mode). */
-function mapOpenAIEffortToAnthropic(effort?: string): string {
-  if (!effort) {
+/**
+ * Map OpenAI `reasoning_effort` to Anthropic `output_config.effort`.
+ * `undefined` means omit effort (`auto`, model default). A blank value stays `high`.
+ */
+function mapOpenAIEffortToAnthropic(effort?: string): string | undefined {
+  if (effort === undefined || effort.trim() === "") {
     return "high";
   }
-  const e = effort.toLowerCase();
-  if (e === "minimal") {
-    return "low";
-  }
-  return e;
+  return canonicalClientEffort(effort);
 }
 
 function stringifyToolContent(rawContent: OpenAIMessage["content"]): string {

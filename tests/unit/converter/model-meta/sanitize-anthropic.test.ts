@@ -40,6 +40,28 @@ describe("sanitizeAnthropicRequestByMeta", () => {
     expect(data.thinking).toEqual({ type: "adaptive" });
   });
 
+  it("maps claude code ultracode to xhigh and drops auto", () => {
+    const meta = resolveModelMeta("claude-opus-4-8", { vendor: "anthropic" });
+    const ultracode: Record<string, unknown> = {
+      model: "claude-opus-4-8",
+      thinking: { type: "adaptive" },
+      output_config: { effort: "ultracode" },
+      messages: [{ role: "user", content: "hi" }],
+    };
+    sanitizeAnthropicRequestByMeta(ultracode, meta);
+    expect(ultracode.output_config).toEqual({ effort: "xhigh" });
+
+    const auto: Record<string, unknown> = {
+      model: "claude-opus-4-8",
+      thinking: { type: "adaptive" },
+      output_config: { effort: "auto" },
+      messages: [{ role: "user", content: "hi" }],
+    };
+    sanitizeAnthropicRequestByMeta(auto, meta);
+    expect(auto.output_config).toBeUndefined();
+    expect(auto.thinking).toEqual({ type: "adaptive" });
+  });
+
   it("strips context_management for claude-opus by default", () => {
     const data: Record<string, unknown> = {
       model: "claude-opus-4-8",

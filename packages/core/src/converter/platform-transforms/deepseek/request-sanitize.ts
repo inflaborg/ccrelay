@@ -4,6 +4,7 @@
  * penalties are ignored upstream; strip them for a smaller payload.
  */
 
+import { canonicalClientEffort } from "../../model-meta/effort";
 import { resolveModelMeta } from "../../model-meta/registry";
 
 /** Injected on outbound `/v1/chat/completions` bodies when upstream host is `api.deepseek.com`. */
@@ -37,13 +38,13 @@ export function deepseekChatSanitize(body: Record<string, unknown>): void {
   delete body.frequency_penalty;
 }
 
-/** Map OpenAI-style effort to DeepSeek-accepted `high` | `max` (low/medium → high, xhigh → max). */
+/** Map OpenAI-style effort to DeepSeek-accepted `high` | `max` (low/medium → high, xhigh/ultracode → max). */
 export function normalizeDeepseekEffort(effort: string): string {
-  const e = effort.toLowerCase();
-  if (e === "low" || e === "medium" || e === "minimal") {
+  const e = canonicalClientEffort(effort);
+  if (!e || e === "low" || e === "medium") {
     return "high";
   }
-  if (e === "xhigh") {
+  if (e === "xhigh" || e === "max") {
     return "max";
   }
   return e;

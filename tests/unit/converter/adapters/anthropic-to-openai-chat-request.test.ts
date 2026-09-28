@@ -1114,7 +1114,7 @@ describe("converter: anthropic-to-openai-chat-request", () => {
       expect(result.request.reasoning_effort).toBe("high");
     });
 
-    it("maps output_config effort max to reasoning_effort high", () => {
+    it("maps output_config effort max through to reasoning_effort", () => {
       const request: AnthropicMessageRequest = {
         model: "claude-opus-4-7",
         max_tokens: 4096,
@@ -1125,7 +1125,35 @@ describe("converter: anthropic-to-openai-chat-request", () => {
 
       const result = convertRequestToOpenAI(request, basePath);
 
-      expect(result.request.reasoning_effort).toBe("high");
+      expect(result.request.reasoning_effort).toBe("max");
+    });
+
+    it("maps output_config effort ultracode to reasoning_effort xhigh", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-opus-4-7",
+        max_tokens: 4096,
+        thinking: { type: "adaptive" },
+        output_config: { effort: "ultracode" },
+        messages: [],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.reasoning_effort).toBe("xhigh");
+    });
+
+    it("omits reasoning_effort when output_config effort is auto", () => {
+      const request: AnthropicMessageRequest = {
+        model: "claude-opus-4-7",
+        max_tokens: 4096,
+        thinking: { type: "adaptive" },
+        output_config: { effort: "auto" },
+        messages: [],
+      };
+
+      const result = convertRequestToOpenAI(request, basePath);
+
+      expect(result.request.reasoning_effort).toBeUndefined();
     });
 
     it("maps output_config effort xhigh through to reasoning_effort", () => {

@@ -8,6 +8,7 @@ import * as os from "os";
 import * as path from "path";
 import type { Provider, ProviderType, SmartRoutingCatalogEntry } from "../types";
 import { collectParsedCustomModelsDeduped } from "../converter/models-fallback";
+import { resolveModelMeta } from "../converter/model-meta/registry";
 import { buildSmartRoutingModelDisplayName } from "../server/smartRouting/synthesizeModels";
 
 export const CCRELAY_CODEX_MODEL_CATALOG_FILENAME = "ccrelay-model-catalog.json";
@@ -16,7 +17,7 @@ export const CCRELAY_CODEX_MODEL_CATALOG_FILENAME = "ccrelay-model-catalog.json"
  * Bump when generated catalog fields change in a way that existing files must be rewritten.
  * Files without this field are treated as version 0.
  */
-export const CCRELAY_CODEX_CATALOG_SCHEMA_VERSION = 3;
+export const CCRELAY_CODEX_CATALOG_SCHEMA_VERSION = 4;
 
 /** Read a top-level TOML string key without importing the full clientConfig parser. */
 function readTopLevelTomlString(content: string, key: string): string | undefined {
@@ -64,7 +65,8 @@ const BASE_INSTRUCTIONS =
 /**
  * Efforts Codex can offer in `/model`. An empty list makes the picker fall back
  * to the client default (Medium) and hides `default_reasoning_level`.
- * `max` / `ultra` are omitted: they imply OpenAI multi-agent delegation.
+ * `ultra` stays omitted: Codex treats it as multi-agent delegation, not an effort.
+ * `max` is a real reasoning effort on gpt-5.6 and gpt-6 and is added per model.
  */
 const CODEX_REASONING_LEVELS: ReadonlyArray<{ effort: string; description: string }> = [
   { effort: "low", description: "Fast responses with lighter reasoning" },
@@ -72,6 +74,20 @@ const CODEX_REASONING_LEVELS: ReadonlyArray<{ effort: string; description: strin
   { effort: "high", description: "Greater reasoning depth for complex problems" },
   { effort: "xhigh", description: "Extra high reasoning depth for complex problems" },
 ];
+
+const CODEX_MAX_REASONING_LEVEL = {
+  effort: "max",
+  description: "Maximum reasoning depth for the hardest tasks",
+};
+
+function codexReasoningLevelsForSlug(slug: string): Array<{ effort: string; description: string }> {
+  const levels = CODEX_REASONING_LEVELS.map(level => ({ ...level }));
+  const efforts = resolveModelMeta(slug).openaiChat?.validReasoningEfforts;
+  if (efforts?.includes("max")) {
+    levels.push({ ...CODEX_MAX_REASONING_LEVEL });
+  }
+  return levels;
+}
 
 /** Minimal Codex catalog entry fields required for /model listing. */
 function catalogEntryTemplate(
@@ -87,7 +103,7 @@ function catalogEntryTemplate(
     description: displayName,
     base_instructions: BASE_INSTRUCTIONS,
     default_reasoning_level: "high",
-    supported_reasoning_levels: CODEX_REASONING_LEVELS.map(level => ({ ...level })),
+    supported_reasoning_levels: codexReasoningLevelsForSlug(slug),
     shell_type: "shell_command",
     visibility: "list",
     supported_in_api: true,

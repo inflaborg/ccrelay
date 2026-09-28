@@ -35,7 +35,7 @@ describe("resolveModelMeta", () => {
       expect(meta.input.modalities).toContain("image");
     }
     expect(resolveModelMeta("llm-router-dev:gpt-6-luna").id).toBe("gpt-6");
-    expect(resolveModelMeta("router:gpt-5.6-terra").id).toBe("gpt-5");
+    expect(resolveModelMeta("router:gpt-5.6-terra").id).toBe("gpt-5.6");
   });
 
   it("matches gpt-6 and later as their own family", () => {
@@ -44,7 +44,13 @@ describe("resolveModelMeta", () => {
       expect(meta.id).toBe("gpt-6");
       expect(meta.openaiChat?.usesMaxCompletionTokens).toBe(true);
       expect(meta.openaiChat?.preferResponses).toBe(true);
-      expect(meta.openaiChat?.validReasoningEfforts).toEqual(["low", "medium", "high", "xhigh"]);
+      expect(meta.openaiChat?.validReasoningEfforts).toEqual([
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+      ]);
       expect(meta.reasoning.supportsReasoningEffort).toBe(true);
     }
   });

@@ -25,8 +25,10 @@ describe("normalizeDeepseekEffort", () => {
     expect(normalizeDeepseekEffort("minimal")).toBe("high");
   });
 
-  it("maps xhigh to max", () => {
+  it("maps xhigh and ultracode to max, and auto to high", () => {
     expect(normalizeDeepseekEffort("xhigh")).toBe("max");
+    expect(normalizeDeepseekEffort("ultracode")).toBe("max");
+    expect(normalizeDeepseekEffort("auto")).toBe("high");
   });
 
   it("passes through high and max", () => {

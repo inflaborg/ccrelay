@@ -15,6 +15,7 @@ import {
   type AnthropicServerToolDef,
   isServerToolResultBlock,
 } from "../../types";
+import { resolveClientEffort } from "../model-meta/effort";
 import { assignOpenAiChatMaxOutput } from "../rules/openai-chat-model-rules";
 import { mapAnthropicWirePathToOpenAiUpstream } from "../paths";
 import {
@@ -328,13 +329,15 @@ export function convertRequestToOpenAI(
     const t = anthropic.thinking.type?.toLowerCase() ?? "";
     if (t === "disabled") {
       // omit reasoning_effort — upstream has thinking turned off
-    } else if (t === "adaptive") {
-      openai.reasoning_effort =
-        mapAnthropicEffortToOpenAI(anthropic.output_config?.effort) ?? "high";
     } else {
-      // `enabled`, empty/unknown type: prefer output_config.effort, else budget_tokens heuristic
-      const fromConfig = mapAnthropicEffortToOpenAI(anthropic.output_config?.effort);
-      openai.reasoning_effort = fromConfig ?? getThinkLevel(anthropic.thinking.budget_tokens);
+      const resolved = resolveClientEffort(anthropic.output_config?.effort);
+      if (!resolved.specified) {
+        openai.reasoning_effort =
+          t === "adaptive" ? "high" : getThinkLevel(anthropic.thinking.budget_tokens);
+      } else if (resolved.effort) {
+        openai.reasoning_effort = resolved.effort;
+      }
+      // `auto` is specified but has no wire value: omit and keep the upstream default.
     }
   }
 
@@ -345,18 +348,6 @@ export function convertRequestToOpenAI(
     originalPath,
     newPath,
   };
-}
-
-/** Map Anthropic `output_config.effort` to OpenAI `reasoning_effort` (OpenAI has no `max`). */
-function mapAnthropicEffortToOpenAI(effort?: string): string | undefined {
-  if (effort === undefined || effort === "") {
-    return undefined;
-  }
-  const e = effort.toLowerCase();
-  if (e === "max") {
-    return "high";
-  }
-  return e;
 }
 
 /**

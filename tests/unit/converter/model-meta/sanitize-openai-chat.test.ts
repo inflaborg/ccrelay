@@ -52,6 +52,26 @@ describe("sanitizeOpenAiChatRequestRecord", () => {
     }
   });
 
+  it("keeps max on gpt-5.6 and gpt-6, and maps older gpt-5 max to xhigh", () => {
+    for (const model of ["gpt-6-astra", "gpt-5.6-sol", "llm-router:gpt-5.6-terra"]) {
+      const data: Record<string, unknown> = {
+        model,
+        reasoning_effort: "max",
+        messages: [{ role: "user", content: "hi" }],
+      };
+      sanitizeOpenAiChatRequestRecord(data);
+      expect(data.reasoning_effort).toBe("max");
+    }
+
+    const older: Record<string, unknown> = {
+      model: "gpt-5.4",
+      reasoning_effort: "max",
+      messages: [{ role: "user", content: "hi" }],
+    };
+    sanitizeOpenAiChatRequestRecord(older);
+    expect(older.reasoning_effort).toBe("xhigh");
+  });
+
   it("keeps reasoning_effort for gpt-5 when there are no tools", () => {
     const data: Record<string, unknown> = {
       model: "gpt-5.6-terra",

@@ -268,6 +268,26 @@ describe("convertOpenAIRequestToAnthropic", () => {
       expect(request.output_config).toEqual({ effort: "low" });
     });
 
+    it("maps reasoning_effort max and xhigh through, ultracode to xhigh, and auto to no effort", () => {
+      const convert = (effort: string) =>
+        convertOpenAIRequestToAnthropic(
+          {
+            model: "claude-opus-4-7",
+            max_tokens: 1024,
+            messages: [{ role: "user", content: "Hi" }],
+            reasoning_effort: effort,
+          },
+          "/v1/chat/completions"
+        ).request;
+
+      expect(convert("max").thinking).toEqual({ type: "adaptive" });
+      expect(convert("max").output_config).toEqual({ effort: "max" });
+      expect(convert("xhigh").output_config).toEqual({ effort: "xhigh" });
+      expect(convert("ultracode").output_config).toEqual({ effort: "xhigh" });
+      expect(convert("auto").thinking).toEqual({ type: "adaptive" });
+      expect(convert("auto").output_config).toBeUndefined();
+    });
+
     it("maps empty reasoning_effort to adaptive + high effort", () => {
       const { request } = convertOpenAIRequestToAnthropic(
         {
