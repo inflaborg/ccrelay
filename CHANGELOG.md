@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**UI**
+
+- The custom-model quick fill dialog keeps Cancel and Apply visible. Long model lists scroll inside the dialog instead of pushing those buttons off screen.
+
 **Protocol/Conversion**
 
 - ChatGPT and Codex can select max thinking on gpt-5.6 and gpt-6, and that level is forwarded upstream.

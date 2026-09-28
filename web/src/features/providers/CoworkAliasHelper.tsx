@@ -194,101 +194,103 @@ export function CoworkAliasHelper({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[90vh] max-w-lg flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+        <DialogHeader className="shrink-0 space-y-1 px-4 pb-2 pt-4 pr-10 text-left">
           <DialogTitle>{t("providers.modal.coworkHelper")}</DialogTitle>
           <DialogDescription>{t("providers.modal.coworkHelperDesc")}</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-2">
-          {rows.map((row, index) => (
-            <div key={row.id} className="flex items-center gap-1.5">
-              <Input
-                ref={index === rows.length - 1 ? lastRealIdInputRef : undefined}
-                className="h-8 text-xs font-mono flex-1 min-w-0"
-                placeholder={t("providers.modal.coworkHelperRealId")}
-                value={row.realId}
-                onChange={e => updateRow(row.id, { realId: e.target.value })}
-              />
-              <Input
-                className="h-8 text-xs flex-1 min-w-0"
-                placeholder={t("providers.modal.coworkHelperDisplayName")}
-                value={row.displayName}
-                onChange={e => updateRow(row.id, { displayName: e.target.value })}
-                onKeyDown={e => handleDisplayKeyDown(e, index)}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="h-8 w-8 shrink-0"
-                aria-label={t("providers.modal.coworkHelperRemoveRow")}
-                onClick={() => removeOrClearRow(row.id)}
-              >
-                <Minus className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          ))}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-7 text-xs gap-1"
-            onClick={addRow}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {t("providers.modal.coworkHelperAdd")}
-          </Button>
-        </div>
-
-        <div className="space-y-2">
-          <div className="space-y-0.5">
-            <p className="text-xs font-medium">{t("providers.modal.coworkHelperFamilyMaps")}</p>
-            <p className="text-[10px] text-muted-foreground">
-              {t("providers.modal.coworkHelperFamilyMapsDesc")}
-            </p>
-          </div>
-          {CLAUDE_FAMILY_WILDCARDS.map(pattern => (
-            <div key={pattern} className="flex items-center gap-2">
-              <span className="text-xs font-mono shrink-0 w-[8.5rem] text-muted-foreground">
-                {pattern}
-              </span>
-              <div className="flex-1 min-w-0">
-                <SelectField
-                  value={
-                    firstId ? resolveFamilyTarget(familyTargets[pattern], validIds, firstId) : ""
-                  }
-                  options={modelSelectOptions}
-                  onChange={v => updateFamilyTarget(pattern, v)}
-                  placeholder={t("providers.modal.coworkHelperFamilyMapsPlaceholder")}
-                  disabled={!firstId}
-                  className="h-8"
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-2">
+          <div className="space-y-2">
+            {rows.map((row, index) => (
+              <div key={row.id} className="flex items-center gap-1.5">
+                <Input
+                  ref={index === rows.length - 1 ? lastRealIdInputRef : undefined}
+                  className="h-8 text-xs font-mono flex-1 min-w-0"
+                  placeholder={t("providers.modal.coworkHelperRealId")}
+                  value={row.realId}
+                  onChange={e => updateRow(row.id, { realId: e.target.value })}
                 />
+                <Input
+                  className="h-8 text-xs flex-1 min-w-0"
+                  placeholder={t("providers.modal.coworkHelperDisplayName")}
+                  value={row.displayName}
+                  onChange={e => updateRow(row.id, { displayName: e.target.value })}
+                  onKeyDown={e => handleDisplayKeyDown(e, index)}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  aria-label={t("providers.modal.coworkHelperRemoveRow")}
+                  onClick={() => removeOrClearRow(row.id)}
+                >
+                  <Minus className="h-3.5 w-3.5" />
+                </Button>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs gap-1"
+              onClick={addRow}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {t("providers.modal.coworkHelperAdd")}
+            </Button>
+          </div>
 
-        <div className="space-y-1">
-          <p className="text-xs font-medium">{t("providers.modal.coworkHelperPreview")}</p>
-          <div className="rounded-md border bg-muted/30 p-2 text-[10px] font-mono text-muted-foreground whitespace-pre-wrap break-all">
-            {preview ? (
-              <>
-                <span className="text-foreground/80">customModelsList</span>
-                {"\n"}
-                {preview.customModelsList.join("\n")}
-                {"\n\n"}
-                <span className="text-foreground/80">modelMap</span>
-                {"\n"}
-                {preview.modelMap.map(e => `${e.pattern} -> ${e.model}`).join("\n")}
-              </>
-            ) : (
-              "—"
-            )}
+          <div className="space-y-2">
+            <div className="space-y-0.5">
+              <p className="text-xs font-medium">{t("providers.modal.coworkHelperFamilyMaps")}</p>
+              <p className="text-[10px] text-muted-foreground">
+                {t("providers.modal.coworkHelperFamilyMapsDesc")}
+              </p>
+            </div>
+            {CLAUDE_FAMILY_WILDCARDS.map(pattern => (
+              <div key={pattern} className="flex items-center gap-2">
+                <span className="text-xs font-mono shrink-0 w-[8.5rem] text-muted-foreground">
+                  {pattern}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <SelectField
+                    value={
+                      firstId ? resolveFamilyTarget(familyTargets[pattern], validIds, firstId) : ""
+                    }
+                    options={modelSelectOptions}
+                    onChange={v => updateFamilyTarget(pattern, v)}
+                    placeholder={t("providers.modal.coworkHelperFamilyMapsPlaceholder")}
+                    disabled={!firstId}
+                    className="h-8"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-xs font-medium">{t("providers.modal.coworkHelperPreview")}</p>
+            <div className="rounded-md border bg-muted/30 p-2 text-[10px] font-mono text-muted-foreground whitespace-pre-wrap break-all">
+              {preview ? (
+                <>
+                  <span className="text-foreground/80">customModelsList</span>
+                  {"\n"}
+                  {preview.customModelsList.join("\n")}
+                  {"\n\n"}
+                  <span className="text-foreground/80">modelMap</span>
+                  {"\n"}
+                  {preview.modelMap.map(e => `${e.pattern} -> ${e.model}`).join("\n")}
+                </>
+              ) : (
+                "—"
+              )}
+            </div>
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="mx-0 mb-0 shrink-0">
           <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
             {t("common.cancel")}
           </Button>
