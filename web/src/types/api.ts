@@ -315,6 +315,8 @@ export interface ProviderConfig {
 export interface VersionResponse {
   version: string;
   date: string;
+  /** Process that started the server. Absent when core runs without a host app. */
+  host?: "vscode" | "electron" | "tauri";
   features: {
     modelExtraction: boolean;
     logListWithoutBody: boolean;

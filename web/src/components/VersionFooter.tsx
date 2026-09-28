@@ -49,6 +49,7 @@ export function VersionFooter() {
   const { t } = useTranslation();
   const nativeUpdater = typeof window !== "undefined" && window.CCRELAY_NATIVE_UPDATER === true;
   const [version, setVersion] = useState<string | null>(null);
+  const [serverHost, setServerHost] = useState<"vscode" | "electron" | "tauri" | null>(null);
   const [updateChannel, setUpdateChannel] = useState<"prod" | "dev" | null>(
     readInjectedUpdateChannel
   );
@@ -90,7 +91,10 @@ export function VersionFooter() {
   useEffect(() => {
     api
       .getVersion()
-      .then(v => setVersion(v.version))
+      .then(v => {
+        setVersion(v.version);
+        setServerHost(v.host ?? null);
+      })
       .catch(() => {});
   }, []);
 
@@ -199,8 +203,12 @@ export function VersionFooter() {
         ? t("update.channelStable")
         : null;
 
+  const hostLabel = serverHost ? t(`app.footer.host.${serverHost}`) : null;
+
   const versionAndChannel = (
     <>
+      {hostLabel && <span title={t("app.footer.hostHint")}>{hostLabel}</span>}
+      {hostLabel && displayVersion && <span aria-hidden>·</span>}
       {displayVersion && <span>{displayVersion}</span>}
       {channelLabel && (
         <>

@@ -36,6 +36,8 @@ export {
   PACKAGE_VERSION,
 } from "./api/version.generated";
 
+export { setServerHost, type ServerHost } from "./api/version";
+
 export * from "./types";
 
 export {

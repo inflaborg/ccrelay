@@ -79,7 +79,13 @@
   },
   "app": {
     "footer": {
-      "project": "Project CCRelay"
+      "project": "Project CCRelay",
+      "hostHint": "이 서버를 시작한 프로그램",
+      "host": {
+        "vscode": "VS Code",
+        "electron": "Electron",
+        "tauri": "Tauri"
+      }
     }
   },
   "update": {

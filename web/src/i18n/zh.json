@@ -79,7 +79,13 @@
   },
   "app": {
     "footer": {
-      "project": "CCRelay 项目组"
+      "project": "CCRelay 项目组",
+      "hostHint": "启动当前服务的程序",
+      "host": {
+        "vscode": "VS Code",
+        "electron": "Electron",
+        "tauri": "Tauri"
+      }
     }
   },
   "update": {

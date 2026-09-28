@@ -79,7 +79,13 @@
   },
   "app": {
     "footer": {
-      "project": "Project CCRelay"
+      "project": "Project CCRelay",
+      "hostHint": "このサーバーを起動したプログラム",
+      "host": {
+        "vscode": "VS Code",
+        "electron": "Electron",
+        "tauri": "Tauri"
+      }
     }
   },
   "update": {

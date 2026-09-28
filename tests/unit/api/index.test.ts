@@ -108,6 +108,7 @@ class MockServerResponse extends EventEmitter {
 
 afterEach(() => {
   resetProxyServerForApi();
+  versionApi.setServerHost(undefined);
 });
 
 describe("api: isApiRequest", () => {
@@ -640,6 +641,23 @@ describe("api: handleApiRequest specific routes", () => {
     // Version endpoint doesn't require server initialization
     // It should return 200 with version info
     expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as { host?: string };
+    expect(body.host).toBeUndefined();
+  });
+
+  it("reports the process that started the server", () => {
+    versionApi.setServerHost("vscode");
+    const req = new MockIncomingMessage(
+      "/ccrelay/api/version",
+      "GET"
+    ) as unknown as MockIncomingMessage & IncomingMessage;
+    const res = new MockServerResponse() as unknown as MockServerResponse & ServerResponse;
+
+    handleApiRequest(req, res);
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as { host?: string };
+    expect(body.host).toBe("vscode");
   });
 
   it("should handle GET /ccrelay/api/update-check", () => {

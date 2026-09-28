@@ -10,6 +10,7 @@ import {
   LeaderElection,
   Logger,
   ProxyServer,
+  setServerHost,
   loggingDatabaseConfigToDriver,
   setLogDatabaseDriverConfigResolver,
   setWebDistPath,
@@ -79,6 +80,7 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   const serverStart = Date.now();
+  setServerHost("vscode");
   server = new ProxyServer(configManager, leaderElection);
   logger.info(`[Extension:${instanceId}] ProxyServer created in ${Date.now() - serverStart}ms`);
 

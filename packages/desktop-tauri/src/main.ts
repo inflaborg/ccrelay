@@ -21,6 +21,7 @@ import {
   Logger,
   ProxyServer,
   getUiAccessToken,
+  setServerHost,
   loggingDatabaseConfigToDriver,
   setLogDatabaseDriverConfigResolver,
   setWebDistPath,
@@ -123,6 +124,7 @@ async function main(): Promise<void> {
   const leaderElection = new LeaderElection(configManager.port, configManager.host, () =>
     configManager.getApiBearerToken()
   );
+  setServerHost("tauri");
   const server = new ProxyServer(configManager, leaderElection);
 
   Api.setServer(server);
