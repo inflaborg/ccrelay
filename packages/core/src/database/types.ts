@@ -115,6 +115,19 @@ export interface ProviderStatRow {
 /** Sentinel model label when metrics.model is null/empty. */
 export const UNKNOWN_MODEL_LABEL = "(unknown)";
 
+/** One provider alias wire id and the upstream model it meant. */
+export interface ModelAliasUpsert {
+  providerId: string;
+  alias: string;
+  upstreamModelId: string;
+  protocol?: string;
+  displayName?: string;
+  firstSeen: number;
+  lastSeen: number;
+}
+
+export type ModelAliasRecord = ModelAliasUpsert;
+
 /**
  * Per-model row in provider detail breakdown
  */
@@ -299,9 +312,18 @@ export interface DatabaseDriver {
   clearAllLogs(): Promise<void>;
 
   /**
-   * Clear all token / performance metrics (dashboard statistics).
+   * Clear all token / performance metrics (dashboard statistics) and the model-alias registry.
    */
   clearAllMetrics(): Promise<void>;
+
+  /**
+   * Remember provider alias → upstream model bindings. Existing rows are kept;
+   * a repeat of the same triple only extends first_seen / last_seen.
+   */
+  upsertModelAliases(rows: ModelAliasUpsert[]): Promise<void>;
+
+  /** All persisted alias bindings. */
+  listModelAliases(): Promise<ModelAliasRecord[]>;
 
   /**
    * Get database statistics

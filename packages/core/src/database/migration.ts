@@ -21,7 +21,14 @@ import {
   POSTGRES_CREATE_SCHEMA_MIGRATIONS,
   POSTGRES_CREATE_TABLE_METRICS,
   POSTGRES_INDEXES_METRICS,
+  SQLITE_CREATE_TABLE_ALIAS_REGISTRY,
+  POSTGRES_CREATE_TABLE_ALIAS_REGISTRY,
 } from "./schema";
+import {
+  backfillPostgresModelAliases,
+  backfillSqliteModelAliases,
+  backfillSqliteModelAliasesSync,
+} from "./model-alias-registry";
 import { decodeFromStorage, utf8StringToBlob } from "./shared-utils";
 import type { LogDbMigrationChoice } from "./types";
 import { Logger } from "../utils/logger";
@@ -438,6 +445,28 @@ async function runMigrationV6ServiceMetaPostgres(
   }
 }
 
+function runMigrationV7ModelAliasSqlite(ctx: SqliteMigrationContext): void {
+  ctx.exec(SQLITE_CREATE_TABLE_ALIAS_REGISTRY);
+  backfillSqliteModelAliasesSync(ctx.queryAll, ctx.exec);
+}
+
+async function runMigrationV7ModelAliasSqliteAsync(
+  ctx: SqliteMigrationAsyncContext
+): Promise<void> {
+  await ctx.exec(SQLITE_CREATE_TABLE_ALIAS_REGISTRY);
+  await backfillSqliteModelAliases(ctx.queryAll, ctx.exec);
+}
+
+async function runMigrationV7ModelAliasPostgres(
+  query: (sql: string, params?: unknown[]) => Promise<unknown>
+): Promise<void> {
+  await query(POSTGRES_CREATE_TABLE_ALIAS_REGISTRY);
+  await backfillPostgresModelAliases(async (sql, params) => {
+    const result = (await query(sql, params)) as { rows?: Array<Record<string, unknown>> };
+    return result ?? {};
+  });
+}
+
 function sqliteRecordMigration(exec: (sql: string) => void, version: number, name: string): void {
   exec(
     `INSERT OR REPLACE INTO ${MIGRATIONS_TABLE} (version, name, applied_at) VALUES (${version}, '${name}', ${Date.now()})`
@@ -627,6 +656,14 @@ export function runSqliteMigrations(ctx: SqliteMigrationContext): void {
     applied = true;
   }
 
+  if (maxVersion < 7) {
+    logMigration(`Applying v7 model_alias_registry${suffix}`);
+    runMigrationV7ModelAliasSqlite(ctx);
+    sqliteRecordMigration(ctx.exec, 7, "model_alias_registry");
+    logMigration(`v7 model_alias_registry applied${suffix}`);
+    applied = true;
+  }
+
   if (!applied) {
     logMigration(`Schema up to date (version ${maxVersion})${suffix}`);
   } else {
@@ -756,6 +793,16 @@ export async function runSqliteMigrationsAsync(ctx: SqliteMigrationAsyncContext)
       `INSERT OR REPLACE INTO ${MIGRATIONS_TABLE} (version, name, applied_at) VALUES (6, 'service_meta', ${Date.now()})`
     );
     logMigration(`v6 service_meta applied${suffix}`);
+    applied = true;
+  }
+
+  if (maxVersion < 7) {
+    logMigration(`Applying v7 model_alias_registry${suffix}`);
+    await runMigrationV7ModelAliasSqliteAsync(ctx);
+    await ctx.exec(
+      `INSERT OR REPLACE INTO ${MIGRATIONS_TABLE} (version, name, applied_at) VALUES (7, 'model_alias_registry', ${Date.now()})`
+    );
+    logMigration(`v7 model_alias_registry applied${suffix}`);
     applied = true;
   }
 
@@ -906,6 +953,14 @@ export async function runPostgresMigrations(ctx: PostgresMigrationContext): Prom
     await runMigrationV6ServiceMetaPostgres(ctx.query);
     await postgresRecordMigration(ctx.query, 6, "service_meta");
     logMigration(`v6 service_meta applied${suffix}`);
+    applied = true;
+  }
+
+  if (maxVersion < 7) {
+    logMigration(`Applying v7 model_alias_registry${suffix}`);
+    await runMigrationV7ModelAliasPostgres(ctx.query);
+    await postgresRecordMigration(ctx.query, 7, "model_alias_registry");
+    logMigration(`v7 model_alias_registry applied${suffix}`);
     applied = true;
   }
 

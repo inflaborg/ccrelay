@@ -22,6 +22,8 @@ import type {
   DatabaseInitializeOptions,
   LogDbMigrationChoice,
   SqliteDriverConfig,
+  ModelAliasUpsert,
+  ModelAliasRecord,
 } from "../types";
 import { emptyProviderDetailStats } from "../shared-utils";
 
@@ -40,6 +42,8 @@ type WorkerMessageType =
   | "deleteLogs"
   | "clearAllLogs"
   | "clearAllMetrics"
+  | "upsertModelAliases"
+  | "listModelAliases"
   | "getStats"
   | "getProviderStats"
   | "cleanOldLogs"
@@ -412,6 +416,24 @@ export class DatabaseWorkerClient implements DatabaseDriver {
    */
   async clearAllMetrics(): Promise<void> {
     await this.send("clearAllMetrics");
+  }
+
+  async upsertModelAliases(rows: ModelAliasUpsert[]): Promise<void> {
+    if (rows.length === 0) {
+      return;
+    }
+    await this.send("upsertModelAliases", rows);
+  }
+
+  async listModelAliases(): Promise<ModelAliasRecord[]> {
+    try {
+      return await this.send<ModelAliasRecord[]>("listModelAliases");
+    } catch (err) {
+      this.log.warn(
+        `[DatabaseWorker] listModelAliases failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+      return [];
+    }
   }
 
   /**

@@ -9,7 +9,12 @@ import { spawn, execSync, ChildProcess } from "child_process";
 import * as path from "path";
 import * as fsSync from "fs";
 import { Logger } from "../../../utils/logger";
-import { TABLE, METRICS_TABLE } from "../../schema";
+import {
+  TABLE,
+  METRICS_TABLE,
+  ALIAS_REGISTRY_TABLE,
+  SQLITE_UPSERT_ALIAS_REGISTRY,
+} from "../../schema";
 import { runSqliteMigrationsAsync, SQLITE_INSERT_V2 } from "../../migration";
 import {
   shouldTrackMetrics,
@@ -37,6 +42,8 @@ import {
   type StatsQuery,
   type DatabaseInitializeOptions,
   type LogDbMigrationChoice,
+  type ModelAliasRecord,
+  type ModelAliasUpsert,
   UNKNOWN_MODEL_LABEL,
 } from "../../types";
 import {
@@ -51,6 +58,7 @@ import {
   mapProviderDailyStatRow,
   cacheHitRatePercent,
 } from "../../shared-utils";
+import { mapAliasRegistryRow } from "../../model-alias-registry";
 import {
   buildInsertSql,
   CLI_BODY_PREVIEW_HEX,
@@ -1225,7 +1233,36 @@ export class SqliteCliDriver implements DatabaseDriver {
       return;
     }
     await this.writeConn.exec(`DELETE FROM ${METRICS_TABLE}`);
+    await this.writeConn.exec(`DELETE FROM ${ALIAS_REGISTRY_TABLE}`);
     await this.writeConn.exec("VACUUM");
+  }
+
+  async upsertModelAliases(rows: ModelAliasUpsert[]): Promise<void> {
+    if (!this.writeConn?.started || rows.length === 0) {
+      return;
+    }
+    for (const row of rows) {
+      await this.writeConn.exec(SQLITE_UPSERT_ALIAS_REGISTRY, [
+        row.providerId,
+        row.alias,
+        row.upstreamModelId,
+        row.protocol ?? null,
+        row.displayName ?? null,
+        row.firstSeen,
+        row.lastSeen,
+      ]);
+    }
+  }
+
+  async listModelAliases(): Promise<ModelAliasRecord[]> {
+    if (!this.readConn?.started) {
+      return [];
+    }
+    const rows = await this.readConn.query(
+      `SELECT provider_id, alias, upstream_model_id, protocol, display_name, first_seen, last_seen
+       FROM ${ALIAS_REGISTRY_TABLE}`
+    );
+    return rows.map(mapAliasRegistryRow);
   }
 
   async cleanOldLogs(): Promise<void> {

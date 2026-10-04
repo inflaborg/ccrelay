@@ -10,6 +10,8 @@ import type { DatabaseDriver, DatabaseDriverConfig } from "./types";
 import { createDriver } from "./factory";
 import { isSqliteCliUnavailableError } from "./drivers/sqlite";
 import { emptyProviderDetailStats } from "./shared-utils";
+import { applyAliasRegistryToLog, labelProviderModelStats } from "./model-alias-registry";
+import type { ModelAliasRecord, ModelAliasUpsert } from "./types";
 
 export type {
   RequestLog,
@@ -155,14 +157,27 @@ export class LogDatabase {
     if (!this.driver) {
       return { logs: [], total: 0 };
     }
-    return this.driver.queryLogs(filter ?? {});
+    const result = await this.driver.queryLogs(filter ?? {});
+    const aliases = await this.loadAliasRecords();
+    if (aliases.length === 0) {
+      return result;
+    }
+    return {
+      ...result,
+      logs: result.logs.map(log => applyAliasRegistryToLog(log, aliases)),
+    };
   }
 
   /**
    * Get a single log by ID
    */
   async getLogById(id: number) {
-    return this.driver?.getLogById(id) ?? null;
+    const log = (await this.driver?.getLogById(id)) ?? null;
+    if (!log) {
+      return null;
+    }
+    const aliases = await this.loadAliasRecords();
+    return applyAliasRegistryToLog(log, aliases);
   }
 
   /**
@@ -184,6 +199,13 @@ export class LogDatabase {
    */
   async clearAllMetrics(): Promise<void> {
     await this.driver?.clearAllMetrics();
+  }
+
+  async upsertModelAliases(rows: ModelAliasUpsert[]): Promise<void> {
+    if (!this.driver || rows.length === 0) {
+      return;
+    }
+    await this.driver.upsertModelAliases(rows);
   }
 
   /**
@@ -226,7 +248,29 @@ export class LogDatabase {
     if (!this.driver) {
       return emptyProviderDetailStats(providerId);
     }
-    return this.driver.getProviderStats(providerId, query);
+    const stats = await this.driver.getProviderStats(providerId, query);
+    const aliases = await this.loadAliasRecords();
+    if (aliases.length === 0) {
+      return stats;
+    }
+    return {
+      ...stats,
+      modelBreakdown: labelProviderModelStats(providerId, stats.modelBreakdown, aliases),
+    };
+  }
+
+  private async loadAliasRecords(): Promise<ModelAliasRecord[]> {
+    if (!this.driver?.listModelAliases) {
+      return [];
+    }
+    try {
+      return await this.driver.listModelAliases();
+    } catch (err) {
+      this.log.warn(
+        `[LogDatabase] listModelAliases failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+      return [];
+    }
   }
 
   /**
@@ -290,6 +334,11 @@ export function getDatabase(): LogDatabase {
     dbInstance = resolved !== undefined ? new LogDatabase(undefined, resolved) : new LogDatabase();
   }
   return dbInstance;
+}
+
+/** Open database, or null before the leader finishes initializing storage. */
+export function getEnabledDatabase(): LogDatabase | null {
+  return dbInstance?.enabled ? dbInstance : null;
 }
 
 export { loggingDatabaseConfigToDriver } from "./logging-driver-config";

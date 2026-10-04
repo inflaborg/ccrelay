@@ -22,6 +22,7 @@ import type {
   DatabaseDriver,
   DatabaseInitializeOptions,
   LogDbMigrationChoice,
+  ModelAliasUpsert,
 } from "../types";
 
 // Message types
@@ -39,6 +40,8 @@ type WorkerMessageType =
   | "deleteLogs"
   | "clearAllLogs"
   | "clearAllMetrics"
+  | "upsertModelAliases"
+  | "listModelAliases"
   | "getStats"
   | "getProviderStats"
   | "cleanOldLogs"
@@ -194,6 +197,16 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
       case "clearAllMetrics": {
         await driver?.clearAllMetrics();
         return { id, success: true };
+      }
+
+      case "upsertModelAliases": {
+        await driver?.upsertModelAliases(payload as ModelAliasUpsert[]);
+        return { id, success: true };
+      }
+
+      case "listModelAliases": {
+        const aliases = await driver?.listModelAliases();
+        return { id, success: true, data: aliases ?? [] };
       }
 
       case "getStats": {

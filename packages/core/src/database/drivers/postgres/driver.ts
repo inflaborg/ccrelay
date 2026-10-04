@@ -6,7 +6,12 @@
 
 import { Pool, PoolClient } from "pg";
 import { Logger } from "../../../utils/logger";
-import { TABLE, METRICS_TABLE } from "../../schema";
+import {
+  TABLE,
+  METRICS_TABLE,
+  ALIAS_REGISTRY_TABLE,
+  POSTGRES_UPSERT_ALIAS_REGISTRY,
+} from "../../schema";
 import { runPostgresMigrations } from "../../migration";
 import {
   shouldTrackMetrics,
@@ -30,6 +35,8 @@ import {
   type RequestStatus,
   type StatsQuery,
   type DatabaseInitializeOptions,
+  type ModelAliasRecord,
+  type ModelAliasUpsert,
   UNKNOWN_MODEL_LABEL,
 } from "../../types";
 import {
@@ -42,6 +49,7 @@ import {
   mapProviderDailyStatRow,
   cacheHitRatePercent,
 } from "../../shared-utils";
+import { mapAliasRegistryRow } from "../../model-alias-registry";
 
 /**
  * PostgreSQL driver implementation
@@ -585,6 +593,35 @@ export class PostgresDriver implements DatabaseDriver {
       return;
     }
     await this.pool.query(`DELETE FROM ${METRICS_TABLE}`);
+    await this.pool.query(`DELETE FROM ${ALIAS_REGISTRY_TABLE}`);
+  }
+
+  async upsertModelAliases(rows: ModelAliasUpsert[]): Promise<void> {
+    if (!this.pool || rows.length === 0) {
+      return;
+    }
+    for (const row of rows) {
+      await this.pool.query(POSTGRES_UPSERT_ALIAS_REGISTRY, [
+        row.providerId,
+        row.alias,
+        row.upstreamModelId,
+        row.protocol ?? null,
+        row.displayName ?? null,
+        row.firstSeen,
+        row.lastSeen,
+      ]);
+    }
+  }
+
+  async listModelAliases(): Promise<ModelAliasRecord[]> {
+    if (!this.pool) {
+      return [];
+    }
+    const result = await this.pool.query(
+      `SELECT provider_id, alias, upstream_model_id, protocol, display_name, first_seen, last_seen
+       FROM ${ALIAS_REGISTRY_TABLE}`
+    );
+    return (result.rows as Record<string, unknown>[]).map(mapAliasRegistryRow);
   }
 
   /**
