@@ -97,6 +97,23 @@ describe("server: responseLogger token usage extraction", () => {
     });
   });
 
+  it("adds Anthropic cache creation back into total prompt input", () => {
+    const body = JSON.stringify({
+      usage: {
+        input_tokens: 3,
+        output_tokens: 894,
+        cache_read_input_tokens: 100114,
+        cache_creation_input_tokens: 63,
+      },
+    });
+
+    expect(extractTokenUsage(body)).toEqual({
+      inputTokens: 100180,
+      outputTokens: 894,
+      cacheTokens: 100114,
+    });
+  });
+
   it("extracts Anthropic top-level usage as total prompt input", () => {
     const body = JSON.stringify({
       usage: {

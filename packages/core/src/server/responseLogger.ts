@@ -21,6 +21,7 @@ interface UsageRecord {
   input_tokens?: number;
   output_tokens?: number;
   cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
   prompt_tokens?: number;
   completion_tokens?: number;
   effectiveCachedTokens?: number;
@@ -147,9 +148,16 @@ function normalizeTotalInputTokens(usage: UsageRecord): number | undefined {
     return undefined;
   }
 
-  // Anthropic: input_tokens excludes cache; total prompt = input + cache_read.
-  if (typeof usage.cache_read_input_tokens === "number") {
-    return inputRaw + usage.cache_read_input_tokens;
+  // Anthropic: input_tokens excludes cache; total prompt = input + cache read + cache write.
+  if (
+    typeof usage.cache_read_input_tokens === "number" ||
+    typeof usage.cache_creation_input_tokens === "number"
+  ) {
+    const cacheRead =
+      typeof usage.cache_read_input_tokens === "number" ? usage.cache_read_input_tokens : 0;
+    const cacheWrite =
+      typeof usage.cache_creation_input_tokens === "number" ? usage.cache_creation_input_tokens : 0;
+    return inputRaw + cacheRead + cacheWrite;
   }
 
   // Responses and others: input_tokens is already total prompt.

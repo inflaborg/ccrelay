@@ -106,21 +106,40 @@ function buildStructuralContentFromOutput(output: unknown): AnthropicContentBloc
   return blocks;
 }
 
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+/**
+ * Responses `input_tokens` is the total prompt. Anthropic `input_tokens` excludes
+ * cache reads and cache writes, which are reported separately.
+ */
 function mapUsage(u: unknown): AnthropicUsage | undefined {
   const r = asRecord(u);
   if (!r) {
     return undefined;
   }
-  const inTok = r.input_tokens;
-  const outTok = r.output_tokens;
-  if (typeof inTok !== "number" && typeof outTok !== "number") {
+  const inTok = finiteNumber(r.input_tokens);
+  const outTok = finiteNumber(r.output_tokens);
+  if (inTok === undefined && outTok === undefined) {
     return undefined;
   }
-  return {
-    input_tokens: typeof inTok === "number" ? inTok : 0,
-    output_tokens: typeof outTok === "number" ? outTok : 0,
-    cache_read_input_tokens: 0,
+
+  const details = asRecord(r.input_tokens_details);
+  const cacheRead = finiteNumber(details?.cached_tokens) ?? 0;
+  const cacheWrite =
+    finiteNumber(details?.cache_write_tokens) ?? finiteNumber(r.cache_write_tokens) ?? 0;
+  const inputTotal = inTok ?? 0;
+
+  const usage: AnthropicUsage = {
+    input_tokens: Math.max(0, inputTotal - cacheRead - cacheWrite),
+    output_tokens: outTok ?? 0,
+    cache_read_input_tokens: cacheRead,
   };
+  if (cacheWrite > 0) {
+    usage.cache_creation_input_tokens = cacheWrite;
+  }
+  return usage;
 }
 
 /**
