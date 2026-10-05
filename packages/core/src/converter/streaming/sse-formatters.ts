@@ -463,6 +463,9 @@ export function formatAnthropicMessageSse(message: AnthropicMessageResponse): st
         ...(message.usage?.cache_read_input_tokens !== undefined
           ? { cache_read_input_tokens: message.usage.cache_read_input_tokens }
           : {}),
+        ...(message.usage?.cache_creation_input_tokens !== undefined
+          ? { cache_creation_input_tokens: message.usage.cache_creation_input_tokens }
+          : {}),
       },
     },
   });

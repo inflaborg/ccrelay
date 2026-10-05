@@ -55,6 +55,63 @@ describe("convertResponsesApiJsonToAnthropicMessageResponse", () => {
     expect(anth.content).toEqual([{ type: "text", text: "It is sunny." }]);
   });
 
+  it("maps Responses cache read and write into Anthropic usage", () => {
+    const body = {
+      object: "response",
+      id: "resp_cache",
+      model: "gpt-6-sol-1",
+      output: [
+        {
+          type: "message",
+          role: "assistant",
+          content: [{ type: "output_text", text: "ok" }],
+        },
+      ],
+      usage: {
+        input_tokens: 100180,
+        input_tokens_details: {
+          cache_write_tokens: 63,
+          cached_tokens: 100114,
+        },
+        output_tokens: 894,
+        output_tokens_details: { reasoning_tokens: 0 },
+        total_tokens: 101074,
+      },
+    };
+
+    const anth = convertResponsesApiJsonToAnthropicMessageResponse(body, "claude");
+    expect(anth.usage).toEqual({
+      input_tokens: 3,
+      output_tokens: 894,
+      cache_read_input_tokens: 100114,
+      cache_creation_input_tokens: 63,
+    });
+  });
+
+  it("subtracts cached_tokens when the upstream reports no cache write", () => {
+    const body = {
+      object: "response",
+      output: [
+        {
+          type: "message",
+          content: [{ type: "output_text", text: "ok" }],
+        },
+      ],
+      usage: {
+        input_tokens: 1200,
+        output_tokens: 340,
+        input_tokens_details: { cached_tokens: 800 },
+      },
+    };
+
+    const anth = convertResponsesApiJsonToAnthropicMessageResponse(body, "m");
+    expect(anth.usage).toEqual({
+      input_tokens: 400,
+      output_tokens: 340,
+      cache_read_input_tokens: 800,
+    });
+  });
+
   it("returns empty text block when output is missing", () => {
     const anth = convertResponsesApiJsonToAnthropicMessageResponse(
       { object: "response", output: [] },

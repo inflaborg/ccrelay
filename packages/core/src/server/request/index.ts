@@ -13,6 +13,7 @@ import type { RoutingContext, BodyProcessResult } from "./context";
 import { RouterStage } from "./routerStage";
 import { BodyProcessor } from "./bodyProcessor";
 import { SmartRoutingStage, type SmartRoutingStageResult } from "./smartRoutingStage";
+import { buildServiceRequestLogSnapshot } from "./serviceLogSnapshot";
 import { TaskExecutor } from "./taskExecutor";
 import type { ModelCatalog } from "../smartRouting/modelCatalog";
 import { SMART_ROUTING_PROVIDER_ID } from "../smartRouting/virtualProvider";
@@ -34,21 +35,6 @@ function logRoute(routing: RoutingContext, label: "ROUTE" | "SMART_ROUTE"): void
       ` [client:${routing.clientSurface} upstream:${routing.provider.providerType}]` +
       (routing.isOpenAIProvider ? " [OpenAI]" : "")
   );
-}
-
-function buildRawBodyLogSnapshot(
-  rawBody: Buffer,
-  databaseEnabled: boolean
-): Pick<BodyProcessResult, "originalRequestBody" | "requestBodyLog"> {
-  if (!databaseEnabled || rawBody.length === 0) {
-    return { originalRequestBody: undefined, requestBodyLog: undefined };
-  }
-  try {
-    const s = rawBody.toString("utf-8");
-    return { originalRequestBody: s, requestBodyLog: s };
-  } catch {
-    return { originalRequestBody: undefined, requestBodyLog: undefined };
-  }
 }
 
 /**
@@ -229,7 +215,11 @@ export class RequestHandler {
     intercepted: InterceptResult
   ): void {
     const clientId = `req-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
-    const logFields = buildRawBodyLogSnapshot(rawBody, this.database.enabled);
+    const logFields = buildServiceRequestLogSnapshot(
+      rawBody,
+      routing.provider,
+      this.database.enabled
+    );
     const bodyResult: BodyProcessResult = {
       body: rawBody,
       originalModel: undefined,

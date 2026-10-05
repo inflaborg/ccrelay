@@ -4,6 +4,8 @@ import { sortProviderMapKeys } from "../../config/provider-utils";
 import { parseCustomModelLine } from "../../converter/models-fallback";
 import { minimatch } from "../../utils/helpers";
 import { ScopedLogger } from "../../utils/logger";
+import { getEnabledDatabase } from "../../database";
+import { catalogSourcesToAliasUpserts } from "../../database/model-alias-registry";
 import { buildPublicModelId, computeCanonicalAliasHash, looksLikeAliasWireId } from "./aliasHash";
 import { fetchProviderModels, type FetchProviderModelsError } from "./fetchProviderModels";
 
@@ -90,6 +92,39 @@ export class ModelCatalog {
       await this.fetchUpstreamForProvider(provider, true);
     }
     this.rebuildCatalog();
+  }
+
+  /**
+   * Write the current catalog's alias hashes into the historical registry.
+   * No-op until the leader database is open. Does not delete aliases that left the catalog.
+   */
+  async persistAliasRegistry(): Promise<void> {
+    const db = getEnabledDatabase();
+    if (!db) {
+      return;
+    }
+    const seenAt = Date.now();
+    const rows = catalogSourcesToAliasUpserts(
+      this.entries.map(entry => ({
+        providerId: entry.providerId,
+        aliasHash: entry.aliasHash,
+        legacyAlias: entry.legacyAlias,
+        upstreamModelId: entry.upstreamModelId,
+        protocol: entry.protocol,
+        displayName: entry.displayName,
+      })),
+      seenAt
+    );
+    if (rows.length === 0) {
+      return;
+    }
+    try {
+      await db.upsertModelAliases(rows);
+    } catch (err) {
+      log.warn(
+        `[catalog] failed to persist model aliases: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
   }
 
   /** Entries visible to clients (include/exclude filters applied). */
@@ -401,6 +436,8 @@ export class ModelCatalog {
         }
       }
     }
+
+    void this.persistAliasRegistry();
   }
 
   private applyIncludeFilter(entries: SmartRoutingCatalogEntry[]): SmartRoutingCatalogEntry[] {

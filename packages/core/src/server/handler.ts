@@ -208,6 +208,7 @@ export class ProxyServer {
     );
     const dbStart = Date.now();
     await this.database.initialize(true, logsEnabled);
+    await this.modelCatalog.persistAliasRegistry();
     this.log.info(
       `[Server:${this.instanceId}] Database initialized in ${Date.now() - dbStart}ms. available=${this.database.enabled}, logsEnabled=${this.database.logsEnabled}`
     );
