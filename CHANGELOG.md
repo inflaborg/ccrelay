@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+**Desktop**
+
+- The macOS installer window shows the CCRelay name and a drag-to-Applications hint.
+
 ## [0.3.4] - 2026-09-28 (pre-release)
 
 Pre-release line for 0.3.4.

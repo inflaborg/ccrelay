@@ -1,0 +1,62 @@
+<svg width="550" height="360" viewBox="0 0 550 360" xmlns="http://www.w3.org/2000/svg">
+  <!--
+    CCRelay DMG installer window background (1x logical size).
+    Height is 360 so Finder can show a status bar without a scrollbar.
+    Icon centers (electron-builder dmg.contents): app (140, 200), Applications (410, 200).
+    Icon size 80.
+    Regenerate packaging/background.tiff with scripts/generate-dmg-background.sh.
+  -->
+  <defs>
+    <linearGradient id="page" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F8F5FB"/>
+      <stop offset="0.48" stop-color="#F4F1F8"/>
+      <stop offset="1" stop-color="#F2F4F6"/>
+    </linearGradient>
+    <radialGradient id="blobTL" cx="0.12" cy="0.16" r="0.55">
+      <stop offset="0" stop-color="#9B59B6" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#9B59B6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="blobBR" cx="0.9" cy="0.86" r="0.5">
+      <stop offset="0" stop-color="#2C3E50" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#2C3E50" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="blobTR" cx="0.82" cy="0.08" r="0.36">
+      <stop offset="0" stop-color="#D7BDE2" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#D7BDE2" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="arrowGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#9B59B6" stop-opacity="0"/>
+      <stop offset="0.28" stop-color="#A569BD"/>
+      <stop offset="0.72" stop-color="#8E44AD"/>
+      <stop offset="1" stop-color="#7D3C98"/>
+    </linearGradient>
+    <filter id="softBlur" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="28"/>
+    </filter>
+  </defs>
+
+  <rect width="550" height="360" fill="url(#page)"/>
+  <rect width="550" height="360" fill="url(#blobTL)" filter="url(#softBlur)"/>
+  <rect width="550" height="360" fill="url(#blobBR)" filter="url(#softBlur)"/>
+  <rect width="550" height="360" fill="url(#blobTR)" filter="url(#softBlur)"/>
+
+  <text x="275" y="52"
+        text-anchor="middle"
+        font-family="Helvetica Neue, Helvetica, Arial, sans-serif"
+        font-size="26"
+        font-weight="700">
+    <tspan fill="#8E44AD">CC</tspan><tspan fill="#2C3E50">Relay</tspan>
+  </text>
+  <text x="275" y="82"
+        text-anchor="middle"
+        font-family="Helvetica Neue, Helvetica, Arial, sans-serif"
+        font-size="13"
+        font-weight="400"
+        fill="#6B7280">Drag to Applications to install</text>
+
+  <!-- Arrow between icon centers (140, 200) and (410, 200). -->
+  <g transform="translate(275 198)">
+    <rect x="-58" y="-5" width="86" height="10" rx="5" fill="url(#arrowGrad)"/>
+    <path d="M 22 -16 L 58 0 L 22 16 Z" fill="#8E44AD"/>
+  </g>
+</svg>
