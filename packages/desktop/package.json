@@ -82,6 +82,29 @@
       "entitlementsInherit": "packaging/entitlements.mac.inherit.plist",
       "notarize": true
     },
+    "dmg": {
+      "background": "packaging/background.tiff",
+      "iconSize": 80,
+      "contents": [
+        {
+          "x": 140,
+          "y": 200,
+          "type": "file"
+        },
+        {
+          "x": 410,
+          "y": 200,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "window": {
+        "x": 400,
+        "y": 100,
+        "width": 550,
+        "height": 360
+      }
+    },
     "win": {
       "target": [
         "nsis"
