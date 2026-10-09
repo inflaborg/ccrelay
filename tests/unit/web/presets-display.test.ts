@@ -27,7 +27,7 @@ describe("upstreamModelIdToDisplayName", () => {
 
   it("formats DeepSeek model ids", () => {
     expect(upstreamModelIdToDisplayName("deepseek-v4-pro")).toBe("DeepSeek V4 Pro");
-    expect(upstreamModelIdToDisplayName("deepseek-v4-flash")).toBe("DeepSeek V4 Flash");
+    expect(upstreamModelIdToDisplayName("deepseek-v4.1-flash")).toBe("DeepSeek V4.1 Flash");
   });
 
   it("formats LongCat model ids", () => {

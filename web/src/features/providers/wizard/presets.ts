@@ -311,7 +311,7 @@ const PARTNER_PRESETS_LIST: PartnerPreset[] = [
     mode: "inject",
     idPrefix: "minimax",
     namePrefix: "MiniMax",
-    defaultModelIds: ["MiniMax-M2.7"],
+    defaultModelIds: ["MiniMax-M3", "MiniMax-M2.7", "MiniMax-M2.5"],
     defaultCustomModels: true,
     options: [
       {
@@ -432,7 +432,7 @@ const PARTNER_PRESETS_LIST: PartnerPreset[] = [
     mode: "inject",
     idPrefix: "deepseek",
     namePrefix: "DeepSeek",
-    defaultModelIds: ["deepseek-v4-pro", "deepseek-v4-flash"],
+    defaultModelIds: ["deepseek-v4-pro", "deepseek-v4.1-flash"],
     defaultCustomModels: true,
     fixedBaseUrl: "https://api.deepseek.com/v1",
     options: [],
