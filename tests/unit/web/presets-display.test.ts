@@ -40,7 +40,7 @@ describe("defaultModelIdsAsText", () => {
     const p = getPresetById("glm");
     expect(p).toBeDefined();
     const text = defaultModelIdsAsText(p!);
-    expect(text).toBe("glm-5.1;GLM 5.1\nglm-5-turbo;GLM 5 Turbo\nglm-4.7;GLM 4.7");
+    expect(text).toBe("glm-5.3;GLM 5.3\nglm-5.3-flash;GLM 5.3 Flash");
   });
 
   it("expands LongCat preset with explicit display name", () => {

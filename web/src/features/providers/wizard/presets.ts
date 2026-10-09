@@ -157,7 +157,7 @@ const PARTNER_PRESETS_LIST: PartnerPreset[] = [
     mode: "inject",
     idPrefix: "glm",
     namePrefix: "GLM",
-    defaultModelIds: ["glm-5.1", "glm-5-turbo", "glm-4.7"],
+    defaultModelIds: ["glm-5.3", "glm-5.3-flash"],
     defaultCustomModels: true,
     options: [
       {
@@ -224,7 +224,7 @@ const PARTNER_PRESETS_LIST: PartnerPreset[] = [
     mode: "inject",
     idPrefix: "mimo",
     namePrefix: "MiMo",
-    defaultModelIds: ["mimo-v2.5-pro", "mimo-v2.5"],
+    defaultModelIds: ["mimo-v2.6-pro", "mimo-v2.6-flash"],
     defaultCustomModels: true,
     authHeader: "authorization",
     authHeaderWhen: { optionKey: "tokenPlan", equals: true },
