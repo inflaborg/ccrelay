@@ -157,7 +157,7 @@ const PARTNER_PRESETS_LIST: PartnerPreset[] = [
     mode: "inject",
     idPrefix: "glm",
     namePrefix: "GLM",
-    defaultModelIds: ["glm-5.1", "glm-5-turbo", "glm-4.7"],
+    defaultModelIds: ["glm-5.3", "glm-5.3-flash"],
     defaultCustomModels: true,
     options: [
       {
@@ -224,7 +224,7 @@ const PARTNER_PRESETS_LIST: PartnerPreset[] = [
     mode: "inject",
     idPrefix: "mimo",
     namePrefix: "MiMo",
-    defaultModelIds: ["mimo-v2.5-pro", "mimo-v2.5"],
+    defaultModelIds: ["mimo-v2.6-pro", "mimo-v2.6-flash"],
     defaultCustomModels: true,
     authHeader: "authorization",
     authHeaderWhen: { optionKey: "tokenPlan", equals: true },
@@ -311,7 +311,7 @@ const PARTNER_PRESETS_LIST: PartnerPreset[] = [
     mode: "inject",
     idPrefix: "minimax",
     namePrefix: "MiniMax",
-    defaultModelIds: ["MiniMax-M2.7"],
+    defaultModelIds: ["MiniMax-M3", "MiniMax-M2.7", "MiniMax-M2.5"],
     defaultCustomModels: true,
     options: [
       {
@@ -364,7 +364,7 @@ const PARTNER_PRESETS_LIST: PartnerPreset[] = [
     mode: "inject",
     idPrefix: "gemini",
     namePrefix: "Gemini-OpenAI",
-    defaultModelIds: ["gemini-3.1-pro-preview", "gemini-3-flash-preview"],
+    defaultModelIds: ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.1-pro-preview"],
     defaultCustomModels: true,
     fixedBaseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
     options: [],
@@ -432,7 +432,7 @@ const PARTNER_PRESETS_LIST: PartnerPreset[] = [
     mode: "inject",
     idPrefix: "deepseek",
     namePrefix: "DeepSeek",
-    defaultModelIds: ["deepseek-v4-pro", "deepseek-v4-flash"],
+    defaultModelIds: ["deepseek-v4-pro", "deepseek-v4.1-flash"],
     defaultCustomModels: true,
     fixedBaseUrl: "https://api.deepseek.com/v1",
     options: [],

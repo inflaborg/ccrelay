@@ -88,9 +88,8 @@ describe("buildModelConfig", () => {
     expect(c.useCustomModelsList).toBe(true);
     if (c.useCustomModelsList) {
       expect(c.customModelsList).toEqual([
-        `glm-5.1;GLM 5.1;${alias("glm-5.1")}`,
-        `glm-5-turbo;GLM 5 Turbo;${alias("glm-5-turbo")}`,
-        `glm-4.7;GLM 4.7;${alias("glm-4.7")}`,
+        `glm-5.3;GLM 5.3;${alias("glm-5.3")}`,
+        `glm-5.3-flash;GLM 5.3 Flash;${alias("glm-5.3-flash")}`,
       ]);
     }
   });

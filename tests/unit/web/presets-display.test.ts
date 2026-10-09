@@ -27,7 +27,7 @@ describe("upstreamModelIdToDisplayName", () => {
 
   it("formats DeepSeek model ids", () => {
     expect(upstreamModelIdToDisplayName("deepseek-v4-pro")).toBe("DeepSeek V4 Pro");
-    expect(upstreamModelIdToDisplayName("deepseek-v4-flash")).toBe("DeepSeek V4 Flash");
+    expect(upstreamModelIdToDisplayName("deepseek-v4.1-flash")).toBe("DeepSeek V4.1 Flash");
   });
 
   it("formats LongCat model ids", () => {
@@ -40,7 +40,7 @@ describe("defaultModelIdsAsText", () => {
     const p = getPresetById("glm");
     expect(p).toBeDefined();
     const text = defaultModelIdsAsText(p!);
-    expect(text).toBe("glm-5.1;GLM 5.1\nglm-5-turbo;GLM 5 Turbo\nglm-4.7;GLM 4.7");
+    expect(text).toBe("glm-5.3;GLM 5.3\nglm-5.3-flash;GLM 5.3 Flash");
   });
 
   it("expands LongCat preset with explicit display name", () => {
