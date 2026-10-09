@@ -364,7 +364,7 @@ const PARTNER_PRESETS_LIST: PartnerPreset[] = [
     mode: "inject",
     idPrefix: "gemini",
     namePrefix: "Gemini-OpenAI",
-    defaultModelIds: ["gemini-3.1-pro-preview", "gemini-3-flash-preview"],
+    defaultModelIds: ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.1-pro-preview"],
     defaultCustomModels: true,
     fixedBaseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
     options: [],
