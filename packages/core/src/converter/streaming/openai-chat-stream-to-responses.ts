@@ -8,6 +8,7 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 
 import { randomUUID } from "crypto";
+import { StringDecoder } from "string_decoder";
 
 import type { ResponsesRequestEcho } from "../../types";
 import { mergedResponseShellEcho } from "../adapters/openai-responses-to-chat";
@@ -272,9 +273,11 @@ export function createSseLineBuffer(callback: (line: string) => void): {
   flush(): void;
 } {
   let buffer = "";
+  // TCP chunks can split a multi-byte UTF-8 character; the decoder carries partial bytes over.
+  const decoder = new StringDecoder("utf8");
   return {
     feed(chunk: Buffer | string) {
-      const raw = typeof chunk === "string" ? chunk : chunk.toString("utf-8");
+      const raw = typeof chunk === "string" ? chunk : decoder.write(chunk);
       buffer += raw;
       const lines = buffer.split("\n");
       // Last element is either empty (line ended with \n) or a partial line
@@ -287,6 +290,7 @@ export function createSseLineBuffer(callback: (line: string) => void): {
       }
     },
     flush() {
+      buffer += decoder.end();
       const trimmed = buffer.trim();
       if (trimmed.length > 0) {
         callback(trimmed);

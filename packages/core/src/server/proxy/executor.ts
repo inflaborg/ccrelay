@@ -48,6 +48,12 @@ import {
   createAnthropicSseEnvelopeBuffer,
   processAnthropicStreamEnvelope,
   flushAnthropicToOpenAISseFinal,
+  createOpenAIChatToAnthropicSseState,
+  processOpenAIChatSseChunkToAnthropic,
+  flushOpenAIChatToAnthropicSse,
+  aggregateOpenAiChatSseToCompletion,
+  extractResponsesObjectFromSse,
+  parseSseDataPayloads,
   type OpenAIChatCompletionResponse,
 } from "../../converter";
 import {
@@ -58,6 +64,7 @@ import {
   parseAnthropicSseRows,
   serializeAnthropicSseRows,
   platformBuffersChatContentForToolParse,
+  platformRequiresBufferedChatResponse,
 } from "../../converter/platform-transforms";
 import type { ApiSurface } from "../../types";
 import { DEFAULT_UPSTREAM_TIMEOUT_SECONDS } from "../../config/defaults";
@@ -100,6 +107,80 @@ function headersForResponsesSse(
   // writeHead replaces earlier setCorsHeaders — keep browser/Electron Chat readable.
   applyClientCorsHeaders(out);
   return out;
+}
+
+/** Upstream headers with Content-Type forced to JSON (the upstream may have answered with SSE). */
+function headersForJsonBody(
+  base: Record<string, string | string[]>
+): Record<string, string | string[]> {
+  const out: Record<string, string | string[]> = {};
+  for (const [k, v] of Object.entries(base)) {
+    if (k.toLowerCase() !== "content-type") {
+      out[k] = v;
+    }
+  }
+  out["content-type"] = "application/json";
+  return out;
+}
+
+/** Message of the first `error` payload in a buffered SSE body, if any. */
+function firstSseErrorMessage(body: string): string | undefined {
+  for (const payload of parseSseDataPayloads(body)) {
+    const err = payload.error;
+    if (typeof err === "string") {
+      return err;
+    }
+    if (err && typeof err === "object") {
+      const msg = (err as Record<string, unknown>).message;
+      return typeof msg === "string" ? msg : JSON.stringify(err);
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Buffered upstream Chat body → `chat.completion`. Accepts plain JSON and SSE (full completion
+ * in a `data:` line or `chat.completion.chunk` deltas) since some upstreams ignore `stream: false`.
+ */
+function parseBufferedChatCompletion(body: string): OpenAIChatCompletionResponse {
+  if (body.trimStart().startsWith("{")) {
+    try {
+      return JSON.parse(body) as OpenAIChatCompletionResponse;
+    } catch {
+      /* fall through to SSE parsing */
+    }
+  }
+  const aggregated = aggregateOpenAiChatSseToCompletion(body);
+  if (aggregated) {
+    return aggregated;
+  }
+  const upstreamError = firstSseErrorMessage(body);
+  throw new Error(
+    upstreamError
+      ? `Upstream stream error: ${upstreamError}`
+      : "Upstream body is neither a chat.completion JSON nor a Chat SSE stream"
+  );
+}
+
+/** Buffered upstream Responses body (JSON or SSE) → final Responses API object. */
+function parseBufferedResponsesObject(body: string): Record<string, unknown> {
+  if (body.trimStart().startsWith("{")) {
+    try {
+      return JSON.parse(body) as Record<string, unknown>;
+    } catch {
+      /* fall through to SSE parsing */
+    }
+  }
+  const extracted = extractResponsesObjectFromSse(body);
+  if (extracted) {
+    return extracted;
+  }
+  const upstreamError = firstSseErrorMessage(body);
+  throw new Error(
+    upstreamError
+      ? `Upstream stream error: ${upstreamError}`
+      : "Upstream body has no completed Responses API object"
+  );
 }
 
 // Headers to exclude when forwarding response
@@ -714,19 +795,32 @@ export class ProxyExecutor {
     applyClientCorsHeaders(responseHeaders);
     ctx.responseHeadersMasked = maskHeadersForLog(responseHeaders);
 
-    const isJsonResponse = proxyRes.headers["content-type"]?.includes("application/json");
+    const contentType = String(proxyRes.headers["content-type"] ?? "").toLowerCase();
+    const isJsonResponse = contentType.includes("application/json");
+    const isSSEResponse = contentType.includes("text/event-stream");
 
     /** Do not route through chat completion / Responses JSON converters — use buffered handlers + GET /models list conversion. */
     const skipStructuredChatJsonConverters =
       task.method === "GET" &&
       (isModelsListUpstreamPath(task.requestPath) || isModelDetailUpstreamPath(task.requestPath));
 
+    // A 200 SSE body is aggregated by the buffered converters unless the client asked for a
+    // stream we can relay live (handled by the true-streaming branches below).
+    const responsesClientWantsLiveStream = Boolean(task.responsesStreamRequested && clientRes);
+    const anthropicClientWantsLiveChatStream =
+      Boolean(task.streamRequested && clientRes) &&
+      task.upstreamResponseFormat !== "responses" &&
+      !platformRequiresBufferedChatResponse(provider.baseUrl, {
+        openaiCompat: provider.openaiCompat,
+      });
+
     if (
       !skipStructuredChatJsonConverters &&
       clientSurface === "openai_responses" &&
       upstreamWire === "openai" &&
       status === 200 &&
-      isJsonResponse
+      (isJsonResponse ||
+        (needsResponseConversion && isSSEResponse && !responsesClientWantsLiveStream))
     ) {
       this.handleOpenAIChatJsonToResponsesForClient(
         proxyRes,
@@ -742,11 +836,10 @@ export class ProxyExecutor {
     }
 
     // Responses→Chat true SSE streaming: upstream returned SSE with stream=true
-    const isSSEResponseEarly = proxyRes.headers["content-type"]?.includes("text/event-stream");
     if (
       clientSurface === "openai_responses" &&
       upstreamWire === "openai" &&
-      isSSEResponseEarly &&
+      isSSEResponse &&
       task.responsesStreamRequested &&
       clientRes
     ) {
@@ -795,6 +888,29 @@ export class ProxyExecutor {
       return;
     }
 
+    // Chat→Anthropic true SSE streaming: upstream kept stream=true for an Anthropic client.
+    if (
+      !skipStructuredChatJsonConverters &&
+      needsResponseConversion &&
+      upstreamWire === "openai" &&
+      clientSurface === "anthropic" &&
+      status === 200 &&
+      isSSEResponse &&
+      anthropicClientWantsLiveChatStream
+    ) {
+      this.handleOpenAISseToAnthropicSse(
+        proxyRes,
+        task,
+        ctx,
+        onClientDisconnect,
+        status,
+        responseHeaders,
+        originalModel,
+        resolve
+      );
+      return;
+    }
+
     if (
       !skipStructuredChatJsonConverters &&
       needsResponseConversion &&
@@ -802,7 +918,7 @@ export class ProxyExecutor {
       clientSurface === "anthropic" &&
       task.upstreamResponseFormat === "responses" &&
       status === 200 &&
-      isJsonResponse
+      (isJsonResponse || isSSEResponse)
     ) {
       this.handleResponsesJsonToAnthropicResponse(
         proxyRes,
@@ -821,8 +937,9 @@ export class ProxyExecutor {
       !skipStructuredChatJsonConverters &&
       needsResponseConversion &&
       upstreamWire === "openai" &&
+      clientSurface === "anthropic" &&
       status === 200 &&
-      isJsonResponse
+      (isJsonResponse || isSSEResponse)
     ) {
       this.handleOpenAIJsonToAnthropicResponse(
         proxyRes,
@@ -856,8 +973,6 @@ export class ProxyExecutor {
       );
       return;
     }
-
-    const isSSEResponse = proxyRes.headers["content-type"]?.includes("text/event-stream");
 
     // Anthropic upstream SSE → OpenAI Chat Completions SSE or Responses API SSE (true streaming).
     if (needsResponseConversion && upstreamWire === "anthropic" && isSSEResponse && clientRes) {
@@ -1074,6 +1189,115 @@ export class ProxyExecutor {
       if (!ctx.clientDisconnected && !clientRes.writableEnded) {
         clientRes.end();
       }
+    });
+
+    clientRes.on("error", () => {
+      proxyRes.destroy();
+    });
+  }
+
+  /** OpenAI Chat upstream SSE → client Anthropic Messages SSE (true streaming). */
+  private handleOpenAISseToAnthropicSse(
+    proxyRes: http.IncomingMessage,
+    task: RequestTask,
+    ctx: ExecutionContext,
+    onClientDisconnect: () => void,
+    status: number,
+    responseHeaders: Record<string, string | string[]>,
+    originalModel: string | undefined,
+    resolve: (value: ProxyResult) => void
+  ): void {
+    const { clientId, provider, res: clientRes } = task;
+    if (!clientRes) {
+      resolve({
+        statusCode: 500,
+        headers: {},
+        duration: Date.now() - ctx.startTime,
+        errorMessage: "Missing client response for Chat SSE conversion",
+      });
+      return;
+    }
+
+    const sseHeaders = headersForResponsesSse(responseHeaders);
+    log.info(`[Chat->A SSE] ${clientId}: OpenAI chunks → Anthropic events (${provider.id})`);
+    clientRes.writeHead(status, sseHeaders);
+
+    const state = createOpenAIChatToAnthropicSseState(originalModel ?? task.originalModel ?? "");
+    const upstreamLog: Buffer[] = [];
+
+    const writeEvents = (events: string[]): void => {
+      for (const event of events) {
+        if (!ctx.clientDisconnected) {
+          this.writeClientStreamForLog(clientRes, event, ctx);
+        }
+      }
+    };
+
+    const lineBuffer = createSseLineBuffer(line => {
+      if (!line.startsWith("data:")) {
+        return;
+      }
+      writeEvents(processOpenAIChatSseChunkToAnthropic(state, line.slice(5).trim()));
+    });
+
+    proxyRes.on("data", (chunk: Buffer) => {
+      if (!ctx.upstreamTerminalSeen && chunkContainsTerminalMarker(chunk)) {
+        ctx.upstreamTerminalSeen = true;
+      }
+      this.recordUpstreamChunkForLog(chunk, upstreamLog, ctx);
+      lineBuffer.feed(chunk);
+    });
+
+    proxyRes.on("end", () => {
+      ctx.upstreamEndedNaturally = true;
+      lineBuffer.flush();
+      writeEvents(flushOpenAIChatToAnthropicSse(state));
+      if (!ctx.clientDisconnected) {
+        clientRes.end();
+      }
+
+      clientRes.off("close", onClientDisconnect);
+      const aborted = ctx.clientDisconnected && !ctx.upstreamEndedNaturally;
+      task.streamCompleted = !aborted;
+      ctx.streamCompleted = task.streamCompleted;
+      const duration = Date.now() - ctx.startTime;
+      const errorMessage = aborted ? "Client disconnected" : state.errorMessage;
+      this.responseLogger.logResponse(
+        clientId,
+        duration,
+        aborted ? 499 : status,
+        ctx.responseChunks,
+        errorMessage,
+        this.upstreamLogBody(upstreamLog),
+        ttfbForStreamLog(ctx, true),
+        undefined,
+        ctx.responseHeadersMasked,
+        computeTiming(ctx, task)
+      );
+      resolve({
+        statusCode: aborted ? 499 : status,
+        headers: sseHeaders,
+        duration,
+        streamed: true,
+        streamCompleted: task.streamCompleted,
+        errorMessage,
+      });
+    });
+
+    proxyRes.on("error", err => {
+      log.error(`[Chat->A SSE] upstream error ${provider.id}`, err);
+      clientRes.off("close", onClientDisconnect);
+      if (ctx.upstreamTimedOut || ctx.clientDisconnected || clientRes.writableEnded) {
+        return;
+      }
+      if (!state.finished) {
+        this.writeClientStreamForLog(
+          clientRes,
+          formatAnthropicSseError(502, `Upstream stream error: ${err.message}`, "api_error"),
+          ctx
+        );
+      }
+      clientRes.end();
     });
 
     clientRes.on("error", () => {
@@ -1343,20 +1567,21 @@ export class ProxyExecutor {
   ): void {
     const { clientId, provider, res: clientRes } = task;
 
-    let responseBody = "";
+    const bodyChunks: Buffer[] = [];
     proxyRes.on("data", (chunk: Buffer) => {
-      responseBody += chunk.toString();
+      bodyChunks.push(chunk);
     });
 
     proxyRes.on("end", () => {
       if (clientRes) {
         clientRes.off("close", onClientDisconnect);
       }
+      const responseBody = Buffer.concat(bodyChunks).toString("utf-8");
       ctx.originalResponseBody = responseBody;
       const duration = Date.now() - ctx.startTime;
 
       try {
-        const openaiResponse = JSON.parse(responseBody) as OpenAIChatCompletionResponse;
+        const openaiResponse = parseBufferedChatCompletion(responseBody);
         applyPlatformChatResponseSanitize(
           openaiResponse as unknown as Record<string, unknown>,
           provider.baseUrl,
@@ -1420,7 +1645,7 @@ export class ProxyExecutor {
 
         resolve({
           statusCode: status,
-          headers: responseHeaders,
+          headers: headersForJsonBody(responseHeaders),
           body: JSON.stringify(anthropicResponse),
           duration,
           responseBodyChunks: ctx.responseChunks,
@@ -1481,20 +1706,21 @@ export class ProxyExecutor {
   ): void {
     const { clientId, provider, res: clientRes } = task;
 
-    let responseBody = "";
+    const bodyChunks: Buffer[] = [];
     proxyRes.on("data", (chunk: Buffer) => {
-      responseBody += chunk.toString();
+      bodyChunks.push(chunk);
     });
 
     proxyRes.on("end", () => {
       if (clientRes) {
         clientRes.off("close", onClientDisconnect);
       }
+      const responseBody = Buffer.concat(bodyChunks).toString("utf-8");
       ctx.originalResponseBody = responseBody;
       const duration = Date.now() - ctx.startTime;
 
       try {
-        const parsed = JSON.parse(responseBody) as Record<string, unknown>;
+        const parsed = parseBufferedResponsesObject(responseBody);
         if (!isOpenAIResponsesApiResultBody(parsed)) {
           throw new Error("Response is not a valid Responses API JSON object");
         }
@@ -1556,7 +1782,7 @@ export class ProxyExecutor {
 
         resolve({
           statusCode: status,
-          headers: responseHeaders,
+          headers: headersForJsonBody(responseHeaders),
           body: JSON.stringify(anthropicResponse),
           duration,
           responseBodyChunks: ctx.responseChunks,
@@ -1734,37 +1960,19 @@ export class ProxyExecutor {
     resolve: (value: ProxyResult) => void
   ): void {
     const { clientId, provider, res: clientRes, responsesStreamRequested } = task;
-    let responseBody = "";
+    const bodyChunks: Buffer[] = [];
     proxyRes.on("data", (chunk: Buffer) => {
-      responseBody += chunk.toString();
+      bodyChunks.push(chunk);
     });
     proxyRes.on("end", () => {
       if (clientRes) {
         clientRes.off("close", onClientDisconnect);
       }
+      const responseBody = Buffer.concat(bodyChunks).toString("utf-8");
       ctx.originalResponseBody = responseBody;
       const duration = Date.now() - ctx.startTime;
       try {
-        // Some upstream providers ignore stream=false and return SSE even when
-        // Content-Type is application/json. Detect and extract the final JSON payload.
-        let jsonBody = responseBody;
-        if (responseBody.startsWith("data:")) {
-          const dataLines = responseBody
-            .split("\n")
-            .map(line => line.trim())
-            .filter(
-              line => line.startsWith("data:") && line !== "data: [DONE]" && line !== "data:[DONE]"
-            );
-          if (dataLines.length > 0) {
-            const lastLine = dataLines[dataLines.length - 1];
-            jsonBody = lastLine.slice("data:".length).trim();
-            log.info(
-              `[Chat->Responses] Detected SSE in JSON response for ${provider.id}; ` +
-                `extracted last data chunk from ${dataLines.length} SSE lines`
-            );
-          }
-        }
-        const openaiResponse = JSON.parse(jsonBody) as OpenAIChatCompletionResponse;
+        const openaiResponse = parseBufferedChatCompletion(responseBody);
         applyPlatformChatResponseSanitize(
           openaiResponse as unknown as Record<string, unknown>,
           provider.baseUrl,
@@ -1818,7 +2026,7 @@ export class ProxyExecutor {
           );
           resolve({
             statusCode: status,
-            headers: responseHeaders,
+            headers: headersForJsonBody(responseHeaders),
             body: outJson,
             duration,
             responseBodyChunks: ctx.responseChunks,

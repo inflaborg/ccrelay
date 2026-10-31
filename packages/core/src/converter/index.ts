@@ -177,6 +177,19 @@ export {
 } from "./streaming/openai-chat-stream-to-responses";
 
 export {
+  createOpenAIChatToAnthropicSseState,
+  processOpenAIChatSseChunkToAnthropic,
+  flushOpenAIChatToAnthropicSse,
+  type OpenAIChatToAnthropicSseState,
+} from "./streaming/openai-chat-sse-to-anthropic";
+
+export {
+  aggregateOpenAiChatSseToCompletion,
+  extractResponsesObjectFromSse,
+  parseSseDataPayloads,
+} from "./streaming/openai-chat-sse-aggregate";
+
+export {
   assignOpenAiChatMaxOutput,
   ensureOpenAiChatStreamUsageIncluded,
   normalizeOpenAiChatMaxOutputFields,

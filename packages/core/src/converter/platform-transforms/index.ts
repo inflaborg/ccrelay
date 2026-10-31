@@ -287,6 +287,21 @@ export function platformBuffersChatContentForToolParse(
 }
 
 /**
+ * True when the platform must see the complete Chat completion before converting it to Anthropic
+ * (inbound sanitize or response transforms), so Anthropic clients cannot be streamed live.
+ */
+export function platformRequiresBufferedChatResponse(
+  baseUrl: string,
+  options?: PlatformMatchOptions
+): boolean {
+  if (platformBuffersChatContentForToolParse(baseUrl, options)) {
+    return true;
+  }
+  const rule = matchPlatformResponseRule(baseUrl, options);
+  return Boolean(rule?.responses && RESPONSE_TRANSFORM_REGISTRY[rule.responses]);
+}
+
+/**
  * Inject provider-specific inbound blocks into Anthropic `content` built from upstream Chat completion JSON.
  */
 export function applyPlatformResponseTransforms(
