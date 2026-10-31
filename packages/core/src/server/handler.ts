@@ -104,6 +104,7 @@ export class ProxyServer {
     // Initialize proxy executor (executeFn set after construction for retry support)
     this.proxyExecutor = new ProxyExecutor(this.responseLogger);
     this.proxyExecutor.setModelCatalog(this.modelCatalog);
+    this.proxyExecutor.setUpstreamTimeoutProvider(() => this.config.upstreamTimeoutMs);
 
     // Initialize queue manager (executor set after construction to avoid circular dependency)
     this.queueManager = new QueueManager(config);

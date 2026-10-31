@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildConcurrencyConfig, buildRouteQueues } from "@/config/builders/concurrency";
+import {
+  buildConcurrencyConfig,
+  buildRouteQueues,
+  resolveUpstreamTimeoutSeconds,
+} from "@/config/builders/concurrency";
 
 describe("buildConcurrencyConfig", () => {
   it("returns undefined when concurrency is missing", () => {
@@ -17,8 +21,21 @@ describe("buildConcurrencyConfig", () => {
       maxWorkers: 5,
       maxQueueSize: undefined,
       requestTimeout: undefined,
+      upstreamTimeout: 600,
       retry429: { enabled: false, maxRetries: 3, delayMs: 1000 },
     });
+  });
+
+  it("resolves upstreamTimeout independently of the queue toggle", () => {
+    expect(resolveUpstreamTimeoutSeconds(undefined)).toBe(600);
+    expect(resolveUpstreamTimeoutSeconds({ enabled: false, maxWorkers: 3 })).toBe(600);
+    expect(
+      resolveUpstreamTimeoutSeconds({ enabled: false, maxWorkers: 3, upstreamTimeout: 0 })
+    ).toBe(0);
+    expect(
+      buildConcurrencyConfig({ enabled: true, maxWorkers: 3, upstreamTimeout: 120 })
+        ?.upstreamTimeout
+    ).toBe(120);
   });
 
   it("honors explicit retry429", () => {

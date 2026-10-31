@@ -591,6 +591,7 @@ export interface ConcurrencySettings {
   maxWorkers: number;
   maxQueueSize?: number;
   requestTimeout?: number;
+  upstreamTimeout?: number;
   retry429?: {
     enabled: boolean;
     maxRetries: number;

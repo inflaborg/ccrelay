@@ -879,7 +879,8 @@
       "enable": "同時実行マネージャを有効化",
       "maxWorkers": "最大ワーカー数",
       "maxQueueSize": "最大キューサイズ",
-      "requestTimeout": "リクエストタイムアウト（秒、0 = 制限なし）",
+      "requestTimeout": "キュー待機タイムアウト（秒、0 = 制限なし）",
+      "upstreamTimeout": "アップストリーム無通信タイムアウト（秒、0 = 無効）",
       "retry429": {
         "title": "429 で再試行",
         "enable": "429 再試行を有効化",

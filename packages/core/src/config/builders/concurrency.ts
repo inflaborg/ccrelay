@@ -5,6 +5,7 @@ import type {
   RouteQueueConfig,
   RouteQueueConfigInput,
 } from "../../types";
+import { DEFAULT_UPSTREAM_TIMEOUT_SECONDS } from "../defaults";
 
 export function buildConcurrencyConfig(
   mergedConcurrency: ConcurrencyConfigInput | undefined
@@ -33,8 +34,20 @@ export function buildConcurrencyConfig(
     maxWorkers: mergedConcurrency.maxWorkers || 3,
     maxQueueSize: mergedConcurrency.maxQueueSize,
     requestTimeout: mergedConcurrency.requestTimeout,
+    upstreamTimeout: resolveUpstreamTimeoutSeconds(mergedConcurrency),
     retry429,
   };
+}
+
+/** `concurrency.upstreamTimeout` in seconds; applies even when the queue is disabled. */
+export function resolveUpstreamTimeoutSeconds(
+  mergedConcurrency: ConcurrencyConfigInput | undefined
+): number {
+  const v = mergedConcurrency?.upstreamTimeout;
+  if (typeof v === "number" && Number.isFinite(v) && v >= 0) {
+    return v;
+  }
+  return DEFAULT_UPSTREAM_TIMEOUT_SECONDS;
 }
 
 export function buildRouteQueues(

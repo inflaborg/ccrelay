@@ -879,7 +879,8 @@
       "enable": "Enable concurrency manager",
       "maxWorkers": "Max workers",
       "maxQueueSize": "Max queue size",
-      "requestTimeout": "Request timeout (s, 0 = no limit)",
+      "requestTimeout": "Queue wait timeout (s, 0 = no limit)",
+      "upstreamTimeout": "Upstream idle timeout (s, 0 = off)",
       "retry429": {
         "title": "Retry on 429",
         "enable": "Enable 429 retry",

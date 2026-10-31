@@ -60,6 +60,7 @@ import {
   platformBuffersChatContentForToolParse,
 } from "../../converter/platform-transforms";
 import type { ApiSurface } from "../../types";
+import { DEFAULT_UPSTREAM_TIMEOUT_SECONDS } from "../../config/defaults";
 import type { RequestTask, ProxyResult } from "../../types";
 import type { ResponseLogger } from "../responseLogger";
 import type { LogResponseTiming } from "../../database/types";
@@ -168,6 +169,38 @@ interface ExecutionContext {
   upstreamTerminalSeen?: boolean;
   /** Chat->Responses SSE handler finished writing normally */
   streamCompleted?: boolean;
+  /** Upstream socket idle timeout applied to this attempt (ms); 0 = disabled. */
+  upstreamTimeoutMs: number;
+  /** Set once the upstream idle timeout fired; later abort/error events must not re-resolve. */
+  upstreamTimedOut?: boolean;
+}
+
+/** Client-protocol error frame for an upstream failure after SSE headers were already sent. */
+function formatClientSseError(
+  surface: ApiSurface | undefined,
+  status: number,
+  message: string,
+  code: string
+): string {
+  if (surface === "anthropic") {
+    return formatAnthropicSseError(status, message, "api_error");
+  }
+  if (surface === "openai_responses") {
+    return formatOpenAIResponsesSseError(status, message, code);
+  }
+  return formatOpenAIChatSseError(status, message, code);
+}
+
+/** Client-protocol JSON error body for an upstream failure before any response bytes were sent. */
+function formatClientJsonError(
+  surface: ApiSurface | undefined,
+  message: string,
+  code: string
+): string {
+  if (surface === "anthropic") {
+    return JSON.stringify({ type: "error", error: { type: "api_error", message } });
+  }
+  return JSON.stringify({ error: { message, type: "server_error", code } });
 }
 
 /** TTFB for DB logs: only when the response was incrementally streamed (not buffered/synthetic). */
@@ -229,11 +262,17 @@ function chunkContainsTerminalMarker(chunk: Buffer): boolean {
 export class ProxyExecutor {
   private executeFn: ((task: RequestTask) => Promise<ProxyResult>) | null = null;
   private modelCatalog: ModelCatalog | null = null;
+  private getUpstreamTimeoutMs: () => number = () => DEFAULT_UPSTREAM_TIMEOUT_SECONDS * 1000;
 
   constructor(private responseLogger: ResponseLogger) {}
 
   setModelCatalog(catalog: ModelCatalog): void {
     this.modelCatalog = catalog;
+  }
+
+  /** Read per request so config hot reload applies to the next upstream call. 0 disables. */
+  setUpstreamTimeoutProvider(getter: () => number): void {
+    this.getUpstreamTimeoutMs = getter;
   }
 
   /** Write converted SSE to the client and mirror into `ctx.responseChunks` when capture is on. */
@@ -525,8 +564,7 @@ export class ProxyExecutor {
       }
     }
 
-    // Use task's abortController if provided by ConcurrencyManager (queue mode),
-    // otherwise create a local AbortController (non-queue mode)
+    // Aborted on client disconnect or upstream idle timeout.
     const abortController = task.abortController ?? new AbortController();
     const abortSignal = abortController.signal;
 
@@ -551,6 +589,7 @@ export class ProxyExecutor {
       captureResponse: this.responseLogger.shouldCaptureResponse(method, task.requestPath),
       originalResponseBody: undefined,
       clientDisconnected: false,
+      upstreamTimeoutMs: Math.max(0, this.getUpstreamTimeoutMs()),
     };
 
     // Track client disconnect during streaming.
@@ -605,9 +644,9 @@ export class ProxyExecutor {
         reject
       );
 
-      // Explicitly disable upstream socket idle-timeout. Some runtimes (e.g. Electron)
-      // inherit a ~5s default; LLM upstream TTFB can exceed that. Rely on client disconnect + abortSignal.
-      proxyReq.setTimeout(0);
+      // Always set explicitly: some runtimes (e.g. Electron) inherit a ~5s socket default, far
+      // below LLM time-to-first-byte. Socket idle covers both TTFB and mid-stream stalls.
+      proxyReq.setTimeout(ctx.upstreamTimeoutMs);
 
       if (body) {
         proxyReq.write(body);
@@ -2671,6 +2710,10 @@ export class ProxyExecutor {
         clientRes.off("close", onClientDisconnect);
       }
 
+      if (ctx.upstreamTimedOut) {
+        return;
+      }
+
       // Check if aborted by client disconnect
       if (abortSignal.aborted) {
         // The upstream had already streamed its terminal SSE event before the client closed —
@@ -2765,29 +2808,94 @@ export class ProxyExecutor {
     });
 
     proxyReq.on("timeout", () => {
+      if (ctx.upstreamTimedOut || ctx.clientDisconnected) {
+        return;
+      }
+      ctx.upstreamTimedOut = true;
       const duration = Date.now() - ctx.startTime;
-      log.error(`Proxy timeout to ${provider.id} (${duration}ms)`);
+      const idleSeconds = Math.round(ctx.upstreamTimeoutMs / 1000);
+      const message = `Upstream idle timeout: no data from ${provider.id} for ${idleSeconds}s`;
+      log.error(`[${clientId}] ${message} (elapsed ${duration}ms)`);
 
-      // Clean up client disconnect listener
       if (clientRes) {
         clientRes.off("close", onClientDisconnect);
       }
 
-      // Abort the request
       abortController.abort();
+      resolve(this.finishWithUpstreamTimeout(task, ctx, message, duration));
+    });
+  }
+
+  /**
+   * Upstream went silent past `concurrency.upstreamTimeout`. Before any client bytes: 504 JSON in
+   * the client protocol. Mid-stream: append a protocol error frame and end the client stream.
+   */
+  private finishWithUpstreamTimeout(
+    task: RequestTask,
+    ctx: ExecutionContext,
+    message: string,
+    duration: number
+  ): ProxyResult {
+    const { clientId, res: clientRes, clientSurface } = task;
+    const status = 504;
+    const code = "upstream_timeout";
+
+    if (clientRes && clientRes.headersSent) {
+      const contentType = String(clientRes.getHeader("content-type") ?? "");
+      if (!clientRes.writableEnded) {
+        if (/text\/event-stream/i.test(contentType)) {
+          this.writeClientStreamForLog(
+            clientRes,
+            formatClientSseError(clientSurface, status, message, code),
+            ctx
+          );
+        }
+        clientRes.end();
+      }
       this.responseLogger.logResponse(
         clientId,
         duration,
-        0,
+        status,
         ctx.responseChunks,
-        "Timeout",
+        message,
         undefined,
+        ttfbForStreamLog(ctx, true),
         undefined,
-        undefined,
-        undefined,
+        ctx.responseHeadersMasked,
         computeTiming(ctx, task)
       );
-      reject(new Error("Proxy timeout"));
-    });
+      return {
+        statusCode: status,
+        headers: {},
+        duration,
+        streamed: true,
+        streamCompleted: false,
+        responseBodyChunks: ctx.responseChunks,
+        errorMessage: message,
+      };
+    }
+
+    const body = formatClientJsonError(clientSurface, message, code);
+    const chunks = [Buffer.from(body, "utf-8")];
+    this.responseLogger.logResponse(
+      clientId,
+      duration,
+      status,
+      chunks,
+      message,
+      undefined,
+      undefined,
+      undefined,
+      ctx.responseHeadersMasked,
+      computeTiming(ctx, task)
+    );
+    return {
+      statusCode: status,
+      headers: { "content-type": "application/json" },
+      body,
+      duration,
+      responseBodyChunks: chunks,
+      errorMessage: message,
+    };
   }
 }

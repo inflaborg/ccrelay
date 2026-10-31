@@ -23,7 +23,12 @@ import {
   type DatabaseConfig,
   type WebSearchGlobalConfig,
 } from "../types";
-import { CONFIG_VERSION, DEFAULT_CONFIG_YAML, getDefaultConfig } from "./defaults";
+import {
+  CONFIG_VERSION,
+  DEFAULT_CONFIG_YAML,
+  DEFAULT_UPSTREAM_TIMEOUT_SECONDS,
+  getDefaultConfig,
+} from "./defaults";
 import { expandEnvVarsInObject } from "./env";
 import { deepMerge, mergeFileConfigWithDefaults, omitNullDeep } from "./merge";
 import { parseProvider, sortProviderMapKeys, resolveProviderKeyInMap } from "./provider-utils";
@@ -35,7 +40,11 @@ import {
   prepareConfigUpgrade025,
 } from "./migration";
 import { buildRoutingFromMerged } from "./builders/routing";
-import { buildConcurrencyConfig, buildRouteQueues } from "./builders/concurrency";
+import {
+  buildConcurrencyConfig,
+  buildRouteQueues,
+  resolveUpstreamTimeoutSeconds,
+} from "./builders/concurrency";
 import { buildDatabaseConfig } from "./builders/database";
 import { buildWebSearchConfig } from "./builders/web-search";
 import { buildSmartRoutingConfig } from "./builders/smart-routing";
@@ -426,6 +435,7 @@ export class ConfigManager {
       routing,
       concurrency,
       routeQueues,
+      upstreamTimeout: resolveUpstreamTimeoutSeconds(merged.concurrency),
       logging: {
         storeBodies: resolveLoggingStoreBodies(merged.logging),
         database,
@@ -527,6 +537,12 @@ export class ConfigManager {
 
   get routeQueues(): RouteQueueConfig[] | undefined {
     return this.config.routeQueues;
+  }
+
+  /** Upstream idle timeout in milliseconds; 0 = disabled. */
+  get upstreamTimeoutMs(): number {
+    const seconds = this.config.upstreamTimeout ?? DEFAULT_UPSTREAM_TIMEOUT_SECONDS;
+    return Math.round(seconds * 1000);
   }
 
   get database(): DatabaseConfig | undefined {

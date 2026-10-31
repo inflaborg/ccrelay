@@ -879,7 +879,8 @@
       "enable": "동시 실행 관리자 사용",
       "maxWorkers": "최대 워커",
       "maxQueueSize": "최대 대기열 크기",
-      "requestTimeout": "요청 제한 시간 (초, 0 = 제한 없음)",
+      "requestTimeout": "대기열 대기 제한 시간 (초, 0 = 제한 없음)",
+      "upstreamTimeout": "업스트림 유휴 제한 시간 (초, 0 = 끄기)",
       "retry429": {
         "title": "429 재시도",
         "enable": "429 재시도 사용",

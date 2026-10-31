@@ -174,6 +174,8 @@ export const ConcurrencyConfigSchema = z.object({
   maxWorkers: z.number().int().positive().default(3),
   maxQueueSize: z.number().int().nonnegative().optional(),
   requestTimeout: z.number().nonnegative().optional(), // Queue wait timeout in seconds (supports fractions)
+  /** Upstream idle timeout in seconds (no bytes received); 0 disables. Applies with or without the queue. */
+  upstreamTimeout: z.number().nonnegative().optional(),
   retry429: Retry429ConfigSchema.optional(),
   routes: z.array(RouteQueueConfigSchema).optional(),
 });
@@ -497,6 +499,8 @@ export interface RouterConfig {
   };
   concurrency?: ConcurrencyConfig;
   routeQueues?: RouteQueueConfig[]; // Route-based queue configurations
+  /** Upstream socket idle timeout in seconds (`concurrency.upstreamTimeout`); 0 = disabled. */
+  upstreamTimeout?: number;
   logging: {
     /** Effective body-storage flag (resolved from storeBodies / enabled). */
     storeBodies: boolean;
@@ -765,6 +769,7 @@ export interface ConcurrencyConfig {
   maxWorkers: number;
   maxQueueSize?: number;
   requestTimeout?: number; // Queue wait timeout in seconds
+  upstreamTimeout?: number; // Upstream idle timeout in seconds (0 = disabled)
   retry429?: Retry429Config;
 }
 
