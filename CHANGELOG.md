@@ -7,11 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Fixes for a gateway that kept its port open but stopped answering ([#152](https://github.com/inflaborg/ccrelay/issues/152)). Stalled upstreams now time out, OpenAI-compatible streams reach Claude clients as real streams, and the log database stays bounded.
+
+### Added
+
+**Config**
+
+- `concurrency.upstreamTimeout` (default 600 seconds) aborts a request when the upstream sends nothing for that long, before or during the response. The setting is also in the Settings page.
+- `logging.retention` limits stored logs by age (30 days), count (10,000), and SQLite file size (256 MB). `logging.maxBodyBytes` caps each stored body at 1 MB by default.
+
+**UI**
+
+- The status and queue APIs report event-loop lag. The dashboard queue card shows a warning badge when the gateway is blocked, and task tooltips show the provider and path.
+
 ### Changed
 
 **Desktop**
 
 - The macOS installer window shows the CCRelay name and a drag-to-Applications hint.
+
+**Server**
+
+- `concurrency.requestTimeout` only limits time spent waiting in the queue. Use `upstreamTimeout` to bound slow upstreams.
+- A leader whose health check is briefly slow keeps serving; it gives up the port only after three failed checks in a row. If the port is held by an unresponsive process, VS Code and the desktop app show an error naming its PID.
+
+### Fixed
+
+**Protocol/Conversion**
+
+- Claude clients on OpenAI-compatible providers no longer get an error event wrapped around a successful streamed reply. Streaming requests are now streamed end to end, except on providers that need the full response first.
+- Multi-byte characters split across stream chunks are no longer corrupted.
+
+**Logs**
+
+- The SQLite log file no longer grows without limit. Old rows are removed hourly, deleted space is reclaimed in the background, and the write-ahead log is kept small. Clearing logs no longer blocks the gateway.
 
 ## [0.3.4] - 2026-09-28 (pre-release)
 

@@ -134,7 +134,7 @@ Claude Code は次のリクエストから新しいプロバイダーを使い�
 | 実行場所             | お使いのコンピュータ上。プロキシはデフォルトで `127.0.0.1` を待ち受けます。                                                          |
 | 外向きの通信         | リクエストは設定したプロバイダーへ送られます。Tavily または Parallel へは、ウェブ検索を有効にした場合のみ接続します。更新確認は GitHub Releases を使います。 |
 | テレメトリ           | ありません。                                                                                                                         |
-| リクエストログ       | リクエストとレスポンスのボディは、ログで確認できるようデフォルトで `~/.ccrelay/logs.db` に保存されます。                             |
+| リクエストログ       | リクエストとレスポンスのボディは、ログで確認できるようデフォルトで `~/.ccrelay/logs.db` に保存されます。30 日、10,000 件、または 256 MB を超えた古いログは削除されます。 |
 | ログをオフにする     | `logging.storeBodies: false` を設定するか、設定でオフにします。トークンと速度の統計は別途保持されます。                              |
 | データを削除する     | ログタブの **すべて消去** は保存されたボディを削除します。ダッシュボードの **統計をリセット** は使用量の数値を削除します。            |
 | API キー             | `~/.ccrelay/config.yaml` に保存されます。ファイルにキーを書かないようにするには `${ENV_VAR}` を使います。ログに出るヘッダーではキーはマスクされます。 |
@@ -574,7 +574,8 @@ CCRelay は `~/.ccrelay/config.yaml` を使います（初回起動時に自動�
 | `concurrency.enabled`        | `true`     | リクエストキューを有効にする         |
 | `concurrency.maxWorkers`     | `3`        | 同時リクエストの最大数               |
 | `concurrency.maxQueueSize`   | `100`      | キューに入れられる最大数（0 = 無制限） |
-| `concurrency.requestTimeout` | `0`        | キューのタイムアウト（秒。0 = 無制限） |
+| `concurrency.requestTimeout` | `0` | 空きワーカーを待ってキューにいられる最大秒数。超えると 503 を返します（0 = 無制限） |
+| `concurrency.upstreamTimeout` | `600` | 上流がレスポンス前または途中でこの秒数データを送らないと中断し、504 を返します（0 = オフ） |
 | `concurrency.routes`         | `[]`       | ルートごとのキュー設定（`pattern` 単位） |
 
 ### ログ
@@ -582,9 +583,15 @@ CCRelay は `~/.ccrelay/config.yaml` を使います（初回起動時に自動�
 | 設定                     | デフォルト | 説明                                                                                             |
 | ------------------------ | ---------- | ------------------------------------------------------------------------------------------------ |
 | `logging.storeBodies`    | `true`     | ログタブにリクエスト／レスポンスのボディを保存します。トークンと性能指標は別に記録されます       |
+| `logging.maxBodyBytes` | `1048576` | ボディごとの最大保存バイト数。超えた分はマーカー付きで切り詰めます（0 = 無制限） |
+| `logging.retention.maxAgeDays` | `30` | この日数より古いログを削除します（0 = 保持） |
+| `logging.retention.maxRows` | `10000` | 保持するログの最大件数（0 = 無制限） |
+| `logging.retention.maxSizeMB` | `256` | SQLite のみ：データベースがこのサイズを超える間、最も古いログを削除します（0 = 無制限） |
 | `logging.database.type`  | `"sqlite"` | `"sqlite"` または `"postgres"`                                                                   |
 
 `logging.enabled` は非推奨です。`storeBodies` が未設定の場合、フォールバックとして `enabled` が使われます。
+
+保持ルールは起動の約 1 分後に適用され、その後は 1 時間ごとに実行されます。SQLite ファイルはクリーンアップ後にバックグラウンドで縮小されます。
 
 **SQLite:**
 
@@ -726,9 +733,15 @@ concurrency:
   maxWorkers: 3
   maxQueueSize: 100
   requestTimeout: 0
+  upstreamTimeout: 600
 
 logging:
   storeBodies: true
+  maxBodyBytes: 1048576
+  retention:
+    maxAgeDays: 30
+    maxRows: 10000
+    maxSizeMB: 256
   database:
     type: "sqlite"
     path: ""
@@ -742,13 +755,13 @@ logging:
 
 | エンドポイント                  | メソッド   | 説明                           |
 | ------------------------------- | ---------- | ------------------------------ |
-| `/ccrelay/api/status`           | GET        | プロキシの状態                 |
+| `/ccrelay/api/status`           | GET        | プロキシの状態とイベントループ遅延 |
 | `/ccrelay/api/providers`        | GET        | プロバイダーの一覧             |
 | `/ccrelay/api/switch/{id}`      | GET        | プロバイダーへ切り替え         |
 | `/ccrelay/api/switch`           | POST       | プロバイダーを切り替え（JSON ボディ） |
 | `/ccrelay/api/providers/export` | POST       | ID でプロバイダーをエクスポート |
 | `/ccrelay/api/providers/import` | POST       | プロバイダーをインポート（ID でマージ） |
-| `/ccrelay/api/queue`            | GET        | キューの統計                   |
+| `/ccrelay/api/queue`            | GET        | キューの統計とイベントループ遅延 |
 | `/ccrelay/api/logs`             | GET        | リクエストログ                 |
 | `/ccrelay/api/config`           | GET, PATCH | 設定の節を読み書き             |
 | `/ccrelay/ws`                   | WebSocket  | Follower の同期                |

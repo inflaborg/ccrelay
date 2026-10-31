@@ -134,7 +134,7 @@ Claude Code는 다음 요청부터 새 제공자를 사용합니다. Codex CLI�
 | 실행 위치        | 사용자 컴퓨터에서 실행됩니다. 프록시는 기본적으로 `127.0.0.1`에서 수신합니다.                                                        |
 | 아웃바운드 트래픽 | 요청은 구성한 제공자로 갑니다. Tavily 또는 Parallel에는 웹 검색을 켠 경우에만 접속합니다. 업데이트 확인은 GitHub Releases를 사용합니다. |
 | 텔레메트리       | 없습니다.                                                                                                                            |
-| 요청 로그        | 요청과 응답 본문은 로그에서 볼 수 있도록 기본적으로 `~/.ccrelay/logs.db`에 저장됩니다.                                               |
+| 요청 로그        | 요청과 응답 본문은 로그에서 볼 수 있도록 기본적으로 `~/.ccrelay/logs.db`에 저장됩니다. 30일, 10,000건 또는 256 MB를 넘는 오래된 로그는 삭제됩니다. |
 | 로그 끄기        | `logging.storeBodies: false`로 설정하거나 설정에서 끕니다. 토큰과 속도 통계는 따로 유지됩니다.                                       |
 | 데이터 삭제      | 로그 탭의 **모두 지우기**는 저장된 본문을 지웁니다. 대시보드의 **통계 초기화**는 사용량 숫자를 지웁니다.                             |
 | API 키           | `~/.ccrelay/config.yaml`에 저장됩니다. 파일에 키를 넣지 않으려면 `${ENV_VAR}`를 사용합니다. 로그에 남는 헤더에서는 키가 가려집니다.  |
@@ -574,7 +574,8 @@ CCRelay는 `~/.ccrelay/config.yaml`을 사용합니다(첫 실행 시 자동 생
 | `concurrency.enabled`        | `true` | 요청 대기열 사용                  |
 | `concurrency.maxWorkers`     | `3`    | 동시 요청 최대 수                 |
 | `concurrency.maxQueueSize`   | `100`  | 대기열 최대 수(0 = 제한 없음)     |
-| `concurrency.requestTimeout` | `0`    | 대기열 시간 제한(초, 0 = 제한 없음) |
+| `concurrency.requestTimeout` | `0` | 요청이 빈 워커를 기다리며 대기열에 머물 수 있는 최대 초. 넘으면 503을 반환합니다(0 = 제한 없음) |
+| `concurrency.upstreamTimeout` | `600` | 업스트림이 응답 전이나 도중에 이 초 동안 데이터를 보내지 않으면 중단하고 504를 반환합니다(0 = 끔) |
 | `concurrency.routes`         | `[]`   | 경로별 대기열 구성(`pattern` 기준) |
 
 ### 로깅
@@ -582,9 +583,15 @@ CCRelay는 `~/.ccrelay/config.yaml`을 사용합니다(첫 실행 시 자동 생
 | 설정                     | 기본값     | 설명                                                                                         |
 | ------------------------ | ---------- | -------------------------------------------------------------------------------------------- |
 | `logging.storeBodies`    | `true`     | 로그 탭에 요청/응답 본문을 저장합니다. 토큰과 성능 지표는 따로 기록됩니다                    |
+| `logging.maxBodyBytes` | `1048576` | 본문당 최대 저장 바이트. 넘는 부분은 표시와 함께 잘립니다(0 = 제한 없음) |
+| `logging.retention.maxAgeDays` | `30` | 이 일수보다 오래된 로그를 삭제합니다(0 = 유지) |
+| `logging.retention.maxRows` | `10000` | 보관할 최대 로그 수(0 = 제한 없음) |
+| `logging.retention.maxSizeMB` | `256` | SQLite 전용: 데이터베이스가 이 크기를 넘는 동안 가장 오래된 로그를 삭제합니다(0 = 제한 없음) |
 | `logging.database.type`  | `"sqlite"` | `"sqlite"` 또는 `"postgres"`                                                                 |
 
 `logging.enabled`는 더 이상 쓰이지 않습니다. `storeBodies`가 설정되지 않으면 `enabled`가 폴백으로 사용됩니다.
+
+보관 규칙은 시작 약 1분 뒤 적용되고 이후 1시간마다 실행됩니다. SQLite 파일은 정리 후 백그라운드에서 줄어듭니다.
 
 **SQLite:**
 
@@ -726,9 +733,15 @@ concurrency:
   maxWorkers: 3
   maxQueueSize: 100
   requestTimeout: 0
+  upstreamTimeout: 600
 
 logging:
   storeBodies: true
+  maxBodyBytes: 1048576
+  retention:
+    maxAgeDays: 30
+    maxRows: 10000
+    maxSizeMB: 256
   database:
     type: "sqlite"
     path: ""
@@ -742,13 +755,13 @@ logging:
 
 | 엔드포인트                      | 메서드     | 설명                           |
 | ------------------------------- | ---------- | ------------------------------ |
-| `/ccrelay/api/status`           | GET        | 프록시 상태                    |
+| `/ccrelay/api/status`           | GET        | 프록시 상태와 이벤트 루프 지연 |
 | `/ccrelay/api/providers`        | GET        | 제공자 목록                    |
 | `/ccrelay/api/switch/{id}`      | GET        | 제공자로 전환                  |
 | `/ccrelay/api/switch`           | POST       | 제공자 전환(JSON 본문)         |
 | `/ccrelay/api/providers/export` | POST       | ID로 제공자 내보내기           |
 | `/ccrelay/api/providers/import` | POST       | 제공자 가져오기(ID로 병합)     |
-| `/ccrelay/api/queue`            | GET        | 대기열 통계                    |
+| `/ccrelay/api/queue`            | GET        | 대기열 통계와 이벤트 루프 지연 |
 | `/ccrelay/api/logs`             | GET        | 요청 로그                      |
 | `/ccrelay/api/config`           | GET, PATCH | 구성 절 읽기/쓰기              |
 | `/ccrelay/ws`                   | WebSocket  | Follower 동기화                |
