@@ -23,7 +23,13 @@ import {
   type DatabaseConfig,
   type WebSearchGlobalConfig,
 } from "../types";
-import { CONFIG_VERSION, DEFAULT_CONFIG_YAML, getDefaultConfig } from "./defaults";
+import type { LogRetentionPolicy } from "../database/types";
+import {
+  CONFIG_VERSION,
+  DEFAULT_CONFIG_YAML,
+  DEFAULT_UPSTREAM_TIMEOUT_SECONDS,
+  getDefaultConfig,
+} from "./defaults";
 import { expandEnvVarsInObject } from "./env";
 import { deepMerge, mergeFileConfigWithDefaults, omitNullDeep } from "./merge";
 import { parseProvider, sortProviderMapKeys, resolveProviderKeyInMap } from "./provider-utils";
@@ -35,12 +41,16 @@ import {
   prepareConfigUpgrade025,
 } from "./migration";
 import { buildRoutingFromMerged } from "./builders/routing";
-import { buildConcurrencyConfig, buildRouteQueues } from "./builders/concurrency";
+import {
+  buildConcurrencyConfig,
+  buildRouteQueues,
+  resolveUpstreamTimeoutSeconds,
+} from "./builders/concurrency";
 import { buildDatabaseConfig } from "./builders/database";
 import { buildWebSearchConfig } from "./builders/web-search";
 import { buildSmartRoutingConfig } from "./builders/smart-routing";
 import { buildClientVersionDetectionConfig } from "./builders/client-version-detection";
-import { resolveLoggingStoreBodies } from "./logging";
+import { resolveLoggingStoreBodies, resolveLogRetention, resolveLogMaxBodyBytes } from "./logging";
 
 export { getDefaultRoutingSettings } from "./defaults";
 export { resolveLoggingStoreBodies, DEFAULT_LOGGING_STORE_BODIES } from "./logging";
@@ -426,9 +436,12 @@ export class ConfigManager {
       routing,
       concurrency,
       routeQueues,
+      upstreamTimeout: resolveUpstreamTimeoutSeconds(merged.concurrency),
       logging: {
         storeBodies: resolveLoggingStoreBodies(merged.logging),
         database,
+        retention: resolveLogRetention(merged.logging),
+        maxBodyBytes: resolveLogMaxBodyBytes(merged.logging),
       },
       locale: merged.server?.locale,
       webSearch: webSearchConfig,
@@ -529,12 +542,26 @@ export class ConfigManager {
     return this.config.routeQueues;
   }
 
+  /** Upstream idle timeout in milliseconds; 0 = disabled. */
+  get upstreamTimeoutMs(): number {
+    const seconds = this.config.upstreamTimeout ?? DEFAULT_UPSTREAM_TIMEOUT_SECONDS;
+    return Math.round(seconds * 1000);
+  }
+
   get database(): DatabaseConfig | undefined {
     return this.config.logging.database;
   }
 
   get enableLogStorage(): boolean {
     return this.config.logging.storeBodies;
+  }
+
+  get logRetention(): LogRetentionPolicy {
+    return this.config.logging.retention ?? resolveLogRetention(undefined);
+  }
+
+  get logMaxBodyBytes(): number {
+    return this.config.logging.maxBodyBytes ?? resolveLogMaxBodyBytes(undefined);
   }
 
   get webSearchConfig(): WebSearchGlobalConfig | undefined {

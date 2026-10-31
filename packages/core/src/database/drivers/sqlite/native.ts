@@ -44,11 +44,11 @@ import {
   type DatabaseInitializeOptions,
   type ModelAliasRecord,
   type ModelAliasUpsert,
+  type LogRetentionPolicy,
+  DEFAULT_LOG_RETENTION,
   UNKNOWN_MODEL_LABEL,
 } from "../../types";
 import {
-  MAX_LOG_ROWS,
-  MAX_LOG_AGE_DAYS,
   utf8StringToBlob,
   dbRowToLogWithoutBody,
   sqliteListBodyPreviewColumns,
@@ -61,6 +61,12 @@ import {
 } from "../../shared-utils";
 import { mapAliasRegistryRow } from "../../model-alias-registry";
 import { buildInsertSql } from "./utils";
+import {
+  runSqliteLogMaintenance,
+  logMaintenanceReport,
+  SQLITE_WAL_AUTOCHECKPOINT_PAGES,
+  SQLITE_JOURNAL_SIZE_LIMIT_BYTES,
+} from "./maintenance";
 
 export class SqliteNativeDriver implements DatabaseDriver {
   private readonly config: SqliteDriverConfig;
@@ -91,12 +97,16 @@ export class SqliteNativeDriver implements DatabaseDriver {
     const BetterSqlite3 = require("better-sqlite3") as typeof import("better-sqlite3");
     this.db = new BetterSqlite3(dbPath);
 
+    // Takes effect on new files only; existing files switch on their next full VACUUM.
+    this.d.pragma("auto_vacuum = INCREMENTAL");
     this.d.pragma("journal_mode = WAL");
     this.d.pragma("synchronous = NORMAL");
     this.d.pragma("busy_timeout = 30000");
     this.d.pragma("cache_size = -8000");
     this.d.pragma("temp_store = MEMORY");
     this.d.pragma("mmap_size = 16777216");
+    this.d.pragma(`wal_autocheckpoint = ${SQLITE_WAL_AUTOCHECKPOINT_PAGES}`);
+    this.d.pragma(`journal_size_limit = ${SQLITE_JOURNAL_SIZE_LIMIT_BYTES}`);
 
     this.log.info(`[SqliteNative] Database path: ${dbPath}`);
 
@@ -130,12 +140,6 @@ export class SqliteNativeDriver implements DatabaseDriver {
 
     this.isEnabled = true;
     this._logsEnabled = options?.logsEnabled ?? false;
-
-    setTimeout(() => {
-      this.cleanOldLogs().catch(err => {
-        this.log.error("[SqliteNative] Background cleanup failed:", err);
-      });
-    }, 0);
   }
 
   get enabled(): boolean {
@@ -317,7 +321,8 @@ export class SqliteNativeDriver implements DatabaseDriver {
       return;
     }
     this.d.exec(`DELETE FROM ${TABLE}`);
-    this.d.exec("VACUUM");
+    this.d.pragma("wal_checkpoint(TRUNCATE)");
+    this.scheduleBackgroundVacuum();
   }
 
   async clearAllMetrics(): Promise<void> {
@@ -326,7 +331,26 @@ export class SqliteNativeDriver implements DatabaseDriver {
     }
     this.d.exec(`DELETE FROM ${METRICS_TABLE}`);
     this.d.exec(`DELETE FROM ${ALIAS_REGISTRY_TABLE}`);
-    this.d.exec("VACUUM");
+    this.d.pragma("wal_checkpoint(TRUNCATE)");
+    this.scheduleBackgroundVacuum();
+  }
+
+  /** Reclaim space after a bulk clear without holding up the caller's response. */
+  private scheduleBackgroundVacuum(): void {
+    setTimeout(() => {
+      if (!this.isEnabled || !this.db) {
+        return;
+      }
+      try {
+        this.d.pragma("auto_vacuum = INCREMENTAL");
+        this.d.exec("VACUUM");
+        this.d.pragma("wal_checkpoint(TRUNCATE)");
+      } catch (err) {
+        this.log.warn(
+          `[SqliteNative] Background VACUUM failed: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    }, 0);
   }
 
   async upsertModelAliases(rows: ModelAliasUpsert[]): Promise<void> {
@@ -363,18 +387,22 @@ export class SqliteNativeDriver implements DatabaseDriver {
     return rows.map(mapAliasRegistryRow);
   }
 
-  async cleanOldLogs(): Promise<void> {
+  async cleanOldLogs(policy: LogRetentionPolicy = DEFAULT_LOG_RETENTION): Promise<void> {
     if (!this.isEnabled) {
       return;
     }
-    const cutoff = Date.now() - MAX_LOG_AGE_DAYS * 24 * 60 * 60 * 1000;
-    this.d.prepare(`DELETE FROM ${TABLE} WHERE timestamp < ?`).run(cutoff);
-    this.d
-      .prepare(
-        `DELETE FROM ${TABLE} WHERE id NOT IN (SELECT id FROM ${TABLE} ORDER BY timestamp DESC LIMIT ?)`
-      )
-      .run(MAX_LOG_ROWS);
-    this.d.prepare(`DELETE FROM ${METRICS_TABLE} WHERE timestamp < ?`).run(cutoff);
+    const report = await runSqliteLogMaintenance(
+      {
+        query: async sql =>
+          this.db ? (this.d.prepare(sql).all() as Record<string, unknown>[]) : [],
+        exec: async sql => {
+          this.db?.exec(sql);
+        },
+      },
+      policy,
+      { allowFullVacuum: true }
+    );
+    logMaintenanceReport(this.log, "SqliteNative", report);
   }
 
   // ---- Read operations -----------------------------------------------------

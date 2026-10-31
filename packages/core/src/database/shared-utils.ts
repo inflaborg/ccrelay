@@ -10,8 +10,33 @@ import type {
 } from "./types";
 import { UNKNOWN_MODEL_LABEL } from "./types";
 
-export const MAX_LOG_ROWS = 10000;
-export const MAX_LOG_AGE_DAYS = 30;
+/** Default per-body cap for stored request/response bodies (`logging.maxBodyBytes`). */
+export const DEFAULT_LOG_MAX_BODY_BYTES = 1_048_576;
+
+/**
+ * Cap a stored body at `maxBytes` UTF-8 bytes and append a marker with the dropped size.
+ * `maxBytes <= 0` keeps the body intact.
+ */
+export function truncateLogBody(body: string | undefined, maxBytes: number): string | undefined {
+  // UTF-8 is at most 3 bytes per UTF-16 code unit, so short strings skip the byte count.
+  if (body === undefined || maxBytes <= 0 || body.length * 3 <= maxBytes) {
+    return body;
+  }
+  const buf = Buffer.from(body, "utf-8");
+  if (buf.length <= maxBytes) {
+    return body;
+  }
+  const kept = buf
+    .subarray(0, maxBytes)
+    .toString("utf-8")
+    .replace(/\uFFFD+$/, "");
+  return `${kept}\n…[truncated ${buf.length - maxBytes} bytes]`;
+}
+
+/** Cutoff timestamp (ms) for `maxAgeDays`, or undefined when age retention is off. */
+export function retentionCutoffMs(maxAgeDays: number, now = Date.now()): number | undefined {
+  return maxAgeDays > 0 ? now - maxAgeDays * 24 * 60 * 60 * 1000 : undefined;
+}
 
 /** List-view prefix of request bodies for model extraction (Chat bodies often place `model` after long `messages`). */
 export const LIST_LOG_MODEL_BODY_HEAD_BYTES = 32_768;

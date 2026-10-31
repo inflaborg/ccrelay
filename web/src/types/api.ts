@@ -261,6 +261,15 @@ export type StatsRange = "1d" | "7d" | "30d" | "all";
 export interface QueueTaskSnapshot {
   id: string;
   elapsed: number;
+  providerId?: string;
+  path?: string;
+}
+
+export interface EventLoopLagSnapshot {
+  p99Ms: number;
+  maxMs: number;
+  peakMs: number;
+  sampledAt: number;
 }
 
 export interface QueueDetailStats {
@@ -281,6 +290,7 @@ export interface QueueOverviewResponse {
   message?: string;
   default?: QueueDetailStats | null;
   routes: Record<string, QueueDetailStats>;
+  eventLoopLag?: EventLoopLagSnapshot;
 }
 
 export interface BlockPattern {
@@ -591,6 +601,7 @@ export interface ConcurrencySettings {
   maxWorkers: number;
   maxQueueSize?: number;
   requestTimeout?: number;
+  upstreamTimeout?: number;
   retry429?: {
     enabled: boolean;
     maxRetries: number;

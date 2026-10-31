@@ -7,6 +7,7 @@
 
 import * as http from "http";
 import { z } from "zod";
+import type { LogRetentionPolicy } from "../database/types";
 
 export type ProviderMode = "passthrough" | "inject";
 
@@ -174,6 +175,8 @@ export const ConcurrencyConfigSchema = z.object({
   maxWorkers: z.number().int().positive().default(3),
   maxQueueSize: z.number().int().nonnegative().optional(),
   requestTimeout: z.number().nonnegative().optional(), // Queue wait timeout in seconds (supports fractions)
+  /** Upstream idle timeout in seconds (no bytes received); 0 disables. Applies with or without the queue. */
+  upstreamTimeout: z.number().nonnegative().optional(),
   retry429: Retry429ConfigSchema.optional(),
   routes: z.array(RouteQueueConfigSchema).optional(),
 });
@@ -221,6 +224,17 @@ export const LoggingConfigSchema = z.object({
   /** @deprecated Use `storeBodies`. Read when the new field is absent. */
   enabled: z.boolean().optional(),
   database: DatabaseConfigSchema.optional(),
+  /** Request-log retention; each limit uses 0 for unlimited. */
+  retention: z
+    .object({
+      maxAgeDays: z.number().nonnegative().optional(),
+      maxRows: z.number().int().nonnegative().optional(),
+      /** SQLite only: cap on live data in logs.db, oldest rows are dropped first. */
+      maxSizeMB: z.number().nonnegative().optional(),
+    })
+    .optional(),
+  /** Per-body cap for stored request/response bodies, in bytes; 0 = unlimited. */
+  maxBodyBytes: z.number().int().nonnegative().optional(),
 });
 
 export type LoggingConfigInput = z.infer<typeof LoggingConfigSchema>;
@@ -497,10 +511,16 @@ export interface RouterConfig {
   };
   concurrency?: ConcurrencyConfig;
   routeQueues?: RouteQueueConfig[]; // Route-based queue configurations
+  /** Upstream socket idle timeout in seconds (`concurrency.upstreamTimeout`); 0 = disabled. */
+  upstreamTimeout?: number;
   logging: {
     /** Effective body-storage flag (resolved from storeBodies / enabled). */
     storeBodies: boolean;
     database?: DatabaseConfig;
+    /** Resolved `logging.retention`; defaults apply when absent. */
+    retention?: LogRetentionPolicy;
+    /** Resolved `logging.maxBodyBytes`; 0 = unlimited. */
+    maxBodyBytes?: number;
   };
   /** UI language locale; undefined means not yet chosen. */
   locale?: "en" | "zh" | "ja" | "ko";
@@ -512,6 +532,16 @@ export interface RouterConfig {
   clientVersionDetection?: ClientVersionDetectionConfig;
 }
 
+export interface EventLoopLagSnapshot {
+  /** p99 delay of the last completed sample window (ms). */
+  p99Ms: number;
+  /** Worst delay of the last completed sample window (ms). */
+  maxMs: number;
+  /** Worst delay seen since the monitor started (ms). */
+  peakMs: number;
+  sampledAt: number;
+}
+
 export interface RouterStatus {
   status: "running" | "stopped";
   currentProvider: string | null;
@@ -520,6 +550,7 @@ export interface RouterStatus {
   port?: number;
   host?: string;
   dbAvailable?: boolean;
+  eventLoopLag?: EventLoopLagSnapshot;
 }
 
 export interface ProvidersResponse {
@@ -746,6 +777,15 @@ export interface RoleChangeInfo {
   state: ElectionState;
   leaderUrl?: string;
   error?: Error;
+  /** Set once leadership attempts are exhausted because the port is held by an unresponsive process. */
+  portConflict?: PortConflictInfo;
+}
+
+export interface PortConflictInfo {
+  host: string;
+  port: number;
+  /** PID of the last CCRelay instance recorded as leader, when known (may be a hung process). */
+  holderPid?: number;
 }
 
 /**
@@ -765,6 +805,7 @@ export interface ConcurrencyConfig {
   maxWorkers: number;
   maxQueueSize?: number;
   requestTimeout?: number; // Queue wait timeout in seconds
+  upstreamTimeout?: number; // Upstream idle timeout in seconds (0 = disabled)
   retry429?: Retry429Config;
 }
 
@@ -879,6 +920,8 @@ export interface QueueStats {
 export interface QueueTaskSnapshot {
   id: string;
   elapsed: number;
+  providerId?: string;
+  path?: string;
 }
 
 /** Queue stats plus live task snapshots for dashboard / API. */
@@ -894,6 +937,8 @@ export interface QueueOverview {
   message?: string;
   default?: QueueDetailStats | null;
   routes: Record<string, QueueDetailStats>;
+  /** Main-thread lag; added by the queue API. */
+  eventLoopLag?: EventLoopLagSnapshot;
 }
 
 /**

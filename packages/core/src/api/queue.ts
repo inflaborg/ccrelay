@@ -6,6 +6,7 @@
 import * as http from "http";
 import type { ProxyServer } from "../server/handler";
 import type { QueueOverview } from "../types";
+import { eventLoopMonitor } from "../server/eventLoopMonitor";
 import { sendJson } from "./index";
 
 let serverInstance: ProxyServer | null = null;
@@ -44,7 +45,7 @@ export function handleQueueStats(
     routes: {},
   };
 
-  sendJson(res, 200, overview);
+  sendJson(res, 200, { ...overview, eventLoopLag: eventLoopMonitor.snapshot() });
 }
 
 /**

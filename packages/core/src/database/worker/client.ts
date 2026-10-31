@@ -24,6 +24,7 @@ import type {
   SqliteDriverConfig,
   ModelAliasUpsert,
   ModelAliasRecord,
+  LogRetentionPolicy,
 } from "../types";
 import { emptyProviderDetailStats } from "../shared-utils";
 
@@ -67,6 +68,7 @@ interface WorkerResponse {
  * to give the inner layer time to detect and recover from errors.
  */
 const DEFAULT_TIMEOUT_MS = 25_000;
+const MAINTENANCE_TIMEOUT_MS = 10 * 60_000;
 
 function generateRequestId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
@@ -479,10 +481,11 @@ export class DatabaseWorkerClient implements DatabaseDriver {
   }
 
   /**
-   * Clean old logs (background maintenance)
+   * Retention + space reclamation in the worker thread. A one-off VACUUM on a large file
+   * can take minutes, so this waits longer than ordinary operations.
    */
-  async cleanOldLogs(): Promise<void> {
-    await this.send("cleanOldLogs");
+  async cleanOldLogs(policy?: LogRetentionPolicy): Promise<void> {
+    await this.send("cleanOldLogs", { policy }, MAINTENANCE_TIMEOUT_MS);
   }
 
   /**

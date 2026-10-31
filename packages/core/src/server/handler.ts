@@ -25,7 +25,8 @@ import {
   setLogDatabaseDriverConfigResolver,
   loggingDatabaseConfigToDriver,
 } from "../database";
-import { LeaderElection } from "./leaderElection";
+import { LeaderElection, describePortConflict } from "./leaderElection";
+import { eventLoopMonitor } from "./eventLoopMonitor";
 import { isStaticRequest, serveStatic } from "./static";
 import { isApiRequest, handleApiRequest } from "../api";
 import { cancelUpdateCheck, scheduleUpdateCheck } from "./updateCheck";
@@ -104,6 +105,7 @@ export class ProxyServer {
     // Initialize proxy executor (executeFn set after construction for retry support)
     this.proxyExecutor = new ProxyExecutor(this.responseLogger);
     this.proxyExecutor.setModelCatalog(this.modelCatalog);
+    this.proxyExecutor.setUpstreamTimeoutProvider(() => this.config.upstreamTimeoutMs);
 
     // Initialize queue manager (executor set after construction to avoid circular dependency)
     this.queueManager = new QueueManager(config);
@@ -176,6 +178,16 @@ export class ProxyServer {
     }
 
     await this.ensureFollowerNoLogStorage();
+
+    if (this.leaderElection.hasExternalPortConflict()) {
+      const portConflict = this.leaderElection.getPortConflict();
+      this.notifyRoleChangeListeners({
+        role: this.role,
+        state: this.leaderElection.getState(),
+        error: new Error(describePortConflict(portConflict)),
+        portConflict,
+      });
+    }
   }
 
   /**
@@ -207,6 +219,7 @@ export class ProxyServer {
       `[Server:${this.instanceId}] Initializing database (leader). logging.storeBodies=${logsEnabled}`
     );
     const dbStart = Date.now();
+    this.database.setRetentionPolicy(this.config.logRetention, this.config.logMaxBodyBytes);
     await this.database.initialize(true, logsEnabled);
     await this.modelCatalog.persistAliasRegistry();
     this.log.info(
@@ -413,6 +426,7 @@ export class ProxyServer {
    */
   private handleConfigChanged(): void {
     this.database.setLogsEnabled(this.config.enableLogStorage);
+    this.database.setRetentionPolicy(this.config.logRetention, this.config.logMaxBodyBytes);
     this.queueManager.reloadFromConfig();
     if (this.wsBroadcaster) {
       this.wsBroadcaster.broadcastConfigChanged();
@@ -489,6 +503,8 @@ export class ProxyServer {
       this.log.info(`[Server:${this.instanceId}] Already running as ${this.role}`);
       return { role: this.role, leaderUrl: this.leaderUrl ?? undefined };
     }
+
+    eventLoopMonitor.start();
 
     // Initialize proxy executor's retry handler
     this.proxyExecutor.setExecuteFn((task: RequestTask) => this.proxyExecutor.execute(task));
@@ -608,6 +624,8 @@ export class ProxyServer {
     // Close database
     await this.database.close();
     this.log.info("[Server] Database closed");
+
+    eventLoopMonitor.stop();
   }
 
   /**

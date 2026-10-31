@@ -134,7 +134,7 @@ Yes. CCRelay is open source under the MIT License.
 | Where it runs        | On your computer. The proxy listens on `127.0.0.1` by default.                                                                               |
 | Outbound traffic     | Requests go to the providers you configure. Tavily or Parallel are contacted only if you enable web search. Update checks use GitHub Releases. |
 | Telemetry            | None.                                                                                                                                        |
-| Request logs         | Request and response bodies are saved by default in `~/.ccrelay/logs.db` so you can inspect them in Logs.                                    |
+| Request logs         | Request and response bodies are saved by default in `~/.ccrelay/logs.db` so you can inspect them in Logs. Old logs are removed after 30 days, 10,000 rows, or 256 MB. |
 | Turning logs off     | Set `logging.storeBodies: false` or switch it off in Settings. Token and speed stats are kept separately.                                   |
 | Deleting data        | **Clear All** on the Logs tab removes saved bodies; **Reset stats** on the Dashboard removes usage numbers.                                  |
 | API keys             | Stored in `~/.ccrelay/config.yaml`. Use `${ENV_VAR}` to keep keys out of the file. Keys are masked in logged headers.                        |
@@ -569,22 +569,29 @@ Use the **Smart Routing** tab for settings (alias prefix, bare model id fallback
 
 ### Concurrency
 
-| Setting                      | Default | Description                              |
-| ---------------------------- | ------- | ---------------------------------------- |
-| `concurrency.enabled`        | `true`  | Enable request queue                     |
-| `concurrency.maxWorkers`     | `3`     | Max concurrent requests                  |
-| `concurrency.maxQueueSize`   | `100`   | Max queued requests (0 = unlimited)      |
-| `concurrency.requestTimeout` | `0`     | Queue timeout in seconds (0 = unlimited) |
-| `concurrency.routes`         | `[]`    | Per-route queue config (by `pattern`)    |
+| Setting                       | Default | Description                                                                                                  |
+| ----------------------------- | ------- | ------------------------------------------------------------------------------------------------------------ |
+| `concurrency.enabled`         | `true`  | Enable request queue                                                                                         |
+| `concurrency.maxWorkers`      | `3`     | Max concurrent requests                                                                                      |
+| `concurrency.maxQueueSize`    | `100`   | Max queued requests (0 = unlimited)                                                                          |
+| `concurrency.requestTimeout`  | `0`     | Max seconds a request waits in the queue for a free worker; returns 503 (0 = unlimited)                      |
+| `concurrency.upstreamTimeout` | `600`   | Abort when the upstream sends nothing for this many seconds, before or during the response; returns 504 (0 = off) |
+| `concurrency.routes`          | `[]`    | Per-route queue config (by `pattern`)                                                                        |
 
 ### Logging
 
-| Setting                  | Default    | Description                                                                                          |
-| ------------------------ | ---------- | ---------------------------------------------------------------------------------------------------- |
-| `logging.storeBodies`    | `true`     | Store request/response bodies in the Logs tab. Token and performance metrics are recorded separately |
-| `logging.database.type`  | `"sqlite"` | `"sqlite"` or `"postgres"`                                                                           |
+| Setting                          | Default    | Description                                                                                          |
+| -------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------- |
+| `logging.storeBodies`            | `true`     | Store request/response bodies in the Logs tab. Token and performance metrics are recorded separately |
+| `logging.maxBodyBytes`           | `1048576`  | Max stored size per body; longer bodies are cut with a marker (0 = unlimited)                       |
+| `logging.retention.maxAgeDays`   | `30`       | Delete logs older than this many days (0 = keep)                                                     |
+| `logging.retention.maxRows`      | `10000`    | Keep at most this many logs (0 = unlimited)                                                          |
+| `logging.retention.maxSizeMB`    | `256`      | SQLite only: drop the oldest logs while the database is larger than this (0 = unlimited)             |
+| `logging.database.type`          | `"sqlite"` | `"sqlite"` or `"postgres"`                                                                           |
 
 `logging.enabled` is deprecated. If `storeBodies` is unset, `enabled` is used as a fallback.
+
+Retention runs about a minute after startup and then every hour. SQLite files shrink in the background after cleanup.
 
 **SQLite:**
 
@@ -726,9 +733,15 @@ concurrency:
   maxWorkers: 3
   maxQueueSize: 100
   requestTimeout: 0
+  upstreamTimeout: 600
 
 logging:
   storeBodies: true
+  maxBodyBytes: 1048576
+  retention:
+    maxAgeDays: 30
+    maxRows: 10000
+    maxSizeMB: 256
   database:
     type: "sqlite"
     path: ""
@@ -742,13 +755,13 @@ Management endpoints at `/ccrelay/`:
 
 | Endpoint                        | Method     | Description                    |
 | ------------------------------- | ---------- | ------------------------------ |
-| `/ccrelay/api/status`           | GET        | Proxy status                   |
+| `/ccrelay/api/status`           | GET        | Proxy status and event-loop lag |
 | `/ccrelay/api/providers`        | GET        | List providers                 |
 | `/ccrelay/api/switch/{id}`      | GET        | Switch to provider             |
 | `/ccrelay/api/switch`           | POST       | Switch provider (JSON body)    |
 | `/ccrelay/api/providers/export` | POST       | Export providers by ID         |
 | `/ccrelay/api/providers/import` | POST       | Import providers (merge by ID) |
-| `/ccrelay/api/queue`            | GET        | Queue statistics               |
+| `/ccrelay/api/queue`            | GET        | Queue statistics and event-loop lag |
 | `/ccrelay/api/logs`             | GET        | Request logs                   |
 | `/ccrelay/api/config`           | GET, PATCH | Read/write config sections     |
 | `/ccrelay/ws`                   | WebSocket  | Follower sync                  |

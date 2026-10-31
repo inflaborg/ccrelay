@@ -14,6 +14,22 @@ export type RequestStatus = "pending" | "completed" | "cancelled" | "timeout";
 export type RouteType = "block" | "passthrough" | "router" | "service";
 
 /**
+ * Request-log retention (`logging.retention`). Each limit uses 0 for "unlimited".
+ * `maxSizeMB` applies to SQLite only (live data pages of the database file).
+ */
+export interface LogRetentionPolicy {
+  maxAgeDays: number;
+  maxRows: number;
+  maxSizeMB: number;
+}
+
+export const DEFAULT_LOG_RETENTION: Readonly<LogRetentionPolicy> = {
+  maxAgeDays: 30,
+  maxRows: 10_000,
+  maxSizeMB: 256,
+};
+
+/**
  * Request log entry
  */
 export interface RequestLog {
@@ -336,9 +352,10 @@ export interface DatabaseDriver {
   getProviderStats(providerId: string, query?: StatsQuery): Promise<ProviderDetailStats>;
 
   /**
-   * Clean old logs (background maintenance)
+   * Background maintenance: apply the retention policy (age / row count / on-disk size)
+   * and reclaim space where the backend supports it. Defaults to {@link DEFAULT_LOG_RETENTION}.
    */
-  cleanOldLogs(): Promise<void>;
+  cleanOldLogs(policy?: LogRetentionPolicy): Promise<void>;
 
   /**
    * Check if the driver is enabled and ready

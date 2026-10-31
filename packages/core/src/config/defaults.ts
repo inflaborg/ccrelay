@@ -9,6 +9,9 @@ export const LEGACY_CONCURRENCY_REQUEST_TIMEOUT = 60;
 /** Current bundled default: 0 = no queue wait timeout. */
 export const DEFAULT_CONCURRENCY_REQUEST_TIMEOUT = 0;
 
+/** Bundled default for `concurrency.upstreamTimeout` (seconds of upstream silence before abort). */
+export const DEFAULT_UPSTREAM_TIMEOUT_SECONDS = 600;
+
 // Default config with comments template
 export const DEFAULT_CONFIG_YAML = `# CCRelay Configuration
 # Docs: https://github.com/inflaborg/ccrelay#configuration
@@ -154,10 +157,15 @@ concurrency:
   maxWorkers: 3                 # Maximum concurrent workers
   maxQueueSize: 100             # Maximum queue size (0=unlimited)
 
-  # Request timeout: Maximum wait time in queue (seconds)
+  # Queue wait timeout (seconds): how long a request may wait for a free worker
   # Requests exceeding this will return 503
   # 0 or not set = unlimited
   requestTimeout: 0
+
+  # Upstream idle timeout (seconds): abort when the upstream sends no bytes for this long
+  # (covers time-to-first-byte and stalls mid-stream). Returns 504 / an SSE error frame.
+  # 0 = disabled
+  upstreamTimeout: 600
 
   # 429 Retry configuration
   retry429:
@@ -175,6 +183,13 @@ concurrency:
 # ==================== Logging Storage ====================
 logging:
   storeBodies: true             # Store request/response bodies in the Logs tab
+  maxBodyBytes: 1048576         # Per-body cap for stored bodies (bytes, 0 = unlimited)
+
+  # Request-log retention, applied ~1 min after start and then hourly (0 = unlimited)
+  retention:
+    maxAgeDays: 30
+    maxRows: 10000
+    maxSizeMB: 256              # SQLite only: oldest rows are dropped above this size
 
   database:
     type: "sqlite"              # sqlite | postgres

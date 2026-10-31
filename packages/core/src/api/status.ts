@@ -8,6 +8,7 @@ import type { ProxyServer } from "../server/handler";
 import type { RouterStatus } from "../types";
 import { resolveEffectiveRoutingStatus } from "../server/smartRouting/virtualProvider";
 import { getDatabase } from "../database";
+import { eventLoopMonitor } from "../server/eventLoopMonitor";
 import { sendJson } from "./index";
 
 let serverInstance: ProxyServer | null = null;
@@ -44,6 +45,7 @@ export function handleStatus(
     port: config.port,
     host: config.host,
     dbAvailable: getDatabase().enabled,
+    eventLoopLag: eventLoopMonitor.snapshot(),
   };
 
   sendJson(res, 200, status);

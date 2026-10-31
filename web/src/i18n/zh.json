@@ -197,6 +197,8 @@
       "noQueues": "未配置队列",
       "defaultQueue": "默认队列",
       "saturated": "已满",
+      "eventLoopLag": "事件循环延迟 p99 {{p99}}",
+      "eventLoopLagHint": "网关主线程阻塞，请求与健康检查都会被延迟。启动以来峰值：{{peak}}",
       "workers": "{{active}} / {{max}} 并发",
       "processing": "执行中",
       "waiting": "排队中",
@@ -879,7 +881,8 @@
       "enable": "启用并发管理器",
       "maxWorkers": "最大并发数",
       "maxQueueSize": "最大队列长度",
-      "requestTimeout": "请求超时（秒，0 = 不超时）",
+      "requestTimeout": "排队等待超时（秒，0 = 不超时）",
+      "upstreamTimeout": "上游空闲超时（秒，0 = 关闭）",
       "retry429": {
         "title": "429 重试",
         "enable": "启用 429 重试",

@@ -10,6 +10,7 @@ import type {
   ProxyResult,
   QueueStats,
   QueueDetailStats,
+  QueueTaskSnapshot,
   ConcurrencyConfig,
 } from "../types";
 import { ScopedLogger } from "../utils/logger";
@@ -247,12 +248,12 @@ export class ConcurrencyManager {
   /**
    * Execute a single task with optional 429 retry support
    *
-   * IMPORTANT: Once execution starts, we do NOT apply any timeout.
-   * The task relies entirely on:
+   * IMPORTANT: The queue applies no execution timeout once a task starts.
+   * Running tasks end on:
    * 1. Upstream server response
    * 2. Client disconnection detection
+   * 3. The executor's upstream idle timeout (`concurrency.upstreamTimeout`)
    *
-   * This avoids complex timing issues with execution timeouts.
    * Queue timeout only applies while waiting in queue.
    */
   private async executeTask(queuedTask: QueuedTask, lease: { release(): void }): Promise<void> {
@@ -396,24 +397,28 @@ export class ConcurrencyManager {
   /**
    * Get detailed information about currently processing tasks
    */
-  getProcessingTasks(): Array<{ id: string; elapsed: number }> {
+  getProcessingTasks(): QueueTaskSnapshot[] {
     const now = Date.now();
     return Array.from(this.processingTasks.values()).map(t => ({
       id: t.task.id,
       elapsed: now - t.startedAt,
+      providerId: t.task.provider?.id,
+      path: t.task.inboundPath,
     }));
   }
 
   /**
    * Get tasks waiting in the queue (not yet assigned a worker)
    */
-  getQueuedTasks(): Array<{ id: string; elapsed: number }> {
+  getQueuedTasks(): QueueTaskSnapshot[] {
     const now = Date.now();
     return this.queue
       .toArray()
       .map(qt => ({
         id: qt.task.id,
         elapsed: now - qt.queuedAt,
+        providerId: qt.task.provider?.id,
+        path: qt.task.inboundPath,
       }))
       .sort((a, b) => b.elapsed - a.elapsed);
   }

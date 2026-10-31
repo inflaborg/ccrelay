@@ -36,6 +36,7 @@ import {
   matchAnthropicSseRule,
   openaiChatStrictToolsSanitize,
   capOpenAiChatTools,
+  platformRequiresBufferedChatResponse,
 } from "../../converter/platform-transforms";
 import { anthropicBodyHasHostedTool } from "../../converter/hosted-tools";
 import { ScopedLogger } from "../../utils/logger";
@@ -185,6 +186,7 @@ function forceDisableStreamInBody(body: Buffer, label: string): Buffer {
     const data = JSON.parse(body.toString("utf-8")) as Record<string, unknown>;
     if (data.stream === true || data.stream === "true") {
       data.stream = false;
+      delete data.stream_options;
       log.info(
         `[${label}] stream=true is not supported for cross-protocol conversion; forcing stream=false`
       );
@@ -278,9 +280,34 @@ export class BodyProcessor {
       }
     }
 
+    // Anthropic→Chat streaming stays live unless the request ends up on Responses or on a
+    // platform that must buffer the full completion; decided once the target is final.
+    const anthropicToChatStream =
+      needsConversion &&
+      streamRequested &&
+      clientSurface === "anthropic" &&
+      upstreamWire === "openai";
+    let anthropicToChatStreamSettled = !anthropicToChatStream;
+    const settleAnthropicToChatStream = () => {
+      if (anthropicToChatStreamSettled) {
+        return;
+      }
+      anthropicToChatStreamSettled = true;
+      const keepStream =
+        upstreamResponseFormat === undefined &&
+        isOpenAiChatCompletionsTargetPath(routing.targetPath) &&
+        !platformRequiresBufferedChatResponse(routing.provider.baseUrl, {
+          openaiCompat: routing.provider.openaiCompat,
+        });
+      if (!keepStream) {
+        body = forceDisableStreamInBody(body, `${clientSurface}->${upstreamWire}`);
+      }
+    };
+
     if (needsConversion) {
       // Responses→Chat and OpenAI-surfaces→Anthropic streaming: keep stream=true upstream.
       const skipDisableStream =
+        anthropicToChatStream ||
         (clientSurface === "openai_responses" && upstreamWire === "openai") ||
         ((clientSurface === "openai" || clientSurface === "openai_responses") &&
           upstreamWire === "anthropic");
@@ -401,6 +428,8 @@ export class BodyProcessor {
         }
       }
 
+      // Before Chat transforms: they add stream_options only when stream is still true.
+      settleAnthropicToChatStream();
       if (isOpenAiChatCompletionsTargetPath(routing.targetPath)) {
         body = applyPlatformTransformsToOpenAiChatBody(
           body,
@@ -410,6 +439,7 @@ export class BodyProcessor {
         );
       }
     }
+    settleAnthropicToChatStream();
 
     if (databaseEnabled && body && body.length > 0) {
       try {

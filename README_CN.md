@@ -134,7 +134,7 @@ Claude Code 在下一次请求时就会使用新的提供商。Codex CLI 和 Cha
 | 运行位置     | 在你的电脑上运行，代理默认只监听 `127.0.0.1`。                                                     |
 | 对外连接     | 请求只发往你配置的提供商。仅在开启联网搜索时才会访问 Tavily 或 Parallel。检查更新时访问 GitHub Releases。 |
 | 遥测         | 无。                                                                                               |
-| 请求日志     | 默认把请求与响应正文保存在 `~/.ccrelay/logs.db`，便于在日志页查看。                                |
+| 请求日志     | 默认把请求与响应正文保存在 `~/.ccrelay/logs.db`，便于在日志页查看。旧日志超过 30 天、10,000 条或 256 MB 时会被清理。 |
 | 关闭日志     | 设置 `logging.storeBodies: false`，或在设置页关闭。Token 与速度统计单独保存，不受影响。            |
 | 删除数据     | 日志页的 **清空全部** 删除已保存的正文；仪表盘的 **复位统计** 删除用量数据。                       |
 | API Key      | 保存在 `~/.ccrelay/config.yaml`。可用 `${ENV_VAR}` 引用环境变量，避免明文写入文件。日志中的请求头会隐藏 Key。 |
@@ -574,7 +574,8 @@ CCRelay 使用 `~/.ccrelay/config.yaml`（首次启动时自动创建）。启�
 | `concurrency.enabled`        | `true` | 启用请求队列                     |
 | `concurrency.maxWorkers`     | `3`    | 最大并发数                       |
 | `concurrency.maxQueueSize`   | `100`  | 最大队列大小（0 = 无限制）       |
-| `concurrency.requestTimeout` | `0`    | 队列超时秒数（0 = 无限制）       |
+| `concurrency.requestTimeout` | `0` | 请求在队列中等待空闲 worker 的最长秒数，超时返回 503（0 = 无限制） |
+| `concurrency.upstreamTimeout` | `600` | 上游在响应前或响应中连续这么多秒没有数据就中止，返回 504（0 = 关闭） |
 | `concurrency.routes`         | `[]`   | 按路由的队列配置（按 `pattern`） |
 
 ### 日志
@@ -582,9 +583,15 @@ CCRelay 使用 `~/.ccrelay/config.yaml`（首次启动时自动创建）。启�
 | 设置                     | 默认值     | 描述                                                                 |
 | ------------------------ | ---------- | -------------------------------------------------------------------- |
 | `logging.storeBodies`    | `true`     | 在 Logs 页保存请求/响应正文。Token 与性能指标另行记录，不受此开关影响 |
+| `logging.maxBodyBytes` | `1048576` | 每个正文的最大保存字节数，超出部分截断并加标记（0 = 无限制） |
+| `logging.retention.maxAgeDays` | `30` | 删除早于该天数的日志（0 = 不按时间删除） |
+| `logging.retention.maxRows` | `10000` | 最多保留的日志条数（0 = 无限制） |
+| `logging.retention.maxSizeMB` | `256` | 仅 SQLite：数据库超过该大小时删除最旧的日志（0 = 无限制） |
 | `logging.database.type`  | `"sqlite"` | `"sqlite"` 或 `"postgres"`                                           |
 
 `logging.enabled` 已弃用。未设置 `storeBodies` 时回退到 `enabled`。
+
+清理在启动约 1 分钟后执行，之后每小时一次。SQLite 文件在清理后于后台收缩。
 
 **SQLite：**
 
@@ -726,9 +733,15 @@ concurrency:
   maxWorkers: 3
   maxQueueSize: 100
   requestTimeout: 0
+  upstreamTimeout: 600
 
 logging:
   storeBodies: true
+  maxBodyBytes: 1048576
+  retention:
+    maxAgeDays: 30
+    maxRows: 10000
+    maxSizeMB: 256
   database:
     type: "sqlite"
     path: ""
@@ -742,13 +755,13 @@ logging:
 
 | 端点                            | 方法       | 描述                     |
 | ------------------------------- | ---------- | ------------------------ |
-| `/ccrelay/api/status`           | GET        | 代理状态                 |
+| `/ccrelay/api/status`           | GET        | 代理状态与事件循环延迟 |
 | `/ccrelay/api/providers`        | GET        | 列出提供商               |
 | `/ccrelay/api/switch/{id}`      | GET        | 切换到指定提供商         |
 | `/ccrelay/api/switch`           | POST       | 切换提供商（JSON body）  |
 | `/ccrelay/api/providers/export` | POST       | 按 ID 导出提供商         |
 | `/ccrelay/api/providers/import` | POST       | 导入提供商（按 ID 合并） |
-| `/ccrelay/api/queue`            | GET        | 队列统计                 |
+| `/ccrelay/api/queue`            | GET        | 队列统计与事件循环延迟 |
 | `/ccrelay/api/logs`             | GET        | 请求日志                 |
 | `/ccrelay/api/config`           | GET、PATCH | 读写配置节               |
 | `/ccrelay/ws`                   | WebSocket  | Follower 同步            |

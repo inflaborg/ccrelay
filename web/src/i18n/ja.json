@@ -197,6 +197,8 @@
       "noQueues": "キューは設定されていません",
       "defaultQueue": "デフォルト",
       "saturated": "飽和",
+      "eventLoopLag": "イベントループ遅延 p99 {{p99}}",
+      "eventLoopLagHint": "ゲートウェイのメインスレッドがブロックされ、リクエストとヘルスチェックが遅延しています。起動後の最大値：{{peak}}",
       "workers": "{{active}} / {{max}} ワーカー",
       "processing": "処理中",
       "waiting": "待機中",
@@ -879,7 +881,8 @@
       "enable": "同時実行マネージャを有効化",
       "maxWorkers": "最大ワーカー数",
       "maxQueueSize": "最大キューサイズ",
-      "requestTimeout": "リクエストタイムアウト（秒、0 = 制限なし）",
+      "requestTimeout": "キュー待機タイムアウト（秒、0 = 制限なし）",
+      "upstreamTimeout": "アップストリーム無通信タイムアウト（秒、0 = 無効）",
       "retry429": {
         "title": "429 で再試行",
         "enable": "429 再試行を有効化",

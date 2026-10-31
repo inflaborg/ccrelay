@@ -197,6 +197,8 @@
       "noQueues": "No queues configured",
       "defaultQueue": "Default",
       "saturated": "Saturated",
+      "eventLoopLag": "Event loop lag p99 {{p99}}",
+      "eventLoopLagHint": "The gateway main thread is blocked; requests and health checks are delayed. Peak since start: {{peak}}",
       "workers": "{{active}} / {{max}} workers",
       "processing": "Processing",
       "waiting": "Waiting",
@@ -879,7 +881,8 @@
       "enable": "Enable concurrency manager",
       "maxWorkers": "Max workers",
       "maxQueueSize": "Max queue size",
-      "requestTimeout": "Request timeout (s, 0 = no limit)",
+      "requestTimeout": "Queue wait timeout (s, 0 = no limit)",
+      "upstreamTimeout": "Upstream idle timeout (s, 0 = off)",
       "retry429": {
         "title": "Retry on 429",
         "enable": "Enable 429 retry",

@@ -1132,7 +1132,7 @@ function ConcurrencySection({ data }: { data: ConcurrencySettings }) {
         onChange={v => setForm(f => ({ ...f, enabled: v }))}
         label={t("settings.concurrency.enable")}
       />
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <Field label={t("settings.concurrency.maxWorkers")}>
           <NumberInput
             value={form.maxWorkers ?? 3}
@@ -1151,6 +1151,13 @@ function ConcurrencySection({ data }: { data: ConcurrencySettings }) {
           <NumberInput
             value={form.requestTimeout ?? 0}
             onChange={v => setForm(f => ({ ...f, requestTimeout: v }))}
+            min={0}
+          />
+        </Field>
+        <Field label={t("settings.concurrency.upstreamTimeout")}>
+          <NumberInput
+            value={form.upstreamTimeout ?? 600}
+            onChange={v => setForm(f => ({ ...f, upstreamTimeout: v }))}
             min={0}
           />
         </Field>

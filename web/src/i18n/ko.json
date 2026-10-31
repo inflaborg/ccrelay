@@ -197,6 +197,8 @@
       "noQueues": "구성된 대기열이 없습니다",
       "defaultQueue": "기본",
       "saturated": "포화",
+      "eventLoopLag": "이벤트 루프 지연 p99 {{p99}}",
+      "eventLoopLagHint": "게이트웨이 메인 스레드가 막혀 요청과 헬스 체크가 지연됩니다. 시작 이후 최대값: {{peak}}",
       "workers": "{{active}} / {{max}} 워커",
       "processing": "처리 중",
       "waiting": "대기 중",
@@ -879,7 +881,8 @@
       "enable": "동시 실행 관리자 사용",
       "maxWorkers": "최대 워커",
       "maxQueueSize": "최대 대기열 크기",
-      "requestTimeout": "요청 제한 시간 (초, 0 = 제한 없음)",
+      "requestTimeout": "대기열 대기 제한 시간 (초, 0 = 제한 없음)",
+      "upstreamTimeout": "업스트림 유휴 제한 시간 (초, 0 = 끄기)",
       "retry429": {
         "title": "429 재시도",
         "enable": "429 재시도 사용",

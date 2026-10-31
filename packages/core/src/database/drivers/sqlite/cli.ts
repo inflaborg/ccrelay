@@ -44,11 +44,11 @@ import {
   type LogDbMigrationChoice,
   type ModelAliasRecord,
   type ModelAliasUpsert,
+  type LogRetentionPolicy,
+  DEFAULT_LOG_RETENTION,
   UNKNOWN_MODEL_LABEL,
 } from "../../types";
 import {
-  MAX_LOG_ROWS,
-  MAX_LOG_AGE_DAYS,
   utf8StringToBlob,
   dbRowToLogWithoutBody,
   dbRowToLog,
@@ -66,6 +66,15 @@ import {
   type SqlInsertParam,
 } from "./utils";
 import { sqlLiteralForBlob } from "./cli-wire";
+import {
+  runSqliteLogMaintenance,
+  logMaintenanceReport,
+  SQLITE_WAL_AUTOCHECKPOINT_PAGES,
+  SQLITE_JOURNAL_SIZE_LIMIT_BYTES,
+} from "./maintenance";
+
+/** Pages released per maintenance run; keeps `incremental_vacuum` under the CLI command timeout. */
+const CLI_INCREMENTAL_VACUUM_PAGES = 20_000;
 
 /** Thrown when the `sqlite3` executable is absent; callers may degrade to disabled log storage. */
 export const SQLITE_CLI_NOT_FOUND_MESSAGE = "sqlite3 CLI not found. Please install SQLite3.";
@@ -445,12 +454,15 @@ class CliConnection {
       const initCommands = [
         ".mode json",
         ".headers on",
+        "PRAGMA auto_vacuum=INCREMENTAL;",
         "PRAGMA journal_mode=WAL;",
         "PRAGMA synchronous=NORMAL;",
         "PRAGMA busy_timeout=30000;",
         "PRAGMA cache_size=-8000;",
         "PRAGMA temp_store=MEMORY;",
         "PRAGMA mmap_size=16777216;",
+        `PRAGMA wal_autocheckpoint=${SQLITE_WAL_AUTOCHECKPOINT_PAGES};`,
+        `PRAGMA journal_size_limit=${SQLITE_JOURNAL_SIZE_LIMIT_BYTES};`,
       ].join("\n");
 
       const initSentinel = this.generateSentinelId();
@@ -1017,12 +1029,6 @@ export class SqliteCliDriver implements DatabaseDriver {
     this.writeQueue.setEnabled(true);
 
     this.writeConn.startHealthCheck();
-
-    setTimeout(() => {
-      this.cleanOldLogs().catch(err => {
-        this.log.error("[SqliteCli] Background cleanup failed:", err);
-      });
-    }, 0);
   }
 
   private resolveSqlite3ExecutablePath(): string | null {
@@ -1225,7 +1231,8 @@ export class SqliteCliDriver implements DatabaseDriver {
       return;
     }
     await this.writeConn.exec(`DELETE FROM ${TABLE}`);
-    await this.writeConn.exec("VACUUM");
+    await this.writeConn.query("PRAGMA wal_checkpoint(TRUNCATE)");
+    this.vacuumInBackground();
   }
 
   async clearAllMetrics(): Promise<void> {
@@ -1234,7 +1241,24 @@ export class SqliteCliDriver implements DatabaseDriver {
     }
     await this.writeConn.exec(`DELETE FROM ${METRICS_TABLE}`);
     await this.writeConn.exec(`DELETE FROM ${ALIAS_REGISTRY_TABLE}`);
-    await this.writeConn.exec("VACUUM");
+    await this.writeConn.query("PRAGMA wal_checkpoint(TRUNCATE)");
+    this.vacuumInBackground();
+  }
+
+  /** Reclaim space after a bulk clear without holding up the caller's response. */
+  private vacuumInBackground(): void {
+    const conn = this.writeConn;
+    if (!conn?.started) {
+      return;
+    }
+    void conn
+      .exec("PRAGMA auto_vacuum=INCREMENTAL")
+      .then(() => conn.exec("VACUUM"))
+      .catch(err => {
+        this.log.warn(
+          `[SqliteCli] Background VACUUM failed: ${err instanceof Error ? err.message : String(err)}`
+        );
+      });
   }
 
   async upsertModelAliases(rows: ModelAliasUpsert[]): Promise<void> {
@@ -1265,21 +1289,17 @@ export class SqliteCliDriver implements DatabaseDriver {
     return rows.map(mapAliasRegistryRow);
   }
 
-  async cleanOldLogs(): Promise<void> {
-    if (!this.isEnabled || !this.writeConn?.started) {
+  async cleanOldLogs(policy: LogRetentionPolicy = DEFAULT_LOG_RETENTION): Promise<void> {
+    const conn = this.writeConn;
+    if (!this.isEnabled || !conn?.started) {
       return;
     }
-
-    const cutoff = Date.now() - MAX_LOG_AGE_DAYS * 24 * 60 * 60 * 1000;
-    await this.writeConn.exec(`DELETE FROM ${TABLE} WHERE timestamp < ?`, [cutoff]);
-
-    await this.writeConn.exec(`
-      DELETE FROM ${TABLE}
-      WHERE id NOT IN (
-        SELECT id FROM ${TABLE} ORDER BY timestamp DESC LIMIT ${MAX_LOG_ROWS}
-      )
-    `);
-    await this.writeConn.exec(`DELETE FROM ${METRICS_TABLE} WHERE timestamp < ?`, [cutoff]);
+    const report = await runSqliteLogMaintenance(
+      { query: sql => conn.query(sql), exec: sql => conn.exec(sql) },
+      policy,
+      { allowFullVacuum: false, maxIncrementalVacuumPages: CLI_INCREMENTAL_VACUUM_PAGES }
+    );
+    logMaintenanceReport(this.log, "SqliteCli", report);
   }
 
   // ---- Read operations (readConn) ----------------------------------------

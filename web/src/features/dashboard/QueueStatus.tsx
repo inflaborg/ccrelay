@@ -4,7 +4,7 @@ import { Layers, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/api/client";
-import type { QueueDetailStats } from "@/types/api";
+import type { QueueDetailStats, QueueTaskSnapshot } from "@/types/api";
 
 function formatDuration(ms: number): string {
   if (ms >= 60_000) return `${(ms / 60_000).toFixed(1)}m`;
@@ -12,9 +12,16 @@ function formatDuration(ms: number): string {
   return `${ms}ms`;
 }
 
+/** Matches the gateway's own warning threshold. */
+const EVENT_LOOP_LAG_WARN_MS = 1_000;
+
 function shortenTaskId(id: string): string {
   if (id.length <= 20) return id;
   return `${id.slice(0, 12)}…${id.slice(-6)}`;
+}
+
+function taskTitle(task: QueueTaskSnapshot): string {
+  return [task.id, task.providerId, task.path].filter(Boolean).join("\n");
 }
 
 function QueueSection({
@@ -94,7 +101,7 @@ function QueueSection({
             <tbody>
               {stats.processingTasks.map(task => (
                 <tr key={`p-${task.id}`} className="border-b border-border last:border-0">
-                  <td className="py-1 pr-2 font-mono text-[10px]" title={task.id}>
+                  <td className="py-1 pr-2 font-mono text-[10px]" title={taskTitle(task)}>
                     {shortenTaskId(task.id)}
                   </td>
                   <td className="py-1 px-2">
@@ -107,7 +114,7 @@ function QueueSection({
               ))}
               {stats.queuedTasks.map(task => (
                 <tr key={`q-${task.id}`} className="border-b border-border last:border-0">
-                  <td className="py-1 pr-2 font-mono text-[10px]" title={task.id}>
+                  <td className="py-1 pr-2 font-mono text-[10px]" title={taskTitle(task)}>
                     {shortenTaskId(task.id)}
                   </td>
                   <td className="py-1 px-2">
@@ -146,12 +153,25 @@ export default function QueueStatus() {
       sections.push({ name, stats });
     }
   }
+  const lag = data?.eventLoopLag;
+  const lagging = lag !== undefined && lag.p99Ms > EVENT_LOOP_LAG_WARN_MS;
 
   return (
     <Card className="p-0">
       <CardHeader className="flex flex-row items-center justify-between p-3 pb-2">
         <CardTitle className="text-xs font-medium">{t("dashboard.queue.title")}</CardTitle>
-        <Layers className="h-3.5 w-3.5 text-muted-foreground" />
+        <div className="flex items-center gap-1.5">
+          {lagging && (
+            <Badge
+              variant="destructive"
+              className="text-[10px] px-1.5 py-0"
+              title={t("dashboard.queue.eventLoopLagHint", { peak: formatDuration(lag.peakMs) })}
+            >
+              {t("dashboard.queue.eventLoopLag", { p99: formatDuration(lag.p99Ms) })}
+            </Badge>
+          )}
+          <Layers className="h-3.5 w-3.5 text-muted-foreground" />
+        </div>
       </CardHeader>
       <CardContent className="p-3 pt-0 space-y-3">
         {isLoading ? (

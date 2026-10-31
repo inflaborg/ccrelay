@@ -48,6 +48,12 @@ import {
   createAnthropicSseEnvelopeBuffer,
   processAnthropicStreamEnvelope,
   flushAnthropicToOpenAISseFinal,
+  createOpenAIChatToAnthropicSseState,
+  processOpenAIChatSseChunkToAnthropic,
+  flushOpenAIChatToAnthropicSse,
+  aggregateOpenAiChatSseToCompletion,
+  extractResponsesObjectFromSse,
+  parseSseDataPayloads,
   type OpenAIChatCompletionResponse,
 } from "../../converter";
 import {
@@ -58,8 +64,10 @@ import {
   parseAnthropicSseRows,
   serializeAnthropicSseRows,
   platformBuffersChatContentForToolParse,
+  platformRequiresBufferedChatResponse,
 } from "../../converter/platform-transforms";
 import type { ApiSurface } from "../../types";
+import { DEFAULT_UPSTREAM_TIMEOUT_SECONDS } from "../../config/defaults";
 import type { RequestTask, ProxyResult } from "../../types";
 import type { ResponseLogger } from "../responseLogger";
 import type { LogResponseTiming } from "../../database/types";
@@ -99,6 +107,80 @@ function headersForResponsesSse(
   // writeHead replaces earlier setCorsHeaders — keep browser/Electron Chat readable.
   applyClientCorsHeaders(out);
   return out;
+}
+
+/** Upstream headers with Content-Type forced to JSON (the upstream may have answered with SSE). */
+function headersForJsonBody(
+  base: Record<string, string | string[]>
+): Record<string, string | string[]> {
+  const out: Record<string, string | string[]> = {};
+  for (const [k, v] of Object.entries(base)) {
+    if (k.toLowerCase() !== "content-type") {
+      out[k] = v;
+    }
+  }
+  out["content-type"] = "application/json";
+  return out;
+}
+
+/** Message of the first `error` payload in a buffered SSE body, if any. */
+function firstSseErrorMessage(body: string): string | undefined {
+  for (const payload of parseSseDataPayloads(body)) {
+    const err = payload.error;
+    if (typeof err === "string") {
+      return err;
+    }
+    if (err && typeof err === "object") {
+      const msg = (err as Record<string, unknown>).message;
+      return typeof msg === "string" ? msg : JSON.stringify(err);
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Buffered upstream Chat body → `chat.completion`. Accepts plain JSON and SSE (full completion
+ * in a `data:` line or `chat.completion.chunk` deltas) since some upstreams ignore `stream: false`.
+ */
+function parseBufferedChatCompletion(body: string): OpenAIChatCompletionResponse {
+  if (body.trimStart().startsWith("{")) {
+    try {
+      return JSON.parse(body) as OpenAIChatCompletionResponse;
+    } catch {
+      /* fall through to SSE parsing */
+    }
+  }
+  const aggregated = aggregateOpenAiChatSseToCompletion(body);
+  if (aggregated) {
+    return aggregated;
+  }
+  const upstreamError = firstSseErrorMessage(body);
+  throw new Error(
+    upstreamError
+      ? `Upstream stream error: ${upstreamError}`
+      : "Upstream body is neither a chat.completion JSON nor a Chat SSE stream"
+  );
+}
+
+/** Buffered upstream Responses body (JSON or SSE) → final Responses API object. */
+function parseBufferedResponsesObject(body: string): Record<string, unknown> {
+  if (body.trimStart().startsWith("{")) {
+    try {
+      return JSON.parse(body) as Record<string, unknown>;
+    } catch {
+      /* fall through to SSE parsing */
+    }
+  }
+  const extracted = extractResponsesObjectFromSse(body);
+  if (extracted) {
+    return extracted;
+  }
+  const upstreamError = firstSseErrorMessage(body);
+  throw new Error(
+    upstreamError
+      ? `Upstream stream error: ${upstreamError}`
+      : "Upstream body has no completed Responses API object"
+  );
 }
 
 // Headers to exclude when forwarding response
@@ -168,6 +250,38 @@ interface ExecutionContext {
   upstreamTerminalSeen?: boolean;
   /** Chat->Responses SSE handler finished writing normally */
   streamCompleted?: boolean;
+  /** Upstream socket idle timeout applied to this attempt (ms); 0 = disabled. */
+  upstreamTimeoutMs: number;
+  /** Set once the upstream idle timeout fired; later abort/error events must not re-resolve. */
+  upstreamTimedOut?: boolean;
+}
+
+/** Client-protocol error frame for an upstream failure after SSE headers were already sent. */
+function formatClientSseError(
+  surface: ApiSurface | undefined,
+  status: number,
+  message: string,
+  code: string
+): string {
+  if (surface === "anthropic") {
+    return formatAnthropicSseError(status, message, "api_error");
+  }
+  if (surface === "openai_responses") {
+    return formatOpenAIResponsesSseError(status, message, code);
+  }
+  return formatOpenAIChatSseError(status, message, code);
+}
+
+/** Client-protocol JSON error body for an upstream failure before any response bytes were sent. */
+function formatClientJsonError(
+  surface: ApiSurface | undefined,
+  message: string,
+  code: string
+): string {
+  if (surface === "anthropic") {
+    return JSON.stringify({ type: "error", error: { type: "api_error", message } });
+  }
+  return JSON.stringify({ error: { message, type: "server_error", code } });
 }
 
 /** TTFB for DB logs: only when the response was incrementally streamed (not buffered/synthetic). */
@@ -229,11 +343,17 @@ function chunkContainsTerminalMarker(chunk: Buffer): boolean {
 export class ProxyExecutor {
   private executeFn: ((task: RequestTask) => Promise<ProxyResult>) | null = null;
   private modelCatalog: ModelCatalog | null = null;
+  private getUpstreamTimeoutMs: () => number = () => DEFAULT_UPSTREAM_TIMEOUT_SECONDS * 1000;
 
   constructor(private responseLogger: ResponseLogger) {}
 
   setModelCatalog(catalog: ModelCatalog): void {
     this.modelCatalog = catalog;
+  }
+
+  /** Read per request so config hot reload applies to the next upstream call. 0 disables. */
+  setUpstreamTimeoutProvider(getter: () => number): void {
+    this.getUpstreamTimeoutMs = getter;
   }
 
   /** Write converted SSE to the client and mirror into `ctx.responseChunks` when capture is on. */
@@ -525,8 +645,7 @@ export class ProxyExecutor {
       }
     }
 
-    // Use task's abortController if provided by ConcurrencyManager (queue mode),
-    // otherwise create a local AbortController (non-queue mode)
+    // Aborted on client disconnect or upstream idle timeout.
     const abortController = task.abortController ?? new AbortController();
     const abortSignal = abortController.signal;
 
@@ -551,6 +670,7 @@ export class ProxyExecutor {
       captureResponse: this.responseLogger.shouldCaptureResponse(method, task.requestPath),
       originalResponseBody: undefined,
       clientDisconnected: false,
+      upstreamTimeoutMs: Math.max(0, this.getUpstreamTimeoutMs()),
     };
 
     // Track client disconnect during streaming.
@@ -605,9 +725,9 @@ export class ProxyExecutor {
         reject
       );
 
-      // Explicitly disable upstream socket idle-timeout. Some runtimes (e.g. Electron)
-      // inherit a ~5s default; LLM upstream TTFB can exceed that. Rely on client disconnect + abortSignal.
-      proxyReq.setTimeout(0);
+      // Always set explicitly: some runtimes (e.g. Electron) inherit a ~5s socket default, far
+      // below LLM time-to-first-byte. Socket idle covers both TTFB and mid-stream stalls.
+      proxyReq.setTimeout(ctx.upstreamTimeoutMs);
 
       if (body) {
         proxyReq.write(body);
@@ -675,19 +795,32 @@ export class ProxyExecutor {
     applyClientCorsHeaders(responseHeaders);
     ctx.responseHeadersMasked = maskHeadersForLog(responseHeaders);
 
-    const isJsonResponse = proxyRes.headers["content-type"]?.includes("application/json");
+    const contentType = String(proxyRes.headers["content-type"] ?? "").toLowerCase();
+    const isJsonResponse = contentType.includes("application/json");
+    const isSSEResponse = contentType.includes("text/event-stream");
 
     /** Do not route through chat completion / Responses JSON converters — use buffered handlers + GET /models list conversion. */
     const skipStructuredChatJsonConverters =
       task.method === "GET" &&
       (isModelsListUpstreamPath(task.requestPath) || isModelDetailUpstreamPath(task.requestPath));
 
+    // A 200 SSE body is aggregated by the buffered converters unless the client asked for a
+    // stream we can relay live (handled by the true-streaming branches below).
+    const responsesClientWantsLiveStream = Boolean(task.responsesStreamRequested && clientRes);
+    const anthropicClientWantsLiveChatStream =
+      Boolean(task.streamRequested && clientRes) &&
+      task.upstreamResponseFormat !== "responses" &&
+      !platformRequiresBufferedChatResponse(provider.baseUrl, {
+        openaiCompat: provider.openaiCompat,
+      });
+
     if (
       !skipStructuredChatJsonConverters &&
       clientSurface === "openai_responses" &&
       upstreamWire === "openai" &&
       status === 200 &&
-      isJsonResponse
+      (isJsonResponse ||
+        (needsResponseConversion && isSSEResponse && !responsesClientWantsLiveStream))
     ) {
       this.handleOpenAIChatJsonToResponsesForClient(
         proxyRes,
@@ -703,11 +836,10 @@ export class ProxyExecutor {
     }
 
     // Responses→Chat true SSE streaming: upstream returned SSE with stream=true
-    const isSSEResponseEarly = proxyRes.headers["content-type"]?.includes("text/event-stream");
     if (
       clientSurface === "openai_responses" &&
       upstreamWire === "openai" &&
-      isSSEResponseEarly &&
+      isSSEResponse &&
       task.responsesStreamRequested &&
       clientRes
     ) {
@@ -756,6 +888,29 @@ export class ProxyExecutor {
       return;
     }
 
+    // Chat→Anthropic true SSE streaming: upstream kept stream=true for an Anthropic client.
+    if (
+      !skipStructuredChatJsonConverters &&
+      needsResponseConversion &&
+      upstreamWire === "openai" &&
+      clientSurface === "anthropic" &&
+      status === 200 &&
+      isSSEResponse &&
+      anthropicClientWantsLiveChatStream
+    ) {
+      this.handleOpenAISseToAnthropicSse(
+        proxyRes,
+        task,
+        ctx,
+        onClientDisconnect,
+        status,
+        responseHeaders,
+        originalModel,
+        resolve
+      );
+      return;
+    }
+
     if (
       !skipStructuredChatJsonConverters &&
       needsResponseConversion &&
@@ -763,7 +918,7 @@ export class ProxyExecutor {
       clientSurface === "anthropic" &&
       task.upstreamResponseFormat === "responses" &&
       status === 200 &&
-      isJsonResponse
+      (isJsonResponse || isSSEResponse)
     ) {
       this.handleResponsesJsonToAnthropicResponse(
         proxyRes,
@@ -782,8 +937,9 @@ export class ProxyExecutor {
       !skipStructuredChatJsonConverters &&
       needsResponseConversion &&
       upstreamWire === "openai" &&
+      clientSurface === "anthropic" &&
       status === 200 &&
-      isJsonResponse
+      (isJsonResponse || isSSEResponse)
     ) {
       this.handleOpenAIJsonToAnthropicResponse(
         proxyRes,
@@ -817,8 +973,6 @@ export class ProxyExecutor {
       );
       return;
     }
-
-    const isSSEResponse = proxyRes.headers["content-type"]?.includes("text/event-stream");
 
     // Anthropic upstream SSE → OpenAI Chat Completions SSE or Responses API SSE (true streaming).
     if (needsResponseConversion && upstreamWire === "anthropic" && isSSEResponse && clientRes) {
@@ -1035,6 +1189,115 @@ export class ProxyExecutor {
       if (!ctx.clientDisconnected && !clientRes.writableEnded) {
         clientRes.end();
       }
+    });
+
+    clientRes.on("error", () => {
+      proxyRes.destroy();
+    });
+  }
+
+  /** OpenAI Chat upstream SSE → client Anthropic Messages SSE (true streaming). */
+  private handleOpenAISseToAnthropicSse(
+    proxyRes: http.IncomingMessage,
+    task: RequestTask,
+    ctx: ExecutionContext,
+    onClientDisconnect: () => void,
+    status: number,
+    responseHeaders: Record<string, string | string[]>,
+    originalModel: string | undefined,
+    resolve: (value: ProxyResult) => void
+  ): void {
+    const { clientId, provider, res: clientRes } = task;
+    if (!clientRes) {
+      resolve({
+        statusCode: 500,
+        headers: {},
+        duration: Date.now() - ctx.startTime,
+        errorMessage: "Missing client response for Chat SSE conversion",
+      });
+      return;
+    }
+
+    const sseHeaders = headersForResponsesSse(responseHeaders);
+    log.info(`[Chat->A SSE] ${clientId}: OpenAI chunks → Anthropic events (${provider.id})`);
+    clientRes.writeHead(status, sseHeaders);
+
+    const state = createOpenAIChatToAnthropicSseState(originalModel ?? task.originalModel ?? "");
+    const upstreamLog: Buffer[] = [];
+
+    const writeEvents = (events: string[]): void => {
+      for (const event of events) {
+        if (!ctx.clientDisconnected) {
+          this.writeClientStreamForLog(clientRes, event, ctx);
+        }
+      }
+    };
+
+    const lineBuffer = createSseLineBuffer(line => {
+      if (!line.startsWith("data:")) {
+        return;
+      }
+      writeEvents(processOpenAIChatSseChunkToAnthropic(state, line.slice(5).trim()));
+    });
+
+    proxyRes.on("data", (chunk: Buffer) => {
+      if (!ctx.upstreamTerminalSeen && chunkContainsTerminalMarker(chunk)) {
+        ctx.upstreamTerminalSeen = true;
+      }
+      this.recordUpstreamChunkForLog(chunk, upstreamLog, ctx);
+      lineBuffer.feed(chunk);
+    });
+
+    proxyRes.on("end", () => {
+      ctx.upstreamEndedNaturally = true;
+      lineBuffer.flush();
+      writeEvents(flushOpenAIChatToAnthropicSse(state));
+      if (!ctx.clientDisconnected) {
+        clientRes.end();
+      }
+
+      clientRes.off("close", onClientDisconnect);
+      const aborted = ctx.clientDisconnected && !ctx.upstreamEndedNaturally;
+      task.streamCompleted = !aborted;
+      ctx.streamCompleted = task.streamCompleted;
+      const duration = Date.now() - ctx.startTime;
+      const errorMessage = aborted ? "Client disconnected" : state.errorMessage;
+      this.responseLogger.logResponse(
+        clientId,
+        duration,
+        aborted ? 499 : status,
+        ctx.responseChunks,
+        errorMessage,
+        this.upstreamLogBody(upstreamLog),
+        ttfbForStreamLog(ctx, true),
+        undefined,
+        ctx.responseHeadersMasked,
+        computeTiming(ctx, task)
+      );
+      resolve({
+        statusCode: aborted ? 499 : status,
+        headers: sseHeaders,
+        duration,
+        streamed: true,
+        streamCompleted: task.streamCompleted,
+        errorMessage,
+      });
+    });
+
+    proxyRes.on("error", err => {
+      log.error(`[Chat->A SSE] upstream error ${provider.id}`, err);
+      clientRes.off("close", onClientDisconnect);
+      if (ctx.upstreamTimedOut || ctx.clientDisconnected || clientRes.writableEnded) {
+        return;
+      }
+      if (!state.finished) {
+        this.writeClientStreamForLog(
+          clientRes,
+          formatAnthropicSseError(502, `Upstream stream error: ${err.message}`, "api_error"),
+          ctx
+        );
+      }
+      clientRes.end();
     });
 
     clientRes.on("error", () => {
@@ -1304,20 +1567,21 @@ export class ProxyExecutor {
   ): void {
     const { clientId, provider, res: clientRes } = task;
 
-    let responseBody = "";
+    const bodyChunks: Buffer[] = [];
     proxyRes.on("data", (chunk: Buffer) => {
-      responseBody += chunk.toString();
+      bodyChunks.push(chunk);
     });
 
     proxyRes.on("end", () => {
       if (clientRes) {
         clientRes.off("close", onClientDisconnect);
       }
+      const responseBody = Buffer.concat(bodyChunks).toString("utf-8");
       ctx.originalResponseBody = responseBody;
       const duration = Date.now() - ctx.startTime;
 
       try {
-        const openaiResponse = JSON.parse(responseBody) as OpenAIChatCompletionResponse;
+        const openaiResponse = parseBufferedChatCompletion(responseBody);
         applyPlatformChatResponseSanitize(
           openaiResponse as unknown as Record<string, unknown>,
           provider.baseUrl,
@@ -1381,7 +1645,7 @@ export class ProxyExecutor {
 
         resolve({
           statusCode: status,
-          headers: responseHeaders,
+          headers: headersForJsonBody(responseHeaders),
           body: JSON.stringify(anthropicResponse),
           duration,
           responseBodyChunks: ctx.responseChunks,
@@ -1442,20 +1706,21 @@ export class ProxyExecutor {
   ): void {
     const { clientId, provider, res: clientRes } = task;
 
-    let responseBody = "";
+    const bodyChunks: Buffer[] = [];
     proxyRes.on("data", (chunk: Buffer) => {
-      responseBody += chunk.toString();
+      bodyChunks.push(chunk);
     });
 
     proxyRes.on("end", () => {
       if (clientRes) {
         clientRes.off("close", onClientDisconnect);
       }
+      const responseBody = Buffer.concat(bodyChunks).toString("utf-8");
       ctx.originalResponseBody = responseBody;
       const duration = Date.now() - ctx.startTime;
 
       try {
-        const parsed = JSON.parse(responseBody) as Record<string, unknown>;
+        const parsed = parseBufferedResponsesObject(responseBody);
         if (!isOpenAIResponsesApiResultBody(parsed)) {
           throw new Error("Response is not a valid Responses API JSON object");
         }
@@ -1517,7 +1782,7 @@ export class ProxyExecutor {
 
         resolve({
           statusCode: status,
-          headers: responseHeaders,
+          headers: headersForJsonBody(responseHeaders),
           body: JSON.stringify(anthropicResponse),
           duration,
           responseBodyChunks: ctx.responseChunks,
@@ -1695,37 +1960,19 @@ export class ProxyExecutor {
     resolve: (value: ProxyResult) => void
   ): void {
     const { clientId, provider, res: clientRes, responsesStreamRequested } = task;
-    let responseBody = "";
+    const bodyChunks: Buffer[] = [];
     proxyRes.on("data", (chunk: Buffer) => {
-      responseBody += chunk.toString();
+      bodyChunks.push(chunk);
     });
     proxyRes.on("end", () => {
       if (clientRes) {
         clientRes.off("close", onClientDisconnect);
       }
+      const responseBody = Buffer.concat(bodyChunks).toString("utf-8");
       ctx.originalResponseBody = responseBody;
       const duration = Date.now() - ctx.startTime;
       try {
-        // Some upstream providers ignore stream=false and return SSE even when
-        // Content-Type is application/json. Detect and extract the final JSON payload.
-        let jsonBody = responseBody;
-        if (responseBody.startsWith("data:")) {
-          const dataLines = responseBody
-            .split("\n")
-            .map(line => line.trim())
-            .filter(
-              line => line.startsWith("data:") && line !== "data: [DONE]" && line !== "data:[DONE]"
-            );
-          if (dataLines.length > 0) {
-            const lastLine = dataLines[dataLines.length - 1];
-            jsonBody = lastLine.slice("data:".length).trim();
-            log.info(
-              `[Chat->Responses] Detected SSE in JSON response for ${provider.id}; ` +
-                `extracted last data chunk from ${dataLines.length} SSE lines`
-            );
-          }
-        }
-        const openaiResponse = JSON.parse(jsonBody) as OpenAIChatCompletionResponse;
+        const openaiResponse = parseBufferedChatCompletion(responseBody);
         applyPlatformChatResponseSanitize(
           openaiResponse as unknown as Record<string, unknown>,
           provider.baseUrl,
@@ -1779,7 +2026,7 @@ export class ProxyExecutor {
           );
           resolve({
             statusCode: status,
-            headers: responseHeaders,
+            headers: headersForJsonBody(responseHeaders),
             body: outJson,
             duration,
             responseBodyChunks: ctx.responseChunks,
@@ -2671,6 +2918,10 @@ export class ProxyExecutor {
         clientRes.off("close", onClientDisconnect);
       }
 
+      if (ctx.upstreamTimedOut) {
+        return;
+      }
+
       // Check if aborted by client disconnect
       if (abortSignal.aborted) {
         // The upstream had already streamed its terminal SSE event before the client closed —
@@ -2765,29 +3016,94 @@ export class ProxyExecutor {
     });
 
     proxyReq.on("timeout", () => {
+      if (ctx.upstreamTimedOut || ctx.clientDisconnected) {
+        return;
+      }
+      ctx.upstreamTimedOut = true;
       const duration = Date.now() - ctx.startTime;
-      log.error(`Proxy timeout to ${provider.id} (${duration}ms)`);
+      const idleSeconds = Math.round(ctx.upstreamTimeoutMs / 1000);
+      const message = `Upstream idle timeout: no data from ${provider.id} for ${idleSeconds}s`;
+      log.error(`[${clientId}] ${message} (elapsed ${duration}ms)`);
 
-      // Clean up client disconnect listener
       if (clientRes) {
         clientRes.off("close", onClientDisconnect);
       }
 
-      // Abort the request
       abortController.abort();
+      resolve(this.finishWithUpstreamTimeout(task, ctx, message, duration));
+    });
+  }
+
+  /**
+   * Upstream went silent past `concurrency.upstreamTimeout`. Before any client bytes: 504 JSON in
+   * the client protocol. Mid-stream: append a protocol error frame and end the client stream.
+   */
+  private finishWithUpstreamTimeout(
+    task: RequestTask,
+    ctx: ExecutionContext,
+    message: string,
+    duration: number
+  ): ProxyResult {
+    const { clientId, res: clientRes, clientSurface } = task;
+    const status = 504;
+    const code = "upstream_timeout";
+
+    if (clientRes && clientRes.headersSent) {
+      const contentType = String(clientRes.getHeader("content-type") ?? "");
+      if (!clientRes.writableEnded) {
+        if (/text\/event-stream/i.test(contentType)) {
+          this.writeClientStreamForLog(
+            clientRes,
+            formatClientSseError(clientSurface, status, message, code),
+            ctx
+          );
+        }
+        clientRes.end();
+      }
       this.responseLogger.logResponse(
         clientId,
         duration,
-        0,
+        status,
         ctx.responseChunks,
-        "Timeout",
+        message,
         undefined,
+        ttfbForStreamLog(ctx, true),
         undefined,
-        undefined,
-        undefined,
+        ctx.responseHeadersMasked,
         computeTiming(ctx, task)
       );
-      reject(new Error("Proxy timeout"));
-    });
+      return {
+        statusCode: status,
+        headers: {},
+        duration,
+        streamed: true,
+        streamCompleted: false,
+        responseBodyChunks: ctx.responseChunks,
+        errorMessage: message,
+      };
+    }
+
+    const body = formatClientJsonError(clientSurface, message, code);
+    const chunks = [Buffer.from(body, "utf-8")];
+    this.responseLogger.logResponse(
+      clientId,
+      duration,
+      status,
+      chunks,
+      message,
+      undefined,
+      undefined,
+      undefined,
+      ctx.responseHeadersMasked,
+      computeTiming(ctx, task)
+    );
+    return {
+      statusCode: status,
+      headers: { "content-type": "application/json" },
+      body,
+      duration,
+      responseBodyChunks: chunks,
+      errorMessage: message,
+    };
   }
 }
