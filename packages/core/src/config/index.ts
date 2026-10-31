@@ -23,6 +23,7 @@ import {
   type DatabaseConfig,
   type WebSearchGlobalConfig,
 } from "../types";
+import type { LogRetentionPolicy } from "../database/types";
 import {
   CONFIG_VERSION,
   DEFAULT_CONFIG_YAML,
@@ -49,7 +50,7 @@ import { buildDatabaseConfig } from "./builders/database";
 import { buildWebSearchConfig } from "./builders/web-search";
 import { buildSmartRoutingConfig } from "./builders/smart-routing";
 import { buildClientVersionDetectionConfig } from "./builders/client-version-detection";
-import { resolveLoggingStoreBodies } from "./logging";
+import { resolveLoggingStoreBodies, resolveLogRetention, resolveLogMaxBodyBytes } from "./logging";
 
 export { getDefaultRoutingSettings } from "./defaults";
 export { resolveLoggingStoreBodies, DEFAULT_LOGGING_STORE_BODIES } from "./logging";
@@ -439,6 +440,8 @@ export class ConfigManager {
       logging: {
         storeBodies: resolveLoggingStoreBodies(merged.logging),
         database,
+        retention: resolveLogRetention(merged.logging),
+        maxBodyBytes: resolveLogMaxBodyBytes(merged.logging),
       },
       locale: merged.server?.locale,
       webSearch: webSearchConfig,
@@ -551,6 +554,14 @@ export class ConfigManager {
 
   get enableLogStorage(): boolean {
     return this.config.logging.storeBodies;
+  }
+
+  get logRetention(): LogRetentionPolicy {
+    return this.config.logging.retention ?? resolveLogRetention(undefined);
+  }
+
+  get logMaxBodyBytes(): number {
+    return this.config.logging.maxBodyBytes ?? resolveLogMaxBodyBytes(undefined);
   }
 
   get webSearchConfig(): WebSearchGlobalConfig | undefined {

@@ -208,6 +208,7 @@ export class ProxyServer {
       `[Server:${this.instanceId}] Initializing database (leader). logging.storeBodies=${logsEnabled}`
     );
     const dbStart = Date.now();
+    this.database.setRetentionPolicy(this.config.logRetention, this.config.logMaxBodyBytes);
     await this.database.initialize(true, logsEnabled);
     await this.modelCatalog.persistAliasRegistry();
     this.log.info(
@@ -414,6 +415,7 @@ export class ProxyServer {
    */
   private handleConfigChanged(): void {
     this.database.setLogsEnabled(this.config.enableLogStorage);
+    this.database.setRetentionPolicy(this.config.logRetention, this.config.logMaxBodyBytes);
     this.queueManager.reloadFromConfig();
     if (this.wsBroadcaster) {
       this.wsBroadcaster.broadcastConfigChanged();

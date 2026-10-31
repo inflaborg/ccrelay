@@ -965,4 +965,47 @@ describe("database: LogDatabase", () => {
       expect(true).toBe(true);
     });
   });
+
+  describe("retention policy and body cap", () => {
+    type MockDriver = {
+      insertLog: ReturnType<typeof vi.fn>;
+      updateLogCompleted: ReturnType<typeof vi.fn>;
+      cleanOldLogs: ReturnType<typeof vi.fn>;
+    };
+    const driverOf = (d: LogDatabase) => (d as unknown as { driver: MockDriver }).driver;
+
+    it("truncates stored bodies to maxBodyBytes before they reach the driver", async () => {
+      await db.initialize(true, true);
+      db.setRetentionPolicy({ maxAgeDays: 30, maxRows: 10000, maxSizeMB: 256 }, 16);
+
+      db.insertLog({
+        timestamp: Date.now(),
+        providerId: "p",
+        providerName: "P",
+        method: "POST",
+        path: "/v1/messages",
+        duration: 1,
+        success: true,
+        requestBody: "r".repeat(40),
+      });
+      db.updateLogCompleted("c1", 200, "s".repeat(40), 1, true, undefined, "o".repeat(16));
+
+      const driver = driverOf(db);
+      const inserted = driver.insertLog.mock.calls[0][0] as RequestLog;
+      expect(inserted.requestBody).toBe(`${"r".repeat(16)}\n…[truncated 24 bytes]`);
+      const args = driver.updateLogCompleted.mock.calls[0];
+      expect(args[2]).toBe(`${"s".repeat(16)}\n…[truncated 24 bytes]`);
+      expect(args[6]).toBe("o".repeat(16));
+    });
+
+    it("runMaintenance passes the configured retention to the driver", async () => {
+      await db.initialize(true);
+      const policy = { maxAgeDays: 7, maxRows: 500, maxSizeMB: 64 };
+      db.setRetentionPolicy(policy, 0);
+
+      await db.runMaintenance();
+
+      expect(driverOf(db).cleanOldLogs).toHaveBeenCalledWith(policy);
+    });
+  });
 });

@@ -22,6 +22,7 @@ import type {
   DatabaseDriver,
   DatabaseInitializeOptions,
   LogDbMigrationChoice,
+  LogRetentionPolicy,
   ModelAliasUpsert,
 } from "../types";
 
@@ -223,7 +224,9 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
       }
 
       case "cleanOldLogs": {
-        await driver?.cleanOldLogs();
+        await driver?.cleanOldLogs(
+          (payload as { policy?: LogRetentionPolicy } | undefined)?.policy
+        );
         return { id, success: true };
       }
 

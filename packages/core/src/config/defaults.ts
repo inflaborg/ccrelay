@@ -183,6 +183,13 @@ concurrency:
 # ==================== Logging Storage ====================
 logging:
   storeBodies: true             # Store request/response bodies in the Logs tab
+  maxBodyBytes: 1048576         # Per-body cap for stored bodies (bytes, 0 = unlimited)
+
+  # Request-log retention, applied ~1 min after start and then hourly (0 = unlimited)
+  retention:
+    maxAgeDays: 30
+    maxRows: 10000
+    maxSizeMB: 256              # SQLite only: oldest rows are dropped above this size
 
   database:
     type: "sqlite"              # sqlite | postgres

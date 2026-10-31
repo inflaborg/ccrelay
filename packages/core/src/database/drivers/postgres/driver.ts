@@ -37,9 +37,12 @@ import {
   type DatabaseInitializeOptions,
   type ModelAliasRecord,
   type ModelAliasUpsert,
+  type LogRetentionPolicy,
+  DEFAULT_LOG_RETENTION,
   UNKNOWN_MODEL_LABEL,
 } from "../../types";
 import {
+  retentionCutoffMs,
   utf8StringToBlob,
   dbRowToLog,
   dbRowToLogWithoutBody,
@@ -103,13 +106,6 @@ export class PostgresDriver implements DatabaseDriver {
     this._logsEnabled = options?.logsEnabled ?? false;
 
     this.log.info("[PostgresDriver] Connected successfully");
-
-    // Clean old logs in background
-    setTimeout(() => {
-      this.cleanOldLogs().catch(err => {
-        this.log.error("[PostgresDriver] Background cleanup failed:", err);
-      });
-    }, 0);
   }
 
   /**
@@ -625,19 +621,26 @@ export class PostgresDriver implements DatabaseDriver {
   }
 
   /**
-   * Clean old logs
+   * Apply age and row-count retention; `maxSizeMB` is SQLite-only and autovacuum reclaims space.
    */
-  async cleanOldLogs(): Promise<void> {
+  async cleanOldLogs(policy: LogRetentionPolicy = DEFAULT_LOG_RETENTION): Promise<void> {
     if (!this.pool) {
       return;
     }
 
-    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    await this.pool.query(`DELETE FROM ${TABLE} WHERE timestamp < $1`, [thirtyDaysAgo]);
-    await this.pool.query(`DELETE FROM ${METRICS_TABLE} WHERE timestamp < $1`, [thirtyDaysAgo]);
-
-    // PostgreSQL doesn't need VACUUM like SQLite, but we can run VACUUM ANALYZE
-    // Note: VACUUM cannot run inside a transaction block
+    const cutoff = retentionCutoffMs(policy.maxAgeDays);
+    if (cutoff !== undefined) {
+      await this.pool.query(`DELETE FROM ${TABLE} WHERE timestamp < $1`, [cutoff]);
+      await this.pool.query(`DELETE FROM ${METRICS_TABLE} WHERE timestamp < $1`, [cutoff]);
+    }
+    if (policy.maxRows > 0) {
+      await this.pool.query(
+        `DELETE FROM ${TABLE} WHERE timestamp < (
+           SELECT timestamp FROM ${TABLE} ORDER BY timestamp DESC LIMIT 1 OFFSET $1
+         )`,
+        [policy.maxRows - 1]
+      );
+    }
   }
 
   /**

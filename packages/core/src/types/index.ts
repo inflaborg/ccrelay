@@ -7,6 +7,7 @@
 
 import * as http from "http";
 import { z } from "zod";
+import type { LogRetentionPolicy } from "../database/types";
 
 export type ProviderMode = "passthrough" | "inject";
 
@@ -223,6 +224,17 @@ export const LoggingConfigSchema = z.object({
   /** @deprecated Use `storeBodies`. Read when the new field is absent. */
   enabled: z.boolean().optional(),
   database: DatabaseConfigSchema.optional(),
+  /** Request-log retention; each limit uses 0 for unlimited. */
+  retention: z
+    .object({
+      maxAgeDays: z.number().nonnegative().optional(),
+      maxRows: z.number().int().nonnegative().optional(),
+      /** SQLite only: cap on live data in logs.db, oldest rows are dropped first. */
+      maxSizeMB: z.number().nonnegative().optional(),
+    })
+    .optional(),
+  /** Per-body cap for stored request/response bodies, in bytes; 0 = unlimited. */
+  maxBodyBytes: z.number().int().nonnegative().optional(),
 });
 
 export type LoggingConfigInput = z.infer<typeof LoggingConfigSchema>;
@@ -505,6 +517,10 @@ export interface RouterConfig {
     /** Effective body-storage flag (resolved from storeBodies / enabled). */
     storeBodies: boolean;
     database?: DatabaseConfig;
+    /** Resolved `logging.retention`; defaults apply when absent. */
+    retention?: LogRetentionPolicy;
+    /** Resolved `logging.maxBodyBytes`; 0 = unlimited. */
+    maxBodyBytes?: number;
   };
   /** UI language locale; undefined means not yet chosen. */
   locale?: "en" | "zh" | "ja" | "ko";

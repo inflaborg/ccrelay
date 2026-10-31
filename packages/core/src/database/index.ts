@@ -9,12 +9,27 @@ import { Logger } from "../utils/logger";
 import type { DatabaseDriver, DatabaseDriverConfig } from "./types";
 import { createDriver } from "./factory";
 import { isSqliteCliUnavailableError } from "./drivers/sqlite";
-import { emptyProviderDetailStats } from "./shared-utils";
+import {
+  emptyProviderDetailStats,
+  truncateLogBody,
+  DEFAULT_LOG_MAX_BODY_BYTES,
+} from "./shared-utils";
 import { applyAliasRegistryToLog, labelProviderModelStats } from "./model-alias-registry";
-import type { ModelAliasRecord, ModelAliasUpsert } from "./types";
+import {
+  DEFAULT_LOG_RETENTION,
+  type LogRetentionPolicy,
+  type ModelAliasRecord,
+  type ModelAliasUpsert,
+  type RequestLog,
+} from "./types";
+
+/** First maintenance pass runs shortly after startup, then hourly. */
+export const LOG_MAINTENANCE_INITIAL_DELAY_MS = 60_000;
+export const LOG_MAINTENANCE_INTERVAL_MS = 60 * 60_000;
 
 export type {
   RequestLog,
+  LogRetentionPolicy,
   LogFilter,
   LogQueryResult,
   RequestStatus,
@@ -28,7 +43,8 @@ export type {
   PostgresDriverConfig,
   LogDbMigrationChoice,
 } from "./types";
-export { UNKNOWN_MODEL_LABEL } from "./types";
+export { UNKNOWN_MODEL_LABEL, DEFAULT_LOG_RETENTION } from "./types";
+export { DEFAULT_LOG_MAX_BODY_BYTES } from "./shared-utils";
 
 /**
  * LogDatabase - Simple wrapper around database driver
@@ -40,6 +56,10 @@ export class LogDatabase {
   private readonly log = Logger.getInstance();
   private initPromise: Promise<void> | null = null;
   private _logsEnabled = false;
+  private retention: LogRetentionPolicy = { ...DEFAULT_LOG_RETENTION };
+  private maxBodyBytes = DEFAULT_LOG_MAX_BODY_BYTES;
+  private maintenanceTimer: NodeJS.Timeout | null = null;
+  private maintenanceRunning = false;
 
   constructor(customDbPath?: string, driverConfig?: DatabaseDriverConfig) {
     // Determine default path
@@ -102,6 +122,7 @@ export class LogDatabase {
       await this.driver.initialize({ migrationChoice: "migrate", logsEnabled });
 
       this.log.info("[LogDatabase] Initialization complete");
+      this.scheduleMaintenance(LOG_MAINTENANCE_INITIAL_DELAY_MS);
     } catch (err) {
       try {
         await this.driver?.close();
@@ -126,21 +147,83 @@ export class LogDatabase {
    * Insert a log entry (async via write queue if supported)
    */
   insertLog(log: Parameters<DatabaseDriver["insertLog"]>[0]): void {
-    this.driver?.insertLog(log);
+    this.driver?.insertLog(this.capLogBodies(log));
   }
 
   /**
    * Insert a log entry with "pending" status immediately
    */
   insertLogPending(log: Parameters<DatabaseDriver["insertLogPending"]>[0]): void {
-    this.driver?.insertLogPending(log);
+    this.driver?.insertLogPending(this.capLogBodies(log));
   }
 
   /**
    * Update a log entry by clientId with response data
    */
   updateLogCompleted(...args: Parameters<DatabaseDriver["updateLogCompleted"]>): void {
-    this.driver?.updateLogCompleted(...args);
+    const capped = [...args] as Parameters<DatabaseDriver["updateLogCompleted"]>;
+    capped[2] = truncateLogBody(capped[2], this.maxBodyBytes);
+    capped[6] = truncateLogBody(capped[6], this.maxBodyBytes);
+    this.driver?.updateLogCompleted(...capped);
+  }
+
+  private capLogBodies(log: RequestLog): RequestLog {
+    const max = this.maxBodyBytes;
+    if (max <= 0) {
+      return log;
+    }
+    return {
+      ...log,
+      requestBody: truncateLogBody(log.requestBody, max),
+      responseBody: truncateLogBody(log.responseBody, max),
+      originalRequestBody: truncateLogBody(log.originalRequestBody, max),
+      originalResponseBody: truncateLogBody(log.originalResponseBody, max),
+    };
+  }
+
+  /**
+   * Apply `logging.retention` / `logging.maxBodyBytes`; takes effect on the next write / maintenance run.
+   */
+  setRetentionPolicy(retention: LogRetentionPolicy, maxBodyBytes: number): void {
+    this.retention = { ...retention };
+    this.maxBodyBytes = maxBodyBytes;
+  }
+
+  /** Run retention + space reclamation now (also runs on a timer while the leader holds the DB). */
+  async runMaintenance(): Promise<void> {
+    if (!this.driver?.enabled || this.maintenanceRunning) {
+      return;
+    }
+    this.maintenanceRunning = true;
+    try {
+      await this.driver.cleanOldLogs(this.retention);
+    } catch (err) {
+      this.log.warn(
+        `[LogDatabase] Maintenance failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+    } finally {
+      this.maintenanceRunning = false;
+    }
+  }
+
+  private scheduleMaintenance(delayMs: number): void {
+    this.clearMaintenanceTimer();
+    this.maintenanceTimer = setTimeout(() => {
+      this.maintenanceTimer = null;
+      void this.runMaintenance().finally(() => {
+        if (this.driver?.enabled) {
+          this.scheduleMaintenance(LOG_MAINTENANCE_INTERVAL_MS);
+        }
+      });
+    }, delayMs);
+    this.maintenanceTimer.unref?.();
+  }
+
+  private clearMaintenanceTimer(): void {
+    if (this.maintenanceTimer) {
+      clearTimeout(this.maintenanceTimer);
+      this.maintenanceTimer = null;
+    }
   }
 
   /**
@@ -277,6 +360,7 @@ export class LogDatabase {
    * Close the database
    */
   async close(): Promise<void> {
+    this.clearMaintenanceTimer();
     if (this.driver) {
       await this.driver.close();
       this.driver = null;
