@@ -25,7 +25,8 @@ import {
   setLogDatabaseDriverConfigResolver,
   loggingDatabaseConfigToDriver,
 } from "../database";
-import { LeaderElection } from "./leaderElection";
+import { LeaderElection, describePortConflict } from "./leaderElection";
+import { eventLoopMonitor } from "./eventLoopMonitor";
 import { isStaticRequest, serveStatic } from "./static";
 import { isApiRequest, handleApiRequest } from "../api";
 import { cancelUpdateCheck, scheduleUpdateCheck } from "./updateCheck";
@@ -177,6 +178,16 @@ export class ProxyServer {
     }
 
     await this.ensureFollowerNoLogStorage();
+
+    if (this.leaderElection.hasExternalPortConflict()) {
+      const portConflict = this.leaderElection.getPortConflict();
+      this.notifyRoleChangeListeners({
+        role: this.role,
+        state: this.leaderElection.getState(),
+        error: new Error(describePortConflict(portConflict)),
+        portConflict,
+      });
+    }
   }
 
   /**
@@ -493,6 +504,8 @@ export class ProxyServer {
       return { role: this.role, leaderUrl: this.leaderUrl ?? undefined };
     }
 
+    eventLoopMonitor.start();
+
     // Initialize proxy executor's retry handler
     this.proxyExecutor.setExecuteFn((task: RequestTask) => this.proxyExecutor.execute(task));
 
@@ -611,6 +624,8 @@ export class ProxyServer {
     // Close database
     await this.database.close();
     this.log.info("[Server] Database closed");
+
+    eventLoopMonitor.stop();
   }
 
   /**

@@ -98,7 +98,8 @@ describe("api/queue", () => {
     handleQueueStats(req as unknown as IncomingMessage, res as unknown as ServerResponse, {});
 
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toEqual(overview);
+    expect(JSON.parse(res.body)).toMatchObject(overview);
+    expect(JSON.parse(res.body)).toHaveProperty("eventLoopLag.p99Ms");
   });
 
   it("returns disabled overview when concurrency is off", () => {
@@ -120,6 +121,7 @@ describe("api/queue", () => {
       enabled: false,
       message: "Concurrency control is not enabled",
       routes: {},
+      eventLoopLag: { p99Ms: 0, maxMs: 0, peakMs: 0, sampledAt: 0 },
     });
   });
 });

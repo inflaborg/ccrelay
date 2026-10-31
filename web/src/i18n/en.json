@@ -197,6 +197,8 @@
       "noQueues": "No queues configured",
       "defaultQueue": "Default",
       "saturated": "Saturated",
+      "eventLoopLag": "Event loop lag p99 {{p99}}",
+      "eventLoopLagHint": "The gateway main thread is blocked; requests and health checks are delayed. Peak since start: {{peak}}",
       "workers": "{{active}} / {{max}} workers",
       "processing": "Processing",
       "waiting": "Waiting",

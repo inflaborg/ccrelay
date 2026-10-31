@@ -532,6 +532,16 @@ export interface RouterConfig {
   clientVersionDetection?: ClientVersionDetectionConfig;
 }
 
+export interface EventLoopLagSnapshot {
+  /** p99 delay of the last completed sample window (ms). */
+  p99Ms: number;
+  /** Worst delay of the last completed sample window (ms). */
+  maxMs: number;
+  /** Worst delay seen since the monitor started (ms). */
+  peakMs: number;
+  sampledAt: number;
+}
+
 export interface RouterStatus {
   status: "running" | "stopped";
   currentProvider: string | null;
@@ -540,6 +550,7 @@ export interface RouterStatus {
   port?: number;
   host?: string;
   dbAvailable?: boolean;
+  eventLoopLag?: EventLoopLagSnapshot;
 }
 
 export interface ProvidersResponse {
@@ -766,6 +777,15 @@ export interface RoleChangeInfo {
   state: ElectionState;
   leaderUrl?: string;
   error?: Error;
+  /** Set once leadership attempts are exhausted because the port is held by an unresponsive process. */
+  portConflict?: PortConflictInfo;
+}
+
+export interface PortConflictInfo {
+  host: string;
+  port: number;
+  /** PID of the last CCRelay instance recorded as leader, when known (may be a hung process). */
+  holderPid?: number;
 }
 
 /**
@@ -900,6 +920,8 @@ export interface QueueStats {
 export interface QueueTaskSnapshot {
   id: string;
   elapsed: number;
+  providerId?: string;
+  path?: string;
 }
 
 /** Queue stats plus live task snapshots for dashboard / API. */
@@ -915,6 +937,8 @@ export interface QueueOverview {
   message?: string;
   default?: QueueDetailStats | null;
   routes: Record<string, QueueDetailStats>;
+  /** Main-thread lag; added by the queue API. */
+  eventLoopLag?: EventLoopLagSnapshot;
 }
 
 /**

@@ -22,7 +22,7 @@ interface SyncDb {
 
 function loadNodeSqlite(): (new (file: string) => SyncDb) | null {
   try {
-    const req = createRequire(import.meta.url);
+    const req = createRequire(__filename);
     // eslint-disable-next-line @typescript-eslint/naming-convention -- class export
     const { DatabaseSync } = req("node:sqlite") as { DatabaseSync: new (file: string) => SyncDb };
     return DatabaseSync;

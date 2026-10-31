@@ -2,7 +2,7 @@
  * System tray UI for CCRelay desktop
  */
 
-import { Tray, Menu, shell, nativeImage, app } from "electron";
+import { Tray, Menu, Notification, shell, nativeImage, app } from "electron";
 import * as path from "path";
 import { getLogDir, type ConfigManager, type ProxyServer } from "@ccrelay/core";
 import { setOpenAtLogin, getOpenAtLogin } from "./autoLaunch";
@@ -173,7 +173,20 @@ export function createTray(server: ProxyServer, config: ConfigManager): Tray {
     tray.setToolTip(`CCRelay (${running ? role : t.tooltipStopped})`);
   };
 
-  server.onRoleChanged(() => updateMenu());
+  server.onRoleChanged(info => {
+    updateMenu();
+    if (info.portConflict && Notification.isSupported()) {
+      const t = trayStrings(resolveTrayLocale(config.locale));
+      const pid =
+        info.portConflict.holderPid !== undefined ? ` (PID ${info.portConflict.holderPid})` : "";
+      new Notification({
+        title: t.portConflictTitle,
+        body: t.portConflictBody
+          .replace("{port}", String(info.portConflict.port))
+          .replace("{pid}", pid),
+      }).show();
+    }
+  });
   server.getRouter().onProviderChanged(() => updateMenu());
   config.onConfigChanged(() => {
     updateDashboardInjectConfig(server, config);

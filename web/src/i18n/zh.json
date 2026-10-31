@@ -197,6 +197,8 @@
       "noQueues": "未配置队列",
       "defaultQueue": "默认队列",
       "saturated": "已满",
+      "eventLoopLag": "事件循环延迟 p99 {{p99}}",
+      "eventLoopLagHint": "网关主线程阻塞，请求与健康检查都会被延迟。启动以来峰值：{{peak}}",
       "workers": "{{active}} / {{max}} 并发",
       "processing": "执行中",
       "waiting": "排队中",

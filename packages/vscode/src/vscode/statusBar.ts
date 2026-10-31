@@ -39,8 +39,17 @@ export class StatusBarManager implements vscode.Disposable {
   /**
    * Handle role change events from server
    */
-  private handleRoleChange = (_info: RoleChangeInfo): void => {
+  private handleRoleChange = (info: RoleChangeInfo): void => {
     this.update();
+    if (info.portConflict && info.error) {
+      void vscode.window
+        .showErrorMessage(`CCRelay: ${info.error.message}`, "Show Output Logs")
+        .then(choice => {
+          if (choice) {
+            void vscode.commands.executeCommand("ccrelay.showLogs");
+          }
+        });
+    }
   };
 
   /**

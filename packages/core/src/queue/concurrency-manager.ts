@@ -10,6 +10,7 @@ import type {
   ProxyResult,
   QueueStats,
   QueueDetailStats,
+  QueueTaskSnapshot,
   ConcurrencyConfig,
 } from "../types";
 import { ScopedLogger } from "../utils/logger";
@@ -396,24 +397,28 @@ export class ConcurrencyManager {
   /**
    * Get detailed information about currently processing tasks
    */
-  getProcessingTasks(): Array<{ id: string; elapsed: number }> {
+  getProcessingTasks(): QueueTaskSnapshot[] {
     const now = Date.now();
     return Array.from(this.processingTasks.values()).map(t => ({
       id: t.task.id,
       elapsed: now - t.startedAt,
+      providerId: t.task.provider?.id,
+      path: t.task.inboundPath,
     }));
   }
 
   /**
    * Get tasks waiting in the queue (not yet assigned a worker)
    */
-  getQueuedTasks(): Array<{ id: string; elapsed: number }> {
+  getQueuedTasks(): QueueTaskSnapshot[] {
     const now = Date.now();
     return this.queue
       .toArray()
       .map(qt => ({
         id: qt.task.id,
         elapsed: now - qt.queuedAt,
+        providerId: qt.task.provider?.id,
+        path: qt.task.inboundPath,
       }))
       .sort((a, b) => b.elapsed - a.elapsed);
   }

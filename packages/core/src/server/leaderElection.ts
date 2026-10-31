@@ -19,11 +19,18 @@ import {
   ElectionState,
   InstanceRole,
   RoleChangeInfo,
+  type PortConflictInfo,
   type ServerLockInfo,
 } from "../types";
+import { eventLoopMonitor } from "./eventLoopMonitor";
 
 // Timeout for probing existing server
 const PROBE_TIMEOUT_MS = 500; // 500ms - reduced from 2s for faster startup
+
+// Leader self-probe and port-conflict probe: a busy event loop can delay /ccrelay/status well
+// past 500ms, which must not be mistaken for a dead server.
+const SELF_PROBE_TIMEOUT_MS = 2_000;
+const SELF_PROBE_MAX_FAILURES = 3;
 
 // Maximum failed leadership attempts before giving up
 const MAX_LEADERSHIP_FAILURES = 3;
@@ -47,6 +54,18 @@ const LEADER_READY_MAX_PROBE_MS = 2_000; // Max probe interval
 // Callback type for role changes (extended with state and error)
 type RoleChangeCallback = (info: RoleChangeInfo) => void;
 
+/** User-facing explanation of an unrecoverable port conflict. */
+export function describePortConflict(conflict: PortConflictInfo): string {
+  const holder =
+    conflict.holderPid !== undefined
+      ? `PID ${conflict.holderPid} (a previous CCRelay instance)`
+      : "another process";
+  return (
+    `Port ${conflict.port} is held by ${holder} that does not answer HTTP. ` +
+    `CCRelay stopped trying to start the server; free the port (or end that process) and restart.`
+  );
+}
+
 /**
  * Leader election manager
  */
@@ -64,6 +83,9 @@ export class LeaderElection {
   private isRunning: boolean = false;
   private failedLeadershipAttempts: number = 0;
   private hasPortConflict: boolean = false;
+  private lastPortConflict: PortConflictInfo | null = null;
+  private selfProbeFailures = 0;
+  private heartbeatInFlight = false;
 
   // Election lock to prevent concurrent elections
   private electionInProgress: boolean = false;
@@ -445,28 +467,61 @@ export class LeaderElection {
    */
   private startHeartbeat(): void {
     this.stopHeartbeat();
+    this.selfProbeFailures = 0;
     this.log.info(`[LeaderElection] Starting heartbeat as leader_active`);
     this.heartbeatTimer = setInterval(
       // eslint-disable-next-line @typescript-eslint/no-misused-promises -- setInterval doesn't await callbacks
       async () => {
-        if (this.state !== "leader_active") {
-          this.stopHeartbeat();
+        if (this.heartbeatInFlight) {
           return;
         }
-
-        const selfHttpUp = await probeCcrelayHttp(this.host, this.port, PROBE_TIMEOUT_MS);
-        if (!selfHttpUp) {
-          this.log.warn(
-            `[LeaderElection] Self HTTP not serving while leader_active, self-evicting instance ${this.instanceId}`
-          );
-          await this.selfEvict();
-          return;
+        this.heartbeatInFlight = true;
+        try {
+          await this.heartbeatTick();
+        } finally {
+          this.heartbeatInFlight = false;
         }
-
-        await this.serverLock.updateHeartbeat(this.instanceId, this.port, this.host);
       },
       LEADER_HEARTBEAT_INTERVAL_MS
     );
+  }
+
+  /**
+   * Self-probe HTTP, then refresh the lock. A slow probe usually means a busy event loop, not a
+   * dead server, so eviction needs {@link SELF_PROBE_MAX_FAILURES} consecutive failures; until then
+   * the heartbeat keeps the lock so followers do not race for a port that is still bound.
+   */
+  private async heartbeatTick(): Promise<void> {
+    if (this.state !== "leader_active") {
+      this.stopHeartbeat();
+      return;
+    }
+
+    const selfHttpUp = await probeCcrelayHttp(this.host, this.port, SELF_PROBE_TIMEOUT_MS);
+    if (selfHttpUp) {
+      if (this.selfProbeFailures > 0) {
+        this.log.info(
+          `[LeaderElection] Self HTTP probe recovered after ${this.selfProbeFailures} failure(s)`
+        );
+      }
+      this.selfProbeFailures = 0;
+    } else {
+      this.selfProbeFailures++;
+      const lag = eventLoopMonitor.snapshot();
+      this.log.warn(
+        `[LeaderElection] Self HTTP probe failed (${this.selfProbeFailures}/${SELF_PROBE_MAX_FAILURES}, ` +
+          `timeout ${SELF_PROBE_TIMEOUT_MS}ms, event loop p99=${lag.p99Ms}ms max=${lag.maxMs}ms)`
+      );
+      if (this.selfProbeFailures >= SELF_PROBE_MAX_FAILURES) {
+        this.log.error(
+          `[LeaderElection] Self HTTP not serving while leader_active, self-evicting instance ${this.instanceId}`
+        );
+        await this.selfEvict();
+        return;
+      }
+    }
+
+    await this.serverLock.updateHeartbeat(this.instanceId, this.port, this.host);
   }
 
   private stopHeartbeat(): void {
@@ -498,7 +553,7 @@ export class LeaderElection {
    * Port bind failed (EADDRINUSE). If another instance serves HTTP, demote to its follower.
    */
   async handlePortConflict(): Promise<{ becameFollower: boolean; leaderUrl?: string }> {
-    const serverUp = await this.probeExistingServer();
+    const serverUp = await probeCcrelayHttp(this.host, this.port, SELF_PROBE_TIMEOUT_MS);
     if (serverUp) {
       this.log.info(
         `[LeaderElection] Port ${this.port} held by active server, demoting to follower`
@@ -522,8 +577,16 @@ export class LeaderElection {
       return { becameFollower: true, leaderUrl: this.leaderUrl };
     }
 
-    this.log.info(
-      `[LeaderElection] Port conflict but no server responding, cleaning stale coordination state`
+    const holder = await this.serverLock.getCurrentLeader().catch(() => null);
+    const holderPid = holder && holder.instanceId !== this.instanceId ? holder.pid : undefined;
+    this.lastPortConflict = { host: this.host, port: this.port, holderPid };
+    this.log.error(
+      `[LeaderElection] Port ${this.host}:${this.port} is bound but CCRelay HTTP did not answer within ` +
+        `${SELF_PROBE_TIMEOUT_MS}ms` +
+        (holderPid !== undefined
+          ? `; last recorded leader is PID ${holderPid} (it may be hung)`
+          : "; the port may be held by another program") +
+        `. Cleaning stale coordination state.`
     );
     await this.serverLock.cleanupStaleLocks();
     await this.serverLock.invalidateInheritedLeaderIfHttpDown(this.instanceId);
@@ -801,7 +864,7 @@ export class LeaderElection {
     if (this.failedLeadershipAttempts >= MAX_LEADERSHIP_FAILURES) {
       this.hasPortConflict = true;
       this.log.error(
-        `[LeaderElection] Max leadership failures reached. Port ${this.port} may be in use by external process. Stopping election attempts.`
+        `[LeaderElection] Max leadership failures reached. ${describePortConflict(this.getPortConflict())}`
       );
     }
   }
@@ -811,6 +874,11 @@ export class LeaderElection {
    */
   hasExternalPortConflict(): boolean {
     return this.hasPortConflict;
+  }
+
+  /** Port and last known holder from the most recent unresponsive-port conflict. */
+  getPortConflict(): PortConflictInfo {
+    return this.lastPortConflict ?? { host: this.host, port: this.port };
   }
 
   /**
