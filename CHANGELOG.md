@@ -15,6 +15,7 @@ Fixes for a gateway that kept its port open but stopped answering ([#152](https:
 
 - `concurrency.upstreamTimeout` (default 600 seconds) aborts a request when the upstream sends nothing for that long, before or during the response. The setting is also in the Settings page.
 - `logging.retention` limits stored logs by age (30 days), count (10,000), and SQLite file size (256 MB). `logging.maxBodyBytes` caps each stored body at 1 MB by default.
+- Providers can require one system message at the start of Chat Completions. Turn on `singleLeadingSystem` for gateways that reject system messages unless they are unique and first.
 
 **UI**
 

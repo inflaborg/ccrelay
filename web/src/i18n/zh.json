@@ -497,6 +497,8 @@
       "typeOpenaiChatOnly": "OpenAI（仅 Chat）",
       "azureChatCompat": "Azure Chat 兼容",
       "azureChatCompatHelp": "用于 Azure OpenAI 或自定义域名的 Azure 兼容网关（developer→system，custom 工具转 function）。官方 *.cognitiveservices.azure.com 会自动识别。",
+      "singleLeadingSystem": "合并为一条前置 system",
+      "singleLeadingSystemHelp": "转发 Chat Completions 前，把所有 system 和 developer 合并成一条并放到 messages 最前。用于会报 System message must be at the beginning 的网关。",
       "modePassthrough": "透传",
       "modeInject": "注入",
       "apiKey": "API 密钥",

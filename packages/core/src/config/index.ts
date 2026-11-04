@@ -651,6 +651,9 @@ export class ConfigManager {
               openai_compat: config.openai_compat,
             }
           : {}),
+        ...(config.singleLeadingSystem === true || config.single_leading_system === true
+          ? { singleLeadingSystem: true }
+          : {}),
       };
 
       rawConfig.providers = sortProviderMapKeys(providers);

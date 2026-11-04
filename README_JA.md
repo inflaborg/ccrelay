@@ -536,6 +536,7 @@ CCRelay は `~/.ccrelay/config.yaml` を使います（初回起動時に自動�
 | `mode`         | `"passthrough"`   | `passthrough`（認証を保持）または `inject`（認証を置き換え）                                 |
 | `providerType` | `"anthropic"`     | `"anthropic"`、`"openai"`（完全パススルー）、または `"openai_chat"`（Chat Completions のみ） |
 | `openaiCompat` | —                 | 任意。カスタムドメインで Azure Chat の整形をするには `azure_openai` を設定します（公式の `*.cognitiveservices.azure.com` は自動検出されます） |
+| `singleLeadingSystem` | —          | 任意。`true` のとき、Chat Completions リクエストの system と developer を1件にまとめて先頭に置きます。YAML は `single_leading_system` も受け付けます。 |
 | `apiKey`       | —                 | inject モード用の API キー。`${ENV_VAR}` に対応します。                                      |
 | `authHeader`   | `"authorization"` | 認証ヘッダー名                                                                               |
 | `modelMap`     | —                 | モデル名のマッピング（`[{pattern, model}]`、ワイルドカード対応）                             |

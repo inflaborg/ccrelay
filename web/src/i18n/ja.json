@@ -497,6 +497,8 @@
       "typeOpenaiChatOnly": "OpenAI（Chat のみ）",
       "azureChatCompat": "Azure Chat 互換",
       "azureChatCompatHelp": "カスタムドメインの Azure OpenAI または Azure 互換ルーターで有効にします（developer→system、カスタムツールのシム）。公式の *.cognitiveservices.azure.com ホストは自動検出されます。",
+      "singleLeadingSystem": "先頭に system を1件だけ置く",
+      "singleLeadingSystemHelp": "Chat Completions へ転送する前に、system と developer を1件にまとめて messages の先頭へ置きます。system が先頭にない、または複数あると拒否するゲートウェイ向けです。",
       "modePassthrough": "パススルー",
       "modeInject": "注入",
       "apiKey": "API キー",

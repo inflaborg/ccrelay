@@ -25,6 +25,8 @@ export interface Provider {
   webSearchEnabled?: boolean;
   /** When `azure_openai`, apply Azure Chat Completions sanitization (custom domains). */
   openaiCompat?: "default" | "azure_openai";
+  /** When true, merge Chat system/developer messages into one leading system. */
+  singleLeadingSystem?: boolean;
 }
 
 export interface ProvidersResponse {
@@ -75,6 +77,8 @@ export interface AddProviderRequest {
   customModelsList?: string[];
   /** When `azure_openai`, apply Azure Chat Completions sanitization (custom domains). */
   openaiCompat?: "default" | "azure_openai";
+  /** When true, merge Chat system/developer messages into one leading system. */
+  singleLeadingSystem?: boolean;
 }
 
 export interface AddProviderResponse {
@@ -663,6 +667,8 @@ export interface WizardEndpointVariantInput {
   vlModelMap?: ModelMapEntry[];
   modelMappingEnabled?: boolean;
   openaiCompat?: "default" | "azure_openai";
+  /** When true, merge Chat system/developer messages into one leading system. */
+  singleLeadingSystem?: boolean;
   useCustomModelsList?: boolean;
   customModelsList?: string[];
 }

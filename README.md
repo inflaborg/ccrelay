@@ -536,6 +536,7 @@ Each provider supports:
 | `mode`         | `"passthrough"`   | `passthrough` (keep auth) or `inject` (replace auth)                                     |
 | `providerType` | `"anthropic"`     | `"anthropic"`, `"openai"` (full passthrough), or `"openai_chat"` (Chat Completions only) |
 | `openaiCompat` | —                 | Optional. Set `azure_openai` for Azure Chat shaping on custom domains (official `*.cognitiveservices.azure.com` is auto-detected) |
+| `singleLeadingSystem` | —          | Optional. When `true`, Chat Completions requests merge every system and developer message into one and place it first. YAML also accepts `single_leading_system`. |
 | `apiKey`       | —                 | API key for inject mode. Supports `${ENV_VAR}`.                                          |
 | `authHeader`   | `"authorization"` | Auth header name                                                                         |
 | `modelMap`     | —                 | Model name mappings (`[{pattern, model}]`, wildcards supported)                          |

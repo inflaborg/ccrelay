@@ -16,6 +16,8 @@ export function parseProvider(id: string, config: ProviderConfigInput): Provider
   const rawList = config.customModelsList ?? config.custom_models_list;
   const customModelsListNormalized = Array.isArray(rawList) ? rawList : undefined;
   const openaiCompat = config.openaiCompat ?? config.openai_compat;
+  const singleLeadingSystem =
+    config.singleLeadingSystem === true || config.single_leading_system === true;
   const modelMappingExplicitlyDisabled =
     config.modelMappingEnabled === false || config.model_mapping_enabled === false;
 
@@ -39,6 +41,7 @@ export function parseProvider(id: string, config: ProviderConfigInput): Provider
         }
       : {}),
     ...(openaiCompat !== undefined ? { openaiCompat } : {}),
+    ...(singleLeadingSystem ? { singleLeadingSystem: true } : {}),
     ...(modelMappingExplicitlyDisabled ? { modelMappingEnabled: false } : {}),
   };
 }
