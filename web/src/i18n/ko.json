@@ -497,6 +497,8 @@
       "typeOpenaiChatOnly": "OpenAI (Chat만)",
       "azureChatCompat": "Azure Chat 호환",
       "azureChatCompatHelp": "사용자 지정 도메인의 Azure OpenAI 또는 Azure 호환 라우터에 사용합니다 (developer→system, 사용자 지정 도구 심). 공식 *.cognitiveservices.azure.com 호스트는 자동으로 감지됩니다.",
+      "singleLeadingSystem": "system 메시지를 맨 앞에 하나로",
+      "singleLeadingSystemHelp": "Chat Completions로 보내기 전에 system과 developer를 하나로 합쳐 messages 맨 앞에 둡니다. system이 맨 앞이 아니거나 여러 개면 거부하는 게이트웨이용입니다.",
       "modePassthrough": "통과",
       "modeInject": "주입",
       "apiKey": "API 키",

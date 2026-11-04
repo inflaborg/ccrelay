@@ -112,6 +112,7 @@ export function handleListProviders(
     customModelsList: p.useCustomModelsList ? (p.customModelsList ?? []) : undefined,
     webSearchEnabled: webSearchProviders.includes(p.id),
     ...(p.openaiCompat !== undefined ? { openaiCompat: p.openaiCompat } : {}),
+    ...(p.singleLeadingSystem === true ? { singleLeadingSystem: true } : {}),
   }));
 
   const response: ProvidersResponse = {
@@ -177,6 +178,7 @@ export async function handleAddProvider(
         ? { customModelsList: body.customModelsList ?? [] }
         : {}),
       ...(body.openaiCompat !== undefined ? { openaiCompat: body.openaiCompat } : {}),
+      ...(body.singleLeadingSystem === true ? { singleLeadingSystem: true } : {}),
     };
 
     const success = configManager.addProvider(body.id, providerConfig);
@@ -261,6 +263,9 @@ function buildDuplicateConfigFromProvider(source: Provider, name: string): Provi
   }
   if (source.openaiCompat !== undefined) {
     out.openaiCompat = source.openaiCompat;
+  }
+  if (source.singleLeadingSystem === true) {
+    out.singleLeadingSystem = true;
   }
   return out;
 }
@@ -478,6 +483,8 @@ interface AddProviderRequest {
   customModelsList?: string[];
   /** @deprecated comment removed — when `azure_openai`, apply Azure Chat sanitization for custom domains. */
   openaiCompat?: "default" | "azure_openai";
+  /** When true, merge Chat system/developer messages into one leading system. */
+  singleLeadingSystem?: boolean;
 }
 
 /**
@@ -522,6 +529,8 @@ export async function handleExportProviders(
         headers: p.headers,
         useCustomModelsList: p.useCustomModelsList,
         customModelsList: p.customModelsList,
+        ...(p.openaiCompat !== undefined ? { openaiCompat: p.openaiCompat } : {}),
+        ...(p.singleLeadingSystem === true ? { singleLeadingSystem: true } : {}),
       }));
 
     sendJson(res, 200, { providers });
@@ -581,6 +590,7 @@ export async function handleImportProviders(
         useCustomModelsList: p.useCustomModelsList === true,
         ...(p.useCustomModelsList === true ? { customModelsList: p.customModelsList ?? [] } : {}),
         ...(p.openaiCompat !== undefined ? { openaiCompat: p.openaiCompat } : {}),
+        ...(p.singleLeadingSystem === true ? { singleLeadingSystem: true } : {}),
       };
       const success = configManager.addProvider(p.id, providerConfig);
       if (success) {

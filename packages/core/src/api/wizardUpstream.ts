@@ -242,6 +242,7 @@ export interface WizardEndpointVariantInput {
   vlModelMap?: ModelMapEntry[];
   modelMappingEnabled?: boolean;
   openaiCompat?: OpenAICompat;
+  singleLeadingSystem?: boolean;
   useCustomModelsList?: boolean;
   customModelsList?: string[];
 }
@@ -282,6 +283,7 @@ function snapshotToTempProvider(v: WizardEndpointVariantInput, apiKey: string): 
     useCustomModelsList: v.useCustomModelsList === true,
     ...(v.useCustomModelsList === true ? { customModelsList: v.customModelsList ?? [] } : {}),
     ...(v.openaiCompat !== undefined ? { openaiCompat: v.openaiCompat } : {}),
+    ...(v.singleLeadingSystem === true ? { singleLeadingSystem: true } : {}),
     enabled: true,
   });
 }

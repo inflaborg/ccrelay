@@ -79,6 +79,12 @@ export const ProviderConfigSchema = z.object({
   custom_models_list: z.array(z.string()).optional(),
   openaiCompat: OpenAICompatSchema.optional(),
   openai_compat: OpenAICompatSchema.optional(),
+  /**
+   * When true, Chat Completions bodies merge every system/developer message into one
+   * and place it first. Omitted means off.
+   */
+  singleLeadingSystem: z.boolean().optional(),
+  single_leading_system: z.boolean().optional(),
   /** When false, `modelMap` / `vlModelMap` are ignored (request remap, list remap, response model). Default: enabled. */
   modelMappingEnabled: z.boolean().optional(),
   model_mapping_enabled: z.boolean().optional(),
@@ -466,6 +472,11 @@ export interface Provider {
    * Official `*.cognitiveservices.azure.com` hosts are still matched automatically.
    */
   openaiCompat?: OpenAICompat;
+  /**
+   * When true, Chat Completions requests merge every `system` and `developer` message
+   * into one and place it first. Independent of {@link openaiCompat}. Omitted means off.
+   */
+  singleLeadingSystem?: boolean;
 }
 
 /** Global web search configuration shared across providers. */

@@ -20,6 +20,7 @@ import {
   type ResponsesRequestEcho,
 } from "../../converter";
 import { looksLikeAliasWireId } from "../../shared/aliasHash";
+import { coalesceLeadingSystemMessages } from "../../converter/chat-system-coalesce";
 import type { OpenAIMessage } from "../../converter/adapters/anthropic-to-openai-chat-request";
 import {
   normalizeOpenAiChatMaxOutputFields,
@@ -106,7 +107,8 @@ function applyPlatformTransformsToOpenAiChatBody(
   body: Buffer,
   baseUrl: string,
   clientModelHint?: string,
-  openaiCompat?: RoutingContext["provider"]["openaiCompat"]
+  openaiCompat?: RoutingContext["provider"]["openaiCompat"],
+  singleLeadingSystem?: boolean
 ): Buffer {
   if (!body.length) {
     return body;
@@ -115,6 +117,9 @@ function applyPlatformTransformsToOpenAiChatBody(
     const data = JSON.parse(body.toString("utf-8")) as Record<string, unknown>;
     if (!isOpenAIChatCompletionsRequest(data)) {
       return body;
+    }
+    if (singleLeadingSystem === true && Array.isArray(data.messages)) {
+      data.messages = coalesceLeadingSystemMessages(data.messages as OpenAIMessage[]);
     }
     const matchOpts = { openaiCompat };
     normalizeOpenAiChatMaxOutputFields(data, clientModelHint);
@@ -435,7 +440,8 @@ export class BodyProcessor {
           body,
           routing.provider.baseUrl,
           clientWireModel,
-          routing.provider.openaiCompat
+          routing.provider.openaiCompat,
+          routing.provider.singleLeadingSystem === true
         );
       }
     }

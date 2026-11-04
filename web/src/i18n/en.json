@@ -497,6 +497,8 @@
       "typeOpenaiChatOnly": "OpenAI (Chat Only)",
       "azureChatCompat": "Azure Chat compatibility",
       "azureChatCompatHelp": "Enable for Azure OpenAI or Azure-compatible routers on custom domains (maps developer→system, shims custom tools). Official *.cognitiveservices.azure.com hosts are detected automatically.",
+      "singleLeadingSystem": "Single leading system message",
+      "singleLeadingSystemHelp": "Before forwarding Chat Completions, merge every system and developer message into one and place it first. For gateways that reject system messages unless they are unique and at the beginning.",
       "modePassthrough": "Passthrough",
       "modeInject": "Inject",
       "apiKey": "API Key",

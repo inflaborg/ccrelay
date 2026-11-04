@@ -248,6 +248,12 @@ export default function Providers() {
               ? "azure_openai"
               : undefined
             : undefined,
+        singleLeadingSystem:
+          pt === "openai" || pt === "openai_chat"
+            ? formData.singleLeadingSystem === true
+              ? true
+              : undefined
+            : undefined,
       },
     ];
   }, [showAddModal, formData, customModelsText, endpointTestApiKey]);
@@ -403,6 +409,7 @@ export default function Providers() {
       useCustomModelsList: Boolean(provider.useCustomModelsList),
       customModelsList: provider.customModelsList,
       openaiCompat: provider.openaiCompat,
+      singleLeadingSystem: provider.singleLeadingSystem === true ? true : undefined,
     });
     setModelMapText(modelMap ? yaml.dump(modelMap, { indent: 2, lineWidth: -1 }) : "");
     setModelMapError(null);
@@ -490,6 +497,12 @@ export default function Providers() {
         formData.providerType === "openai" || formData.providerType === "openai_chat"
           ? formData.openaiCompat === "azure_openai"
             ? "azure_openai"
+            : undefined
+          : undefined,
+      singleLeadingSystem:
+        formData.providerType === "openai" || formData.providerType === "openai_chat"
+          ? formData.singleLeadingSystem === true
+            ? true
             : undefined
           : undefined,
     };
@@ -1386,7 +1399,9 @@ export default function Providers() {
                       setFormData(prev => ({
                         ...prev,
                         providerType: t,
-                        ...(t === "anthropic" ? { openaiCompat: undefined } : {}),
+                        ...(t === "anthropic"
+                          ? { openaiCompat: undefined, singleLeadingSystem: undefined }
+                          : {}),
                       }));
                     }}
                     className="h-8 text-xs"
@@ -1425,6 +1440,30 @@ export default function Providers() {
                     </Label>
                     <p className="text-[10px] text-muted-foreground">
                       {t("providers.modal.azureChatCompatHelp")}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {(formData.providerType === "openai" || formData.providerType === "openai_chat") && (
+                <div className="flex items-start gap-2 rounded-md border border-border/60 px-3 py-2">
+                  <Checkbox
+                    id="single-leading-system"
+                    checked={formData.singleLeadingSystem === true}
+                    onCheckedChange={checked =>
+                      setFormData(prev => ({
+                        ...prev,
+                        singleLeadingSystem: checked === true ? true : undefined,
+                      }))
+                    }
+                    className="mt-0.5"
+                  />
+                  <div className="space-y-0.5">
+                    <Label htmlFor="single-leading-system" className="text-xs font-medium">
+                      {t("providers.modal.singleLeadingSystem")}
+                    </Label>
+                    <p className="text-[10px] text-muted-foreground">
+                      {t("providers.modal.singleLeadingSystemHelp")}
                     </p>
                   </div>
                 </div>
